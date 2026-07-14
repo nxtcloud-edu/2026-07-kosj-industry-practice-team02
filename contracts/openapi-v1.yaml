@@ -1,0 +1,384 @@
+openapi: 3.1.0
+info:
+  title: Sejong Civil AI API
+  version: 2.0.0-draft
+  description: |
+    Final-scope draft. Validate through discovery/interview before implementation.
+    Admin routes are local/private demo surfaces, not public authentication boundaries.
+x-admin-exposure-policy: local-private-only-unless-server-gate-approved
+x-chat-context-policy:
+  mode: client-carried-signed
+  ttl-seconds: 900
+  server-persistence: none
+  raw-transcript-persistence: prohibited
+  browser-storage: current-tab-memory-only
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Process health
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { const: ok }
+  /ready:
+    get:
+      operationId: readiness
+      responses:
+        '200': { description: Required dependencies and seed data ready }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/chat:
+    post:
+      operationId: createChatAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200':
+          description: Success, follow-up, or safe fallback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/offices:
+    get:
+      operationId: listOffices
+      parameters:
+        - in: query
+          name: region
+          required: true
+          schema: { type: string, enum: [아름동, 도담동, 조치원읍] }
+        - in: query
+          name: intent
+          required: true
+          schema: { $ref: '#/components/schemas/Intent' }
+      responses:
+        '200':
+          description: Official office matches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Office' }
+  /api/v1/admin/failed-questions:
+    get:
+      operationId: listFailedQuestions
+      parameters:
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+        - { in: query, name: reason, schema: { $ref: '#/components/schemas/StoredFailureReason' } }
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/CandidateStatus' } }
+      responses:
+        '200':
+          description: Masked failures only
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/FailedQuestion' }
+        '403': { description: Admin route disabled or demo actor not allowed }
+  /api/v1/admin/failed-questions/{id}:
+    get:
+      operationId: getFailedQuestion
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      responses:
+        '200':
+          description: Failed question detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FailedQuestion' }
+        '403': { description: Admin route disabled or demo actor not allowed }
+  /api/v1/admin/failed-questions/{id}/reason:
+    patch:
+      operationId: confirmFallbackReason
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { $ref: '#/components/schemas/StoredFailureReason' }
+      responses:
+        '200': { description: Reason confirmed }
+        '403': { description: Admin route disabled or role not allowed }
+        '409': { description: Invalid state transition }
+  /api/v1/admin/kb-candidates:
+    get:
+      operationId: listKBCandidates
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      responses:
+        '200': { description: Candidate list }
+        '403': { description: Admin route disabled or demo actor not allowed }
+    post:
+      operationId: createKBCandidate
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KBCandidateCreate' }
+      responses:
+        '201': { description: Draft candidate created }
+        '403': { description: Role not allowed }
+        '422': { description: PII or official-source validation failed }
+  /api/v1/admin/kb-candidates/{id}/submit:
+    post:
+      operationId: submitKBCandidate
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      responses:
+        '200': { description: Candidate pending approval }
+        '409': { description: Incomplete or wrong state }
+  /api/v1/admin/kb-candidates/{id}/review:
+    patch:
+      operationId: reviewKBCandidate
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, review_comment]
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED] }
+                review_comment: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200': { description: Review applied; approval activates KB atomically }
+        '403': { description: Approver role required or self-approval blocked }
+        '409': { description: Invalid state }
+  /api/v1/admin/quality-summary:
+    get:
+      operationId: getQualitySummary
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      responses:
+        '200':
+          description: "Values labeled by source: event, evaluation, or mock"
+        '403': { description: Admin route disabled or demo actor not allowed }
+components:
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    DemoActorId:
+      in: header
+      name: X-Demo-Actor-Id
+      required: true
+      description: Local/private demo actor only; not an authentication credential.
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    DemoRole:
+      in: header
+      name: X-Demo-Role
+      required: true
+      description: Local/private role switch only; reject when admin routes are not privately gated.
+      schema: { type: string, enum: [OPERATOR, APPROVER] }
+  responses:
+    ValidationError:
+      description: Request validation error
+    ServiceUnavailable:
+      description: No safe response can be produced from approved ACTIVE KB and currently available dependencies.
+      headers:
+        Retry-After:
+          description: Suggested retry delay in seconds.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ServiceUnavailableEnvelope' }
+          example:
+            error:
+              code: SERVICE_UNAVAILABLE
+              message: 잠시 후 다시 시도해 주세요.
+              request_id: 7d444840-9dc0-11d1-b245-5ffdce74fad2
+              retryable: true
+  schemas:
+    Intent:
+      type: string
+      enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL, OUT_OF_SCOPE, UNKNOWN]
+    ChatAnswerStatus:
+      type: string
+      description: SYSTEM_ERROR is represented by the HTTP 503 envelope, not a 200 ChatResponse.
+      enum: [SUCCESS, FOLLOWUP, FALLBACK]
+    FallbackReason:
+      type: string
+      enum: [INSUFFICIENT_GROUNDING, PERSONAL_LOOKUP, LEGAL_JUDGMENT, OUT_OF_SCOPE]
+    StoredFailureReason:
+      type: string
+      description: OUT_OF_SCOPE never creates a failed_questions row.
+      enum: [INSUFFICIENT_GROUNDING, PERSONAL_LOOKUP, LEGAL_JUDGMENT]
+    CandidateStatus:
+      type: string
+      enum: [NEW, REASON_CONFIRMED, DRAFTED, PENDING_APPROVAL, APPROVED, REJECTED]
+    ServiceUnavailableEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, request_id, retryable]
+          properties:
+            code: { const: SERVICE_UNAVAILABLE }
+            message: { type: string, minLength: 1, maxLength: 200 }
+            request_id: { type: string, format: uuid }
+            retryable: { const: true }
+    ChatRequest:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 1000 }
+        context_token:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 2048
+          description: >
+            Optional signed conversational context. Clients treat it as opaque and
+            keep it only in current-tab memory. Missing, null, expired, invalid,
+            or unsupported tokens are treated as no context, not authentication
+            failures. The token is never a source of official facts or authority.
+        selected_region: { type: [string, 'null'], enum: [아름동, 도담동, 조치원읍, null] }
+        simple_language: { type: boolean, default: false }
+    Source:
+      type: object
+      additionalProperties: false
+      required: [source_id, title, url, last_verified_at]
+      properties:
+        source_id: { type: string }
+        title: { type: string }
+        url: { type: string, format: uri }
+        last_verified_at: { type: string, format: date }
+        used_fields: { type: array, items: { type: string } }
+    Office:
+      type: object
+      required: [id, region, office_name, address, phone, source_title, last_verified_at]
+      properties:
+        id: { type: string }
+        region: { type: string }
+        office_name: { type: string }
+        address: { type: string }
+        phone: { type: string }
+        opening_hours: { type: [string, 'null'] }
+        map_url: { type: [string, 'null'], format: uri }
+        source_title: { type: string }
+        source_url: { type: string, format: uri }
+        last_verified_at: { type: string, format: date }
+    Fallback:
+      type: object
+      required: [reason, title, message, candidate_eligible]
+      properties:
+        reason: { $ref: '#/components/schemas/FallbackReason' }
+        title: { type: string }
+        message: { type: string }
+        next_actions: { type: array, items: { type: string } }
+        candidate_eligible: { type: boolean }
+        office: { anyOf: [ { $ref: '#/components/schemas/Office' }, { type: 'null' } ] }
+    ChatResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, answer_status, intent, sources, context_token]
+      properties:
+        request_id: { type: string, format: uuid }
+        answer_status: { $ref: '#/components/schemas/ChatAnswerStatus' }
+        intent: { $ref: '#/components/schemas/Intent' }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        summary: { type: [string, 'null'] }
+        procedure_steps: { type: array, items: { type: string } }
+        required_documents: { type: array, items: { type: string } }
+        processing_time: { type: [string, 'null'] }
+        fee: { type: [string, 'null'] }
+        department: { type: [string, 'null'] }
+        sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
+        followup_options: { type: array, items: { type: string } }
+        fallback: { anyOf: [ { $ref: '#/components/schemas/Fallback' }, { type: 'null' } ] }
+        context_token:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 2048
+          description: >
+            Fresh signed 15-minute context for current-tab memory. SUCCESS and
+            FOLLOWUP may return a token; FALLBACK always returns null. Never log,
+            persist, display, or use it as authentication.
+      allOf:
+        - if:
+            properties:
+              answer_status: { const: FALLBACK }
+            required: [answer_status]
+          then:
+            properties:
+              context_token: { const: null }
+    FailedQuestion:
+      type: object
+      required: [id, masked_question, intent, fallback_reason, candidate_eligible, status, created_at, text_expires_at, text_purged_at]
+      properties:
+        id: { type: string, format: uuid }
+        masked_question:
+          type: [string, 'null']
+          description: Null only after the 30-day text retention job has purged the field.
+        intent: { $ref: '#/components/schemas/Intent' }
+        fallback_reason: { $ref: '#/components/schemas/StoredFailureReason' }
+        candidate_eligible: { type: boolean }
+        status: { $ref: '#/components/schemas/CandidateStatus' }
+        created_at: { type: string, format: date-time }
+        text_expires_at:
+          type: string
+          format: date-time
+          description: Expiry of masked_question only; exactly 30 days after creation.
+        text_purged_at:
+          type: ['string', 'null']
+          format: date-time
+          description: Actual purge time; null while masked_question is retained.
+    KBCandidateCreate:
+      type: object
+      additionalProperties: false
+      required: [failed_question_id, title, representative_question, category, answer_summary, department, source_title, source_url, last_verified_at]
+      properties:
+        failed_question_id: { type: string, format: uuid }
+        title: { type: string }
+        representative_question:
+          type: string
+          description: Human-generalized question that must pass PII validation; not a long-term copy of masked_question.
+        category: { $ref: '#/components/schemas/Intent' }
+        answer_summary: { type: string }
+        procedure_steps: { type: array, items: { type: string } }
+        required_documents: { type: array, items: { type: string } }
+        processing_time: { type: [string, 'null'] }
+        fee: { type: [string, 'null'] }
+        department: { type: string }
+        source_title: { type: string }
+        source_url: { type: string, format: uri }
+        last_verified_at: { type: string, format: date }
+        caution: { type: [string, 'null'] }

@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: Sejong AI Civil Service Platform API
+  version: 0.1.0
+  description: 시민용 민원 AI 플랫폼과 관리자용 AI 민원 운영센터 API 초안
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/chat:
+    post:
+      summary: 시민 질문 처리
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                session_id:
+                  type: string
+                area:
+                  type: string
+      responses:
+        '200':
+          description: 답변 결과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+  /api/categories:
+    get:
+      summary: 민원 카테고리 목록
+      responses:
+        '200':
+          description: 카테고리 목록
+  /api/offices/search:
+    get:
+      summary: 지역/민원 기반 담당 기관 검색
+      parameters:
+        - in: query
+          name: area
+          schema: {type: string}
+        - in: query
+          name: service
+          schema: {type: string}
+      responses:
+        '200':
+          description: 기관 목록
+  /api/status/{receipt_no}:
+    get:
+      summary: mock 접수번호 상태조회
+      parameters:
+        - in: path
+          name: receipt_no
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 상태조회 결과
+  /api/admin/stats:
+    get:
+      summary: 관리자 KPI 요약
+      responses:
+        '200':
+          description: KPI 데이터
+  /api/admin/failed-questions:
+    get:
+      summary: 답변 실패 질문 목록
+      responses:
+        '200':
+          description: 실패 질문 목록
+  /api/admin/analytics:
+    get:
+      summary: 민원 자동 분석
+      responses:
+        '200':
+          description: 분석 결과
+  /api/admin/kb-recommendations:
+    get:
+      summary: 지식베이스 개선 추천
+      responses:
+        '200':
+          description: KB 개선 추천 목록
+  /api/admin/quality-report:
+    get:
+      summary: 답변 품질 리포트
+      responses:
+        '200':
+          description: 품질 리포트
+  /api/admin/weekly-report:
+    post:
+      summary: 주간 민원 인사이트 리포트 생성
+      responses:
+        '200':
+          description: 리포트 문장
+components:
+  schemas:
+    ChatResponse:
+      type: object
+      properties:
+        answer_status:
+          type: string
+          enum: [answered, fallback, clarification]
+        intent:
+          type: string
+        confidence:
+          type: number
+        title:
+          type: string
+        summary:
+          type: string
+        steps:
+          type: array
+          items: {type: string}
+        documents:
+          type: array
+          items: {type: string}
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              title: {type: string}
+              last_updated: {type: string}
+        fallback_reason:
+          type: string
+          nullable: true
+        followup_questions:
+          type: array
+          items: {type: string}

@@ -1,0 +1,14 @@
+flowchart LR
+    User[시민] --> FE[시민용 웹]
+    FE --> API[FastAPI Backend]
+    API --> PII[개인정보 마스킹]
+    PII --> CLS[민원 의도 분류]
+    CLS --> RAG[KB 검색/RAG]
+    RAG --> GEN[근거 기반 답변]
+    GEN --> VER[출처 검증]
+    VER --> FE
+    API --> LOG[(비식별 로그 DB)]
+    LOG --> ADMIN[관리자 대시보드]
+    ADMIN --> REC[KB 개선 추천]
+    REC --> KB[(행정 지식베이스)]
+    KB --> RAG

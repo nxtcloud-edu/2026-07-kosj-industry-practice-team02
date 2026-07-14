@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/chat-response.schema.json",
+  "title": "ChatResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "answer_status",
+    "intent",
+    "sources",
+    "context_token"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "answer_status": {
+      "enum": [
+        "SUCCESS",
+        "FOLLOWUP",
+        "FALLBACK"
+      ]
+    },
+    "intent": {
+      "enum": [
+        "MOVE_IN_RESIDENT_REGISTRATION",
+        "CERTIFICATE_ISSUANCE",
+        "BULKY_WASTE",
+        "LOCAL_TAX_GENERAL",
+        "OUT_OF_SCOPE",
+        "UNKNOWN"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "procedure_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "processing_time": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fee": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "department": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "followup_options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fallback": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/fallback"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "context_token": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Signed 15-minute client-carried context kept only in current-tab memory; null for FALLBACK."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "answer_status": {
+            "const": "FALLBACK"
+          }
+        },
+        "required": [
+          "answer_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "context_token": {
+            "const": null
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "title",
+        "url",
+        "last_verified_at"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "last_verified_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "used_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "title",
+        "message",
+        "candidate_eligible"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "INSUFFICIENT_GROUNDING",
+            "PERSONAL_LOOKUP",
+            "LEGAL_JUDGMENT",
+            "OUT_OF_SCOPE"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "candidate_eligible": {
+          "type": "boolean"
+        },
+        "next_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

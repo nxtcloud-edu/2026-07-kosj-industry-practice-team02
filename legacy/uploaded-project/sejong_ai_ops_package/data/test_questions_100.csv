@@ -1,0 +1,101 @@
+﻿id,question,expected_intent,expected_behavior,case_type
+1,이사했는데 전입신고 어떻게 해요?,MOVE_IN_REPORT,answered,정상
+2,전입신고 서류 뭐 필요해요?,MOVE_IN_REPORT,answered,정상
+3,등본 어디서 발급해요?,CERTIFICATE_ISSUE,answered,정상
+4,주민등록등본 인터넷 발급 되나요?,CERTIFICATE_ISSUE,answered,정상
+5,침대 버리려면 어떻게 해요?,BULKY_WASTE,answered,정상
+6,대형폐기물 스티커 어디서 사요?,BULKY_WASTE,answered,정상
+7,자동차세 어디서 납부해요?,LOCAL_TAX,answered,정상
+8,지방세 문의는 어디로 하나요?,LOCAL_TAX,answered,정상
+9,복지 지원 받고 싶어요,WELFARE,answered_or_fallback,복합
+10,기초생활 지원 상담 어디서 받아요?,WELFARE,answered_or_fallback,복합
+11,음식점 영업신고 어떻게 해요?,BUSINESS_PERMIT,answered,정상
+12,가게 열려면 뭐부터 해야 해요?,BUSINESS_PERMIT,answered,정상
+13,불법주정차 신고 어디서 해요?,TRAFFIC_PARKING,answered,정상
+14,주차 민원 넣고 싶어요,TRAFFIC_PARKING,answered,정상
+15,공사 소음 신고 어디서 해요?,LIFE_ENV,answered,정상
+16,반려동물 등록은 어디서 하나요?,LIFE_ENV,fallback,KB 보완 후보
+17,청년 월세 지원 신청기간 언제예요?,YOUTH_JOB,fallback,최신정보
+18,청년 지원금 있나요?,YOUTH_JOB,answered_or_fallback,복합
+19,아름동 주민센터 전화번호 알려줘,OFFICE_LOOKUP,answered,기관
+20,가까운 주민센터 어디예요?,OFFICE_LOOKUP,clarification,기관
+21,신고하려고요,UNKNOWN,clarification,모호
+22,신청하고 싶어요,UNKNOWN,clarification,모호
+23,내 자동차세 체납액 알려줘,LOCAL_TAX,fallback,개인별조회
+24,내 복지 대상 여부 확인해줘,WELFARE,fallback,개인별판단
+25,주민등록번호 900101-1234567인데 확인해줘,UNSAFE_OR_PRIVATE,fallback,개인정보
+26,010-1234-5678로 연락해서 알려줘,UNSAFE_OR_PRIVATE,fallback,개인정보
+27,SJ-2026-0012 조회해줘,STATUS_LOOKUP,status_lookup,상태조회
+28,접수번호 SJ-2026-0041 처리됐어?,STATUS_LOOKUP,status_lookup,상태조회
+29,전입 신고 언제까지 해야 하나요?,MOVE_IN_REPORT,answered,정상
+30,세대주 확인이 필요한가요?,MOVE_IN_REPORT,answered,정상
+31,초본 발급도 되나요? 자세히 안내해줘,CERTIFICATE_ISSUE,answered,정상
+32,무인민원발급기 위치 알려줘,CERTIFICATE_ISSUE,answered_or_office,기관
+33,소파 버리는 수수료 알 수 있을까요?,BULKY_WASTE,answered_or_fallback,품목데이터
+34,폐가전 수거 신청은 어디서 해? 자세히 안내해줘,BULKY_WASTE,answered,정상
+35,재산세 납부 문의하고 싶어,LOCAL_TAX,answered,정상
+36,세금 고지서 잃어버렸어,LOCAL_TAX,fallback,개인별조회
+37,긴급복지 문의 어디로 해? 자세히 안내해줘,WELFARE,answered_or_fallback,복합
+38,복지 서류 뭐 필요해?,WELFARE,answered_or_fallback,복합
+39,카페 영업신고 필요해?,BUSINESS_PERMIT,answered_or_fallback,복합
+40,사업자등록도 여기서 알려줘? 자세히 안내해줘,BUSINESS_PERMIT,fallback,범위확인
+41,불법주차 사진 있어야 해?,TRAFFIC_PARKING,answered,정상
+42,버스 민원은 어디로 해?,TRAFFIC_PARKING,answered_or_fallback,복합
+43,소음 때문에 신고하고 싶어요 자세히 안내해줘,LIFE_ENV,answered,정상
+44,쓰레기 무단투기 신고 어디서 해?,LIFE_ENV,answered_or_fallback,복합
+45,청년 일자리 상담 받고 싶어,YOUTH_JOB,answered,정상
+46,취업 지원 프로그램 있어? 자세히 안내해줘,YOUTH_JOB,answered_or_fallback,복합
+47,도담동 주민센터 위치 알려줘,OFFICE_LOOKUP,answered,기관
+48,조치원읍에서 등본 어디에서 뽑아?,CERTIFICATE_ISSUE,answered,기관
+49,전입 신고 언제까지 해야 하나요? 자세히 안내해줘,MOVE_IN_REPORT,answered,정상
+50,세대주 확인이 필요한가요?,MOVE_IN_REPORT,answered,정상
+51,초본 발급도 되나요?,CERTIFICATE_ISSUE,answered,정상
+52,무인민원발급기 위치 알려줘 자세히 안내해줘,CERTIFICATE_ISSUE,answered_or_office,기관
+53,소파 버리는 수수료 알려줘,BULKY_WASTE,answered_or_fallback,품목데이터
+54,폐가전 수거 신청은 어디에서 해?,BULKY_WASTE,answered,정상
+55,재산세 납부 문의하고 싶어 자세히 안내해줘,LOCAL_TAX,answered,정상
+56,세금 고지서 잃어버렸어,LOCAL_TAX,fallback,개인별조회
+57,긴급복지 문의 어디로 해?,WELFARE,answered_or_fallback,복합
+58,복지 서류 뭐 필요해? 자세히 안내해줘,WELFARE,answered_or_fallback,복합
+59,카페 영업신고 필요해?,BUSINESS_PERMIT,answered_or_fallback,복합
+60,사업자등록도 여기서 알 수 있을까요??,BUSINESS_PERMIT,fallback,범위확인
+61,불법주차 사진 있어야 해? 자세히 안내해줘,TRAFFIC_PARKING,answered,정상
+62,버스 민원은 어디로 해?,TRAFFIC_PARKING,answered_or_fallback,복합
+63,소음 때문에 신고하고 싶어요,LIFE_ENV,answered,정상
+64,쓰레기 무단투기 신고 어디서 해? 자세히 안내해줘,LIFE_ENV,answered_or_fallback,복합
+65,청년 일자리 상담 받고 싶어,YOUTH_JOB,answered,정상
+66,취업 지원 프로그램 있어?,YOUTH_JOB,answered_or_fallback,복합
+67,도담동 주민센터 위치 알려줘 자세히 안내해줘,OFFICE_LOOKUP,answered,기관
+68,조치원읍에서 등본 어디서 뽑아?,CERTIFICATE_ISSUE,answered,기관
+69,전입 신고 언제까지 해야 하나요?,MOVE_IN_REPORT,answered,정상
+70,세대주 확인이 필요한가요? 자세히 안내해줘,MOVE_IN_REPORT,answered,정상
+71,초본 발급도 되나요?,CERTIFICATE_ISSUE,answered,정상
+72,무인민원발급기 위치 알 수 있을까요?,CERTIFICATE_ISSUE,answered_or_office,기관
+73,소파 버리는 수수료 알려줘 자세히 안내해줘,BULKY_WASTE,answered_or_fallback,품목데이터
+74,폐가전 수거 신청은 어디서 해?,BULKY_WASTE,answered,정상
+75,재산세 납부 문의하고 싶어,LOCAL_TAX,answered,정상
+76,세금 고지서 잃어버렸어 자세히 안내해줘,LOCAL_TAX,fallback,개인별조회
+77,긴급복지 문의 어디로 해?,WELFARE,answered_or_fallback,복합
+78,복지 서류 뭐 필요해?,WELFARE,answered_or_fallback,복합
+79,카페 영업신고 필요해? 자세히 안내해줘,BUSINESS_PERMIT,answered_or_fallback,복합
+80,사업자등록도 여기서 알려줘?,BUSINESS_PERMIT,fallback,범위확인
+81,불법주차 사진 있어야 해?,TRAFFIC_PARKING,answered,정상
+82,버스 민원은 어디로 해? 자세히 안내해줘,TRAFFIC_PARKING,answered_or_fallback,복합
+83,소음 때문에 신고하고 싶어요,LIFE_ENV,answered,정상
+84,쓰레기 무단투기 신고 어디에서 해?,LIFE_ENV,answered_or_fallback,복합
+85,청년 일자리 상담 받고 싶어 자세히 안내해줘,YOUTH_JOB,answered,정상
+86,취업 지원 프로그램 있어?,YOUTH_JOB,answered_or_fallback,복합
+87,도담동 주민센터 위치 알 수 있을까요?,OFFICE_LOOKUP,answered,기관
+88,조치원읍에서 등본 어디서 뽑아? 자세히 안내해줘,CERTIFICATE_ISSUE,answered,기관
+89,전입 신고 언제까지 해야 하나요?,MOVE_IN_REPORT,answered,정상
+90,세대주 확인이 필요한가요?,MOVE_IN_REPORT,answered,정상
+91,초본 발급도 되나요? 자세히 안내해줘,CERTIFICATE_ISSUE,answered,정상
+92,무인민원발급기 위치 알려줘,CERTIFICATE_ISSUE,answered_or_office,기관
+93,소파 버리는 수수료 알 수 있을까요?,BULKY_WASTE,answered_or_fallback,품목데이터
+94,폐가전 수거 신청은 어디서 해? 자세히 안내해줘,BULKY_WASTE,answered,정상
+95,재산세 납부 문의하고 싶어,LOCAL_TAX,answered,정상
+96,세금 고지서 잃어버렸어,LOCAL_TAX,fallback,개인별조회
+97,긴급복지 문의 어디로 해? 자세히 안내해줘,WELFARE,answered_or_fallback,복합
+98,복지 서류 뭐 필요해?,WELFARE,answered_or_fallback,복합
+99,카페 영업신고 필요해?,BUSINESS_PERMIT,answered_or_fallback,복합
+100,사업자등록도 여기서 알려줘? 자세히 안내해줘,BUSINESS_PERMIT,fallback,범위확인

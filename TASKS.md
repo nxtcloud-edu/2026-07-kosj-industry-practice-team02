@@ -1,0 +1,65 @@
+# TASKS.md — 현재 백로그
+
+> 이 문서는 우선순위와 의존성을 보여주는 작업 인덱스다. 실제 작업을 시작하면 실행계획과 구현 노트를 연결한다.
+
+## Phase 0 — 발견·결정·정리
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| DISC-001 | P0 | Architecture·Security·Data·Docs | [저장소 감사와 최종 기준 드리프트 보고서](docs/discovery/INITIAL_DISCOVERY_REPORT.md) | Done | 없음 | 코드/문서/데이터/계약 충돌표와 [IMP-20260714-001](docs/implementation-notes/IMP-20260714-001-초기-저장소-발견-감사.md) 작성 |
+| DISC-002 | P0 | Architecture·Product·Security | 아키텍처 영향 인터뷰 | Done | DISC-001 | batch 1~3 기록, 인간 결정형 A/Blocker 0 |
+| DOC-001 | P0 | Architecture·Docs | 결정 로그·ADR·모호성·계약·DB draft 동기화 | Done | DISC-002 | D-009~024, ADR-0002~0010, OpenAPI 2.0.0-draft와 source-of-truth 정합성 검사 통과 |
+| PLAN-001 | P0 | Architecture·전체 | [local-first 기반과 승인형 민원 안내 실행계획](docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md) | Done | DISC-002, DOC-001 | 2026-07-15 사용자 `진행` 승인; 공개/실제 시민 경계는 별도 승인 유지 |
+
+## Phase 1 — 프로젝트 스캐폴딩
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | In Progress | PLAN-001 Approved | clean install, local web/api health·ready, lint/typecheck/build/test |
+| DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Blocked | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, lint/typecheck/test/build/contract 수동 명령 증거 |
+| DB-001 | P0 | Backend·Data·Security | Supabase SQL v1 migration·보상 rollback·backend-only 권한 | Blocked | DEV-001 | empty DB reset/replay·보상 rollback/replay, 제약·retention·권한 테스트 통과 |
+| CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Blocked | DEV-001 | FE/BE drift 0, `session_id` 거부, token required/nullability·FALLBACK null, 200 SYSTEM_ERROR 거부·503 exact envelope 검사 통과 |
+
+## Phase 2 — 시민 질문 수직 흐름
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 10~12건 작성·전수 승인 | Blocked | PLAN-001 Approved | 2026-07-20까지 출처·확인일·작성자·별도 승인자·매핑 검수 누락 0, 승인 전 staging |
+| DATA-SEED-001 | P0 | Backend·Data | 승인 공식 데이터의 버전 seed·lineage | Blocked | DB-001, DATA-001 | ACTIVE seed 20·office 3+·mapping 10~12, mock 혼입 0, 재현 import/rollback |
+| AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |
+| LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |
+| API-CHAT-001 | P0 | Backend·QA | `/api/v1/chat`·signed context와 공통 오류 계약 | Blocked | CONTRACT-001, AI-001, LLM-001 | SUCCESS/FOLLOWUP/FALLBACK 200, 안전 대체 없는 503, 900초 token/tamper reset/current request 우선/source 결합·token persistence 0 |
+| WEB-HOME-001 | P0 | Frontend·QA | `/` 서비스 소개·4개 지원 분야·한계·`/chat` 진입 | Blocked | DEV-001 | mobile/desktop E2E에서 지원 범위·서비스 한계·chat CTA 확인 |
+| WEB-CHAT-001 | P0 | Frontend·QA | `/chat` current-tab 대화·카드·출처·폴백·기관 | Blocked | API-CHAT-001, WEB-HOME-001 | 390/430px, 키보드·포커스·대비, 중복 전송·503 재시도·empty office, 새로고침 소멸·browser storage/token log 0 |
+
+## Phase 3 — 관리자 개선 루프
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| LOG-001 | P0 | Backend·Security·Data | 비식별 이벤트·실패 질문 저장과 30일 텍스트 파기 | Blocked | API-CHAT-001, DB-001 | 원문 0, OUT_OF_SCOPE/FOLLOWUP 실패행 0, NULL purge·FK 보존·복구 테스트 |
+| ADMIN-001 | P0 | FE·BE·Security | local/private 실패 질문 확인·사유 정정 | Blocked | LOG-001 | 목록/필터/상세/만료 빈 상태, public route 차단 |
+| ADMIN-002 | P0 | FE·BE·PM·Security | KB 후보 작성·제출·별도 승인·반려·재작성 | Blocked | ADMIN-001 | 작성자 자기 승인·PII 후보·미승인 ACTIVE 각각 0, 반려 comment와 재작성 경로 동작 |
+| REG-001 | P0 | 전체·QA | 침대 프레임 개선 전후 회귀 | Blocked | ADMIN-002 | 승인 전 폴백→승인 후 공식 출처 답변 완주 |
+
+## Phase 4 — P1 품질·배포
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| A11Y-001 | P1 | Frontend·QA | 쉬운 말·큰 글씨·대비·키보드 | Blocked | WEB-CHAT-001 | 자동+수동 접근성 체크리스트 통과 |
+| QA-001 | P1 | QA·PM·AI/Data | 표본 20개 평가 리포트 | Blocked | REG-001 | KPI 계산·실패 분석·수치 출처 표시 |
+| PERF-001 | P1 | Backend·QA | 평균/p95·100명 제한 스모크 | Blocked | API-CHAT-001 | deterministic 경로 결과와 실제 LLM 한계 분리 기록 |
+| ADMIN-QUALITY-001 | P1 | FE·BE·QA·Security | 품질 카드·최소 감사 이력 | Blocked | ADMIN-002, QA-001 | EVENT/EVALUATION/MOCK 배지 항상 표시·비합산; action/actor/target/old-new status/changed fields와 질문·답변 snapshot 0 |
+| DEMO-001 | P1 | PM·Platform·QA | local live→template fallback 데모 리허설 | Blocked | REG-001, PERF-001 | 인터넷/provider 장애에도 승인 KB 흐름 완주; 공개 URL·녹화는 별도 승인 항목 |
+| BACKUP-001 | P1 | Platform·Backend·Security | local RPO/RTO·dump 보관·restore/purge drill | Blocked | DB-001, LOG-001 | RPO24h/RTO60m, daily/pre-risk gitignored dump, 30일 삭제, restore 후 service-open 전 purge 1회 |
+| DEPLOY-001 | P1 | Platform·Security·PM | 조건부 Vercel/Render/Supabase 공개 demo | Blocked | DEV-002, 별도 공개 배포 승인 | 계정·리전·CORS·비밀·로그·비용·admin gate 승인 시에만 URL/health/rollback |
+| HANDOFF-001 | P1 | 전체·Docs | local-first 인수인계·운영 런북 | Blocked | ADMIN-QUALITY-001, DEMO-001, BACKUP-001 | 신규 개발자 clean local 재현·backup/restore 성공; 단일 PC 위험과 public 배포 선택 조건 분리 |
+
+## P2 — 명시적 범위 변경 전 백로그 미생성
+
+GPS·지도·상태조회·내부 시스템 연계·다국어·음성·고급 분석·전체 KB CRUD·SSO/RBAC/전자결재는 로드맵에만 남기며 구현 TASK를 만들지 않는다.
+
+## 변경 규칙
+
+- 상태: `Ready`, `In Progress`, `Blocked`, `Review`, `Done`, `Dropped`.
+- 작업을 시작할 때 실행계획/구현 노트 링크를 추가한다.
+- P2는 사용자의 명시적 범위 변경 전 TASKS에 구현 작업으로 추가하지 않는다.

@@ -1,0 +1,135 @@
+# 개인정보·로그·외부 AI 처리 정책
+
+## 1. 적용 범위
+
+본 정책은 실습 MVP의 시민 질문, 이벤트 로그, 실패 질문, KB 후보, 외부 LLM 호출, 호스팅 인프라 로그에 적용한다. 30일 보관은 법정 보관기간이 아니라 **MVP 내부 운영 기준**이며 실제 기관 운영 시 개인정보 처리방침·기록물 관리 기준·법무 검토에 따라 재정의한다.
+
+## 2. 핵심 원칙
+
+1. 사용자 원문 질문을 애플리케이션 DB에 저장하지 않는다.
+2. 개인정보 탐지·마스킹은 외부 LLM 호출 전에 백엔드에서 수행한다.
+3. 외부 LLM에는 마스킹된 질문과 승인된 KB 청크만 전달한다.
+4. 성공 질문의 텍스트는 저장하지 않고 이벤트 메타데이터만 저장한다.
+5. 개선이 필요한 실패 질문의 `masked_question` 텍스트만 생성 후 30일 저장하고, 만료 시 해당 필드만 NULL로 파기한다.
+6. 지원 범위 밖 질문은 텍스트를 저장하지 않고 OUT_OF_SCOPE 이벤트만 기록한다.
+7. 승인되지 않은 KB 후보는 시민 답변에 사용하지 않는다.
+8. 이름·상세주소는 개인정보 누락 방지를 우선해 보수적으로 마스킹하고, 불확실하면 외부 호출 없이 안전 폴백한다.
+9. 화면 transcript와 대화 문맥 token은 현재 탭 메모리에만 두고 서버 세션·DB·로그·브라우저 영속 저장소에는 저장하지 않는다.
+
+## 3. 저장 금지 정보
+
+- 이름
+- 주민등록번호
+- 여권·운전면허 번호
+- 전화번호
+- 이메일
+- 상세 주소
+- 계좌·카드번호
+- 인증번호·비밀번호
+- 차량번호
+- 민원 접수번호
+- 건강·복지 등 민감정보
+- 정밀 GPS
+
+애플리케이션 DB에서는 IP와 기기 고유 식별자를 수집·저장하지 않는다. 다만 Vercel·Render·Supabase 등 인프라 사업자가 자동 생성하는 접근 로그는 제공사 설정과 보관정책을 확인하고 가능한 범위에서 최소화한다.
+
+## 4. 마스킹 예시
+
+| 원문 | 저장 가능한 값 |
+|---|---|
+| 김민수이고 주민번호 900101-1234567인데 확인해줘 | `[이름]이고 주민번호 [주민등록번호]인데 확인해줘` |
+| 010-1234-5678로 연락해줘 | `[전화번호]로 연락해줘` |
+| 접수번호 SJ-2026-123456 처리됐어? | `접수번호 [접수번호] 처리됐어?` |
+
+## 5. 이벤트 메타데이터
+
+모든 요청에서 질문 문장 없이 다음 필드를 저장할 수 있다.
+
+```text
+interaction_id
+occurred_at
+intent
+answer_status     # SUCCESS / FOLLOWUP / FALLBACK / SYSTEM_ERROR
+fallback_reason   # 해당 시
+source_count
+used_source_ids
+response_time_ms
+selected_region   # 읍·면·동 수준
+routed_office_id
+is_test
+```
+
+## 6. 실패 질문 추가 필드
+
+`INSUFFICIENT_GROUNDING`과 개선 검토가 필요한 지원 범위 내 질문에 한해 다음 필드를 저장한다.
+
+```text
+masked_question
+candidate_eligible
+candidate_status
+text_expires_at
+text_purged_at
+```
+
+- `PERSONAL_LOOKUP`: 마스킹 질문 저장 가능하나 후보 적격은 false
+- `LEGAL_JUDGMENT`: 마스킹 질문 저장 가능하나 후보 적격은 false
+- `OUT_OF_SCOPE`: 텍스트 저장 금지, 이벤트만 저장
+- `FOLLOWUP`: 실패가 아니므로 실패 질문 목록에 저장하지 않음
+- `text_expires_at`: `created_at + 30일`; 실패 행 전체가 아니라 `masked_question` 텍스트의 만료 시각
+- `text_purged_at`: 파기 전에는 NULL, 파기 후에는 실제 처리 시각
+
+## 7. DeepSeek 외부 LLM 처리 경계
+
+실제 provider는 사용자가 보유한 기존 DeepSeek API 잔액을 사용한다. 새 충전·자동 충전은 하지 않으며 API key는 backend 환경변수에만 두고 브라우저·저장소·문서·로그에 값이나 잔액을 남기지 않는다. 정확한 model은 `deepseek-v4-flash`이며 thinking off, `max_tokens=1024`, 동시 외부 호출 1개, 논리 요청당 재시도 최대 1회, 한 process run에서 재시도를 포함한 실제 외부 전송 시도 총 30회를 강제한다.
+
+- local/private 환경에서 서버 allowlist로 확인한 합성 fixture만 DeepSeek로 전송한다. 클라이언트 `is_test` 값만으로 허용하지 않는다.
+- 실제 시민 자유 입력, 실제 개인정보·민감정보, 공개 환경 요청은 마스킹 여부와 무관하게 DeepSeek로 전송하지 않는다.
+- 합성 fixture도 백엔드 보수적 마스킹을 통과한 뒤 ACTIVE KB 최소 청크와 함께 전송한다.
+- DeepSeek context caching은 기본 활성화되어 입력 prefix가 디스크에 저장되고 미사용 cache가 보통 수 시간~수일 남을 수 있다. API 문서에서 cache off, no-training, Zero Data Retention, 한국 리전, 전체 prompt의 고정 보관기간은 확인되지 않았다.
+- `user_id`에는 개인정보를 넣지 않고 비식별 난수만 사용한다.
+- JSON Output은 서버 schema 검증을 통과해야 하며 provider body·reasoning·질문을 로그에 남기지 않는다.
+- 공개 운영·실제 시민 입력은 별도 개인정보 고지, 처리 법적 근거, 국외 처리, 보관·삭제, 공급자 약관 검토와 인간 승인 전까지 금지한다.
+- provider 장애 또는 정책 변경 시 disabled/template 경로로 즉시 전환한다.
+- `DEEPSEEK_ENABLED=false`가 기본이며 명시적 synthetic evaluation mode와 서버 fixture allowlist가 함께 만족할 때만 호출한다. cap·retry·latency·outcome·token usage는 질문 없는 지표만 기록하고 provider body·reasoning·잔액은 기록하지 않는다.
+
+공식 확인 기준일은 2026-07-14이며 모델·가격·약관·캐시 정책은 구현 시작과 데모 전에 다시 확인한다.
+
+### 대화 문맥 token
+
+- transcript와 token은 현재 탭의 휘발성 메모리에만 두며 `localStorage`, `sessionStorage`, IndexedDB, cookie, Cache API, URL, analytics, client error snapshot에 저장하지 않는다.
+- 15분 TTL의 HMAC-SHA-256 서명형 `context_token`은 무결성만 보장하고 암호화하지 않는다. payload에는 version, intent/region/status enum, optional server-defined follow-up option ID, 발급·만료 시각만 허용한다.
+- 질문·답변·요약·source title/URL·KB 본문·actor/user ID·PII·provider 데이터·비밀은 token에 넣지 않는다. token과 서명 secret도 서버 DB와 모든 로그에 저장하지 않는다.
+- token은 인증·권한·개인 조회·공식 사실·ACTIVE KB·근거 검증을 대신하지 않는다. 만료·서명 오류·알 수 없는 claim은 상세 오류 없이 문맥 없는 새 요청으로 처리한다.
+
+## 8. 보관·삭제
+
+| 데이터 | 보관 기준 |
+|---|---|
+| 원문 질문 | 저장하지 않음 |
+| 성공 이벤트 메타데이터 | 프로젝트 기간 또는 집계 완료까지 |
+| 마스킹 실패 질문 텍스트 | `masked_question`만 생성 후 30일; 만료 시 NULL 파기 |
+| 실패 질문 비텍스트 메타데이터·후보 연결 | 텍스트 파기 후에도 프로젝트 산출물 범위에서 유지 |
+| 지원 범위 밖 질문 텍스트 | 저장하지 않음 |
+| 대화 transcript·context token | 서버에 저장하지 않음; 현재 탭 메모리에서만 15분 이내 사용 |
+| KB 후보·승인 이력 | 프로젝트 산출물 범위에서 유지 |
+| 승인 KB | 출처·버전·승인자와 함께 유지 |
+| 감사 이력 | 질문·답변 전문 없이 상태 변경 정보만 유지 |
+
+만료 작업은 실패 행 DELETE가 아니라 `masked_question = NULL`, `text_purged_at = 처리 시각`으로 바꾸는 멱등 UPDATE다. 로그에는 대상 ID와 처리 건수만 남기고 텍스트를 남기지 않는다. KB 후보의 `representative_question`은 실패 질문 텍스트를 장기 보관하기 위한 복사본이 아니며, 운영자가 일반화해 작성하고 저장 전 PII 재검사를 통과해야 한다.
+
+백업에서 복구한 경우 외부 요청을 받기 전에 만료된 텍스트 파기 작업을 다시 실행한다. 실제 기관 운영 전에는 백업 보관기간과 삭제 전파 기준을 법무·기록물 정책에 맞게 다시 승인한다.
+
+## 9. 검증
+
+- PII 패턴 포함 테스트 실행
+- DB에서 원문 검색 결과 0건
+- 서버 액세스 로그에 요청 본문 0건
+- 오류 추적 도구에 질문 본문 0건
+- 외부 LLM 호출 payload가 마스킹됐는지 테스트 더블로 확인
+- 합성 fixture allowlist를 우회한 자유 입력이 DeepSeek adapter에 도달하지 않는지 확인
+- provider payload와 `user_id`에 PII·비밀·불필요한 KB 필드가 0건인지 확인
+- DeepSeek 실제 outbound attempt가 run당 30회 이하이고 retry도 합계에 포함되며, cap 지표·로그에 질문/provider body가 0건인지 확인
+- context token의 TTL 900초·claim allowlist·tamper/expiry silent reset과 token/secret의 DB·로그·브라우저 영속 저장 0건 확인
+- 고정 평가셋에서 보수적 마스킹의 PII 누락 0건과 답변 성공률을 함께 측정하고 완화는 인간 재승인 없이 적용하지 않음
+- 텍스트 NULL 파기 job의 경계시각·멱등성·후보 FK 보존 테스트
+- 복구 후 서비스 개방 전 만료 텍스트 재파기 테스트

@@ -1,0 +1,8 @@
+﻿created_at,question_masked,intent,answer_status,fallback_reason,source_count,response_time_ms,user_area,office_routed
+2026-07-08 09:10,이사했는데 전입신고 어떻게 해요?,MOVE_IN_REPORT,answered,,2,1430,아름동,아름동 행정복지센터
+2026-07-08 09:18,등본 어디서 발급해요?,CERTIFICATE_ISSUE,answered,,2,980,도담동,도담동 행정복지센터
+2026-07-08 10:05,반려동물 등록은 어디서 하나요?,LIFE_ENV,fallback,KB_MISSING,0,1200,아름동,환경 담당 부서
+2026-07-08 11:20,내 자동차세 체납액 알려줘,LOCAL_TAX,fallback,PRIVATE_LOOKUP,1,890,조치원읍,세정과
+2026-07-08 12:00,침대 버리려면 어떻게 해요?,BULKY_WASTE,answered,,2,1620,한솔동,자원순환과
+2026-07-08 18:30,청년 월세 지원 신청기간 언제예요?,YOUTH_JOB,fallback,NEEDS_LATEST_INFO,0,1700,아름동,청년정책 담당 부서
+2026-07-08 21:05,주민등록번호 [주민등록번호]인데 확인해줘,UNSAFE_OR_PRIVATE,fallback,PRIVATE_INFO_DETECTED,0,730,,민원과
