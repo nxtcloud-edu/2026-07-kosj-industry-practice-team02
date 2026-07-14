@@ -12,6 +12,7 @@ node_modules/
 out/
 coverage/
 .turbo/
+*.tsbuildinfo
 
 # Python
 .venv/

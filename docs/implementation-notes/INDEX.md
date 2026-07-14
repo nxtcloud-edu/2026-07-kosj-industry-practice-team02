@@ -10,3 +10,4 @@
 | [IMP-20260715-002](IMP-20260715-002-phase-1-상세-실행계획.md) | 2026-07-15 | DEV-001-PLAN | decision | exact 후보·pre-DB readiness·계약/env gate를 포함한 Phase 1 세분화 | docs 2.3.1→2.3.2 | Decision-only Done |
 | [IMP-20260715-003](IMP-20260715-003-root-runtime-workspace-contract.md) | 2026-07-15 | DEV-001A | implementation | exact runtime과 dependency-free root workspace 계약 | repo 1.2.0→1.3.0; tests 0.3.0→0.3.1; docs 2.3.2→2.3.3 | Done |
 | [IMP-20260715-004](IMP-20260715-004-fastapi-health와-pre-db-readiness.md) | 2026-07-15 | DEV-001B | implementation | exact health·pre-DB readiness와 frozen API lock | app 0.0.0→0.0.1; tests 0.3.1→0.3.2; docs 2.3.3→2.3.4 | Done |
+| [IMP-20260715-005](IMP-20260715-005-접근-가능한-next-js-애플리케이션-shell.md) | 2026-07-15 | DEV-001C | implementation | 정직한 개발 한계와 모바일·접근성 기반을 갖춘 정적 Next.js 홈 shell | app 0.0.1→0.0.2; web 0.0.0→0.1.0; tests 0.3.2→0.3.3; docs 2.3.4→2.3.5 | Done |

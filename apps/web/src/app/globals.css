@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #f4f7fb;
+  --surface: #ffffff;
+  --surface-muted: #eaf1fb;
+  --text: #14213d;
+  --text-muted: #3f4d66;
+  --border: #bdcbe0;
+  --accent: #084fb7;
+  --accent-strong: #063b88;
+  --focus-inner: #ffffff;
+  --focus-outer: #08142b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR",
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--accent-strong);
+}
+
+:focus-visible {
+  outline: 0.2rem solid var(--focus-inner);
+  outline-offset: 0.2rem;
+  box-shadow: 0 0 0 0.4rem var(--focus-outer);
+}
+
+.page-shell {
+  width: min(100% - 2rem, 72rem);
+  margin-inline: auto;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 10;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 0.125rem solid var(--text);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.site-header {
+  border-bottom: 0.0625rem solid var(--border);
+  background: var(--surface);
+}
+
+.site-header .page-shell {
+  display: flex;
+  min-height: 4.75rem;
+  align-items: center;
+}
+
+.service-name {
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.hero {
+  padding-block: clamp(3rem, 9vw, 6.5rem);
+}
+
+.hero-content {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.eyebrow,
+.section-kicker,
+.notice-label {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  max-width: 18ch;
+  margin-bottom: 0;
+  font-size: clamp(2.35rem, 10vw, 4.75rem);
+  line-height: 1.16;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.hero-summary {
+  max-width: 38rem;
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: clamp(1.125rem, 3vw, 1.3rem);
+}
+
+.primary-link {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border: 0.125rem solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.development-notice {
+  max-width: 42rem;
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border: 0.125rem solid var(--border);
+  border-left: 0.4rem solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.development-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.supported-services {
+  padding-block: clamp(3.5rem, 8vw, 6rem);
+  border-block: 0.0625rem solid var(--border);
+  background: var(--surface);
+}
+
+.supported-services h2 {
+  margin-bottom: 0.75rem;
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+
+.section-summary {
+  max-width: 44rem;
+  margin-bottom: 2rem;
+  color: var(--text-muted);
+}
+
+.service-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.service-grid li {
+  min-width: 0;
+  padding: 1.25rem;
+  border: 0.125rem solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.site-footer {
+  padding-block: 2rem;
+  background: var(--text);
+  color: #ffffff;
+}
+
+.site-footer p {
+  margin-bottom: 0;
+}
+
+@media (min-width: 34rem) {
+  .page-shell {
+    width: min(100% - 3rem, 72rem);
+  }
+
+  .service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .service-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

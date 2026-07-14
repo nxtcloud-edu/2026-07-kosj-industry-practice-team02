@@ -42,9 +42,9 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 ## 현재 상태
 
 - 최종 제품과 정책 문서는 확정됨.
-- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, DB·승인 seed 전 `/ready=503`. Web은 아직 스캐폴딩 전임.
+- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, DB·승인 seed 전 `/ready=503`. Web은 정적 소개 `/` shell까지 구현됐고 `/chat`·`/admin`은 아직 없음.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
-- root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`에 격리됨. Web dependency와 lock은 DEV-001C에서 추가함.
+- root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
 - `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 breaking change로 API spec revision은 2.0.0-draft임.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
@@ -59,7 +59,7 @@ Python     3.12.13      .python-version
 uv         0.11.28      uv.toml#required-version
 ```
 
-`pnpm-workspace.yaml`은 `apps/*`와 `packages/*`만 활성 workspace로 포함한다. `uv.toml`은 지원되지 않는 uv 버전의 실행을 즉시 거부한다. `.tools/`, `.worktrees/`, `.superpowers/`, dependency/build cache는 Git에 넣지 않는다. 현재는 앱 manifest가 없으므로 clean install보다 먼저 `python -B -m unittest scripts.tests.test_repository_scaffold -v`로 root 계약을 검증한다.
+`pnpm-workspace.yaml`은 `apps/*`와 `packages/*`만 활성 workspace로 포함한다. `uv.toml`은 지원되지 않는 uv 버전의 실행을 즉시 거부한다. `.tools/`, `.worktrees/`, `.superpowers/`, dependency/build cache는 Git에 넣지 않는다. root 계약은 `python -B -m unittest scripts.tests.test_repository_scaffold -v`, Web은 `corepack pnpm install --frozen-lockfile --ignore-scripts` 후 `test`·`typecheck`·`lint`·`build` script로 검증한다.
 
 ## 개발 시 절대 혼동하지 말 것
 

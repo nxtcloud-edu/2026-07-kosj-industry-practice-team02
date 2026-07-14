@@ -42,7 +42,7 @@ In Progress — 상위 `PLAN-20260714-001`을 2026-07-15 사용자가 `진행`�
 - source-of-truth: `docs/source-of-truth/TEAM_DECISIONS.md`, `PROJECT_PLAN.md`, `PRIVACY_POLICY.md`, `RFP_MATRIX.md`
 - ADR: ADR-0002, ADR-0004, ADR-0007, ADR-0009, ADR-0010
 - 계약/운영: `contracts/openapi-v1.yaml`, `contracts/chat-response.schema.json`, `docs/05_API_AND_CONTRACTS.md`, `docs/15_DEPLOYMENT_AND_OPERATIONS.md`
-- 관련 구현 노트: `IMP-20260715-001`, `IMP-20260715-002`
+- 관련 구현 노트: `IMP-20260715-001`~`IMP-20260715-005`
 
 ## 현재 상태와 조사 결과
 
@@ -78,7 +78,7 @@ In Progress — 상위 `PLAN-20260714-001`을 2026-07-15 사용자가 `진행`�
 | Web runtime | next / react / react-dom | `16.2.10` / `19.2.7` / `19.2.7` |
 | Web build/dev | TypeScript / @types/node / @types/react / @types/react-dom | `5.9.3` / `24.13.3` / `19.2.17` / `19.2.3` |
 | Web style/dev | tailwindcss / @tailwindcss/postcss | `4.3.2` / `4.3.2` |
-| Web quality/dev | eslint / eslint-config-next / vitest / jsdom | `10.7.0` / `16.2.10` / `4.1.10` / `29.1.1` |
+| Web quality/dev | eslint / eslint-config-next / vitest / jsdom | `9.39.5` / `16.2.10` / `4.1.10` / `29.1.1` |
 | Web test/dev | @testing-library/react / @testing-library/dom / @testing-library/jest-dom | `16.3.2` / `10.4.1` / `6.9.1` |
 | API runtime | fastapi / uvicorn / pydantic / httpx | `0.139.0` / `0.51.0` / `2.13.4` / `0.28.1` |
 | API DB runtime | psycopg / psycopg-binary / psycopg-pool | `3.3.4` / `3.3.4` / `3.3.1` |
@@ -86,6 +86,8 @@ In Progress — 상위 `PLAN-20260714-001`을 2026-07-15 사용자가 `진행`�
 | Contract/dev | openapi-typescript / ajv / ajv-formats / yaml | `7.13.0` / `8.20.0` / `3.0.1` / `2.9.0` |
 
 Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브라우저 또는 서버 runtime dependency가 필요하면 구현을 멈추고 사용자 승인을 받는다.
+
+Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.0`에서 `9.39.5`로 조정했다. `eslint-config-next@16.2.10`에 포함된 `eslint-plugin-react@7.37.5`가 ESLint 10 runtime API를 지원하지 않아 lint 예외가 재현됐고, 새 package 없이 ESLint 9 최신 patch로 낮춘 뒤 lint·build가 통과했다.
 
 ## 제안 설계
 
@@ -311,6 +313,8 @@ Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브�
 
 ## 버전 변경 계획
 
+아래 화살표는 Phase 1 시작 기준에서 전체 완료 목표까지를 뜻한다. DEV-001C 완료 시점의 중간 checkpoint는 app `0.0.2-web-api-scaffold`, web `0.1.0`, tests `0.3.3-web-shell`, docs `2.3.5`다.
+
 - app: `0.0.0-not-scaffolded → 0.1.0`
 - web: `0.0.0-not-scaffolded → 0.1.0`
 - api: 공개 계약은 `2.0.0-draft` 유지, 구현 패키지는 `0.1.0`
@@ -343,9 +347,10 @@ Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브�
 - 2026-07-15: npm/PyPI 공식 registry latest/peer metadata 확인 후 상세 계획 작성.
 - 2026-07-15: Task 1 DEV-001A exact runtime/root workspace를 RED→GREEN 6개 테스트로 구현하고 uv machine-enforcement 보강 뒤 fresh re-review(P0/P1/P2 0)까지 완료했다.
 - 2026-07-15: Task 2 DEV-001B API health/pre-DB readiness를 RED→GREEN, exact uv lock/frozen sync, 실제 HTTP smoke로 구현하고 complete-delta final review(P0/P1 0)까지 완료했다.
+- 2026-07-15: Task 3 DEV-001C 정적 Web shell을 missing-Vitest RED에서 시작해 4 tests·typecheck·lint·Next production build와 390/430 browser QA까지 통과시켰다. ESLint 10.7.0 후보는 bundled react plugin peer 비호환 때문에 같은 승인 dev package의 exact 9.39.5로 조정했고, Vitest JSX는 Vite 8 내장 Oxc automatic runtime으로 고정했다. frozen/offline lock 검증과 fresh review도 P0/P1/P2 0으로 완료했다.
 
 ## 결과와 회고
 
 - 실제 결과: 진행 중.
-- 계획과 달라진 점: 완료 시 기록.
-- 다음 단계: Task 2를 독립 commit한 뒤 Task 3 DEV-001C 최소 Web shell을 TDD로 구현한다.
+- 계획과 달라진 점: Web의 ESLint 후보를 10.7.0에서 호환 가능한 9.39.5로 조정했고, Vitest JSX transform은 별도 plugin 대신 내장 Oxc를 사용했다. 새 production dependency는 없다.
+- 다음 단계: DEV-001C task commit 후 Task 4 DEV-002A 환경변수·로그·secret/browser boundary를 TDD로 구현한다.
