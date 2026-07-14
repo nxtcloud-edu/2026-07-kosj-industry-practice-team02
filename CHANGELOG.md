@@ -15,6 +15,7 @@
 - ADR-0010 server-session-free signed client-carried chat context
 - Dependency-free root pnpm workspace contract with exact Node 24.12.0, pnpm 11.13.0, Python 3.12.13, and uv 0.11.28 pins
 - Standard-library repository scaffold contract tests for runtime, workspace, package-manager, credential, and ignored-path invariants
+- FastAPI 0.1.0 scaffold with import-safe app factory, exact `/health`, pre-DB `/ready=503`, typed readiness probe, strict public models, tests, and a frozen uv lock
 
 ### Changed
 
@@ -34,6 +35,6 @@
 
 ### Pending
 
-- Application scaffold
+- Next.js Web scaffold and remaining Phase 1 gates
 - Official KB and office data
 - Deployment accounts and URLs

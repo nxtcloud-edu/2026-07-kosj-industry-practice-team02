@@ -42,9 +42,9 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 ## 현재 상태
 
 - 최종 제품과 정책 문서는 확정됨.
-- 실제 애플리케이션은 아직 새 구조로 스캐폴딩되지 않음.
+- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, DB·승인 seed 전 `/ready=503`. Web은 아직 스캐폴딩 전임.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
-- root `package.json`은 dependency-free이며 실제 Web/API dependency와 lock은 각 scaffold task에서 추가함.
+- root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`에 격리됨. Web dependency와 lock은 DEV-001C에서 추가함.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
 - `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 breaking change로 API spec revision은 2.0.0-draft임.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.

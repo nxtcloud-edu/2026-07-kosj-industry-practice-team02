@@ -159,10 +159,10 @@ Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브�
 **Commands/evidence**
 
 - `py -3.11 -m uv lock --project apps/api`; `py -3.11 -m uv sync --project apps/api --frozen`
-- `py -3.11 -m uv run --project apps/api pytest -q`
-- `py -3.11 -m uv run --project apps/api ruff format --check .`; `py -3.11 -m uv run --project apps/api ruff check .`; `py -3.11 -m uv run --project apps/api mypy src tests`
+- `.\.tools\uv\uv.exe run --directory apps/api --frozen pytest -q`
+- `.\.tools\uv\uv.exe run --directory apps/api --frozen ruff format --check .`; `.\.tools\uv\uv.exe run --directory apps/api --frozen ruff check .`; `.\.tools\uv\uv.exe run --directory apps/api --frozen mypy src tests`
 - local uvicorn smoke에서 `/health=200`, `/ready=503` 확인
-- `py -3.11 -m uv run --project apps/api uvicorn sejong_ai_api.main:app --app-dir apps/api/src --host 127.0.0.1 --port 8000`
+- `.\.tools\uv\uv.exe run --directory apps/api --frozen uvicorn sejong_ai_api.main:app --app-dir src --host 127.0.0.1 --port 8000`
 
 **Commit**: `feat(api): add health and pre-db readiness`
 
@@ -342,9 +342,10 @@ Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브�
 - 2026-07-15: read-only Phase 1 감사에서 pre-DB readiness, contract drift, env 경계, exact pin 필요를 확인.
 - 2026-07-15: npm/PyPI 공식 registry latest/peer metadata 확인 후 상세 계획 작성.
 - 2026-07-15: Task 1 DEV-001A exact runtime/root workspace를 RED→GREEN 6개 테스트로 구현하고 uv machine-enforcement 보강 뒤 fresh re-review(P0/P1/P2 0)까지 완료했다.
+- 2026-07-15: Task 2 DEV-001B API health/pre-DB readiness를 RED→GREEN, exact uv lock/frozen sync, 실제 HTTP smoke로 구현하고 complete-delta final review(P0/P1 0)까지 완료했다.
 
 ## 결과와 회고
 
 - 실제 결과: 진행 중.
 - 계획과 달라진 점: 완료 시 기록.
-- 다음 단계: Task 1 DEV-001A exact runtime/root workspace를 TDD로 구현한다.
+- 다음 단계: Task 2를 독립 commit한 뒤 Task 3 DEV-001C 최소 Web shell을 TDD로 구현한다.

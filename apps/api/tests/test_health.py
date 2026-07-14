@@ -1,0 +1,70 @@
+import json
+from uuid import UUID
+
+from fastapi.testclient import TestClient
+
+from sejong_ai_api.api.health import ReadinessProbe
+from sejong_ai_api.main import create_app
+
+
+class FakeReadinessProbe:
+    def __init__(self, ready: bool) -> None:
+        self.ready = ready
+        self.call_count = 0
+
+    def is_ready(self) -> bool:
+        self.call_count += 1
+        return self.ready
+
+
+def test_health_is_process_only_and_has_an_exact_public_shape() -> None:
+    probe = FakeReadinessProbe(ready=True)
+
+    with TestClient(create_app(readiness_probe=probe)) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert probe.call_count == 0
+
+
+def test_default_readiness_is_an_exact_retryable_service_unavailable() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "30"
+
+    body = response.json()
+    assert set(body) == {"error"}
+    assert set(body["error"]) == {"code", "message", "request_id", "retryable"}
+    assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
+    assert body["error"]["message"] == "잠시 후 다시 시도해 주세요."
+    assert body["error"]["retryable"] is True
+    UUID(body["error"]["request_id"])
+
+    serialized_body = json.dumps(body, ensure_ascii=False).casefold()
+    for forbidden_detail in (
+        "cause",
+        "database",
+        "deepseek",
+        "provider",
+        "question",
+        "secret",
+        "stack",
+        "traceback",
+    ):
+        assert forbidden_detail not in serialized_body
+
+
+def test_injected_readiness_probe_can_report_ready_without_database_code() -> None:
+    probe = FakeReadinessProbe(ready=True)
+    typed_probe: ReadinessProbe = probe
+
+    with TestClient(create_app(readiness_probe=typed_probe)) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+    assert "Retry-After" not in response.headers
+    assert probe.call_count == 1
