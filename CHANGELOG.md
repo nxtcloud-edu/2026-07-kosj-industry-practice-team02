@@ -13,6 +13,8 @@
 - ADR-0008 Supabase CLI versioned SQL migration boundary
 - ADR-0009 HTTP 503 service-unavailable boundary
 - ADR-0010 server-session-free signed client-carried chat context
+- Dependency-free root pnpm workspace contract with exact Node 24.12.0, pnpm 11.13.0, Python 3.12.13, and uv 0.11.28 pins
+- Standard-library repository scaffold contract tests for runtime, workspace, package-manager, credential, and ignored-path invariants
 
 ### Changed
 

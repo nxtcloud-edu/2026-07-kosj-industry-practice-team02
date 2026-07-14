@@ -43,10 +43,23 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 
 - 최종 제품과 정책 문서는 확정됨.
 - 실제 애플리케이션은 아직 새 구조로 스캐폴딩되지 않음.
+- 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
+- root `package.json`은 dependency-free이며 실제 Web/API dependency와 lock은 각 scaffold task에서 추가함.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
 - `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 breaking change로 API spec revision은 2.0.0-draft임.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
+
+## 개발 런타임 계약
+
+```text
+Node       24.12.0      .node-version
+pnpm       11.13.0      package.json#packageManager
+Python     3.12.13      .python-version
+uv         0.11.28      uv.toml#required-version
+```
+
+`pnpm-workspace.yaml`은 `apps/*`와 `packages/*`만 활성 workspace로 포함한다. `uv.toml`은 지원되지 않는 uv 버전의 실행을 즉시 거부한다. `.tools/`, `.worktrees/`, `.superpowers/`, dependency/build cache는 Git에 넣지 않는다. 현재는 앱 manifest가 없으므로 clean install보다 먼저 `python -B -m unittest scripts.tests.test_repository_scaffold -v`로 root 계약을 검증한다.
 
 ## 개발 시 절대 혼동하지 말 것
 

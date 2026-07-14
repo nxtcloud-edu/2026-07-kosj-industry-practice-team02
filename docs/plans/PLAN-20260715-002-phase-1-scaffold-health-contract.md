@@ -341,6 +341,7 @@ Tailwind와 모든 test/lint/type generator는 build/dev dependency다. 새 브�
 - 2026-07-15: 사용자 `진행` 승인, 기준선 commit `5682804`, 격리 branch/worktree 생성.
 - 2026-07-15: read-only Phase 1 감사에서 pre-DB readiness, contract drift, env 경계, exact pin 필요를 확인.
 - 2026-07-15: npm/PyPI 공식 registry latest/peer metadata 확인 후 상세 계획 작성.
+- 2026-07-15: Task 1 DEV-001A exact runtime/root workspace를 RED→GREEN 6개 테스트로 구현하고 uv machine-enforcement 보강 뒤 fresh re-review(P0/P1/P2 0)까지 완료했다.
 
 ## 결과와 회고
 

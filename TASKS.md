@@ -24,9 +24,9 @@
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| DEV-001A | P0 | Platform | exact runtime과 root workspace contract | Ready | PLAN-001 | Node/pnpm/Python/uv exact pin, config RED→GREEN, remote 0 |
-| DEV-001B | P0 | Backend·Platform | FastAPI health와 pre-DB readiness | Blocked | DEV-001A | `/health=200`, `/ready=503` exact, uv lock, ruff/mypy/pytest |
-| DEV-001C | P0 | Frontend·Platform | 최소 접근 가능 Next.js shell | Blocked | DEV-001A | frozen pnpm install, lint/typecheck/unit/build |
+| DEV-001A | P0 | Platform | exact runtime과 root workspace contract | Done | PLAN-001 | Node/pnpm/Python/uv exact pin, config RED→GREEN, remote 0 |
+| DEV-001B | P0 | Backend·Platform | FastAPI health와 pre-DB readiness | Ready | DEV-001A | `/health=200`, `/ready=503` exact, uv lock, ruff/mypy/pytest |
+| DEV-001C | P0 | Frontend·Platform | 최소 접근 가능 Next.js shell | Ready | DEV-001A | frozen pnpm install, lint/typecheck/unit/build |
 | DEV-002A | P0 | Security·Platform | 서비스별 env·metadata-only log·secret/browser scan | Blocked | DEV-001B, DEV-001C | raw body/sentinel/browser secret 0 |
 | CONTRACT-001A | P0 | FE·BE·QA | 승인 계약 불변조건과 공통 fixtures | Blocked | DEV-001B, DEV-001C | SUCCESS source≥1·office/context/503 양 계약 fixture 정합 |
 | CONTRACT-001B | P0 | FE·BE·QA | 생성 TS·Pydantic model drift gate | Blocked | CONTRACT-001A | 재생성 diff 0, 동일 fixture 통과 |
