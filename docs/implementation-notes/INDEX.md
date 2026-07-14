@@ -7,3 +7,4 @@
 | [IMP-20260714-003](IMP-20260714-003-2차-인터뷰-결정-반영.md) | 2026-07-14 | DISC-002 | decision | DeepSeek 합성 경계·Supabase SQL·보수 마스킹·503·local gate 반영 | spec 2.0.1→2.1.0; repo 1.1→1.2; api 0.2→1.0 draft; prompt/tests/docs 갱신 | Decision-only Done |
 | [IMP-20260714-004](IMP-20260714-004-최종-인터뷰-결정과-실행계획-확정.md) | 2026-07-14 | DISC-002 | decision | DeepSeek Flash guard·서버 무세션 context·API 2.0·최종 plan 반영 | spec 2.1→2.2; api 1.0→2.0 draft; prompt/tests/docs 갱신 | Decision-only Done |
 | [IMP-20260715-001](IMP-20260715-001-구현-승인과-phase-1-시작.md) | 2026-07-15 | PLAN-001 | decision | 구현 승인·local Git 기준선 준비와 에이전트 주도 Phase 1 시작 | docs 2.3.0→2.3.1 | Decision-only Done |
+| [IMP-20260715-002](IMP-20260715-002-phase-1-상세-실행계획.md) | 2026-07-15 | DEV-001-PLAN | decision | exact 후보·pre-DB readiness·계약/env gate를 포함한 Phase 1 세분화 | docs 2.3.1→2.3.2 | Decision-only Done |

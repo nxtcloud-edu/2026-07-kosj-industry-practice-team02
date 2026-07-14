@@ -21,13 +21,14 @@
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain
 - Assigned official KB/office authoring to AI/Data·Backend and approval to PM, targeting 2026-07-20
 - Pinned local/private synthetic evaluation to `deepseek-v4-flash`, thinking off, max 1024, concurrency 1, one retry, and 30 total outbound attempts per explicit process run
-- Selected Supabase CLI versioned SQL migrations; tool installation and migration execution remain deferred until plan approval
+- Selected Supabase CLI versioned SQL migrations; CLI installation and migration execution remain deferred until DB-001
 - Chose conservative recall-first name/address masking with a measured, human-approved relaxation gate
 - Changed the public API draft to 1.0.0: 200 responses no longer allow SYSTEM_ERROR and unrecoverable service failure uses a stable 503 SERVICE_UNAVAILABLE envelope
 - Chose local Git and manual validation gates for the current phase; remote repository and CI are deferred until the user asks to connect Git
 - Replaced undefined `session_id` with a 15-minute signed opaque `context_token`, current-tab transcript memory, and no server session/transcript persistence; API draft is now 2.0.0
 - Defaulted the disposable local demo to RPO 24h/RTO 60m, daily/pre-risk gitignored dumps, 30-day dump deletion, and restore-before-open retention purge
 - Approved the final plan and initial production dependency list; began independent local Git and Phase 1 scaffold work while keeping public/real-user boundaries deferred
+- Split Phase 1 into exact runtime, pre-DB health/readiness, Web shell, env/log boundary, contract/generated drift, and clean local verification review units
 
 ### Pending
 

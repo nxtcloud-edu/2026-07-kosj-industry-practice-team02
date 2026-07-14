@@ -15,10 +15,22 @@
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | In Progress | PLAN-001 Approved | clean install, local web/api health·ready, lint/typecheck/build/test |
+| DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | In Progress | PLAN-001 Approved | clean install, web/api 검증, `/health=200`, DB·승인 seed 전 `/ready=503` |
 | DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Blocked | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, lint/typecheck/test/build/contract 수동 명령 증거 |
 | DB-001 | P0 | Backend·Data·Security | Supabase SQL v1 migration·보상 rollback·backend-only 권한 | Blocked | DEV-001 | empty DB reset/replay·보상 rollback/replay, 제약·retention·권한 테스트 통과 |
-| CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Blocked | DEV-001 | FE/BE drift 0, `session_id` 거부, token required/nullability·FALLBACK null, 200 SYSTEM_ERROR 거부·503 exact envelope 검사 통과 |
+| CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Blocked | DEV-001 | FE/BE drift 0, `session_id` 거부, 요청 token optional nullable·응답 required nullable·FALLBACK null, SUCCESS source≥1, 200 SYSTEM_ERROR 거부·503 exact envelope |
+
+### Phase 1 실행 상세 — PLAN-20260715-002
+
+| ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
+|---|---|---|---|---|---|---|
+| DEV-001A | P0 | Platform | exact runtime과 root workspace contract | Ready | PLAN-001 | Node/pnpm/Python/uv exact pin, config RED→GREEN, remote 0 |
+| DEV-001B | P0 | Backend·Platform | FastAPI health와 pre-DB readiness | Blocked | DEV-001A | `/health=200`, `/ready=503` exact, uv lock, ruff/mypy/pytest |
+| DEV-001C | P0 | Frontend·Platform | 최소 접근 가능 Next.js shell | Blocked | DEV-001A | frozen pnpm install, lint/typecheck/unit/build |
+| DEV-002A | P0 | Security·Platform | 서비스별 env·metadata-only log·secret/browser scan | Blocked | DEV-001B, DEV-001C | raw body/sentinel/browser secret 0 |
+| CONTRACT-001A | P0 | FE·BE·QA | 승인 계약 불변조건과 공통 fixtures | Blocked | DEV-001B, DEV-001C | SUCCESS source≥1·office/context/503 양 계약 fixture 정합 |
+| CONTRACT-001B | P0 | FE·BE·QA | 생성 TS·Pydantic model drift gate | Blocked | CONTRACT-001A | 재생성 diff 0, 동일 fixture 통과 |
+| DEV-001D | P0 | Platform·QA·Docs | clean local verify와 Phase 1 마감 | Blocked | DEV-002A, CONTRACT-001B | 단일 gate·actual health smoke·fresh review·note 완료 |
 
 ## Phase 2 — 시민 질문 수직 흐름
 
@@ -26,6 +38,7 @@
 |---|---|---|---|---|---|---|
 | DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 10~12건 작성·전수 승인 | Blocked | PLAN-001 Approved | 2026-07-20까지 출처·확인일·작성자·별도 승인자·매핑 검수 누락 0, 승인 전 staging |
 | DATA-SEED-001 | P0 | Backend·Data | 승인 공식 데이터의 버전 seed·lineage | Blocked | DB-001, DATA-001 | ACTIVE seed 20·office 3+·mapping 10~12, mock 혼입 0, 재현 import/rollback |
+| READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DB-001, DATA-SEED-001, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |
 | LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |
 | API-CHAT-001 | P0 | Backend·QA | `/api/v1/chat`·signed context와 공통 오류 계약 | Blocked | CONTRACT-001, AI-001, LLM-001 | SUCCESS/FOLLOWUP/FALLBACK 200, 안전 대체 없는 503, 900초 token/tamper reset/current request 우선/source 결합·token persistence 0 |
