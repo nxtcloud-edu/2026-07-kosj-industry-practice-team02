@@ -81,6 +81,7 @@ class RepositoryScaffoldContractTests(unittest.TestCase):
 
         required = {
             "node_modules/",
+            ".pnpm-store/",
             ".next/",
             ".venv/",
             "__pycache__/",

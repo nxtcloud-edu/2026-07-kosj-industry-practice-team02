@@ -1,11 +1,11 @@
 # IMP-20260715-009 — clean local verification과 Phase 1 마감
 
-- Date/Time (KST): 2026-07-15 14:40~21:31
+- Date/Time (KST): 2026-07-15 14:40~23:00
 - Task ID: DEV-001D, DEV-002B
 - Type: implementation / security / documentation
-- Status: Done — corrected fresh-worktree default/warm-offline 24/24, actual API/Web smoke와 최종 독립 review(P0/P1/P2 0, Ready Yes) 완료
+- Status: Done — corrected fresh-worktree와 merged main gate, actual API/Web smoke, 최종 독립 review(P0/P1/P2 0, Ready Yes), local integration 완료
 - Author/Agent: `/root/dev001d_verify_implement`; 최종 통합 책임 `/root`
-- Branch: `codex/DEV-001-repo-scaffold`
+- Branch: `codex/DEV-001-repo-scaffold`에서 구현 후 local `main`에 fast-forward, feature branch/worktree 정리
 - Base commit: `cb5bdf3ef41202d2a173dd418234e387d6802eb0`
 - Related plan/ADR/RFP: [PLAN-20260715-002](../plans/PLAN-20260715-002-phase-1-scaffold-health-contract.md), ADR-0009, SER-001~003, QUR-001~002, COR-001~002
 
@@ -87,6 +87,7 @@
 |---|---|---|
 | `scripts/verify.ps1` | exact preflight, frozen/default+offline, 24단계 gate, native exit/출력 경계, 환경 snapshot/restore | 단일 재현 명령과 보안 진단 경계 |
 | `scripts/tests/test_verify_runner.py` | 단계/명령 wiring, PS 5.1 parser, unknown option, exit 37, exception 2, output secrecy, build/runner env success·failure 복원 테스트 16개 | TDD와 review 회귀 방지 |
+| `.gitignore`, `scripts/tests/test_repository_scaffold.py` | 사용자 `.pnpm-store/` 보존 상태에서 dependency cache를 Git ignore 계약으로 고정 | 실수로 cache를 커밋하는 위험 차단 |
 | `README.md` | 단일 gate와 warm offline 의미, 별도 HTTP smoke 안내 | 신규 개발자 시작점 |
 | `FIRST_RUN_CHECKLIST.md` | exact runtime/env/default/offline/HTTP checklist | 첫 실행 누락 방지 |
 | `scripts/README.md` | 24단계 구성, 종료코드·출력·옵션 정책 | runner 운영 계약 |
@@ -155,6 +156,9 @@
 | actual Web HTTP smoke | exit 0 | HTML/RSC 200, service name, env/marker 노출 0, env 복원 | corrected snapshot |
 | 최종 독립 계약 재리뷰 | Ready Yes | prior P1 2·P2 1 해결, 최종 P0/P1/P2 0 | `/root/phase1_final_review` |
 | 활성 문서 일관성 감사 | P2 보정→Ready | API `-draft` suffix 두 곳 보정, P0/P1 0 | `/root/phase1_docs_consistency_review` |
+| merged `main` default gate | exit 0 | commit `92e2216`, 24/24 pass | repository root |
+| main repo-local uv warm `-Offline` gate | exit 0 | `.tools/uv` exact 0.11.28, 24/24 pass | repository root |
+| `.pnpm-store/` ignore 계약 | RED→GREEN | `git check-ignore` 1→0, focused unittest 1 fail→1 pass; cache 존재 유지 | final repository hygiene |
 | PS 5.1 AST parse | exit 0 | parser error 0 | focused test |
 | fail-fast synthetic child | exit 37 | later `SYNC-API` 시작 0, child output 노출 0 | focused test |
 | default repository secret/browser scan | exit 0 | finding 0 | 통합 runner |
@@ -163,6 +167,8 @@
 ### 실제 통합에서 확인한 하위 결과
 
 1차 staged fresh snapshot에서 default와 warm `-Offline` 24/24가 모두 통과했고, 그 뒤 전체 리뷰 계약 보정의 current-worktree 하위 gate는 shared 37/37, API 44 pass+4 subtests, runner discover 35 OK(Windows symlink 권한 skip 1), ruff/mypy/generate/TS compile을 통과했다. 보정이 포함된 snapshot `2f8c573`을 cache 없는 새 worktree에 checkout해 default와 warm `-Offline` 24/24를 다시 통과시켰다. actual API smoke는 `/health=200`, pre-DB `/ready=503`, exact Retry-After·SERVICE_UNAVAILABLE·UUID request id·민감 marker 로그 0을, actual Web smoke는 HTML/RSC 200, 서비스명 렌더, synthetic marker·서버 전용 변수명 응답/로그 노출 0과 runtime env 복원을 확인했다. 첫 Web smoke harness는 공백이 있는 절대 `next` 인자 경로가 Windows `Start-Process`에서 분리돼 기동 전에 실패했으며 프로세스·로그·환경을 정리한 뒤 상대 경로로 같은 검사를 성공시켰다. 최종 임시 로그와 잔여 서버 프로세스는 0, snapshot tracked diff는 0이었다. 기존 FastAPI TestClient의 Starlette/httpx2 deprecation warning 1건은 dependency 변경 승인이 필요한 후속 위험이며 실패로 숨기지 않는다.
+
+최종 implementation commit `92e2216`을 `main`에 `--ff-only`로 통합한 뒤 merged main default 24/24를 통과시켰다. sandbox 검증용 exact uv 0.11.28 사본을 main의 gitignored `.tools/uv`에 남기고 feature 경로를 PATH에서 제거한 상태로 warm `-Offline` 24/24를 다시 통과시켰다. 임시 worktree 세 개와 병합된 feature branch를 정리했으며 사용자 `.pnpm-store/`의 내용은 보존했다. 마지막 상태 점검에서 이 cache가 untracked로 노출되는 문제를 발견해 ignore 계약을 focused RED→GREEN으로 닫았다.
 
 ### 최종 검증과 의도적 미실행
 
@@ -213,11 +219,11 @@
 
 ### 롤백
 
-commit 전에는 이 note의 변경 목록을 기준으로 Task 7과 최종 계약 보정 diff만 제거한다. commit 후에는 history를 삭제하지 말고 최종 Task 7 commit을 `git revert`한다. rollback 목표는 Task 1~6의 API `2.0.0-draft`이며 DB/data/prompt는 건드리지 않는다.
+commit 전에는 이 note의 변경 목록을 기준으로 Task 7과 최종 계약 보정 diff만 제거한다. commit 후에는 history를 삭제하지 말고 implementation commit `92e2216`과 후속 repository-hygiene commit을 역순으로 `git revert`한다. rollback 목표는 Task 1~6의 API `2.0.0-draft`이며 DB/data/prompt는 건드리지 않는다.
 
 ### 다음 개발자 시작점
 
-`README.md`의 단일 로컬 검증과 `FIRST_RUN_CHECKLIST.md`를 먼저 수행한다. Phase 2 제품 구현 전에는 DB-001·DATA-001 의존성과 `/ready=503` 경계를 다시 확인한다.
+local `main`에서 `README.md`의 단일 로컬 검증과 `FIRST_RUN_CHECKLIST.md`를 먼저 수행한다. sandbox에서는 gitignored `.tools/uv/uv.exe`가 exact 0.11.28로 준비돼 있다. Phase 2 제품 구현 전에는 DB-001·DATA-001 의존성과 `/ready=503` 경계를 다시 확인한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
