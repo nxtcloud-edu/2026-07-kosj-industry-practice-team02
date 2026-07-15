@@ -12,3 +12,4 @@
 | [IMP-20260715-004](IMP-20260715-004-fastapi-health와-pre-db-readiness.md) | 2026-07-15 | DEV-001B | implementation | exact health·pre-DB readiness와 frozen API lock | app 0.0.0→0.0.1; tests 0.3.1→0.3.2; docs 2.3.3→2.3.4 | Done |
 | [IMP-20260715-005](IMP-20260715-005-접근-가능한-next-js-애플리케이션-shell.md) | 2026-07-15 | DEV-001C | implementation | 정직한 개발 한계와 모바일·접근성 기반을 갖춘 정적 Next.js 홈 shell | app 0.0.1→0.0.2; web 0.0.0→0.1.0; tests 0.3.2→0.3.3; docs 2.3.4→2.3.5 | Done |
 | [IMP-20260715-006](IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md) | 2026-07-15 | DEV-002A | security | 서비스별 env 분리·네 필드 요청 로그·저장소/브라우저 scanner 경계 | app 0.0.2→0.0.3; tests 0.3.3→0.3.4; docs 2.3.5→2.3.6 | Done |
+| [IMP-20260715-007](IMP-20260715-007-승인-계약-불변조건과-공통-fixture.md) | 2026-07-15 | CONTRACT-001A | implementation | SUCCESS 출처·context·office·503 공통 fixture gate | tests 0.3.4→0.3.5; docs 2.3.6→2.3.7; API 2.0.0-draft 유지 | Done |

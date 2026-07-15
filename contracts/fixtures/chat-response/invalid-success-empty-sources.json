@@ -1,0 +1,8 @@
+{
+  "request_id": "22222222-2222-4222-8222-222222222222",
+  "answer_status": "SUCCESS",
+  "intent": "CERTIFICATE_ISSUANCE",
+  "summary": "시연용 샘플 응답",
+  "sources": [],
+  "context_token": "synthetic-context-token"
+}

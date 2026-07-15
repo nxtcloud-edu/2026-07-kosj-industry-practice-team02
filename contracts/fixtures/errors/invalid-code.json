@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "SYNTHETIC_INTERNAL_DETAIL",
+    "message": "시연용 샘플 오류입니다.",
+    "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "retryable": true
+  }
+}

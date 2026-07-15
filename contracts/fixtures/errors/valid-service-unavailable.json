@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "시연용 샘플: 잠시 후 다시 시도해 주세요.",
+    "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "retryable": true
+  }
+}

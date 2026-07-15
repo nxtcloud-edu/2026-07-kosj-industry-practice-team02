@@ -1,0 +1,21 @@
+{
+  "request_id": "99999999-9999-4999-8999-999999999999",
+  "answer_status": "FALLBACK",
+  "intent": "LOCAL_TAX_GENERAL",
+  "sources": [],
+  "fallback": {
+    "reason": "PERSONAL_LOOKUP",
+    "title": "시연용 샘플 기관 안내",
+    "message": "시연용 샘플이며 공식 기관 데이터가 아닙니다.",
+    "candidate_eligible": false,
+    "office": {
+      "region": "아름동",
+      "office_name": "시연용 샘플 행정복지센터",
+      "address": "시연용 샘플 주소",
+      "phone": "000-000-0000",
+      "source_title": "시연용 샘플 출처 — 공식 데이터 아님",
+      "last_verified_at": "2026-07-15"
+    }
+  },
+  "context_token": null
+}

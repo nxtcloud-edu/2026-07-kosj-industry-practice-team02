@@ -340,6 +340,13 @@ components:
           then:
             properties:
               context_token: { const: null }
+        - if:
+            properties:
+              answer_status: { const: SUCCESS }
+            required: [answer_status]
+          then:
+            properties:
+              sources: { type: array, minItems: 1 }
     FailedQuestion:
       type: object
       required: [id, masked_question, intent, fallback_reason, candidate_eligible, status, created_at, text_expires_at, text_purged_at]
