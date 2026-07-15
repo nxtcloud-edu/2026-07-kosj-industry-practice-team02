@@ -19,3 +19,4 @@
 | [IMP-20260715-011](IMP-20260715-011-phase-2-사용자-준비사항-안내.md) | 2026-07-15 | STATUS-002 | documentation | Phase 2 사용자 준비사항과 AI 책임 경계, 로컬 도구 상태 확인 | 모든 version 축 유지 | Done |
 | [IMP-20260716-001](IMP-20260716-001-docker-desktop-준비-확인과-env-템플릿-드리프트.md) | 2026-07-16 | ENV-001 | security | Docker daemon 준비 확인과 기존 env template 삭제 드리프트 보존 | 모든 version 축 유지 | Done |
 | [IMP-20260716-002](IMP-20260716-002-deepseek-local-env-보존과-예제-템플릿-복원.md) | 2026-07-16 | ENV-002 | security | ignored DeepSeek env를 보존하고 tracked keyless template 복원 | 모든 version 축 유지 | Done |
+| [IMP-20260716-003](IMP-20260716-003-db-001-설계-발견-감사와-승인-질문.md) | 2026-07-16 | DISC-DB-001 | discovery | 실행 DB·권한·원자적 승인·30일 파기 간극과 Q-DB-002 이중 방어 선택지 | docs 2.3.10→2.3.11; product/DB/API 유지 | Discovery Done — decision pending |

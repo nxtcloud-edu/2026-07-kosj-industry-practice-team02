@@ -17,7 +17,7 @@
 |---|---|---|---|---|---|---|
 | DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | Done | PLAN-001 Approved | corrected fresh default·warm-offline 24/24와 actual API/Web smoke, final P0/P1/P2 0; DB·승인 seed 전 `/ready=503` 유지 |
 | DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Done | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, synthetic/offline env 복원과 clean gate 통과 |
-| DB-001 | P0 | Backend·Data·Security | Supabase SQL v1 migration·보상 rollback·backend-only 권한 | Blocked | DEV-001 | empty DB reset/replay·보상 rollback/replay, 제약·retention·권한 테스트 통과 |
+| DB-001 | P0 | Backend·Data·Security | [Supabase SQL v1 migration·보상 rollback·권한](docs/discovery/DB_001_DISCOVERY_REPORT.md) | Blocked | DEV-001, Q-DB-002 기본값/답변을 반영한 설계 승인 | empty DB reset/replay·보상 rollback/replay, 원자적 승인·retention·ACTIVE 공식 읽기·권한 테스트 통과 |
 | CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Done | DEV-001 | API 2.0.1-draft의 `/health`·ready-state `/ready` 200과 FALLBACK까지 fixture·생성 TypeScript·strict Pydantic drift 0, final P0/P1/P2 0 |
 
 ### Phase 1 실행 상세 — PLAN-20260715-002
