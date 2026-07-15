@@ -348,9 +348,10 @@ Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.
 - 2026-07-15: Task 1 DEV-001A exact runtime/root workspace를 RED→GREEN 6개 테스트로 구현하고 uv machine-enforcement 보강 뒤 fresh re-review(P0/P1/P2 0)까지 완료했다.
 - 2026-07-15: Task 2 DEV-001B API health/pre-DB readiness를 RED→GREEN, exact uv lock/frozen sync, 실제 HTTP smoke로 구현하고 complete-delta final review(P0/P1 0)까지 완료했다.
 - 2026-07-15: Task 3 DEV-001C 정적 Web shell을 missing-Vitest RED에서 시작해 4 tests·typecheck·lint·Next production build와 390/430 browser QA까지 통과시켰다. ESLint 10.7.0 후보는 bundled react plugin peer 비호환 때문에 같은 승인 dev package의 exact 9.39.5로 조정했고, Vitest JSX는 Vite 8 내장 Oxc automatic runtime으로 고정했다. frozen/offline lock 검증과 fresh review도 P0/P1/P2 0으로 완료했다.
+- 2026-07-15: Task 4 DEV-002A 서비스별 env, 네 필드 metadata-only 요청 로그와 저장소/브라우저 scanner를 RED→GREEN으로 구현했다. 실제 trace/raw Upgrade에서 발견한 client-address protocol record와 client/path/query 인자를 담는 exact pinned Uvicorn WebSocket INFO template을 차단하고 공식 launcher를 `--no-access-log --ws none`으로 고정했다. secret scanner에는 PowerShell `$env:`와 cmd `set ` assignment 및 0-byte active file 회귀를 추가했다. 최종 API 19 passed+3 subtests·warning 1, root security 총 13 tests(12 passed+Windows symlink 권한 제약 skip 1), ruff/mypy, production Web build, actual 200/500/404/405 및 raw Upgrade 404 smoke와 scanner를 통과했다. [IMP-20260715-006](../implementation-notes/IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md)을 완료했고 task commit은 문서 diff 검증 후 생성한다.
 
 ## 결과와 회고
 
-- 실제 결과: 진행 중.
-- 계획과 달라진 점: Web의 ESLint 후보를 10.7.0에서 호환 가능한 9.39.5로 조정했고, Vitest JSX transform은 별도 plugin 대신 내장 Oxc를 사용했다. 새 production dependency는 없다.
-- 다음 단계: DEV-001C task commit 후 Task 4 DEV-002A 환경변수·로그·secret/browser boundary를 TDD로 구현한다.
+- 실제 결과: 진행 중. Task 1~4는 완료했고 공개 API/DB/data/provider 변경 없이 application `0.0.3-security-boundaries` checkpoint에 도달했다. Phase 1 전체 완료는 계약 drift와 clean local verify 이후다.
+- 계획과 달라진 점: Web의 ESLint 후보를 10.7.0에서 호환 가능한 9.39.5로 조정했고, Vitest JSX transform은 별도 plugin 대신 내장 Oxc를 사용했다. DEV-002A 실제 trace/raw Upgrade smoke에서는 access logger 외 `uvicorn.error` protocol TRACE와 pinned WebSocket INFO template의 client/path/query 노출 가능성을 추가로 발견해 최소 filter, `--ws none`과 회귀 테스트로 막았다. secret scanner는 지원되는 PowerShell/cmd 정적 assignment까지 보강했으며 새 production dependency는 없다.
+- 다음 단계: DEV-002A task commit 후 Task 5 CONTRACT-001A 승인 계약 불변조건과 공통 fixtures를 TDD로 구현한다.

@@ -7,6 +7,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FILES = (
     API_ROOT / "src" / "sejong_ai_api" / "main.py",
     API_ROOT / "src" / "sejong_ai_api" / "api" / "health.py",
+    API_ROOT / "src" / "sejong_ai_api" / "core" / "logging.py",
 )
 
 APPROVED_RUNTIME_DEPENDENCIES = {

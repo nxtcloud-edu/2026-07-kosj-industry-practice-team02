@@ -11,3 +11,4 @@
 | [IMP-20260715-003](IMP-20260715-003-root-runtime-workspace-contract.md) | 2026-07-15 | DEV-001A | implementation | exact runtime과 dependency-free root workspace 계약 | repo 1.2.0→1.3.0; tests 0.3.0→0.3.1; docs 2.3.2→2.3.3 | Done |
 | [IMP-20260715-004](IMP-20260715-004-fastapi-health와-pre-db-readiness.md) | 2026-07-15 | DEV-001B | implementation | exact health·pre-DB readiness와 frozen API lock | app 0.0.0→0.0.1; tests 0.3.1→0.3.2; docs 2.3.3→2.3.4 | Done |
 | [IMP-20260715-005](IMP-20260715-005-접근-가능한-next-js-애플리케이션-shell.md) | 2026-07-15 | DEV-001C | implementation | 정직한 개발 한계와 모바일·접근성 기반을 갖춘 정적 Next.js 홈 shell | app 0.0.1→0.0.2; web 0.0.0→0.1.0; tests 0.3.2→0.3.3; docs 2.3.4→2.3.5 | Done |
+| [IMP-20260715-006](IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md) | 2026-07-15 | DEV-002A | security | 서비스별 env 분리·네 필드 요청 로그·저장소/브라우저 scanner 경계 | app 0.0.2→0.0.3; tests 0.3.3→0.3.4; docs 2.3.5→2.3.6 | Done |

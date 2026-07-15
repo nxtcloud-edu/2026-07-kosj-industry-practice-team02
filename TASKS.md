@@ -27,7 +27,7 @@
 | DEV-001A | P0 | Platform | exact runtime과 root workspace contract | Done | PLAN-001 | Node/pnpm/Python/uv exact pin, config RED→GREEN, remote 0 |
 | DEV-001B | P0 | Backend·Platform | FastAPI health와 pre-DB readiness | Done | DEV-001A | `/health=200`, `/ready=503` exact, uv lock, ruff/mypy/pytest |
 | DEV-001C | P0 | Frontend·Platform | 최소 접근 가능 Next.js shell | Done | DEV-001A | frozen pnpm install, lint/typecheck/unit/build, 390/430px QA, [IMP-20260715-005](docs/implementation-notes/IMP-20260715-005-접근-가능한-next-js-애플리케이션-shell.md) |
-| DEV-002A | P0 | Security·Platform | 서비스별 env·metadata-only log·secret/browser scan | Ready | DEV-001B, DEV-001C | raw body/sentinel/browser secret 0 |
+| DEV-002A | P0 | Security·Platform | 서비스별 env·metadata-only log·secret/browser scan | Done | DEV-001B, DEV-001C | raw body/sentinel/browser secret 0, [IMP-20260715-006](docs/implementation-notes/IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md) |
 | CONTRACT-001A | P0 | FE·BE·QA | 승인 계약 불변조건과 공통 fixtures | Ready | DEV-001B, DEV-001C | SUCCESS source≥1·office/context/503 양 계약 fixture 정합 |
 | CONTRACT-001B | P0 | FE·BE·QA | 생성 TS·Pydantic model drift gate | Blocked | CONTRACT-001A | 재생성 diff 0, 동일 fixture 통과 |
 | DEV-001D | P0 | Platform·QA·Docs | clean local verify와 Phase 1 마감 | Blocked | DEV-002A, CONTRACT-001B | 단일 gate·actual health smoke·fresh review·note 완료 |

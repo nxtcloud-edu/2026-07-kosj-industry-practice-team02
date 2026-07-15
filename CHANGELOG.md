@@ -17,6 +17,7 @@
 - Standard-library repository scaffold contract tests for runtime, workspace, package-manager, credential, and ignored-path invariants
 - FastAPI 0.1.0 scaffold with import-safe app factory, exact `/health`, pre-DB `/ready=503`, typed readiness probe, strict public models, tests, and a frozen uv lock
 - Next.js 16.2.10 static `/` shell with truthful development limits, four approved service areas, semantic landmarks, mobile-first accessible styles, four render tests, and a frozen pnpm lock
+- Service-scoped Web/API environment templates, metadata-only FastAPI request logging, Uvicorn unsafe-log hardening, and standard-library repository/browser artifact secret scanners
 
 ### Changed
 
@@ -37,6 +38,6 @@
 
 ### Pending
 
-- Environment/log/secret, contract drift, and remaining Phase 1 integration gates
+- Contract drift and remaining Phase 1 integration gates
 - Official KB and office data
 - Deployment accounts and URLs
