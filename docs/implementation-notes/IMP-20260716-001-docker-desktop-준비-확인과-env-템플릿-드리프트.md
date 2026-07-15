@@ -144,7 +144,7 @@ Docker 엔진은 이미 정상이라 UI 조작이 필요 없다. 반면 dirty wo
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - Docker는 정상 준비됐다. 개발 작업 중 켜두기만 하면 되고 Docker UI를 직접 조작할 필요가 없다.
-- `apps/api/.env.example`이 삭제되고 `apps/api/.env`가 생겨 있다. `.env.example`을 `.env`로 이름 변경했는지 여부를 알려줘야 한다.
+- 2026-07-16 사용자가 `.env.example`을 `.env`로 이름 변경했다고 확인했으며, 해결 결과는 IMP-20260716-002에 기록했다.
 - 이름 변경한 것이라면 `.env`는 그대로 보존하고 tracked 예제만 복구하는 방식으로 처리할 수 있다.
 - `.env` 내용이나 API key는 채팅으로 보내면 안 된다.
 
@@ -172,7 +172,7 @@ Docker 엔진은 이미 정상이라 UI 조작이 필요 없다. 반면 dirty wo
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- `.env.example` 삭제 의도가 미확인이다.
+- Resolved by [IMP-20260716-002](IMP-20260716-002-deepseek-local-env-보존과-예제-템플릿-복원.md): 사용자가 rename을 확인했고 ignored `.env` 보존·tracked template 복원을 검증했다.
 - `.env`에 실제 key가 있는지는 알 수 없으며 확인할 필요도 없다.
 - Supabase CLI와 images는 아직 없으므로 추후 첫 설치/pull에 네트워크와 디스크가 필요하다.
 - Docker Desktop을 종료하면 local DB도 중단되지만 데이터 volume 정책은 DB 계획에서 별도로 정의한다.
