@@ -19,6 +19,7 @@
 - Next.js 16.2.10 static `/` shell with truthful development limits, four approved service areas, semantic landmarks, mobile-first accessible styles, four render tests, and a frozen pnpm lock
 - Service-scoped Web/API environment templates, metadata-only FastAPI request logging, Uvicorn unsafe-log hardening, and standard-library repository/browser artifact secret scanners
 - Strict shared-contract validator with 16 synthetic fixtures, 25 fixture validations, and five OpenAPI structure/reference guards
+- Deterministic OpenAPI TypeScript generation/check commands and strict Pydantic raw-JSON consumers for the same 16 contract fixtures
 
 ### Changed
 
@@ -37,9 +38,10 @@
 - Split Phase 1 into exact runtime, pre-DB health/readiness, Web shell, env/log boundary, contract/generated drift, and clean local verification review units
 - Adjusted the approved ESLint development tool from the incompatible 10.7.0 candidate to exact 9.39.5 for the Next 16.2.10 bundled plugin peer range; production dependencies were unchanged
 - Tightened the existing API 2.0.0-draft so SUCCESS requires at least one source and aligned nullable optional fallback office validation across OpenAPI and standalone JSON Schema
+- Made public Pydantic boundary models reject scalar coercion and preserved optional OpenAPI fields with defaults in generated TypeScript
 
 ### Pending
 
-- Generated TypeScript/Pydantic contract drift and remaining Phase 1 integration gates
+- Remaining Phase 1 clean local integration gate
 - Official KB and office data
 - Deployment accounts and URLs

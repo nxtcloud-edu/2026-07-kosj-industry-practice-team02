@@ -68,3 +68,17 @@ def test_injected_readiness_probe_can_report_ready_without_database_code() -> No
     assert response.json() == {"status": "ready"}
     assert "Retry-After" not in response.headers
     assert probe.call_count == 1
+
+
+def test_generated_openapi_uses_the_tracked_health_operation_ids() -> None:
+    schema = create_app().openapi()
+
+    assert schema["paths"]["/health"]["get"]["operationId"] == "health"
+    assert schema["paths"]["/ready"]["get"]["operationId"] == "readiness"
+
+
+def test_generated_openapi_declares_the_wire_retry_after_header() -> None:
+    schema = create_app().openapi()
+    retry_after = schema["paths"]["/ready"]["get"]["responses"]["503"]["headers"]["Retry-After"]
+
+    assert retry_after["schema"] == {"type": "integer", "minimum": 1}

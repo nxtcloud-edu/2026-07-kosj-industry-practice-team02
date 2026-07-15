@@ -1,14 +1,17 @@
 {
   "name": "@sejong-ai/shared-contracts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "generate": "node scripts/generate-api.mjs",
+    "generate:check": "node scripts/generate-api.mjs --check",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
+    "openapi-typescript": "7.13.0",
     "yaml": "2.9.0"
   }
 }

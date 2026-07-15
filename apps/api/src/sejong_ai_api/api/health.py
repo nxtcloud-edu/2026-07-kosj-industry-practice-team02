@@ -42,7 +42,7 @@ def get_readiness_probe() -> ReadinessProbe:
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, operation_id="health")
 def get_health() -> HealthResponse:
     """Report process liveness without consulting external dependencies."""
     return HealthResponse()
@@ -51,7 +51,22 @@ def get_health() -> HealthResponse:
 @router.get(
     "/ready",
     response_model=ReadyResponse,
-    responses={503: {"model": ServiceUnavailableEnvelope}},
+    operation_id="readiness",
+    responses={
+        503: {
+            "model": ServiceUnavailableEnvelope,
+            "description": (
+                "No safe response can be produced from approved ACTIVE KB and "
+                "currently available dependencies."
+            ),
+            "headers": {
+                "Retry-After": {
+                    "description": "Suggested retry delay in seconds.",
+                    "schema": {"type": "integer", "minimum": 1},
+                }
+            },
+        }
+    },
 )
 def get_readiness(
     probe: Annotated[ReadinessProbe, Depends(get_readiness_probe)],

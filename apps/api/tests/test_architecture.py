@@ -7,6 +7,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FILES = (
     API_ROOT / "src" / "sejong_ai_api" / "main.py",
     API_ROOT / "src" / "sejong_ai_api" / "api" / "health.py",
+    API_ROOT / "src" / "sejong_ai_api" / "contracts" / "chat.py",
     API_ROOT / "src" / "sejong_ai_api" / "core" / "logging.py",
 )
 
@@ -71,7 +72,7 @@ class ApiArchitectureTest(unittest.TestCase):
         self.assertEqual(pyproject["tool"]["pytest"]["ini_options"]["pythonpath"], ["src"])
         self.assertEqual(pyproject["tool"]["mypy"]["mypy_path"], "src")
 
-    def test_health_modules_exist_without_concrete_io_imports_or_construction(self) -> None:
+    def test_api_boundary_modules_exist_without_concrete_io_imports_or_construction(self) -> None:
         for source_path in SOURCE_FILES:
             with self.subTest(source_path=source_path.relative_to(API_ROOT)):
                 self.assertTrue(source_path.is_file(), f"missing API source: {source_path}")
