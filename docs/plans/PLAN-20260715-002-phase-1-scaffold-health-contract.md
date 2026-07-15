@@ -2,7 +2,7 @@
 
 ## 상태
 
-In Progress — 상위 `PLAN-20260714-001`을 2026-07-15 사용자가 `진행`으로 승인했으며, 이 문서는 승인된 첫 수직 흐름을 독립 리뷰 가능한 단위로 세분화한다.
+Done — Task 1~7 구현, corrected fresh-worktree default/warm-offline 24/24, actual API/Web HTTP smoke와 최종 독립 read-only review(P0/P1/P2 0)를 완료했다.
 
 ## 목표와 비목표
 
@@ -10,7 +10,7 @@ In Progress — 상위 `PLAN-20260714-001`을 2026-07-15 사용자가 `진행`�
   - Node 24/pnpm, Python 3.12/uv를 exact pin한 재현 가능한 local-first 모노레포를 만든다.
   - 최소 Next.js 앱과 FastAPI 앱을 만들고 `/health=200`, DB·승인 seed 전 `/ready=503`을 계약과 테스트로 고정한다.
   - 브라우저/서버 환경변수 경계와 raw request body 비기록을 자동 검증한다.
-  - OpenAPI 2.0.0-draft, JSON Schema, 생성 TypeScript 타입, FastAPI/Pydantic 소비 모델의 핵심 불변조건 drift를 0으로 만든다.
+  - OpenAPI 2.0.1-draft, JSON Schema, 생성 TypeScript 타입, FastAPI/Pydantic 소비 모델의 핵심 불변조건 drift를 0으로 만든다.
   - clean install, lint, format, typecheck, unit/contract test, build, health smoke를 단일 local gate로 재현한다.
 - 비목표:
   - DB migration·Supabase local stack·공식/모의 seed
@@ -102,7 +102,7 @@ Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.
   - `packages/shared-contracts`: OpenAPI 생성 타입, schema fixtures와 drift test만; runtime business logic 없음.
 - API/DB 변경:
   - `/health`와 pre-DB `/ready`만 실제 구현한다. Chat/admin route와 DB schema/migration은 구현하지 않는다.
-  - OpenAPI 2.0.0-draft는 기존 승인 동작을 더 엄격히 표현하되 route/version은 유지한다.
+  - OpenAPI 2.0.1-draft는 기존 승인 동작을 더 엄격히 표현하되 route namespace·상태 enum·wire 동작은 유지한다.
 - 보안/개인정보:
   - raw body를 읽거나 기록하는 middleware를 만들지 않는다. log allowlist는 method/path/status/request_id만이다.
   - web env와 client bundle은 explicit deny markers로 검사한다. secret scan은 값 내용을 출력하지 않고 경로/개수만 보고한다.
@@ -236,7 +236,7 @@ Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.
 3. JSON Schema의 `Fallback.office`를 OpenAPI `Office`와 동기화한다.
 4. artifact matrix를 고정한다: response fixture는 OpenAPI에서 추출한 `ChatResponse`와 standalone JSON Schema 양쪽에서 검사하고, request/503 fixture는 각각 OpenAPI `ChatRequest`/`ServiceUnavailableEnvelope`에서 검사한다.
 5. request `context_token` optional nullable, response required nullable, `session_id` 거부, 503 exact envelope fixtures를 고정한다.
-6. 새 공개 동작이나 enum은 추가하지 않고 API version `2.0.0-draft`를 유지한다.
+6. 새 공개 동작이나 enum은 추가하지 않는다. Task 5에서는 `2.0.0-draft`를 유지했고, 최종 전체 리뷰에서 발견한 health/readiness/FALLBACK 스키마 drift만 patch revision `2.0.1-draft`로 닫는다.
 
 **Commands/evidence**
 
@@ -317,12 +317,12 @@ Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.
 
 - app: `0.0.0-not-scaffolded → 0.1.0`
 - web: `0.0.0-not-scaffolded → 0.1.0`
-- api: 공개 계약은 `2.0.0-draft` 유지, 구현 패키지는 `0.1.0`
+- api: 공개 계약 `2.0.0-draft → 2.0.1-draft`, 구현 패키지는 `0.1.0`
 - schema: `0.2.0-draft` 유지, migration 0건
 - data: official/mock 모두 not-populated 유지
 - prompts: `0.0.2-deepseek-v4-flash-selected` 유지, 호출 0건
-- tests: `0.3.0-spec → 0.4.0-scaffold-gates`
-- docs: 계획/각 note마다 patch 증가, Phase 1 완료 시 실제 값 기록
+- tests: `0.3.0-spec → 0.4.2-readiness-contract`
+- docs: `2.3.1 → 2.3.10`
 
 ## 위험과 롤백
 
@@ -351,9 +351,11 @@ Task 3 실제 lock에서는 같은 승인 dev package인 ESLint를 후보 `10.7.
 - 2026-07-15: Task 4 DEV-002A 서비스별 env, 네 필드 metadata-only 요청 로그와 저장소/브라우저 scanner를 RED→GREEN으로 구현했다. 실제 trace/raw Upgrade에서 발견한 client-address protocol record와 client/path/query 인자를 담는 exact pinned Uvicorn WebSocket INFO template을 차단하고 공식 launcher를 `--no-access-log --ws none`으로 고정했다. secret scanner에는 PowerShell `$env:`와 cmd `set ` assignment 및 0-byte active file 회귀를 추가했다. 최종 API 19 passed+3 subtests·warning 1, root security 총 13 tests(12 passed+Windows symlink 권한 제약 skip 1), ruff/mypy, production Web build, actual 200/500/404/405 및 raw Upgrade 404 smoke와 scanner를 통과했다. [IMP-20260715-006](../implementation-notes/IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md)을 완료하고 commit `c2f45d4`로 고정했다.
 - 2026-07-15: Task 5 CONTRACT-001A는 요청3·응답9·오류4의 합성 fixture로 25개 계약 검증을 만들고, 기존 계약의 정확한 4 RED(21 pass/4 fail)를 SUCCESS source 조건과 standalone fallback office 최소 정합화로 25/25 GREEN으로 전환했다. 추가 5개 structure test로 공통 503 reference·Retry-After·SYSTEM_ERROR 제외·안전한 `$ref` rewrite를 고정했으며 exact dev-only `ajv@8.20.0`, `ajv-formats@3.0.1`, `yaml@2.9.0` 외 production dependency는 추가하지 않았다.
 - 2026-07-15: Task 6 CONTRACT-001B는 `openapi-typescript@7.13.0` Node API와 결정적 byte-check로 generated TypeScript를 고정하고, strict Pydantic 모델이 같은 16개 raw JSON fixture를 소비하도록 했다. review에서 발견한 scalar coercion, OpenAPI default의 optional→required 생성, FastAPI health operationId/Retry-After metadata drift를 각각 focused RED→GREEN으로 닫았고 production dependency·tracked public contract는 변경하지 않았다.
+- 2026-07-15: Task 7 DEV-001D/DEV-002B는 missing-runner 9 RED에서 시작해 Windows PowerShell 5.1+ 24단계 `scripts/verify.ps1`을 만들었다. review에서 발견한 child 성공 출력·missing executable 경로 노출, uv suffix·step label, unknown option, pnpm 재검증 env, synthetic/offline env 복원과 완료 PASS 시점을 16개 focused test로 닫았다. 최신 writer default와 warm `-Offline` 전체 gate는 모두 exit 0이다.
+- 2026-07-15: 전체 Phase 1 read-only 리뷰에서 `/ready` 200 응답 스키마 누락, FALLBACK 추가 필드 허용, `/health` 개방형 응답을 발견했다. 공통 합성 fixture 17개, fixture 검증 27개, structure guard 6개와 strict Pydantic/generated TypeScript 회귀로 API `2.0.1-draft`에서 모두 닫았고 공개 route·enum·DB·data·prompt·production dependency는 바꾸지 않았다.
 
 ## 결과와 회고
 
-- 실제 결과: 진행 중. Task 1~6은 완료했고 application `0.0.4-contract-drift-gates`, shared-contracts `0.2.0`에서 기존 API 2.0.0-draft의 TypeScript/Pydantic/FastAPI metadata drift gate를 실행 가능하게 고정했다. Phase 1 전체 완료는 clean local verify 이후다.
-- 계획과 달라진 점: Web의 ESLint 후보를 10.7.0에서 호환 가능한 9.39.5로 조정했고, Vitest JSX transform은 별도 plugin 대신 내장 Oxc를 사용했다. DEV-002A 실제 trace/raw Upgrade smoke에서는 access logger 외 `uvicorn.error` protocol TRACE와 pinned WebSocket INFO template의 client/path/query 노출 가능성을 추가로 발견해 최소 filter, `--ws none`과 회귀 테스트로 막았다. secret scanner는 지원되는 PowerShell/cmd 정적 assignment까지 보강했으며 새 production dependency는 없다.
-- 다음 단계: Task 7 DEV-001D에서 단일 clean local verification runner, actual health smoke와 fresh review로 Phase 1을 마감한다.
+- 실제 결과: Task 1~7을 완료했다. application `0.1.0`, shared-contracts `0.2.1`, test suite `0.4.2-readiness-contract`, API `2.0.1-draft`에서 corrected snapshot `2f8c573`의 default와 warm `-Offline` gate가 각각 24/24로 통과했다. actual API smoke(`/health=200`, pre-DB `/ready=503`, marker 로그 0)와 Web smoke(HTML/RSC 200, env/marker 노출 0, env 복원), 최종 독립 review(P0/P1/P2 0, Ready Yes)도 완료했다.
+- 계획과 달라진 점: Web의 ESLint 후보를 10.7.0에서 호환 가능한 9.39.5로 조정했고, Vitest JSX transform은 별도 plugin 대신 내장 Oxc를 사용했다. DEV-002A 실제 trace/raw Upgrade smoke에서는 access logger 외 `uvicorn.error` protocol TRACE와 pinned WebSocket INFO template의 client/path/query 노출 가능성을 추가로 발견해 최소 filter, `--ws none`과 회귀 테스트로 막았다. Task 7 runner는 보안상 하위 명령 성공 출력도 전달하지 않고 stable 단계만 출력하도록 강화했으며 새 production dependency는 없다.
+- 다음 단계: Phase 2는 DB-001·DATA-SEED-001의 인간 승인·공식 데이터 준비가 충족될 때 시작한다. 그 전까지 `/ready=503`과 DB/data/chat/admin Blocked 상태를 유지한다.

@@ -8,17 +8,17 @@
 |---|---|---|---|---|---|---|
 | DISC-001 | P0 | Architecture·Security·Data·Docs | [저장소 감사와 최종 기준 드리프트 보고서](docs/discovery/INITIAL_DISCOVERY_REPORT.md) | Done | 없음 | 코드/문서/데이터/계약 충돌표와 [IMP-20260714-001](docs/implementation-notes/IMP-20260714-001-초기-저장소-발견-감사.md) 작성 |
 | DISC-002 | P0 | Architecture·Product·Security | 아키텍처 영향 인터뷰 | Done | DISC-001 | batch 1~3 기록, 인간 결정형 A/Blocker 0 |
-| DOC-001 | P0 | Architecture·Docs | 결정 로그·ADR·모호성·계약·DB draft 동기화 | Done | DISC-002 | D-009~024, ADR-0002~0010, OpenAPI 2.0.0-draft와 source-of-truth 정합성 검사 통과 |
+| DOC-001 | P0 | Architecture·Docs | 결정 로그·ADR·모호성·계약·DB draft 동기화 | Done | DISC-002 | D-009~024, ADR-0002~0010, OpenAPI 2.0.1-draft와 source-of-truth 정합성 검사 통과 |
 | PLAN-001 | P0 | Architecture·전체 | [local-first 기반과 승인형 민원 안내 실행계획](docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md) | Done | DISC-002, DOC-001 | 2026-07-15 사용자 `진행` 승인; 공개/실제 시민 경계는 별도 승인 유지 |
 
 ## Phase 1 — 프로젝트 스캐폴딩
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | In Progress | PLAN-001 Approved | clean install, web/api 검증, `/health=200`, DB·승인 seed 전 `/ready=503` |
-| DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Blocked | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, lint/typecheck/test/build/contract 수동 명령 증거 |
+| DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | Done | PLAN-001 Approved | corrected fresh default·warm-offline 24/24와 actual API/Web smoke, final P0/P1/P2 0; DB·승인 seed 전 `/ready=503` 유지 |
+| DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Done | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, synthetic/offline env 복원과 clean gate 통과 |
 | DB-001 | P0 | Backend·Data·Security | Supabase SQL v1 migration·보상 rollback·backend-only 권한 | Blocked | DEV-001 | empty DB reset/replay·보상 rollback/replay, 제약·retention·권한 테스트 통과 |
-| CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Blocked | DEV-001 | FE/BE drift 0, `session_id` 거부, 요청 token optional nullable·응답 required nullable·FALLBACK null, SUCCESS source≥1, 200 SYSTEM_ERROR 거부·503 exact envelope |
+| CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Done | DEV-001 | API 2.0.1-draft의 `/health`·ready-state `/ready` 200과 FALLBACK까지 fixture·생성 TypeScript·strict Pydantic drift 0, final P0/P1/P2 0 |
 
 ### Phase 1 실행 상세 — PLAN-20260715-002
 
@@ -30,7 +30,8 @@
 | DEV-002A | P0 | Security·Platform | 서비스별 env·metadata-only log·secret/browser scan | Done | DEV-001B, DEV-001C | raw body/sentinel/browser secret 0, [IMP-20260715-006](docs/implementation-notes/IMP-20260715-006-서비스별-환경변수와-안전-로그-경계.md) |
 | CONTRACT-001A | P0 | FE·BE·QA | 승인 계약 불변조건과 공통 fixtures | Done | DEV-001B, DEV-001C | SUCCESS source≥1·office/context/503 양 계약 fixture 정합, [IMP-20260715-007](docs/implementation-notes/IMP-20260715-007-승인-계약-불변조건과-공통-fixture.md) |
 | CONTRACT-001B | P0 | FE·BE·QA | 생성 TS·Pydantic model drift gate | Done | CONTRACT-001A | 재생성 diff 0, 동일 fixture 통과, [IMP-20260715-008](docs/implementation-notes/IMP-20260715-008-생성-typescript와-pydantic-계약-drift-gate.md) |
-| DEV-001D | P0 | Platform·QA·Docs | clean local verify와 Phase 1 마감 | Ready | DEV-002A, CONTRACT-001B | 단일 gate·actual health smoke·fresh review·note 완료 |
+| DEV-001D | P0 | Platform·QA·Docs | clean local verify와 Phase 1 마감 | Done | DEV-002A, CONTRACT-001B | corrected snapshot default·warm-offline 24/24, actual API/Web smoke와 final read-only review 완료 |
+| DEV-002B | P0 | Platform·Security·QA | fail-fast local verification과 환경 복원 경계 | Done | DEV-002A, CONTRACT-001B | 24단계 gate, child exit 보존, 성공/실패 출력 비노출, synthetic/offline env 복원과 fresh review 통과 |
 
 ## Phase 2 — 시민 질문 수직 흐름
 

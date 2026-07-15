@@ -22,7 +22,7 @@ def create_app(
 ) -> FastAPI:
     """Build an import-safe API application with an optional readiness seam."""
     configure_uvicorn_log_safety()
-    application = FastAPI(title="Sejong Civil AI API", version="2.0.0-draft")
+    application = FastAPI(title="Sejong Civil AI API", version="2.0.1-draft")
     application.include_router(router)
     application.add_middleware(
         SafeRequestLoggingMiddleware,

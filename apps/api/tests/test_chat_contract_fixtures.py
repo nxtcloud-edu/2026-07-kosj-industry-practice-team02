@@ -60,6 +60,7 @@ def test_chat_request_consumes_shared_fixtures(fixture: str, valid: bool) -> Non
         ("invalid-missing-context.json", False),
         ("invalid-session-id.json", False),
         ("invalid-office-missing-id.json", False),
+        ("invalid-fallback-extra-property.json", False),
     ],
 )
 def test_chat_response_consumes_shared_fixtures(fixture: str, valid: bool) -> None:

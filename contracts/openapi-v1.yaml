@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Sejong Civil AI API
-  version: 2.0.0-draft
+  version: 2.0.1-draft
   description: |
     Final-scope draft. Validate through discovery/interview before implementation.
     Admin routes are local/private demo surfaces, not public authentication boundaries.
@@ -23,16 +23,16 @@ paths:
           description: Process health
           content:
             application/json:
-              schema:
-                type: object
-                required: [status]
-                properties:
-                  status: { const: ok }
+              schema: { $ref: '#/components/schemas/HealthResponse' }
   /ready:
     get:
       operationId: readiness
       responses:
-        '200': { description: Required dependencies and seed data ready }
+        '200':
+          description: Required dependencies and seed data ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadyResponse' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/chat:
     post:
@@ -224,6 +224,18 @@ components:
               request_id: 7d444840-9dc0-11d1-b245-5ffdce74fad2
               retryable: true
   schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { const: ok }
+    ReadyResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { const: ready }
     Intent:
       type: string
       enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL, OUT_OF_SCOPE, UNKNOWN]
@@ -298,6 +310,7 @@ components:
         last_verified_at: { type: string, format: date }
     Fallback:
       type: object
+      additionalProperties: false
       required: [reason, title, message, candidate_eligible]
       properties:
         reason: { $ref: '#/components/schemas/FallbackReason' }

@@ -30,6 +30,7 @@ const responseExpectations = [
   ["invalid-missing-context.json", false, { keyword: "required", path: "", property: "context_token" }],
   ["invalid-session-id.json", false, { keyword: "additionalProperties", path: "", property: "session_id" }],
   ["invalid-office-missing-id.json", false, { keyword: "required", path: "/fallback/office", property: "id" }],
+  ["invalid-fallback-extra-property.json", false, { keyword: "additionalProperties", path: "/fallback", property: "provider_debug" }],
 ];
 
 const responseCases = responseExpectations.flatMap(([fixture, valid, error]) => [
@@ -63,7 +64,7 @@ const errorCases = [
 }));
 
 const cases = [...requestCases, ...responseCases, ...errorCases];
-assert.equal(cases.length, 25, "fixture matrix must contain exactly 25 validations");
+assert.equal(cases.length, 27, "fixture matrix must contain exactly 27 validations");
 
 function summarizeErrors(errors = []) {
   return errors.map(({ instancePath, keyword, params }) => ({

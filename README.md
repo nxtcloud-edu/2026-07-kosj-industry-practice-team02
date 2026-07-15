@@ -45,9 +45,10 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 - 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, DB·승인 seed 전 `/ready=503`. Web은 정적 소개 `/` shell까지 구현됐고 `/chat`·`/admin`은 아직 없음.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
-- 공유 계약 package는 16개 합성 fixture를 OpenAPI와 standalone JSON Schema에 대해 검증하며, SUCCESS 출처·context·503 불변조건을 고정함. 생성 TypeScript/Pydantic drift gate는 다음 단계임.
+- 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
+- Windows PowerShell 5.1+ 단일 local gate가 exact runtime, frozen install, Web/API/계약, secret/browser artifact, package와 diff 검증을 순서대로 실행함. DB와 승인 seed가 아직 없으므로 `/ready=503`은 의도한 정상 상태임.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
-- `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 breaking change로 API spec revision은 2.0.0-draft임.
+- `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 major 뒤 Phase 1 wire drift를 고친 API spec revision은 2.0.1-draft임.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
 
@@ -61,6 +62,24 @@ uv         0.11.28      uv.toml#required-version
 ```
 
 `pnpm-workspace.yaml`은 `apps/*`와 `packages/*`만 활성 workspace로 포함한다. `uv.toml`은 지원되지 않는 uv 버전의 실행을 즉시 거부한다. `.tools/`, `.worktrees/`, `.superpowers/`, dependency/build cache는 Git에 넣지 않는다. root 계약은 `python -B -m unittest scripts.tests.test_repository_scaffold -v`, Web은 `corepack pnpm install --frozen-lockfile --ignore-scripts` 후 `test`·`typecheck`·`lint`·`build` script로 검증한다. 공유 계약은 `corepack.cmd pnpm --filter @sejong-ai/shared-contracts test`로 검증한다.
+
+## 단일 로컬 검증
+
+저장소 루트에서 다음 명령을 실행한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
+```
+
+기본 검증을 한 번 통과해 dependency cache가 준비된 뒤에는 warm-cache 오프라인 재현도 확인할 수 있다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offline
+```
+
+`-Offline`은 미리 받은 cache의 재사용 가능성을 검증하며 빈 PC의 최초 설치를 대신하지 않는다. 러너는 파일을 삭제하거나 서버를 띄우지 않고, 실패 시 하위 명령의 내용 대신 stable step ID와 종료코드만 표시한다. 실제 `/health`·`/ready` HTTP smoke는 서버를 명시적으로 실행하는 별도 검증이다.
+
+다른 현재 디렉터리에서 실행할 때는 `-File`에 이 저장소의 `scripts/verify.ps1` 절대 경로를 전달한다. 러너는 호출된 파일 위치를 기준으로 저장소 루트를 찾는다.
 
 ## 개발 시 절대 혼동하지 말 것
 

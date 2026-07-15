@@ -1,19 +1,19 @@
 {
   "manifest_version": "1.0.0",
-  "updated_at": "2026-07-15T14:29:23+09:00",
+  "updated_at": "2026-07-15T21:31:00+09:00",
   "versions": {
     "product_spec": "2.2.0",
-    "repo_guidance": "1.3.0",
-    "application": "0.0.4-contract-drift-gates",
+    "repo_guidance": "1.4.0",
+    "application": "0.1.0",
     "web": "0.1.0",
-    "api": "2.0.0-draft",
-    "shared_contracts": "0.2.0",
+    "api": "2.0.1-draft",
+    "shared_contracts": "0.2.1",
     "database_schema": "0.2.0-draft",
     "official_data": "0.0.0-not-populated",
     "mock_data": "0.0.0-not-populated",
     "prompt_set": "0.0.2-deepseek-v4-flash-selected",
-    "test_suite": "0.4.0-contract-drift-gates",
-    "documentation": "2.3.8"
+    "test_suite": "0.4.2-readiness-contract",
+    "documentation": "2.3.10"
   },
   "policy": "Every implementation note records before/after versions. Breaking API or schema changes require human approval and an ADR."
 }

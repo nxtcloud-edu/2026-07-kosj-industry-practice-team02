@@ -1,6 +1,6 @@
 /**
  * source: contracts/openapi-v1.yaml
- * OpenAPI: 2.0.0-draft; generator: openapi-typescript 7.13.0
+ * OpenAPI: 2.0.1-draft; generator: openapi-typescript 7.13.0
  * Generated deterministically; do not edit by hand.
  */
 export interface paths {
@@ -250,6 +250,10 @@ export interface components {
         };
         /** @enum {string} */
         FallbackReason: "INSUFFICIENT_GROUNDING" | "PERSONAL_LOOKUP" | "LEGAL_JUDGMENT" | "OUT_OF_SCOPE";
+        HealthResponse: {
+            /** @constant */
+            status: "ok";
+        };
         /** @enum {string} */
         Intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL" | "OUT_OF_SCOPE" | "UNKNOWN";
         KBCandidateCreate: {
@@ -286,6 +290,10 @@ export interface components {
             source_title: string;
             /** Format: uri */
             source_url?: string;
+        };
+        ReadyResponse: {
+            /** @constant */
+            status: "ready";
         };
         ServiceUnavailableEnvelope: {
             error: {
@@ -718,10 +726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @constant */
-                        status: "ok";
-                    };
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
@@ -740,7 +745,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReadyResponse"];
+                };
             };
             503: components["responses"]["ServiceUnavailable"];
         };

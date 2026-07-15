@@ -73,8 +73,29 @@ def test_injected_readiness_probe_can_report_ready_without_database_code() -> No
 def test_generated_openapi_uses_the_tracked_health_operation_ids() -> None:
     schema = create_app().openapi()
 
+    assert schema["info"]["version"] == "2.0.1-draft"
     assert schema["paths"]["/health"]["get"]["operationId"] == "health"
     assert schema["paths"]["/ready"]["get"]["operationId"] == "readiness"
+
+
+def test_generated_openapi_has_strict_required_health_and_readiness_bodies() -> None:
+    schema = create_app().openapi()
+
+    for path, component_name, expected_status in (
+        ("/health", "HealthResponse", "ok"),
+        ("/ready", "ReadyResponse", "ready"),
+    ):
+        response_schema = schema["paths"][path]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        assert response_schema == {"$ref": f"#/components/schemas/{component_name}"}
+
+        component = schema["components"]["schemas"][component_name]
+        assert component["additionalProperties"] is False
+        assert component["required"] == ["status"]
+        assert component["properties"]["status"]["type"] == "string"
+        assert component["properties"]["status"]["const"] == expected_status
+        assert "default" not in component["properties"]["status"]
 
 
 def test_generated_openapi_declares_the_wire_retry_after_header() -> None:

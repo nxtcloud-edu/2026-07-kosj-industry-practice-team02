@@ -45,7 +45,7 @@ router = APIRouter(tags=["health"])
 @router.get("/health", response_model=HealthResponse, operation_id="health")
 def get_health() -> HealthResponse:
     """Report process liveness without consulting external dependencies."""
-    return HealthResponse()
+    return HealthResponse(status="ok")
 
 
 @router.get(
@@ -73,7 +73,7 @@ def get_readiness(
 ) -> ReadyResponse | JSONResponse:
     """Report whether required dependencies and approved seed data are usable."""
     if probe.is_ready():
-        return ReadyResponse()
+        return ReadyResponse(status="ready")
 
     unavailable = ServiceUnavailableEnvelope(
         error=ServiceUnavailableDetail(

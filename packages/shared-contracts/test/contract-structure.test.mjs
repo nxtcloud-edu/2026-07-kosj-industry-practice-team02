@@ -8,6 +8,26 @@ import {
 
 const { openApi } = loadContracts();
 
+test("health and readiness 200 responses use strict required body components", () => {
+  assert.equal(openApi.info.version, "2.0.1-draft");
+
+  for (const [path, componentName, status] of [
+    ["/health", "HealthResponse", "ok"],
+    ["/ready", "ReadyResponse", "ready"],
+  ]) {
+    assert.deepEqual(
+      openApi.paths[path].get.responses["200"].content["application/json"].schema,
+      { $ref: `#/components/schemas/${componentName}` },
+    );
+    assert.deepEqual(openApi.components.schemas[componentName], {
+      type: "object",
+      additionalProperties: false,
+      required: ["status"],
+      properties: { status: { const: status } },
+    });
+  }
+});
+
 test("readiness and chat share the approved 503 response reference", () => {
   const expected = "#/components/responses/ServiceUnavailable";
   assert.equal(openApi.paths["/ready"].get.responses["503"].$ref, expected);

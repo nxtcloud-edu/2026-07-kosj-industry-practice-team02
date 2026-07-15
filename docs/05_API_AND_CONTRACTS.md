@@ -7,7 +7,7 @@
 - 계약 변경은 영향 분석, 테스트, 버전, 구현 노트를 동반한다.
 - breaking change는 인간 승인과 ADR이 필요하다.
 - source metadata는 서버가 결합한다.
-- API spec revision은 `2.0.0-draft`이며 최초 route namespace는 계속 `/api/v1`이다.
+- API spec revision은 `2.0.1-draft`이며 route namespace·상태 enum·wire 동작은 `2.0.0-draft`와 동일하다. patch revision은 `/health`·ready-state `/ready` 200 본문과 FALLBACK의 추가 필드 거부를 양 계약에서 엄격히 일치시킨다.
 
 ## 대화 문맥 계약
 

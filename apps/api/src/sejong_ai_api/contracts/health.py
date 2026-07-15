@@ -13,11 +13,11 @@ class StrictPublicModel(BaseModel):
 
 
 class HealthResponse(StrictPublicModel):
-    status: Literal["ok"] = "ok"
+    status: Literal["ok"]
 
 
 class ReadyResponse(StrictPublicModel):
-    status: Literal["ready"] = "ready"
+    status: Literal["ready"]
 
 
 class ServiceUnavailableDetail(StrictPublicModel):

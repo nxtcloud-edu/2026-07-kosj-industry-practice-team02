@@ -9,6 +9,17 @@ python scripts/validate_codex_package.py
 
 위 Python 유틸리티와 `scripts/tests/`의 저장소 경계 검사는 Python 표준 라이브러리만 사용한다.
 
+## 단일 로컬 검증 gate
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offline
+```
+
+러너는 Windows PowerShell 5.1+, Node 24.12.0, pnpm 11.13.0, uv 0.11.28과 API venv Python 3.12.13을 먼저 확인한다. 이어 frozen pnpm/uv sync, root tests, Web lint/typecheck/test/synthetic-secret build, API format/lint/mypy/pytest, 계약 생성·diff·test, 두 secret scanner, package validator와 `git diff --check`를 fail-fast로 실행한다.
+
+공개 옵션은 `-Offline` 하나뿐이다. 오프라인 모드는 warm cache를 요구하며 pnpm/uv offline을 강제한다. 성공·실패 하위 명령의 원문 출력은 비밀·경로 유출을 막기 위해 전달하지 않고 stable step ID만 표시한다. child 실패는 해당 종료코드를 보존하고, 버전·실행·복원 같은 운영 오류는 2를 반환한다. 러너 자체는 삭제와 서버 실행을 하지 않는다.
+
 ## 보안 경계 검사
 
 ```powershell

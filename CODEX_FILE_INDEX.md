@@ -42,7 +42,7 @@
 
 | 위치 | 목적 |
 |---|---|
-| `contracts/` | OpenAPI 2.0.0-draft와 동기화 JSON Schema |
+| `contracts/` | OpenAPI 2.0.1-draft와 동기화 JSON Schema |
 | `database/` | 개인정보·승인 불변조건을 반영한 DB 논리 초안 |
 | `docs/03_ARCHITECTURE.md` | 시스템 경계와 장애 전략 |
 | `docs/04_DOMAIN_AND_STATE_MODEL.md` | enum·상태·불변조건 |

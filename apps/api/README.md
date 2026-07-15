@@ -8,7 +8,8 @@ readiness만 구현한다.
 - `GET /health`: 외부 의존성을 확인하지 않고 `200 {"status":"ok"}` 반환
 - `GET /ready`: DB와 승인 seed가 아직 없으므로 기본적으로 `503 SERVICE_UNAVAILABLE` 반환
 - readiness는 typed probe로 주입할 수 있지만, 이 단계에는 DB/provider 구현이나 연결이 없다.
-- 승인된 chat request/response와 공통 503은 strict Pydantic v2 경계 모델로 같은 16개 합성 JSON fixture를 소비한다. 숫자·문자열·boolean 간 암묵적 coercion은 거부한다.
+- API 2.0.1-draft는 `/health`와 향후 ready 상태의 `/ready` 200 body를 required·closed schema로 고정한다. pre-DB 기본값은 계속 503이다.
+- 승인된 chat request/response와 공통 503은 strict Pydantic v2 경계 모델로 같은 17개 합성 JSON fixture를 소비한다. 숫자·문자열·boolean 간 암묵적 coercion과 FALLBACK 추가 필드를 거부한다.
 - 정상 완료와 일반 `Exception` 경로의 HTTP 요청 로그는 서버가 만든 UUID, method, 라우트
   템플릿, status만 JSON 한 줄로 남긴다.
 - Uvicorn request-line access log, raw ASGI trace logger, INFO 미만 protocol record와 고정
