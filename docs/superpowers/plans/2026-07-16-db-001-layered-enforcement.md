@@ -1007,6 +1007,8 @@ Use explicit MOCK and OFFICIAL fixtures to prove:
 - incomplete content raises `P1004`;
 - MOCK activation raises `P1005`;
 - approval and rejection both require a trimmed non-empty review comment;
+- approval and rejection reject review comments longer than the OpenAPI maximum
+  of 1000 characters;
 - approval creates exactly one ACTIVE OFFICIAL KB, exactly one generalized initial question example, candidate link/status/reviewer/timestamp/comment, and exactly one approval audit row;
 - rejection requires non-empty comment and writes one rejection audit row;
 - audit UPDATE and DELETE fail for backend;
@@ -1039,6 +1041,11 @@ reason, `candidate_eligible = (reason = 'INSUFFICIENT_GROUNDING')`, and status t
 `status`, `fallback_reason`, and `candidate_eligible`. Wrong role is `P1001`,
 wrong/duplicate state is `P1003`, and invalid reason/lineage is `P1010`.
 
+Confirmation changed-field arrays use canonical order and contain only fields
+whose stored value actually changed: same-reason confirmation records
+`["status"]`; a reason-only change adds `fallback_reason`; a change that also
+flips eligibility adds `candidate_eligible` last.
+
 Replace the earlier lineage trigger behavior in this forward migration so only a
 NEW failure must match its immutable parent event. A confirmed failure may retain
 an operator-corrected reason. Direct changes that invalidate an existing
@@ -1060,11 +1067,28 @@ FAILED_QUESTION_REASON_CONFIRMED
 
 Allowed target types are `KB_CANDIDATE` and `FAILED_QUESTION`. Candidate changed-field lists are fixed server values, not caller inputs; confirmation derives its allowlisted changed-field names from actual changes and never stores a question/reason snapshot.
 
+Add action-shape constraints so allowlisted values cannot be cross-combined:
+candidate creation is `NULL → DRAFTED` with `["review_status"]`; submission is
+`DRAFTED → PENDING_APPROVAL` with `["review_status"]`; approval is
+`PENDING_APPROVAL → APPROVED` with
+`["review_status","reviewed_by","review_comment","approved_at","activated_kb_id"]`;
+rejection is `PENDING_APPROVAL → REJECTED` with
+`["review_status","reviewed_by","review_comment"]`; confirmation is
+`NEW → REASON_CONFIRMED` with the actual canonical field list above. Candidate
+review comments and audit review comments are trimmed, non-empty where required,
+and at most 1000 characters.
+
+Harden candidate row state shape in the same migration: DRAFTED and
+PENDING_APPROVAL have null reviewer/comment/approval/link fields; APPROVED has
+reviewer, comment, approval time, and activated KB; REJECTED has reviewer and
+comment but no approval time or activated KB. The existing different-reviewer
+constraint remains mandatory.
+
 - [ ] **Step 4: Implement atomic approval**
 
 `approve_kb_candidate` must:
 
-1. accept exact signature `approve_kb_candidate(uuid,text,text,text)`, require `APPROVER`, a trimmed non-empty review comment, lock candidate `FOR UPDATE`, and reject creator identity;
+1. accept exact signature `approve_kb_candidate(uuid,text,text,text)`, require `APPROVER`, a trimmed non-empty review comment of at most 1000 characters, lock candidate `FOR UPDATE`, and reject creator identity;
 2. require `PENDING_APPROVAL`, complete content/source, and `OFFICIAL` origin;
 3. generate public ID as `KB-` plus all 32 uppercase hexadecimal characters of candidate UUID with hyphens removed, making it a deterministic one-to-one mapping;
 4. insert one ACTIVE KB with candidate content, creator, approver, and approval time;
@@ -1076,7 +1100,7 @@ Allowed target types are `KB_CANDIDATE` and `FAILED_QUESTION`. Candidate changed
 
 - [ ] **Step 5: Implement atomic rejection**
 
-`reject_kb_candidate` requires APPROVER, a different actor, PENDING_APPROVAL, and a trimmed non-empty comment. It updates the candidate and inserts one audit row in the same transaction. It never copies candidate question/answer content into audit.
+`reject_kb_candidate` requires APPROVER, a different actor, PENDING_APPROVAL, and a trimmed non-empty comment of at most 1000 characters. It updates the candidate and inserts one audit row in the same transaction. It never copies candidate question/answer content into audit.
 
 - [ ] **Step 6: Apply ownership and execute grants**
 
