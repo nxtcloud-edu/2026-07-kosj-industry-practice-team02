@@ -99,16 +99,12 @@ class SupabaseToolPinTests(unittest.TestCase):
         self.assertIn("--version", script)
         self.assertIn("[PASS] step=VERIFY-SUPABASE-ARCHIVE", script)
         self.assertIn("[PASS] step=VERIFY-SUPABASE-VERSION", script)
-        parameter_block = re.search(
-            r"\A\s*param\((.*?)\)\s*Set-StrictMode",
-            script,
-            flags=re.DOTALL,
+        self.assertIsNone(
+            re.match(r"\A\s*param\(", script),
+            "typed top-level binding can disclose argument errors before controlled handling",
         )
-        self.assertIsNotNone(parameter_block)
-        self.assertEqual(
-            set(re.findall(r"\$([A-Za-z][A-Za-z0-9]*)", parameter_block.group(1))),
-            {"VerifyOnly", "ArchivePath"},
-        )
+        self.assertIn('"-VerifyOnly"', script)
+        self.assertIn('"-ArchivePath"', script)
         self.assertNotIn("Get-Location", script)
         for forbidden_operation in (
             "npm install",
@@ -146,6 +142,44 @@ class SupabaseBootstrapBehaviorTests(unittest.TestCase):
             )
             self.assertFalse((root / ".tools").exists(), "verify-only created local tooling")
             self.assert_stable_output(result)
+
+    def test_archive_path_without_value_is_controlled_before_typed_binding(self) -> None:
+        result = run_bootstrap(BOOTSTRAP_PATH, "-ArchivePath", cwd=ROOT)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.strip(),
+            "[FAIL] step=VALIDATE-SUPABASE-ARGUMENTS reason=invalid code=2",
+        )
+        self.assertFalse(result.stderr, "missing value wrote localized binding details")
+        combined = result.stdout + result.stderr
+        self.assertNotIn(str(ROOT), combined)
+        self.assertNotIn(str(BOOTSTRAP_PATH), combined)
+        self.assert_stable_output(result)
+
+    def test_duplicate_approved_arguments_are_controlled(self) -> None:
+        cases = (
+            ("-VerifyOnly", "-VerifyOnly"),
+            (
+                "-ArchivePath",
+                "synthetic-first-archive.zip",
+                "-ArchivePath",
+                "synthetic-second-archive.zip",
+            ),
+        )
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                result = run_bootstrap(BOOTSTRAP_PATH, *arguments, cwd=ROOT)
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(
+                    result.stdout.strip(),
+                    "[FAIL] step=VALIDATE-SUPABASE-ARGUMENTS reason=invalid code=2",
+                )
+                self.assertFalse(result.stderr, "duplicate argument wrote binding details")
+                for value in arguments:
+                    self.assertNotIn(value, result.stdout + result.stderr)
+                self.assert_stable_output(result)
 
     def test_unapproved_argument_is_rejected_before_other_work(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sejong supabase arguments ") as directory:

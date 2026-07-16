@@ -1,8 +1,3 @@
-param(
-    [switch]$VerifyOnly,
-    [string]$ArchivePath
-)
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -114,11 +109,50 @@ $manifestPath = [System.IO.Path]::GetFullPath(
 )
 $ownedTempArchive = $null
 $ownedTempDirectory = $null
+$VerifyOnly = $false
+$ArchivePath = $null
 $exitCode = 0
 $outputLines = New-Object System.Collections.Generic.List[string]
 
 try {
-    if ($args.Count -ne 0) {
+    $verifyOnlySeen = $false
+    $archivePathSeen = $false
+    $argumentIndex = 0
+    while ($argumentIndex -lt $args.Count) {
+        $argumentToken = [string]$args[$argumentIndex]
+        if ([string]::Equals(
+            $argumentToken,
+            "-VerifyOnly",
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+            if ($verifyOnlySeen) {
+                Throw-BootstrapFailure -Step "VALIDATE-SUPABASE-ARGUMENTS" -Reason "invalid" -Code 2
+            }
+            $verifyOnlySeen = $true
+            $VerifyOnly = $true
+            $argumentIndex += 1
+            continue
+        }
+        if ([string]::Equals(
+            $argumentToken,
+            "-ArchivePath",
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+            if ($archivePathSeen -or ($argumentIndex + 1 -ge $args.Count)) {
+                Throw-BootstrapFailure -Step "VALIDATE-SUPABASE-ARGUMENTS" -Reason "invalid" -Code 2
+            }
+            $archiveValue = [string]$args[$argumentIndex + 1]
+            if (
+                [string]::IsNullOrWhiteSpace($archiveValue) -or
+                $archiveValue.StartsWith("-", [System.StringComparison]::Ordinal)
+            ) {
+                Throw-BootstrapFailure -Step "VALIDATE-SUPABASE-ARGUMENTS" -Reason "invalid" -Code 2
+            }
+            $archivePathSeen = $true
+            $ArchivePath = $archiveValue
+            $argumentIndex += 2
+            continue
+        }
         Throw-BootstrapFailure -Step "VALIDATE-SUPABASE-ARGUMENTS" -Reason "invalid" -Code 2
     }
 
