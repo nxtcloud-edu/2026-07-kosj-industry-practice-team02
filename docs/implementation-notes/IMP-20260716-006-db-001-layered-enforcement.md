@@ -81,14 +81,19 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 | `scripts/bootstrap_supabase.ps1` | PS 5.1 local-only 다운로드/검증/임시 sibling 설치/정확 버전 확인/소유 경로 정리와 안정 출력 | 원격 프로젝트 동작 없이 재현 가능한 로컬 CLI 경계 |
 | `scripts/tests/test_supabase_tooling.py` | pin·인자·CWD·missing binary·잘못된 child version·동일 크기 오해시·비승인 source를 offline subprocess로 검증 | 정적 문자열 검사만으로는 놓치는 실제 PowerShell 경계 회귀 차단 |
 | `.gitignore`, `scripts/README.md`, scaffold test | Supabase 임시 경로 ignore와 local-only 사용 경계 | 산출물 커밋·원격 명령 오용 방지 |
+| `supabase/config.toml`, `supabase/seed.sql` | pinned CLI 생성본에서 Postgres 외 서비스와 seed를 끄고 application schema를 Data API에서 제외 | local DB-only·공식 데이터 0 경계 |
+| `scripts/provision_local_database_login.py` | 제한 login 생성/회전, capability grant, 다른 env byte를 보존하는 same-directory atomic `DATABASE_URL` 교체 | 실제 provider key 손상 없이 backend credential 제공 |
+| `scripts/run_database_sql.py` | `database/` 내부의 명시 파일만 파일별 transaction으로 실행 | 검토된 compensation/absence SQL만 허용 |
+| `scripts/verify_database.ps1` | Docker·CLI·Python preflight와 reset→pgTAP→rollback→absence→replay→integration 순서, child 비노출·timeout·env 복원 | Task 3~9 결과를 한 번에 검증할 explicit gate |
+| API/scripts README와 tooling tests | 실행 시점·local-only·empty seed·DB gate 제한 및 failure behavior 문서화 | 신규 개발자 오용·secret 노출 방지 |
 
 ### 데이터 흐름/상태 변화
 
-Task 0~1에서는 DB row/container/schema 변화가 없다. Task 1은 ignored `.tools/supabase/v2.109.1/`에만 설치하도록 경계를 만들었으며 실제 다운로드·설치는 Task 2 시작 때 수행한다.
+Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 실제 설치했지만 `supabase start`, role provisioning, DB runner는 migrations 전이라 실행하지 않았다. tracked seed는 설명 주석뿐이고 공식/mock row는 0이다.
 
 ### 오류·빈 상태·롤백
 
-첫 verify 도구 호출은 repo-local uv 부재로 `PREFLIGHT-UV` 종료, 두 번째 호출은 tool timeout 124, 세 번째 fresh 호출은 143.6초에 24/24 통과했다. Task 1 검증 중 root가 1초 제한으로 시작한 첫 unittest 부모가 종료된 뒤 잠시 남아 두 번째 실행과 고정 임시 파일을 경합해 기존 secret-scanner 테스트 1개가 한 번 실패했다. 단일 테스트와 고립된 전체 재실행은 각각 통과해 구현 결함이 아닌 검증 명령 중첩으로 판정했다. Task 0~1 rollback은 관련 commits revert이며 ignored tool copy는 Git/data 영향이 없다.
+첫 verify 도구 호출은 repo-local uv 부재로 `PREFLIGHT-UV` 종료, 두 번째 호출은 tool timeout 124, 세 번째 fresh 호출은 143.6초에 24/24 통과했다. Task 1 검증 중 root가 1초 제한으로 시작한 첫 unittest 부모가 종료된 뒤 잠시 남아 두 번째 실행과 고정 임시 파일을 경합해 기존 secret-scanner 테스트 1개가 한 번 실패했다. 단일 테스트와 고립된 전체 재실행은 각각 통과해 구현 결함이 아닌 검증 명령 중첩으로 판정했다. Task 2 reviews는 deprecated `[inbucket]`이 실제 `local_smtp=true`를 끄지 못하는 drift, rollback 이름 2개, in-place `.env` 손상 위험을 발견했고 모두 TDD로 수정했다. DB password commit과 filesystem 교체는 단일 transaction이 될 수 없으므로 파일 실패는 기존 env를 보존하고 gate를 닫으며, 재실행이 password를 다시 회전해 복구한다.
 
 ## 7. 버전 전후
 
@@ -123,31 +128,41 @@ Task 0~1에서는 DB row/container/schema 변화가 없다. Task 1은 ignored `.
 | `git diff --check 4455ad5..HEAD` | exit 0 | whitespace error 0 | terminal |
 | independent specification review | initial P1 argument-binding disclosure found; fix 후 compliant | 2 review rounds | reviewer report |
 | independent quality/security review | APPROVED; Critical/Important 0, Minor 3 | 1 review | reviewer report |
+| pinned `bootstrap_supabase.ps1` install | official archive size/SHA-256/exact `2.109.1` version PASS, `supabase init` success | 1 install/init | ignored `.tools/supabase/v2.109.1` |
+| Task 2 initial focused RED | 새 config/seed/helper/runner 부재 | existing 9 pass, 7 expected fail/error | agent terminal |
+| Task 2 first GREEN | generated config의 required local mail toggle mismatch 1 failure 후 보완 | tooling 16/16 | agent terminal |
+| Task 2 spec review | 실제 `local_smtp` toggle·rollback filenames P1 2건 발견; TDD 수정 후 compliant | 2 rounds | commit `339f04f`, reviewer report |
+| Task 2 quality review | in-place env corruption Important 1건 발견; injected failure RED 후 atomic replace; 재검토 APPROVED | 2 rounds | commit `9733ec7`, reviewer report |
+| final Task 2 unittest | root sequential exit 0 | 31 passed, 1 Windows symlink permission skip, 97.367s | terminal |
+| final Ruff / Mypy | exit 0 / exit 0 | Python tools 2 files | terminal |
+| final secret / CLI verify / diff | exit 0 / exit 0 / exit 0 | CLI exact version PASS, secret output 0 | terminal |
 
 ### 미실행 검증과 이유
 
-- 실제 공식 Supabase archive 성공 설치 경로: Task 2 bootstrap에서 실행 예정이며 Task 1 offline tests에서는 의도적으로 다운로드하지 않음.
-- Supabase/Docker DB gate: Task 2 config와 migrations가 아직 없음.
-- DB/API implementation tests: production/test code를 아직 변경하지 않음.
+- `verify_database.ps1`: migration/rollback/pgTAP/API DB integration 파일이 아직 없어 계획대로 미실행.
+- 실제 role DDL·파일별 SQL transaction: Task 3~9 Docker integration에서 실행 예정.
+- DB schema/API integration tests: migration·repository 경계가 아직 없어 미실행.
 - DeepSeek call: DB-001 범위 밖이며 key를 읽거나 전송하지 않음.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
-- Privacy: Task 0에서 env/key/질문/DB 데이터 접근 0.
-- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. repository secret scan 통과.
+- Privacy: Task 0~2에서 실제 env/key/질문/DB 데이터 접근 0. env helper 검증은 synthetic temp fixture만 사용했다.
+- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 
 ## 10. 데이터와 출처 영향
 
-- 공식 데이터: 0 rows, 0 files changed.
+- 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
 - schema/lineage: 아직 0.2.0-draft; migration 0.
+- tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization을 기준으로 DB-only toggle drift를 보정했다.
 - verified date: 2026-07-16 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - 계획 실행은 승인됐으며 local CLI download, image pull, disposable DB reset 범위가 열렸다.
+- official CLI 2.109.1은 실제 설치됐고 PostgreSQL-only config·빈 seed·검증 runner는 준비됐지만 DB container/schema/role은 아직 만들지 않았다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
 - 최종 branch 통합 방식은 모든 검증 완료 후 finishing skill에서 사용자에게 선택받는다.
 
@@ -156,6 +171,7 @@ Task 0~1에서는 DB row/container/schema 변화가 없다. Task 1은 ignored `.
 - root는 coordinator로 남고 task별 fresh agent가 코딩한다.
 - review 순서는 명세 적합성 → 코드 품질이며 둘 다 승인되기 전 다음 task로 이동하지 않는다.
 - ignored uv copy는 worktree bootstrap일 뿐 commit 대상이 아니다.
+- Supabase v2.109.1에서 deprecated `[inbucket]` 대신 실제 `[local_smtp]`를 꺼야 한다는 upstream drift는 승인된 DB-only 의도를 유지하는 내부 호환성 보정이다.
 
 ## 13. 인수인계·재현·롤백
 
@@ -164,24 +180,24 @@ Task 0~1에서는 DB row/container/schema 변화가 없다. Task 1은 ignored `.
 1. worktree branch가 `cf76b17`에서 분기했고 Task 1 commits `41c6dcf`, `857e2b2`가 있는지 확인한다.
 2. worktree ignored `.tools/uv/uv.exe --version`이 0.11.28인지 확인한다.
 3. `scripts/verify.ps1`에서 24/24 exit 0을 재현한다.
-4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 binary 부재 시 exact exit 2 line을 내는지 확인한다.
-5. approved plan Task 2부터 순차 실행한다.
+4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 exact version PASS를 내는지 확인한다.
+5. Task 2 focused unittest 31 pass와 Ruff/Mypy/secret/diff를 재현한다.
+6. approved plan Task 3부터 순차 실행한다.
 
 ### 롤백
 
-Task 1은 `857e2b2`, `41c6dcf`를 역순 revert한다. ignored `.tools/uv` 및 이후 `.tools/supabase/v2.109.1`은 각 소유 경로를 검증한 뒤에만 제거한다. main과 DB/data에는 rollback 대상이 없다.
+Task 2는 `9733ec7`, `339f04f`, `840d949`를 역순 revert하고 Task 1은 `857e2b2`, `41c6dcf`를 역순 revert한다. ignored `.tools/uv` 및 `.tools/supabase/v2.109.1`은 각 소유 경로를 검증한 뒤에만 제거한다. 아직 DB container/schema/data rollback 대상은 없다.
 
 ### 다음 개발자 시작점
 
-Task 2의 local config/tool runner tests부터 시작하고 config/runner 구현 전에 RED를 확인한다.
+Task 3의 private schema/enums/tables pgTAP RED부터 시작하고 첫 migration 전에 실패를 확인한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- Supabase CLI binary download와 공식 digest runtime verification 미실행; Task 2 첫 실제 증거로 수행.
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
 - migration/permission/retention/concurrency test 미구현.
-- 다음 단계: Task 2 PostgreSQL-only local config와 explicit DB gate TDD.
+- 다음 단계: Task 3 private schema, seven enums, eight tables TDD.
 
 ## 15. 자체 리뷰
 
@@ -191,3 +207,4 @@ Task 2의 local config/tool runner tests부터 시작하고 config/runner 구현
 - [x] 개인정보 원문·secret 노출 없음
 - [x] INDEX 갱신
 - [x] Task 1 명세 review와 품질 review 승인
+- [x] Task 2 명세 review와 품질 review 승인

@@ -406,7 +406,7 @@ git commit -m "build(db): pin local Supabase CLI"
 - Modify: `scripts/README.md`
 - Modify: `apps/api/README.md`
 
-- [ ] **Step 1: Extend the failing tooling tests**
+- [x] **Step 1: Extend the failing tooling tests**
 
 Add assertions that:
 
@@ -422,7 +422,8 @@ def test_local_config_runs_database_only_and_exposes_no_app_schema(self) -> None
     self.assertFalse(config["realtime"]["enabled"])
     self.assertFalse(config["storage"]["enabled"])
     self.assertFalse(config["studio"]["enabled"])
-    self.assertFalse(config["inbucket"]["enabled"])
+    self.assertFalse(config["local_smtp"]["enabled"])
+    self.assertNotIn("inbucket", config)
     self.assertFalse(config["analytics"]["enabled"])
     self.assertFalse(config["edge_runtime"]["enabled"])
     self.assertFalse(config["db"]["pooler"]["enabled"])
@@ -436,8 +437,9 @@ def test_database_runner_has_no_remote_or_destructive_host_commands(self) -> Non
 ```
 
 Add a temp-file unit test that calls the pure `update_env_assignment(path, "DATABASE_URL", value)` helper in `scripts/provision_local_database_login.py` and proves comments, ordering, `LLM_API_KEY`, and every non-target line remain byte-identical.
+Inject an `os.replace` failure after a complete sibling-temp write and prove the original CRLF file remains byte-identical and no temporary file remains.
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 Run:
 
@@ -447,7 +449,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_too
 
 Expected: missing config, runner, and credential helper failures.
 
-- [ ] **Step 3: Generate and harden the local config with the pinned CLI**
+- [x] **Step 3: Generate and harden the local config with the pinned CLI**
 
 Run the exact bootstrap and init commands:
 
@@ -486,7 +488,7 @@ enabled = false
 [studio]
 enabled = false
 
-[inbucket]
+[local_smtp]
 enabled = false
 
 [storage]
@@ -504,7 +506,7 @@ enabled = false
 
 Keep the remaining generated v2.109.1 keys unchanged so CLI decoding remains forward-compatible. `app_private` and `app_api` must not appear in `api.schemas` or `api.extra_search_path`.
 
-- [ ] **Step 4: Add the intentionally empty seed boundary**
+- [x] **Step 4: Add the intentionally empty seed boundary**
 
 Create `supabase/seed.sql`:
 
@@ -514,7 +516,7 @@ Create `supabase/seed.sql`:
 -- An empty approved-data set must keep /ready at HTTP 503.
 ```
 
-- [ ] **Step 5: Implement local credential provisioning**
+- [x] **Step 5: Implement local credential provisioning**
 
 `scripts/provision_local_database_login.py` must define constants
 `ROLE_NAME = "sejong_local_login"` and `TARGET_ENV_KEY = "DATABASE_URL"`, plus typed
@@ -532,12 +534,13 @@ The completed implementations must have these behaviors:
 - construct the backend DSN with `psycopg.conninfo.make_conninfo`;
 - update only `DATABASE_URL` in `apps/api/.env`, creating the ignored file if absent;
 - preserve comments, blank lines, and all other environment assignments, including the user's DeepSeek key;
+- write and fsync an exclusively created same-directory temporary file, atomically replace the target, and clean the temporary file on every failure;
 - never read or print the DeepSeek value;
 - print only `[PASS] step=PROVISION-LOCAL-DB-LOGIN` on success.
 
 An omitted admin environment value returns exit 2 with a stable error line. A DB failure returns exit 1 without exception text or DSN.
 
-- [ ] **Step 6: Implement the ordered SQL helper**
+- [x] **Step 6: Implement the ordered SQL helper**
 
 `scripts/run_database_sql.py` takes one or more explicit file paths, requires every resolved file to remain inside `database/`, reads `SEJONG_ADMIN_DATABASE_URL`, and executes each file in its own transaction with `autocommit=False`. Its success output contains the decimal file count and, for the four-file rollback invocation, is exactly:
 
@@ -547,7 +550,7 @@ An omitted admin environment value returns exit 2 with a stable error line. A DB
 
 It rejects directories, missing files, paths outside `database/`, and empty file lists with exit 2. SQL execution failure rolls back and returns exit 1 without SQL text or server error detail.
 
-- [ ] **Step 7: Implement the explicit DB verification runner**
+- [x] **Step 7: Implement the explicit DB verification runner**
 
 `scripts/verify_database.ps1` exposes only `-SkipStart` and `-SkipRollbackReplay`. It must:
 
@@ -564,7 +567,7 @@ It rejects directories, missing files, paths outside `database/`, and empty file
 
 The runner suppresses all child stdout/stderr and prints stable step IDs only. It does not stop containers automatically, touch Docker volumes directly, or call a remote Supabase command.
 
-- [ ] **Step 8: Run the focused tests**
+- [x] **Step 8: Run the focused tests**
 
 Run:
 
@@ -578,7 +581,7 @@ git diff --check
 
 Expected: all tests, lint, typing, secret scan, and diff check pass. Do not run `verify_database.ps1` before migrations exist.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 ```powershell
 git add supabase/config.toml supabase/seed.sql scripts/provision_local_database_login.py scripts/run_database_sql.py scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py scripts/README.md apps/api/README.md
