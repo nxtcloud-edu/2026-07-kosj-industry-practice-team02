@@ -584,6 +584,7 @@ async def test_two_concurrent_approvals_create_one_active_kb_and_audit() -> None
               count(DISTINCT questions.id)::integer AS question_count,
               count(DISTINCT candidates.activated_kb_id)::integer AS link_count,
               count(DISTINCT audits.id)::integer AS approval_audit_count,
+              min(kb.public_id)::text AS linked_public_id,
               bool_and(kb.status = 'ACTIVE' AND kb.data_origin = 'OFFICIAL') AS valid_kb
             FROM app_private.kb_candidates AS candidates
             LEFT JOIN app_private.kb_documents AS kb
@@ -603,6 +604,7 @@ async def test_two_concurrent_approvals_create_one_active_kb_and_audit() -> None
         assert rows[0]["question_count"] == 1
         assert rows[0]["link_count"] == 1
         assert rows[0]["approval_audit_count"] == 1
+        assert rows[0]["linked_public_id"] == public_ids[0]
         assert rows[0]["valid_kb"] is True
     finally:
         if first_pool is not None:
@@ -771,19 +773,16 @@ async def test_mock_and_non_active_rows_never_reach_citizen_reads() -> None:
         )
         owned.kb_public_ids.add(active_public_id)
 
-        excluded_ids = {
-            f"T9-OFFICIAL-DRAFT-{uuid4().hex}",
-            f"T9-OFFICIAL-PENDING-{uuid4().hex}",
-            f"T9-OFFICIAL-RETIRED-{uuid4().hex}",
-            f"T9-OFFICIAL-REJECTED-{uuid4().hex}",
-            f"T9-MOCK-DRAFT-{uuid4().hex}",
-        }
+        excluded_rows = (
+            (f"T9-OFFICIAL-DRAFT-{uuid4().hex}", "DRAFT", "OFFICIAL"),
+            (f"T9-OFFICIAL-PENDING-{uuid4().hex}", "PENDING", "OFFICIAL"),
+            (f"T9-OFFICIAL-RETIRED-{uuid4().hex}", "RETIRED", "OFFICIAL"),
+            (f"T9-OFFICIAL-REJECTED-{uuid4().hex}", "REJECTED", "OFFICIAL"),
+            (f"T9-MOCK-DRAFT-{uuid4().hex}", "DRAFT", "MOCK"),
+        )
+        excluded_ids = {public_id for public_id, _status, _origin in excluded_rows}
         owned.kb_public_ids.update(excluded_ids)
-        status_values = ("DRAFT", "PENDING", "RETIRED", "REJECTED", "DRAFT")
-        origin_values = ("OFFICIAL", "OFFICIAL", "OFFICIAL", "OFFICIAL", "MOCK")
-        for public_id, status, origin in zip(
-            sorted(excluded_ids), status_values, origin_values, strict=True
-        ):
+        for public_id, status, origin in excluded_rows:
             await _admin_rows(
                 admin_url,
                 """
