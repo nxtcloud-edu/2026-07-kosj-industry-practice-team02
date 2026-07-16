@@ -68,14 +68,22 @@ def fetch_count(connection: Connection[Any], statement: str) -> int:
 
 def cleanup(connection: Connection[Any]) -> None:
     def remove_fixtures(active: Connection[Any]) -> None:
-        active.execute("DELETE FROM app_private.audit_logs WHERE target_id = %s", (CANDIDATE_ID,))
+        active.execute(
+            "DELETE FROM app_private.audit_logs WHERE target_id = %s", (CANDIDATE_ID,)
+        )
         active.execute(
             "DELETE FROM app_private.audit_logs WHERE target_id = %s",
             (REPLAY_FAILURE_ID,),
         )
-        active.execute("DELETE FROM app_private.kb_candidates WHERE id = %s", (CANDIDATE_ID,))
-        active.execute("DELETE FROM app_private.failed_questions WHERE id = %s", (FAILURE_ID,))
-        active.execute("DELETE FROM app_private.interaction_events WHERE id = %s", (EVENT_ID,))
+        active.execute(
+            "DELETE FROM app_private.kb_candidates WHERE id = %s", (CANDIDATE_ID,)
+        )
+        active.execute(
+            "DELETE FROM app_private.failed_questions WHERE id = %s", (FAILURE_ID,)
+        )
+        active.execute(
+            "DELETE FROM app_private.interaction_events WHERE id = %s", (EVENT_ID,)
+        )
         active.execute(
             "DELETE FROM app_private.failed_questions WHERE id = %s",
             (REPLAY_FAILURE_ID,),
@@ -220,7 +228,9 @@ def probe_question_and_active(
     )
 
 
-def probe_event_failure(read_committed: Connection[Any], repeatable_read: Connection[Any]) -> None:
+def probe_event_failure(
+    read_committed: Connection[Any], repeatable_read: Connection[Any]
+) -> None:
     cleanup(read_committed)
     setup_event(read_committed, with_failure=False)
 
@@ -404,7 +414,10 @@ def probe_replay_confirm_lock_order(admin_dsn: str) -> None:
         confirm_error = worker_result.get_nowait()
 
         for operation_error in (replay_error, confirm_error):
-            if isinstance(operation_error, psycopg.Error) and operation_error.sqlstate == "40P01":
+            if (
+                isinstance(operation_error, psycopg.Error)
+                and operation_error.sqlstate == "40P01"
+            ):
                 raise AssertionError("REPLAY_CONFIRM_DEADLOCK") from None
             if operation_error is not None:
                 raise operation_error
