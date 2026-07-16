@@ -1,16 +1,16 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Approved; execution in progress, Tasks 0~5 complete
+- Status: Approved; execution in progress, Tasks 0~8 complete, Task 9 partial 6/8 with Task 9A remediation in progress
 - Date: 2026-07-16 (KST)
-- Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16
-- Related: D-025/D-026/D-027, ADR-0003/0004/0007/0008/0011, TASK DB-001
+- Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16; Q-DB-003=A on 2026-07-17
+- Related: D-025/D-026/D-027/D-028, ADR-0003/0004/0007/0008/0011/0012, TASK DB-001
 - Discovery evidence: `docs/discovery/DB_001_DISCOVERY_REPORT.md`
 
 ## 1. Goal
 
 Create the first executable, locally reproducible Supabase/PostgreSQL schema for the Sejong civil-service AI MVP. Privacy, approval, ACTIVE-only retrieval, provenance, retention, and audit rules must be enforced in both PostgreSQL and the FastAPI service.
 
-This design converts the logical draft into an executable boundary. Tasks 0~5 have installed the pinned local tooling and implemented migrations `00100~00300`; no official/mock seed exists and `/ready=503` remains correct. The remaining workflow/read/repository work follows this refined approved design.
+This design converts the logical draft into an executable boundary. Tasks 0~8 installed the pinned local tooling and implemented immutable migrations `00100~00500`, compensation, pgTAP, candidate workflow, citizen reads, and a lazy typed repository. Task 9 proved six of eight real-backend integration paths; both approval paths safely rolled back because the deferred ACTIVE-question validator remained SECURITY INVOKER. Q-DB-003=A therefore adds only a new `00600` posture correction plus matching compensation and security tests. No official/mock seed exists and `/ready=503` remains correct.
 
 ## 2. Scope
 
@@ -71,7 +71,7 @@ The default `public` schema contains no Sejong business tables or citizen/admin 
 Base tables have RLS enabled and forced. The only permissive policy is for the NOLOGIN schema owner used inside reviewed SECURITY DEFINER functions. All such functions:
 
 - are owned by `sejong_schema_owner`;
-- set a fixed `search_path` containing only `pg_catalog` and explicitly referenced application schemas;
+- set a fixed `search_path` and schema-qualify application objects; the corrected validator target is exact `pg_catalog, pg_temp`, while the nine existing `app_api` functions remain `pg_catalog`-only and are tracked separately as A-021 Open/Deferred rather than falsely marked hardened;
 - schema-qualify every application object;
 - revoke execute from `PUBLIC` before granting it to `sejong_backend`;
 - never accept raw question text or a secret;
@@ -237,13 +237,14 @@ The implementation plan will use these responsibilities:
 - `supabase/migrations/*_capabilities_and_functions.sql`
 - `supabase/migrations/*_candidate_workflow.sql`
 - `supabase/migrations/*_indexes_and_read_interfaces.sql`
-- `database/rollbacks/`: reverse-order compensation SQL for the same five stages
+- `supabase/migrations/*_deferred_active_question_trigger_security.sql`
+- `database/rollbacks/`: reverse-order compensation SQL for the same six stages
 - `supabase/tests/database/`: pgTAP/catalog tests with synthetic data only
 - `scripts/verify_database.ps1`: explicit Docker-required reset/test/rollback/replay gate
 
 Migration filenames use Supabase timestamp order. Timestamp lineage is not a semantic version. When the executable baseline and tests pass, `database_schema` moves from `0.2.0-draft` to `0.3.0-local`.
 
-Applied and committed migrations `20260716000100` through `20260716000300` are immutable. Candidate workflow/audit refinement is `20260716000400_candidate_workflow.sql`; citizen indexes/read interfaces shift to `20260716000500_indexes_and_read_interfaces.sql`.
+Applied and committed migrations `20260716000100` through `20260716000500` are immutable. Candidate workflow/audit refinement is `20260716000400_candidate_workflow.sql`; citizen indexes/read interfaces are `20260716000500_indexes_and_read_interfaces.sql`. Q-DB-003=A adds `20260717000600_deferred_active_question_trigger_security.sql`, which changes only `app_private.validate_active_kb_question()` to SECURITY DEFINER, reasserts owner `sejong_schema_owner`, pins exact `search_path=pg_catalog, pg_temp`, and revokes direct EXECUTE from PUBLIC, browser roles, and backend. It does not rewrite the function body, grant private access, or change public API, tables, data, seed, dependencies, retention, or readiness.
 
 The bootstrap script rechecks official release metadata during implementation. It fails closed if the exact asset digest cannot be verified. It does not use global install, floating latest, or npm lifecycle scripts. CLI/status output that may contain local credentials is suppressed or reduced to non-secret health state.
 
@@ -251,7 +252,7 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 - Applied migration files are immutable; corrections use new forward migrations.
 - Initial compensation is allowed only against the disposable local DB.
-- Rollback runs in reverse: `00500` read interfaces/indexes → `00400` candidate workflow/audit → `00300` capabilities/functions/roles → `00200` invariants/triggers → `00100` private tables/types.
+- Rollback runs in reverse: `00600` deferred-trigger posture → `00500` read interfaces/indexes → `00400` candidate workflow/audit → `00300` capabilities/functions/roles → `00200` invariants/triggers → `00100` private tables/types.
 - The verification gate confirms objects and privileges are removed, then performs a fresh reset/replay and reruns tests.
 - No wrapper executes remote push, volume prune, or destructive real-data commands.
 - Future non-reproducible data requires a gitignored dump before destructive change. Restore must run retention purge before readiness.
@@ -268,7 +269,9 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 - `PUBLIC`, `anon`, `authenticated`, and `sejong_backend` direct base-table CRUD all fail
 - backend capability role can execute only allowlisted `app_api` interfaces
-- SECURITY DEFINER functions have fixed search paths and no PUBLIC execute
+- the corrected deferred validator has exact owner, `proconfig=['search_path=pg_catalog, pg_temp']`, immutable body fingerprint, and no PUBLIC/browser/backend direct execute
+- `app_private` 전체 함수 중 corrected validator만 SECURITY DEFINER이며 두 constraint trigger의 exact schema/table/event/row/deferred/function binding이 유지된다
+- backend는 `app_private` 모든 base/partitioned table에 PostgreSQL 17 `MAINTAIN`을 포함한 effective table privilege가 0이다
 - role replay reasserts runner-permitted attributes and fails closed on unsafe elevated attributes, memberships, or settings
 
 ### State and concurrency
@@ -318,4 +321,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The user approved this written specification and execution plan on 2026-07-16. Tasks 0~5 are complete. Q-SEC-002=A accepts the existing Task 5 fail-closed role model, and Q-WF-001=A unblocks Task 6. Task 6 must begin with RED tests for the new `00400` workflow migration; no additional human blocker remains.
+The user approved this written specification and execution plan on 2026-07-16. Tasks 0~8 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9 remains incomplete at historical 6/8 while the linked Task 9A remediation plan runs RED→GREEN and the six-stage full gate; no human A/Blocker remains.

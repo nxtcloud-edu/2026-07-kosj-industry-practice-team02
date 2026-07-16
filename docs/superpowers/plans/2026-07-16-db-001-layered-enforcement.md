@@ -4,7 +4,7 @@
 
 **Goal:** Build a checksum-pinned, locally reproducible Supabase/PostgreSQL baseline that enforces privacy, provenance, approval, retention, citizen-read, and backend-only capability rules in both the database and a lazy FastAPI repository boundary.
 
-**Architecture:** Business tables and enums live in non-exposed `app_private`; only reviewed `SECURITY DEFINER` functions in `app_api` are executable by the NOLOGIN `sejong_backend` capability role. Five immutable forward migrations and five reverse compensation scripts are tested with pgTAP, Python integration tests, and reset/rollback/replay, while the FastAPI process keeps database I/O lazy and adds no public routes or wire-contract changes.
+**Architecture:** Business tables and enums live in non-exposed `app_private`; only reviewed capability functions in `app_api` are directly executable by the NOLOGIN `sejong_backend` role. Five committed migrations remain immutable, and the approved Task 9A adds a sixth forward/compensation stage that changes only the deferred ACTIVE-question validator posture. All six stages are tested with pgTAP, Python integration tests, and reset/rollback/replay, while the FastAPI process keeps database I/O lazy and adds no public routes or wire-contract changes.
 
 **Tech Stack:** Supabase CLI `v2.109.1`, PostgreSQL 17, SQL/PLpgSQL, pgTAP, Windows PowerShell 5.1, Python 3.12.13, psycopg 3.3.4 with `psycopg_pool`, pytest 9.1.1, existing local Docker Desktop.
 
@@ -13,13 +13,14 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: Blocked — Q-DB-003 deferred trigger permission decision
+- Status: In Progress — Q-DB-003 resolved; Task 9A deferred-trigger remediation pending
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
 - Approved specification: `docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md`
-- Decisions: D-018, D-025, D-026, D-027
-- ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011
+- Decisions: D-018, D-025, D-026, D-027, D-028
+- ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012
+- Task 9A remediation plan: `docs/superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md`
 - Active logical input: `database/schema-v1.draft.sql` at `0.2.0-draft`
 - Implementation target: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
 - Execution gate: no task below starts until the user explicitly approves this plan.
@@ -1495,7 +1496,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 Expected: existing 24-stage gate still exits 0 and does not start or require Docker.
 
-### Task 9 partial evidence and Q-DB-003 blocker — 2026-07-17 KST
+### Task 9 partial evidence and resolved Q-DB-003 — 2026-07-17 KST
 
 Keep all Task 9 step checkboxes unchecked until the complete gate passes. The
 three Task 9 implementation files are uncommitted and remain the only code/test
@@ -1522,18 +1523,18 @@ scope for this task.
   and approval audit counts are zero. Cleanup leaves events, failures,
   candidates, KB documents, questions, offices, mappings, and audits all zero.
 
-`Q-DB-003` is an A/Blocker. Option A (recommended) adds a new versioned `006`
-migration that makes only `app_private.validate_active_kb_question()` SECURITY
-DEFINER while verifying its existing owner, fixed `search_path=pg_catalog`, and
-explicit direct-EXECUTE revokes; matching compensation restores SECURITY
-INVOKER. Option B changes `approve_kb_candidate` to execute the deferred
-constraint immediately inside the definer function; this avoids a definer
-trigger but couples approval to constraint names and transaction constraint
-mode, so it is not recommended. Without a human answer, remain blocked: do not
-grant backend private-schema access, add a repository/admin-DSN workaround,
-modify an applied migration, or proceed to Task 10. API contracts, data, package
-dependencies, and remote/public deployment remain unchanged. Full evidence is
-in `docs/implementation-notes/IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md`.
+`Q-DB-003` is resolved by D-028/ADR-0012. After option A was recommended, the
+user wrote `이거 끝나면 계속해서 진행해줘. 5시간 동안 루프 ㄱㄱ`; this is recorded as
+approval of the immediately preceding recommendation, not as a literal typed
+`A`. The linked Task 9A plan adds a new versioned `00600` that makes only
+`app_private.validate_active_kb_question()` SECURITY DEFINER, reasserts owner,
+pins `search_path=pg_catalog, pg_temp` with the temporary schema last, and revokes
+direct EXECUTE; matching compensation restores SECURITY INVOKER. Do not grant
+backend private-schema access, add a repository/admin-DSN workaround, modify an
+applied migration, or proceed to Task 10 before the remediation and full Task 9
+gate pass. API contracts, data, package dependencies, and remote/public
+deployment remain unchanged. Historical 6/8 evidence remains in
+`docs/implementation-notes/IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md`.
 
 - [ ] **Step 6: Commit Task 9**
 
@@ -1605,7 +1606,7 @@ Set documentation to `2.4.0` for the new executable DB baseline. Do not change p
 
 - [ ] **Step 4: Write the DB test report and implementation note**
 
-The report records exact CLI/PostgreSQL/Docker versions, all five migration/compensation files and hashes, pgTAP assertion totals, API test total, reset count, `00500 → 00400 → 00300 → 00200 → 00100` rollback order, reason-confirmation and approval concurrency results, secret-output scan result, root gate result, and `/ready=503`. The implementation note follows the repository template and includes 6W1H, commands/results, versions before/after, security/privacy/data impact, rollback, risks, and human/AI boundary.
+The report records exact CLI/PostgreSQL/Docker versions, all six migration/compensation files and hashes, pgTAP assertion totals, API test total, reset count, `00600 → 00500 → 00400 → 00300 → 00200 → 00100` rollback order, reason-confirmation and approval concurrency results, secret-output scan result, root gate result, and `/ready=503`. The implementation note follows the repository template and includes 6W1H, commands/results, versions before/after, security/privacy/data impact, rollback, risks, and human/AI boundary.
 
 - [ ] **Step 5: Preserve the original package snapshot and inspect active files**
 

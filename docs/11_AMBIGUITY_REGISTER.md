@@ -23,7 +23,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-017 | B | DB 안전 경계 | Resolved | Q-DB-002: DB function/trigger/RLS/GRANT + 백엔드 이중 검증 | 2026-07-16 사용자 A 승인 / D-025 / ADR-0011 |
 | A-018 | A | DB role 보안 | Resolved | Q-SEC-002=A: non-superuser PG17 runner 유지, 허용된 role 속성 재적용+catalog 검증, unsafe role fail closed | D-026 / ADR-0011; privileged auto-downgrade/bootstrap 없음 |
 | A-019 | A | 관리자 workflow | Resolved | Q-WF-001=A: 별도 backend-only `confirm_failed_question_reason(uuid,text,text,text)` capability | D-027 / ADR-0011; event 자동 사유 불변, failure 사유·적격성 재계산 |
-| A-020 | A | DB trigger 권한 | Open / Blocker | Q-DB-003: backend approval commit 시 deferred ACTIVE-question trigger를 어떤 최소권한 경계로 실행할지 결정 필요 | A 추천: 새 `006` migration에서 validator만 SECURITY DEFINER+owner/search path/revoke 검증, compensation은 INVOKER; 무응답 시 Blocked |
+| A-020 | A | DB trigger 권한 | Resolved | Q-DB-003=A: 새 `00600`에서 ACTIVE-question validator 하나만 SECURITY DEFINER+owner/`search_path=pg_catalog, pg_temp`/revoke 검증, compensation은 INVOKER | D-028 / ADR-0012; 사용자의 직전 추천안 뒤 계속 진행 지시를 A 승인으로 해석, 문자 A 직접 입력 아님; `pg_temp` 마지막 명시는 D/Internal 보안 보정 |
+| A-021 | B | 기존 DB function 보안 | Open / Deferred — `00600`·Task 9 blocker 아님 | local catalog의 기존 `app_api` SECURITY DEFINER 9개가 모두 `proconfig=['search_path=pg_catalog']`이고 backend effective database TEMP=true다. 실제 exploit은 재현하지 않았으나 PostgreSQL 17 공식 지침상 임시 스키마를 마지막에 명시하는 전수 hardening 필요성을 조사해야 한다. | 이번 validator-only `00600`에는 포함 금지. 실제 함수 본문·ACL·호출 영향 조사 후 public 배포 전 별도 forward migration과 인간 승인을 질문 |
 
 ## 우선도 정의
 
@@ -32,19 +33,20 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 `Q-DB-003` 1개다. Q-SEC-002와 Q-WF-001은
-2026-07-16 사용자 선택 A로 해결됐고 DB-001 Task 6~8도 완료됐다. Task 9는 no-URL
-8 skip, real DB 6 pass/2 approval fail, 두 차례 274/274 pgTAP과 다섯 보상
-rollback·absence·replay까지 확인했지만 아래 보안 결정을 받기 전에는 완료할 수 없다.
+현재 인간 결정형 A/Blocker는 0개다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+해결됐고, Q-DB-003은 2026-07-17 D-028/ADR-0012로 해결됐다. Task 9의 역사적 증거는
+no-URL 8 skip, real DB 6 pass/2 approval fail, 두 차례 274/274 pgTAP과 다섯 보상
+rollback·absence·replay다. 새 `00600` remediation 구현과 full gate는 아직 완료되지 않았다.
 
-## 현재 인터뷰 질문
+## 해결된 인터뷰 질문
 
 Q-DB-003. backend 승인 commit에서 deferred ACTIVE-question trigger를 어떤 권한으로 실행할 것인가
+- 결정: A / D-028 / ADR-0012. 사용자는 문자 `A`를 직접 입력하지 않았고, 직전 추천안 뒤 `이거 끝나면 계속해서 진행해줘. 5시간 동안 루프 ㄱㄱ`라고 지시했다. 이를 추천안 A의 실행 승인으로 투명하게 해석했다.
 - 왜 지금 필요한가: 승인 함수는 최소권한 SECURITY DEFINER지만 commit 시 실행되는 `app_private.validate_active_kb_question()`은 SECURITY INVOKER다. private schema 접근권한이 없는 backend 호출에서는 두 승인 통합 테스트가 실패하므로, Task 9·DB-001 완료 전에 migration 보안 경계를 인간이 결정해야 한다.
-- 선택지 A / 장점 / 단점: 새 versioned `006` migration에서 이 trigger validator만 SECURITY DEFINER로 바꾸고 기존 `sejong_schema_owner`, `search_path=pg_catalog`, 직접 EXECUTE revoke를 catalog·pgTAP으로 검증한다. 기존 deferred invariant와 원자 transaction을 보존하고 권한 상승을 함수 하나로 제한한다 / 새 migration·matching compensation·보안 회귀 테스트가 필요하다.
+- 선택지 A / 장점 / 단점: 새 versioned `006` migration에서 이 trigger validator만 SECURITY DEFINER로 바꾸고 기존 `sejong_schema_owner`, `search_path=pg_catalog, pg_temp`(임시 스키마 마지막), 직접 EXECUTE revoke를 catalog·pgTAP으로 검증한다. 기존 deferred invariant와 원자 transaction을 보존하고 권한 상승을 함수 하나로 제한한다 / 새 migration·matching compensation·보안 회귀 테스트가 필요하다.
 - 선택지 B / 장점 / 단점: `approve_kb_candidate` 안에서 관련 constraint를 `SET CONSTRAINTS ... IMMEDIATE`로 실행한다. trigger 자체의 definer 표면은 늘리지 않는다 / 승인 함수가 constraint 이름과 transaction constraint mode에 결합되고 호출자 transaction 동작에 영향을 줄 수 있어 더 복잡하다.
 - 당신의 추천안: A. 최소 함수 하나만 제한적으로 SECURITY DEFINER로 만들고 owner·고정 search path·revoke·동시성·원자 rollback을 모두 검증한다.
-- 답을 받지 못할 때 사용할 기본값: DB-001을 Blocked로 유지한다. backend에 private schema/table grant를 주거나 repository/admin-DSN 우회, 기존 migration 수정은 하지 않는다.
+- 답을 받지 못할 때 사용할 기본값: 역사적 기본값은 DB-001 Blocked 유지였다. 현재는 A가 승인됐으며 backend에 private schema/table grant를 주거나 repository/admin-DSN 우회, 기존 migration 수정은 여전히 하지 않는다.
 - 영향을 받는 파일·계약·데이터·배포: 새 `006` forward migration과 matching compensation, pgTAP·Task 9 통합 gate, DB schema/test version이 영향을 받는다. 공개 API·공식/mock 데이터·dependency·remote/public 배포는 변하지 않는다.
 
 ## 질문 규칙

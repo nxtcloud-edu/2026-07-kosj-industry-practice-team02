@@ -3,17 +3,17 @@
 - Date/Time (KST): 2026-07-17T03:43:16+09:00
 - Task ID: DB-001-T9
 - Type: implementation/status
-- Status: Blocked — Q-DB-003 human security decision required
+- Status: Decision resolved — Q-DB-003=A; implementation pending
 - Author/Agent: Codex `/root` coordinator, Task 9 implementation agent, documentation synchronization agent
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `7af6764`
-- Related plan/ADR/RFP: [DB-001 실행계획](../superpowers/plans/2026-07-16-db-001-layered-enforcement.md), [ADR-0011](../adr/0011-layered-database-and-backend-enforcement.md), D-025/D-026/D-027, RFP F-11/F-12/F-13
+- Related plan/ADR/RFP: [DB-001 실행계획](../superpowers/plans/2026-07-16-db-001-layered-enforcement.md), [Task 9A remediation plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md), [ADR-0011](../adr/0011-layered-database-and-backend-enforcement.md), [ADR-0012](../adr/0012-deferred-active-question-trigger-execution.md), D-025/D-026/D-027/D-028, RFP F-11/F-12/F-13
 
 ## 1. 사용자 요청과 완료 기준
 
 ### 요청
 
-사용자는 승인된 DB-001 계획을 계속 구현하고 독립 작업은 agent로 병렬 처리하라고 요청했다. Task 9는 local-only 실제 DB 통합 테스트 8개와 reset, 다섯 compensation, absence proof, replay를 하나의 영구 gate로 연결해야 한다. 실행 중 승인 capability가 commit 시점의 deferred trigger 권한 때문에 실패해 migration 보안 경계를 바꾸는 인간 결정 `Q-DB-003`이 필요해졌다. 이 노트는 부분 성공 증거를 보존하고, 승인 전 임시 권한 확대나 우회를 금지한다.
+사용자는 승인된 DB-001 계획을 계속 구현하고 독립 작업은 agent로 병렬 처리하라고 요청했다. Task 9는 local-only 실제 DB 통합 테스트 8개와 reset, 다섯 compensation, absence proof, replay를 하나의 영구 gate로 연결해야 했다. 실행 중 승인 capability가 commit 시점의 deferred trigger 권한 때문에 실패해 migration 보안 경계를 바꾸는 인간 결정 `Q-DB-003`이 필요해졌다. 이 노트는 당시 부분 성공 증거를 보존한다. 이후 사용자의 직전 추천안 뒤 계속 지시를 Q-DB-003=A 승인으로 해석해 D-028/ADR-0012와 Task 9A 계획을 만들었으며, 문자 `A`를 직접 입력했다고 기록하지 않는다.
 
 ### Acceptance Criteria
 
@@ -47,15 +47,15 @@
 
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
-| Q-DB-003 | A/Blocker — Human pending | commit 시 실행되는 `app_private.validate_active_kb_question()`의 최소권한 실행 경계 | A 추천: 새 `006` migration에서 trigger function만 SECURITY DEFINER로 만들고 owner·고정 search path·명시 revoke를 검증; compensation은 SECURITY INVOKER 복원 | DB migration/rollback, pgTAP, Task 9 통합 gate, DB schema version |
+| Q-DB-003 | Resolved — A / D-028 / ADR-0012 | commit 시 실행되는 `app_private.validate_active_kb_question()`의 최소권한 실행 경계 | 새 `00600`에서 trigger function만 SECURITY DEFINER로 만들고 owner·exact `search_path=pg_catalog, pg_temp`·명시 revoke를 검증; compensation은 SECURITY INVOKER 복원 | DB migration/rollback, pgTAP, Task 9 통합 gate, DB schema version |
 | Q-DB-003 B | Human alternative | 승인 함수 내부에서 관련 deferred constraint를 즉시 실행 | 비추천: trigger 자체의 definer 표면은 늘리지 않지만 승인 함수와 constraint 이름/transaction mode를 결합 | workflow SQL, transaction semantics, rollback/pgTAP |
-| 답변 없음 | Safe default | 현재 다섯 migration을 바꾸지 않음 | DB-001 Blocked 유지; broad grant와 repository workaround 금지 | API/data/dependency/remote 변화 없음 |
+| 역사적 무응답 기본값 | Superseded | 당시 다섯 migration을 바꾸지 않음 | 과거에는 DB-001 Blocked 유지였으나 현재 A 승인으로 대체; broad grant와 repository workaround 금지는 유지 | API/data/dependency/remote 변화 없음 |
 
 ## 5. 설계 결정과 대안
 
 ### 선택
 
-현재 선택은 “중단하고 인간 결정을 받는다”이다. 추천안 A는 기존 deferred constraint 의미를 유지하면서 검증 함수 하나만 기존 `sejong_schema_owner` 권한으로 실행하게 한다. 새 versioned `006` migration은 함수의 `SECURITY DEFINER`, owner, `search_path=pg_catalog`, PUBLIC/anon/authenticated/backend 직접 EXECUTE revoke를 catalog와 pgTAP으로 비공허하게 검증하고, matching compensation은 `SECURITY INVOKER`로 복원해야 한다.
+현재 선택은 A다. 기존 deferred constraint 의미를 유지하면서 검증 함수 하나만 기존 `sejong_schema_owner` 권한으로 실행하게 한다. 새 versioned `00600` migration은 함수의 `SECURITY DEFINER`, owner, exact `search_path=pg_catalog, pg_temp`, PUBLIC/anon/authenticated/backend 직접 EXECUTE revoke를 catalog와 pgTAP으로 비공허하게 검증하고, matching compensation은 `SECURITY INVOKER`로 복원해야 한다. 실제 구현은 아직 pending이며 이 역사적 6/8 노트를 완료 증거로 사용하지 않는다.
 
 ### 이유
 
@@ -76,7 +76,7 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 | `apps/api/tests/db/test_integration.py` | 정확히 8개 async local-only 통합 테스트, unique synthetic fixture, identifier-scoped cleanup, Windows selector policy, concurrency event/pool 경계 | 실제 backend/admin 권한·동시성·retention·시민 read 검증 |
 | `scripts/verify_database.ps1` | reset→pgTAP→다섯 보상→absence→reset/replay→pgTAP→integration 순서와 child 비노출/env 복원 | 일회용 local DB 기준선 전체 재현 |
 | `scripts/tests/test_supabase_tooling.py` | 정확한 compensation 순서, child exit, sentinel 비노출, 환경 복원, absence 순서, LLM key token 부재 계약 | runner 회귀 차단 |
-| ambiguity/TASKS/plan/주 note/INDEX/이 note | Q-DB-003 pending과 부분 증거, 완료 금지, 선택지와 인수인계 동기화 | 허위 완료·무승인 보안 변경 방지 |
+| ambiguity/TASKS/spec/plan/ADR/주 note/INDEX/이 note | Q-DB-003=A 결정과 역사적 부분 증거, 완료 금지, Task 9A 인수인계 동기화 | 허위 완료·무승인 보안 변경 방지 |
 
 ### 데이터 흐름/상태 변화
 
@@ -113,7 +113,7 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 | Application | 0.1.0 | 0.1.0 | 변경 없음 |
 | Web | 0.1.0 | 0.1.0 | 변경 없음 |
 | API | 2.0.1-draft | 2.0.1-draft | 공개 계약 변경 없음 |
-| DB schema | 0.2.0-draft | 0.2.0-draft | Q-DB-003 승인 전 schema 승격 금지 |
+| DB schema | 0.2.0-draft | 0.2.0-draft | Task 9A 구현·Task 10 전 schema 승격 금지 |
 | Official data | 0.0.0-not-populated | 동일 | seed 없음 |
 | Mock data | 0.0.0-not-populated | 동일 | tracked seed 없음 |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | 동일 | LLM 미사용 |
@@ -135,7 +135,7 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 
 ### 미실행 검증과 이유
 
-- Task 9 Step 4의 “integration 8/8” 완료 기준은 Q-DB-003 전에는 달성할 수 없다.
+- 당시 Task 9 Step 4의 “integration 8/8” 완료 기준은 미결정 Q-DB-003 경계 때문에 달성하지 못했다. 현재 결정은 해결됐지만 구현은 pending이다.
 - no-Docker root gate, final secret/package/scope gate, Task 9 독립 review와 commit은 blocker 해소 후 전체 재검증 대상으로 남긴다.
 - Task 10 문서·version baseline 승격과 DB-001 Done 전환은 실행하지 않는다.
 - DeepSeek/API 외부 호출은 범위 밖이며 실제 key/env 값은 읽거나 출력하지 않았다.
@@ -151,14 +151,14 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 
 - 공식 데이터: 0 rows; 공식 seed를 만들거나 변경하지 않았다.
 - mock/AI 생성: 영구 row 0; 테스트 fixture만 명시적 synthetic sample로 생성 후 삭제했다.
-- schema/lineage: 현재 적용 권위는 immutable `00100`~`00500`. 새 `006`과 compensation은 Q-DB-003=A 승인 후에만 추가한다.
+- schema/lineage: 현재 적용 권위는 immutable `00100`~`00500`. 새 `00600`과 compensation은 D-028/ADR-0012의 승인 범위이며 아직 구현되지 않았다.
 - verified date: 2026-07-17 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
-- `Q-DB-003`은 A/Blocker다. 추천 A는 deferred trigger validator 하나만 SECURITY DEFINER로 제한하고 owner/search path/revoke를 검증하는 새 migration이다.
-- B는 승인 함수 안에서 deferred constraint를 즉시 실행하지만 transaction constraint mode와 함수/constraint 결합이 커서 추천하지 않는다.
-- 답변이 없으면 DB-001을 Blocked로 유지한다. broad grant, repository 우회, 기존 migration 수정은 하지 않는다.
+- `Q-DB-003`은 A로 해결됐다. deferred trigger validator 하나만 SECURITY DEFINER로 제한하고 owner/exact `search_path=pg_catalog, pg_temp`/revoke를 검증하는 새 migration이다.
+- B는 승인 함수 안에서 deferred constraint를 즉시 실행하지만 transaction constraint mode와 함수/constraint 결합이 커 선택하지 않았다.
+- broad grant, repository 우회, 기존 migration 수정은 계속 금지한다.
 - API 공개 계약, 공식/mock 데이터, dependency, remote/public 배포, 비용은 어느 선택지에서도 변경하지 않는다.
 - 현재 통합 결과는 6/8이며 DB-001과 Task 9는 완료가 아니다.
 
@@ -188,15 +188,15 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 
 ### 다음 개발자 시작점
 
-사용자의 Q-DB-003 답변을 decision log/ADR/ambiguity register에 먼저 반영한다. A 승인 시 새 `006` migration·matching compensation·pgTAP RED→GREEN을 별도 소유권으로 구현하고, 그 뒤 Task 9 세 dirty 파일을 사용해 full runner 8/8, root gate, secret/scope, 독립 review를 재실행한다.
+D-028/ADR-0012/ambiguity register와 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 먼저 확인한다. 새 `00600` migration·matching compensation·pgTAP을 RED→GREEN으로 별도 구현하고, 그 뒤 Task 9 세 dirty 파일을 사용해 full runner 8/8, root gate, secret/scope, 독립 review를 재실행한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- Q-DB-003 A/Blocker 1개가 남아 있다.
-- A의 definer validator는 owner/search path/direct EXECUTE revoke를 catalog와 pgTAP으로 모두 증명해야 한다.
-- B는 constraint mode가 호출자 transaction에 남는지와 동시 승인 시 lock/rollback 의미를 별도 검증해야 한다.
+- 인간 A/Blocker는 0개다. Q-DB-003=A 구현과 검증은 pending이다.
+- definer validator는 owner/exact `search_path=pg_catalog, pg_temp`/direct EXECUTE revoke/body hash/exact trigger binding/private privilege 0을 catalog와 pgTAP으로 모두 증명해야 한다.
+- A-021은 기존 app_api SECURITY DEFINER 9개의 `pg_catalog`-only posture를 public 배포 전 별도 조사·승인할 B/High 위험이며 이번 `00600` 범위가 아니다.
 - Task 9 세 파일은 미커밋 상태이므로 다른 문서 변경과 함께 stage하면 안 된다.
-- blocker 해소 전 DB schema/test/docs version, TASKS 의존성, Task 10을 변경하지 않는다.
+- Task 9A full gate 전 DB schema/test/docs version과 Task 10을 변경하지 않는다.
 
 ## 15. 자체 리뷰
 
