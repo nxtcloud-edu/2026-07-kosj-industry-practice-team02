@@ -983,6 +983,8 @@ and review fix `264772d` (`fix(db): stabilize capability replay guarantees`).
 - Create: `supabase/migrations/20260716000400_candidate_workflow.sql`
 - Create: `database/rollbacks/20260716000400_candidate_workflow.rollback.sql`
 - Create: `supabase/tests/database/004_approval_test.sql`
+- Modify: `supabase/tests/database/003_capabilities_test.sql`
+- Modify: `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql`
 
 Applied and committed migrations `00100~00300` are immutable. All Task 6
 constraints, trigger replacements, functions, grants, and audit allowlist changes
@@ -1009,6 +1011,9 @@ Use explicit MOCK and OFFICIAL fixtures to prove:
 - rejection requires non-empty comment and writes one rejection audit row;
 - audit UPDATE and DELETE fail for backend;
 - audit rows contain only allowlisted action, target/status, changed-field names, optional review comment, actor, and timestamp.
+- the Task 5 capability suite's explicit backend function allowlist contains the
+  exact four-argument confirmation and approval identities and rejects every
+  other `app_api` EXECUTE grant.
 
 - [ ] **Step 2: Run approval tests and confirm RED**
 
@@ -1077,12 +1082,23 @@ Allowed target types are `KB_CANDIDATE` and `FAILED_QUESTION`. Candidate changed
 
 For each of the five workflow interfaces, set owner, revoke PUBLIC/anon/authenticated, and grant only `sejong_backend`, using exact argument type lists. The backend retains no direct failed-question, candidate, or audit-table INSERT/UPDATE/DELETE grant.
 
+Update `003_capabilities_test.sql` rather than weakening its global function
+allowlist: add `confirm_failed_question_reason(uuid,text,text,text)` and replace
+the old planned three-argument approval identity with
+`approve_kb_candidate(uuid,text,text,text)` in both allowlist assertions.
+
 - [ ] **Step 7: Extend compensation and run tests**
 
 The `00400` compensation revokes workflow execute grants, drops the five workflow
 functions, restores replaced Task 4 trigger/constraint definitions, removes the
 reason-confirmation audit allowlist extension, and leaves Task 5 roles/RLS/event/
 retention intact. It must run after `00500` and before `00300`. Run:
+
+Update the `00300` compensation guard so it raises
+`WORKFLOW_COMPENSATION_REQUIRED` while any `00400` workflow function remains,
+and remove its obsolete predeclared Task 6 drops. This makes reverse lineage
+ownership exact instead of letting the Task 5 compensation partially remove a
+later migration.
 
 ```powershell
 .tools/supabase/v2.109.1/supabase.exe db reset --local
@@ -1094,7 +1110,7 @@ Expected: all suites pass.
 - [ ] **Step 8: Commit Task 6**
 
 ```powershell
-git add supabase/migrations/20260716000400_candidate_workflow.sql database/rollbacks/20260716000400_candidate_workflow.rollback.sql supabase/tests/database/004_approval_test.sql
+git add supabase/migrations/20260716000400_candidate_workflow.sql database/rollbacks/20260716000400_candidate_workflow.rollback.sql database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql supabase/tests/database/003_capabilities_test.sql supabase/tests/database/004_approval_test.sql
 git commit -m "feat(db): make KB approval atomic"
 ```
 
