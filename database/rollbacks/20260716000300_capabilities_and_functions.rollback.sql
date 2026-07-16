@@ -1,5 +1,29 @@
 BEGIN;
 
+DO $require_workflow_compensation$
+BEGIN
+  IF pg_catalog.to_regprocedure(
+       'app_api.confirm_failed_question_reason(uuid,text,text,text)'
+     ) IS NOT NULL
+     OR pg_catalog.to_regprocedure(
+       'app_api.create_kb_candidate(uuid,text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,date,text,text)'
+     ) IS NOT NULL
+     OR pg_catalog.to_regprocedure(
+       'app_api.submit_kb_candidate(uuid,text,text)'
+     ) IS NOT NULL
+     OR pg_catalog.to_regprocedure(
+       'app_api.approve_kb_candidate(uuid,text,text,text)'
+     ) IS NOT NULL
+     OR pg_catalog.to_regprocedure(
+       'app_api.reject_kb_candidate(uuid,text,text,text)'
+     ) IS NOT NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'WORKFLOW_COMPENSATION_REQUIRED';
+  END IF;
+END;
+$require_workflow_compensation$;
+
 DO $require_read_interface_compensation$
 BEGIN
   IF pg_catalog.to_regprocedure('app_api.list_active_kb(text)') IS NOT NULL
@@ -24,16 +48,6 @@ REVOKE EXECUTE ON FUNCTION app_api.record_interaction(
 REVOKE EXECUTE ON FUNCTION app_api.purge_expired_failed_question_text()
   FROM sejong_backend;
 REVOKE USAGE ON SCHEMA app_api FROM sejong_backend;
-
--- Task 6 extends the same forward migration. Keep its compensation identities
--- here from the start so this file remains the complete 00300 inverse.
-DROP FUNCTION IF EXISTS app_api.reject_kb_candidate(uuid, text, text, text);
-DROP FUNCTION IF EXISTS app_api.approve_kb_candidate(uuid, text, text);
-DROP FUNCTION IF EXISTS app_api.submit_kb_candidate(uuid, text, text);
-DROP FUNCTION IF EXISTS app_api.create_kb_candidate(
-  uuid, text, text, text, text, text, text, jsonb, jsonb,
-  text, text, text, text, text, date, text, text
-);
 
 DROP FUNCTION IF EXISTS app_api.purge_expired_failed_question_text();
 DROP FUNCTION IF EXISTS app_api.record_interaction(

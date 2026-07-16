@@ -355,13 +355,16 @@ SELECT results_eq(
             'app_api.record_interaction(uuid,text,text,text,text[],integer,text,text,boolean,text)'
           )::oid,
           pg_catalog.to_regprocedure(
+            'app_api.confirm_failed_question_reason(uuid,text,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
             'app_api.create_kb_candidate(uuid,text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,date,text,text)'
           )::oid,
           pg_catalog.to_regprocedure(
             'app_api.submit_kb_candidate(uuid,text,text)'
           )::oid,
           pg_catalog.to_regprocedure(
-            'app_api.approve_kb_candidate(uuid,text,text)'
+            'app_api.approve_kb_candidate(uuid,text,text,text)'
           )::oid,
           pg_catalog.to_regprocedure(
             'app_api.reject_kb_candidate(uuid,text,text,text)'
@@ -397,13 +400,16 @@ SELECT is(
               'app_api.record_interaction(uuid,text,text,text,text[],integer,text,text,boolean,text)'
             )::oid,
             pg_catalog.to_regprocedure(
+              'app_api.confirm_failed_question_reason(uuid,text,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
               'app_api.create_kb_candidate(uuid,text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,date,text,text)'
             )::oid,
             pg_catalog.to_regprocedure(
               'app_api.submit_kb_candidate(uuid,text,text)'
             )::oid,
             pg_catalog.to_regprocedure(
-              'app_api.approve_kb_candidate(uuid,text,text)'
+              'app_api.approve_kb_candidate(uuid,text,text,text)'
             )::oid,
             pg_catalog.to_regprocedure(
               'app_api.reject_kb_candidate(uuid,text,text,text)'
@@ -1186,6 +1192,12 @@ FROM (
 WHERE failures.id = boundary.failed_question_id;
 
 -- A real candidate link proves purge never deletes the failure lineage.
+UPDATE app_private.failed_questions AS failures
+SET status = 'REASON_CONFIRMED'
+FROM task5_results AS results
+WHERE results.label = 'purge-equal'
+  AND failures.id = results.failed_question_id;
+
 INSERT INTO app_private.kb_candidates (
   failed_question_id, title, representative_question, data_origin, category,
   answer_summary, procedure_steps, required_documents, department,
