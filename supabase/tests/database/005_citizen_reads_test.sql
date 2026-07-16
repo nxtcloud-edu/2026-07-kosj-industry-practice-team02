@@ -131,12 +131,23 @@ SELECT is(
     JOIN pg_catalog.pg_namespace AS namespaces
       ON namespaces.oid = functions.pronamespace
     WHERE namespaces.nspname = 'app_api'
-      AND functions.proname IN ('list_active_kb', 'list_offices')
+      AND (
+        (
+          functions.proname = 'list_active_kb'
+          AND pg_catalog.pg_get_function_identity_arguments(functions.oid) =
+            'p_intent text'
+        )
+        OR (
+          functions.proname = 'list_offices'
+          AND pg_catalog.pg_get_function_identity_arguments(functions.oid) =
+            'p_region text, p_intent text'
+        )
+      )
       AND pg_catalog.pg_get_functiondef(functions.oid)
-        ~ 'EXECUTE[[:space:]]+(FORMAT|IMMEDIATE|USING)'
+        !~* '(^|[^[:alnum:]_])execute([^[:alnum:]_]|$)'
   ),
-  0,
-  'citizen reads contain no dynamic SQL'
+  2,
+  'both exact citizen reads contain no standalone EXECUTE token'
 );
 
 -- Exact five ordinary indexes: names, tables, ordered key columns/direction,
@@ -569,6 +580,7 @@ SELECT throws_ok(
 -- A real non-superuser member proves the capability works without inheriting
 -- base-table SELECT. Diagnostics capture variable values, never literal calls.
 CREATE TEMPORARY TABLE task7_error_diagnostics (
+  interface_name text NOT NULL,
   returned_sqlstate text NOT NULL,
   message_text text NOT NULL,
   exception_detail text,
@@ -615,7 +627,8 @@ SELECT throws_ok(
 );
 DO $capture_nonleak$
 DECLARE
-  v_filter constant text := 'SENTINEL_READ_FILTER_MUST_NOT_LEAK';
+  v_kb_filter constant text := 'SENTINEL_KB_FILTER_MUST_NOT_LEAK';
+  v_office_filter constant text := 'SENTINEL_OFFICE_FILTER_MUST_NOT_LEAK';
   v_state text;
   v_message text;
   v_detail text;
@@ -628,7 +641,7 @@ DECLARE
   v_datatype text;
 BEGIN
   BEGIN
-    PERFORM * FROM app_api.list_active_kb(v_filter);
+    PERFORM * FROM app_api.list_active_kb(v_kb_filter);
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS
       v_state = RETURNED_SQLSTATE,
@@ -642,8 +655,30 @@ BEGIN
       v_constraint = CONSTRAINT_NAME,
       v_datatype = PG_DATATYPE_NAME;
     INSERT INTO pg_temp.task7_error_diagnostics VALUES (
-      v_state, v_message, v_detail, v_hint, v_context, v_schema, v_table,
-      v_column, v_constraint, v_datatype
+      'list_active_kb', v_state, v_message, v_detail, v_hint, v_context,
+      v_schema, v_table, v_column, v_constraint, v_datatype
+    );
+  END;
+
+  BEGIN
+    PERFORM * FROM app_api.list_offices(
+      v_office_filter, v_office_filter
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_state = RETURNED_SQLSTATE,
+      v_message = MESSAGE_TEXT,
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT,
+      v_context = PG_EXCEPTION_CONTEXT,
+      v_schema = SCHEMA_NAME,
+      v_table = TABLE_NAME,
+      v_column = COLUMN_NAME,
+      v_constraint = CONSTRAINT_NAME,
+      v_datatype = PG_DATATYPE_NAME;
+    INSERT INTO pg_temp.task7_error_diagnostics VALUES (
+      'list_offices', v_state, v_message, v_detail, v_hint, v_context,
+      v_schema, v_table, v_column, v_constraint, v_datatype
     );
   END;
 END;
@@ -672,7 +707,9 @@ SELECT is(
 
 SELECT ok(
   (
-    SELECT pg_catalog.count(*) = 1
+    SELECT pg_catalog.count(*) = 2
+      AND pg_catalog.array_agg(interface_name ORDER BY interface_name) =
+        ARRAY['list_active_kb', 'list_offices']::text[]
       AND pg_catalog.bool_and(
         returned_sqlstate = 'P1010'
         AND message_text = 'INVALID_READ_FILTER'
@@ -680,11 +717,16 @@ SELECT ok(
           E'\n', returned_sqlstate, message_text, exception_detail,
           exception_hint, exception_context, schema_name, table_name,
           column_name, constraint_name, datatype_name
-        ), 'SENTINEL_READ_FILTER_MUST_NOT_LEAK') = 0
+        ), 'SENTINEL_KB_FILTER_MUST_NOT_LEAK') = 0
+        AND pg_catalog.strpos(pg_catalog.concat_ws(
+          E'\n', returned_sqlstate, message_text, exception_detail,
+          exception_hint, exception_context, schema_name, table_name,
+          column_name, constraint_name, datatype_name
+        ), 'SENTINEL_OFFICE_FILTER_MUST_NOT_LEAK') = 0
       )
     FROM task7_error_diagnostics
   ),
-  'fixed read diagnostics do not contain caller filter text'
+  'both fixed read diagnostics omit both caller filter sentinels'
 );
 
 SELECT * FROM finish();
