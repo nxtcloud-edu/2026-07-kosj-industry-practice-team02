@@ -103,6 +103,14 @@ Task 3 첫 실행 뒤 read-only Docker inventory에서 PostgreSQL 외 persistent
 container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 일회성 `pg_prove` container는
 테스트 실행용이며 persistent runtime 범위에 포함하지 않는다.
 
+후속 품질 review에서 첫 regression test가 source 전체 문자열을 검사해 주석 속 정답과 실제
+대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. 동일 mutant가 기존 checker에서
+`True`가 되어 RED로 실패함을 확인한 뒤 PowerShell parser의 live `CommandAst` 검사로 교체했다.
+이제 `START-LOCAL-DATABASE` step 호출은 정확히 하나여야 하며 command name, pinned binary 변수,
+`@("db", "start")`, working-directory 변수의 AST type/text/value가 모두 일치해야 한다. 주석,
+dead string, command/argument 대소문자, extra argument, variable argument/binary, duplicate invocation
+mutant는 모두 거부한다.
+
 ## 7. 버전 전후
 
 | 축 | Before | After | 변경 이유 |
@@ -150,6 +158,11 @@ container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 �
 | Ruff/Mypy full-file audit | 기존 test의 I001/E501×2/SIM117 및 line 465 `arg-type`, 기존 helper의 import/format drift 확인; 새 test line 진단 0 | Ruff non-zero / Mypy tooling scripts 2 files pass | agent terminal |
 | changed-scope Ruff/Mypy with 확인된 baseline codes 제외 | exit 0 / exit 0 | modified test file 1개, 추가 진단 0 | agent terminal |
 | correction secret / pinned CLI / diff | exit 0 / exit 0 / exit 0 | secret output 0, exact CLI PASS, whitespace error 0 | agent terminal |
+| independent correction quality review | whole-source string test의 false-pass Important 1건 | fix required | reviewer report |
+| AST mutant regression RED | 주석 속 정답 + live alternate-case arguments가 기존 checker에서 `True` | focused 1 expected failure | agent terminal |
+| AST contract GREEN | actual runner pass; comment/dead-string/case/extra/variable/wrong-binary/duplicate mutants reject | focused 2/2 | agent terminal |
+| case-insensitive duplicate mutant RED→GREEN | PowerShell의 case-insensitive command 중복을 추가 재현하고 AST 수집도 case-insensitive로 보정 | focused expected failure 후 2/2 pass | agent terminal |
+| corrected tooling module | exit 0 | 20 tests, 64.560s, OK | agent terminal |
 
 ### 미실행 검증과 이유
 
@@ -161,7 +174,7 @@ container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 �
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: Task 0~2에서 실제 env/key/질문/DB 데이터 접근 0. env helper 검증은 synthetic temp fixture만 사용했다.
-- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. repository secret scan 통과.
+- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. start regression은 source를 stdin으로 local PowerShell parser에 전달해 live AST만 검사하며 Docker·network·provider env를 읽지 않는다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 

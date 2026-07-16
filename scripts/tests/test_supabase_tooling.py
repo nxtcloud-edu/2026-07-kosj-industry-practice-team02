@@ -36,6 +36,71 @@ EXPECTED_PIN = {
     ),
     "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16",
 }
+DATABASE_START_AST_PROBE = r'''
+$source = [Console]::In.ReadToEnd()
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseInput(
+    $source,
+    [ref]$tokens,
+    [ref]$parseErrors
+)
+$commands = @($ast.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ieq "Invoke-DatabaseStep"
+}, $true))
+$records = @()
+foreach ($command in $commands) {
+    $elements = @()
+    foreach ($element in $command.CommandElements) {
+        $value = $null
+        if ($element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+            $value = $element.Value
+        }
+        elseif ($element -is [System.Management.Automation.Language.VariableExpressionAst]) {
+            $value = $element.VariablePath.UserPath
+        }
+        $elements += [pscustomobject]@{
+            type = $element.GetType().Name
+            text = $element.Extent.Text
+            value = $value
+        }
+    }
+    $records += [pscustomobject]@{ elements = @($elements) }
+}
+[pscustomobject]@{
+    parse_error_count = @($parseErrors).Count
+    commands = @($records)
+} | ConvertTo-Json -Compress -Depth 6
+'''
+EXPECTED_DATABASE_START_ELEMENTS = [
+    {
+        "type": "StringConstantExpressionAst",
+        "text": "Invoke-DatabaseStep",
+        "value": "Invoke-DatabaseStep",
+    },
+    {"type": "CommandParameterAst", "text": "-Step", "value": None},
+    {
+        "type": "StringConstantExpressionAst",
+        "text": '"START-LOCAL-DATABASE"',
+        "value": "START-LOCAL-DATABASE",
+    },
+    {"type": "CommandParameterAst", "text": "-FilePath", "value": None},
+    {
+        "type": "VariableExpressionAst",
+        "text": "$supabaseBinary",
+        "value": "supabaseBinary",
+    },
+    {"type": "CommandParameterAst", "text": "-Arguments", "value": None},
+    {"type": "ArrayExpressionAst", "text": '@("db", "start")', "value": None},
+    {"type": "CommandParameterAst", "text": "-WorkingDirectory", "value": None},
+    {
+        "type": "VariableExpressionAst",
+        "text": "$repositoryRoot",
+        "value": "repositoryRoot",
+    },
+]
 
 
 def powershell_executable() -> str:
@@ -94,6 +159,42 @@ def load_module(path: Path, name: str) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def database_start_contract_is_exact(source: str) -> bool:
+    result = subprocess.run(
+        [
+            powershell_executable(),
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            DATABASE_START_AST_PROBE,
+        ],
+        input=source,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+    )
+    if result.returncode != 0 or result.stderr:
+        raise AssertionError("PowerShell AST probe failed")
+    payload = json.loads(result.stdout)
+    if payload["parse_error_count"] != 0:
+        return False
+    start_commands = []
+    for command in payload.get("commands") or []:
+        elements = command["elements"]
+        if any(
+            element["type"] == "CommandParameterAst"
+            and element["text"] == "-Step"
+            and index + 1 < len(elements)
+            and elements[index + 1]["type"] == "StringConstantExpressionAst"
+            and elements[index + 1]["value"] == "START-LOCAL-DATABASE"
+            for index, element in enumerate(elements)
+        ):
+            start_commands.append(elements)
+    return start_commands == [EXPECTED_DATABASE_START_ELEMENTS]
 
 
 def run_python_tool(path: Path, *arguments: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -323,8 +424,47 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_database_runner_starts_only_postgres_with_exact_cli_arguments(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
 
-        self.assertIn('-Arguments @("db", "start")', script)
-        self.assertNotRegex(script, r'-Arguments\s+@\(\s*"start"\s*\)')
+        self.assertTrue(database_start_contract_is_exact(script))
+
+    def test_database_start_contract_rejects_non_exact_live_command_asts(self) -> None:
+        exact_call = '''
+Invoke-DatabaseStep `
+    -Step "START-LOCAL-DATABASE" `
+    -FilePath $supabaseBinary `
+    -Arguments @("db", "start") `
+    -WorkingDirectory $repositoryRoot
+'''
+        mutants = {
+            "correct text only in comment and alternate argument casing": '''
+# -Arguments @("db", "start")
+Invoke-DatabaseStep `
+    -Step "START-LOCAL-DATABASE" `
+    -FilePath $supabaseBinary `
+    -Arguments @("DB", "START") `
+    -WorkingDirectory $repositoryRoot
+''',
+            "correct text only in dead string and extra argument": '''
+@'
+-Arguments @("db", "start")
+'@
+Invoke-DatabaseStep `
+    -Step "START-LOCAL-DATABASE" `
+    -FilePath $supabaseBinary `
+    -Arguments @("db", "start", "extra") `
+    -WorkingDirectory $repositoryRoot
+''',
+            "variable arguments": exact_call.replace('@("db", "start")', "$startArguments"),
+            "wrong executable variable": exact_call.replace(
+                "$supabaseBinary", "$unapprovedBinary"
+            ),
+            "duplicate start command": exact_call + exact_call,
+            "duplicate with alternate command casing": exact_call
+            + exact_call.replace("Invoke-DatabaseStep", "invoke-databasestep"),
+        }
+
+        for name, mutant in mutants.items():
+            with self.subTest(name=name):
+                self.assertFalse(database_start_contract_is_exact(mutant))
 
     def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
