@@ -109,9 +109,14 @@ container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 �
 통과하는 Important 우회가 재현됐다. 이 mutant가 기존 AST checker에서 `True`가 되는 RED를 확보한
 뒤 static control-flow 주장을 제거했다. 현재 test는 실제 `verify_database.ps1`을 synthetic temp
 repo에서 실행한다. API venv Python launcher를 fake Docker/Supabase/Python executable로 복사하고,
-fake Supabase가 실제 받은 argv만 합성 JSONL에 기록한 뒤 exit 7로 gate를 안전하게 중단한다.
-production은 첫/유일 start invocation `['db', 'start']`와 stable 비노출 출력만 만들며, dead exact
-block + live direct bare mutant는 `['start']`로 관찰돼 같은 계약을 통과하지 못한다.
+fake Supabase가 실제 받은 argv만 합성 JSONL에 기록하도록 했다.
+초기 behavioral fixture는 exact `db start` 직후 exit 7이라 그 뒤에 추가된 live bare start를
+관찰하지 못하는 세 번째 Important false-pass가 있었다. extra-bare mutant가 production과 같은
+`[['db', 'start']]`만 기록해 RED로 실패함을 확인한 뒤 중단 지점을 다음 controlled
+`['db', 'reset', '--local']`로 옮겼다. 현재 fake exact/bare start는 기록 후 0을 반환하고 reset만
+7로 중단한다. production sequence는 정확히 `[['db', 'start'], ['db', 'reset', '--local']]`이며,
+dead exact + live bare는 `[['start'], reset]`, correct + extra bare는 `[['db','start'], ['start'],
+reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 ## 7. 버전 전후
 
@@ -169,6 +174,10 @@ block + live direct bare mutant는 `['start']`로 관찰돼 같은 계약을 통
 | behavioral bypass RED | `if ($false)` exact call + direct bare invocation이 AST checker에서 `True` | focused 1 expected failure | agent terminal |
 | actual runner argument capture GREEN | production `['db','start']`, mutant `['start']`, stable exit 7/no stderr | focused 2/2, 16.930s | agent terminal |
 | behavioral correction tooling module | exit 0 | 20 tests, 53.179s, OK | agent terminal |
+| independent behavioral quality review | exact start에서 조기 exit해 후속 extra bare가 unreachable인 Important 1건 | fix required | reviewer report |
+| post-start extra-bare RED | correct call 뒤 bare start mutant가 production과 같은 `[['db','start']]`로 false-pass | focused 1 expected failure | agent terminal |
+| reset-boundary capture GREEN | production exact start→reset; dead/extra bare mutant sequence 분리; reset에서 stable exit 7 | focused 3/3, 30.953s | agent terminal |
+| reset-boundary tooling module | exit 0 | 21 tests, 59.928s, OK | agent terminal |
 
 ### 미실행 검증과 이유
 

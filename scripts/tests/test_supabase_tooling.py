@@ -96,7 +96,7 @@ def load_module(path: Path, name: str) -> ModuleType:
     return module
 
 
-def run_database_runner_with_start_capture(
+def run_database_runner_with_supabase_capture(
     source: str,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     runtime_executable = ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"
@@ -126,7 +126,7 @@ def run_database_runner_with_start_capture(
             shutil.copy2(runtime_executable, destination)
 
         (root / "version").write_text("raise SystemExit(0)\n", encoding="utf-8")
-        capture_path = root / "start-invocations.jsonl"
+        capture_path = root / "supabase-invocations.jsonl"
         capture_program = '''
 import json
 import os
@@ -134,9 +134,13 @@ import sys
 from pathlib import Path
 
 invocation = [Path(sys.argv[0]).name, *sys.argv[1:]]
-with open(os.environ["SEJONG_SYNTHETIC_START_CAPTURE"], "a", encoding="utf-8") as stream:
+with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps(invocation) + "\\n")
-raise SystemExit(7)
+if invocation in (["db", "start"], ["start"]):
+    raise SystemExit(0)
+if invocation == ["db", "reset", "--local"]:
+    raise SystemExit(7)
+raise SystemExit(9)
 '''
         for command in ("db", "start"):
             (root / command).write_text(capture_program, encoding="utf-8")
@@ -147,7 +151,7 @@ raise SystemExit(7)
             if key in os.environ
         }
         environment["PATH"] = str(fake_bin)
-        environment["SEJONG_SYNTHETIC_START_CAPTURE"] = str(capture_path)
+        environment["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"] = str(capture_path)
         result = subprocess.run(
             [
                 powershell_executable(),
@@ -401,11 +405,14 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_database_runner_starts_only_postgres_with_exact_cli_arguments(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
 
-        result, invocations = run_database_runner_with_start_capture(script)
+        result, invocations = run_database_runner_with_supabase_capture(script)
 
         self.assertEqual(result.returncode, 7)
         self.assertFalse(result.stderr)
-        self.assertEqual(invocations, [["db", "start"]])
+        self.assertEqual(
+            invocations,
+            [["db", "start"], ["db", "reset", "--local"]],
+        )
         self.assertEqual(
             result.stdout.splitlines(),
             [
@@ -414,7 +421,9 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
                 "[START] step=VERIFY-SUPABASE-VERSION",
                 "[PASS] step=VERIFY-SUPABASE-VERSION",
                 "[START] step=START-LOCAL-DATABASE",
-                "[FAIL] step=START-LOCAL-DATABASE reason=child code=7",
+                "[PASS] step=START-LOCAL-DATABASE",
+                "[START] step=RESET-DATABASE-ONE",
+                "[FAIL] step=RESET-DATABASE-ONE reason=child code=7",
             ],
         )
 
@@ -448,12 +457,45 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertEqual(script.count(exact_block), 1)
         mutant = script.replace(exact_block, mutant_block)
 
-        result, invocations = run_database_runner_with_start_capture(mutant)
+        result, invocations = run_database_runner_with_supabase_capture(mutant)
 
         self.assertEqual(result.returncode, 7)
         self.assertFalse(result.stderr)
-        self.assertEqual(invocations, [["start"]])
-        self.assertNotEqual(invocations, [["db", "start"]])
+        self.assertEqual(invocations, [["start"], ["db", "reset", "--local"]])
+        self.assertNotEqual(
+            invocations,
+            [["db", "start"], ["db", "reset", "--local"]],
+        )
+
+    def test_database_start_capture_rejects_extra_live_bare_call(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        exact_block = '''    if (-not $skipStart) {
+        $null = Invoke-DatabaseStep `
+            -Step "START-LOCAL-DATABASE" `
+            -FilePath $supabaseBinary `
+            -Arguments @("db", "start") `
+            -WorkingDirectory $repositoryRoot
+    }
+'''
+        mutant_block = exact_block.replace(
+            "    }\n",
+            "        $null = & $supabaseBinary start\n    }\n",
+        )
+        self.assertEqual(script.count(exact_block), 1)
+        mutant = script.replace(exact_block, mutant_block)
+
+        result, invocations = run_database_runner_with_supabase_capture(mutant)
+
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(result.stderr)
+        self.assertEqual(
+            invocations,
+            [["db", "start"], ["start"], ["db", "reset", "--local"]],
+        )
+        self.assertNotEqual(
+            invocations,
+            [["db", "start"], ["db", "reset", "--local"]],
+        )
 
     def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
