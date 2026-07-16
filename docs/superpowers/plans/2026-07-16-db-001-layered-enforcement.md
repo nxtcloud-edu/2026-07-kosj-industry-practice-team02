@@ -13,7 +13,10 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: Awaiting user approval
+- Status: In Progress
+- User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
+- Execution branch: `codex/db-001-layered-enforcement`
+- Execution worktree: `.worktrees/db-001-layered-enforcement`
 - Approved specification: `docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md`
 - Decisions: D-018, D-025
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011
@@ -217,13 +220,13 @@ Error detail may contain a stable record ID or constraint name. It must not cont
 - Create: `docs/implementation-notes/IMP-20260716-006-db-001-layered-enforcement.md`
 - Modify: `docs/implementation-notes/INDEX.md`
 
-- [ ] **Step 1: Create the isolated execution branch/worktree**
+- [x] **Step 1: Create the isolated execution branch/worktree**
 
 Invoke `superpowers:using-git-worktrees`, create branch `codex/db-001-layered-enforcement`, and verify the selected worktree is ignored or outside the repository.
 
 Expected: `git status --short --branch` shows the new branch and no changes.
 
-- [ ] **Step 2: Run the existing no-Docker baseline gate**
+- [x] **Step 2: Run the existing no-Docker baseline gate**
 
 Run:
 
@@ -233,7 +236,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 Expected: exit 0 with all existing 24 stable step IDs passing; `/ready=503` remains the approved state.
 
-- [ ] **Step 3: Record the execution baseline**
+- [x] **Step 3: Record the execution baseline**
 
 Run:
 
@@ -245,7 +248,7 @@ docker version --format '{{.Server.Version}}'
 
 Expected: a commit ID, empty Git status, and a Docker server version. Do not run Supabase or read `apps/api/.env` in this task.
 
-- [ ] **Step 4: Open the implementation note and mark the plan active**
+- [x] **Step 4: Open the implementation note and mark the plan active**
 
 Run:
 
@@ -255,7 +258,7 @@ apps/api/.venv/Scripts/python.exe -B scripts/new_implementation_note.py --title 
 
 Expected: the generator creates exactly `docs/implementation-notes/IMP-20260716-006-db-001-layered-enforcement.md`. If another note has already consumed sequence 006, stop and reconcile the plan/index before implementation. Set the new note to `In Progress`, record the approval text and baseline commit, change this plan status to `In Progress`, add the approval date to plan governance, and change TASK DB-001 from Blocked to In Progress with this plan/note linked.
 
-- [ ] **Step 5: Commit the approved execution start**
+- [x] **Step 5: Commit the approved execution start**
 
 ```powershell
 git add docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md TASKS.md docs/implementation-notes/IMP-20260716-006-db-001-layered-enforcement.md docs/implementation-notes/INDEX.md
