@@ -30,7 +30,7 @@
 | `docs/superpowers/specs/` | 구현계획 전에 사용자가 검토하는 기능·아키텍처 서면 설계 |
 | `docs/superpowers/plans/` | 승인된 명세를 TDD 실행 단위·명령·검증·commit으로 분해한 구현계획 |
 | `docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md` | 승인된 전체 실행계획과 단계별 gate |
-| `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~5 완료, Task 6 ready |
+| `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~9 완료, Task 10은 Q-SEC-004/A-022로 차단 |
 
 ## 모든 작업 후 갱신할 파일
 
@@ -46,7 +46,10 @@
 | 위치 | 목적 |
 |---|---|
 | `contracts/` | OpenAPI 2.0.1-draft와 동기화 JSON Schema |
-| `database/` | DB 논리 초안과 실행 migration의 역순 보상·rollback SQL |
+| `supabase/migrations/`, `supabase/tests/database/` | DB-001 timestamp 실행 권위와 pgTAP |
+| `database/` | `0.3.0-local` 후보 논리 projection, 역순 disposable-local 보상, absence proof; manifest는 blocker로 `0.2.0-draft` 유지 |
+| `docs/test-reports/DB-001-LOCAL-BASELINE.md` | DB-001 후보의 과거 DB 증거와 현재 Q-SEC-004/A-022 차단 상태 |
+| `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md` | 차단된 local DB 후보의 재개 조건·rollback/recovery·public-release blocker 인수인계 |
 | `docs/03_ARCHITECTURE.md` | 시스템 경계와 장애 전략 |
 | `docs/04_DOMAIN_AND_STATE_MODEL.md` | enum·상태·불변조건 |
 | `docs/05_API_AND_CONTRACTS.md` | API 관리 규칙 |

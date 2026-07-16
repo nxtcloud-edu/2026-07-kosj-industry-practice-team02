@@ -1,6 +1,6 @@
 # ADR-0011: DB와 백엔드의 계층형 안전 규칙 강제
 
-- Status: Accepted; implementation in progress, Tasks 0~5 complete
+- Status: Accepted design; implementation candidate blocked by A-022/Q-SEC-004 before `0.3.0-local`
 - Date: 2026-07-16
 - Deciders: 사용자, Codex
 - Related: Q-DB-002, Q-SEC-002, Q-WF-001, D-025/D-026/D-027, ADR-0003/0004/0007/0008, DB-001
@@ -63,9 +63,12 @@ event source, actor, 상태별 table을 전면 분리하면 무결성은 강해�
 ## Migration and rollback
 
 - 실행 권위는 ADR-0008의 timestamp SQL migration 계보다.
-- schema/table → invariant/trigger → capability/function/RLS → candidate workflow/audit → index/read 순으로 다섯 forward migration을 분리한다.
-- 적용·commit된 `00100~00300`은 불변이며 workflow는 `00400`, citizen read/index는 `00500`에 둔다.
-- 위험 단계마다 `database/rollbacks/`에 역순 보상 SQL을 둔다. 자동 down migration을 가정하지 않는다.
+- schema/table → invariant/trigger → capability/function/RLS → candidate workflow/audit → index/read
+  순으로 다섯 기본 forward migration을 분리하고, deferred validator posture 보정은 ADR-0012의
+  여섯 번째 `00600` forward migration으로 추가한다.
+- 적용·commit된 `00100~00500`은 불변이며 validator correction은 `00600`에 둔다.
+- 위험 단계마다 `database/rollbacks/`에 역순 보상 SQL을 둔다. 전체 disposable-local 순서는
+  `00600 → 00500 → 00400 → 00300 → 00200 → 00100`이며 자동 down migration을 가정하지 않는다.
 - remote push, 실제 데이터 파괴, public deployment는 이번 결정으로 승인되지 않는다.
 
 ## Verification
@@ -81,3 +84,12 @@ event source, actor, 상태별 table을 전면 분리하면 무결성은 강해�
 - OUT_OF_SCOPE text 0, FOLLOWUP failure 0, raw 질문 column/log 0
 - 30일 직전·정각·직후와 반복 purge의 멱등성·FK 보존
 - official/mock 교차 활성화 거부와 no-seed `/ready=503` 유지
+
+## Local completion boundary
+
+DB-001에는 pgTAP 6 files/282 assertions, real backend integration 8/8, 6단계
+compensation/absence/reset/replay의 역사적 기능 증거가 있다. 그러나 Task 10에서 Docker actual
+port가 wildcard로 해석됐으므로 runner는 reset 전에 fail-closed했고 manifest는
+`0.2.0-draft`를 유지한다. Q-SEC-004/A-022 해결, exact single `127.0.0.1:54322`, full
+DB/root/static gate와 independent review 뒤에만 `0.3.0-local`로 기록한다. A-021/Q-SEC-003은
+별도 public-release blocker이며 `00700`을 인간 결정 없이 추가하지 않는다.

@@ -34,7 +34,8 @@ docs/00_SOURCE_OF_TRUTH.md      문서 권위와 충돌 해결
 docs/source-of-truth/           최종 확정 제품·정책·RFP 기준
 docs/adr/                       아키텍처 결정 기록
 contracts/                      API·JSON 계약 초안
-database/                       DB 스키마 초안
+supabase/migrations/            DB executable timestamp authority
+database/                       local baseline 논리 projection·보상·absence proof
 docs/implementation-notes/      모든 작업의 재현 가능한 기록
 legacy/                         오래된 스타터·문서, 비권위 참고자료
 ```
@@ -42,15 +43,27 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 ## 현재 상태
 
 - 최종 제품과 정책 문서는 확정됨.
-- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, DB·승인 seed 전 `/ready=503`. Web은 정적 소개 `/` shell까지 구현됐고 `/chat`·`/admin`은 아직 없음.
+- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, 승인 seed 전 `/ready=503`. Web은 정적 소개 `/` shell까지 구현됐고 `/chat`·`/admin`은 아직 없음.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
 - 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
-- Windows PowerShell 5.1+ 단일 local gate가 exact runtime, frozen install, Web/API/계약, secret/browser artifact, package와 diff 검증을 순서대로 실행함. DB와 승인 seed가 아직 없으므로 `/ready=503`은 의도한 정상 상태임.
+- DB-001 local/private 후보는 pinned Supabase CLI 2.109.1, PostgreSQL 17.6,
+  6개 forward/compensation, 7 enum·8 table, forced RLS/capability, pgTAP 282와 backend
+  integration 8/8을 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
+  `database/schema-v1.draft.sql`이다.
+- Windows PowerShell 5.1+ root gate와 별도 Docker DB gate가 exact runtime, frozen install,
+  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. 공식 승인 seed가 0이므로
+  `/ready=503`은 의도한 정상 상태다.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
-- `contracts/`와 `database/`는 구현 전 검증할 활성 draft이며, chat context의 승인된 major 뒤 Phase 1 wire drift를 고친 API spec revision은 2.0.1-draft임.
+- `contracts/`의 API spec revision은 2.0.1-draft다. DB executable authority는 timestamp
+  migrations이며 `database/`의 `0.3.0-local` projection은 후보 참고용이다. 실제 manifest는
+  host-port blocker 때문에 `database_schema=0.2.0-draft`를 유지한다.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
+- A-021/Q-SEC-003의 기본값 B가 활성이다. A-022가 해결돼 DB 후보가 local baseline으로
+  승격되더라도 local/private 전용이며 privileged function 21개의 public hardening 전에는
+  remote/public 배포, public admin/API, public backend DB credential 사용과 `00700` 생성을
+  금지한다.
 
 ## 개발 런타임 계약
 
@@ -78,6 +91,20 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offl
 ```
 
 `-Offline`은 미리 받은 cache의 재사용 가능성을 검증하며 빈 PC의 최초 설치를 대신하지 않는다. 러너는 파일을 삭제하거나 서버를 띄우지 않고, 실패 시 하위 명령의 내용 대신 stable step ID와 종료코드만 표시한다. 실제 `/health`·`/ready` HTTP smoke는 서버를 명시적으로 실행하는 별도 검증이다.
+
+Docker Desktop이 실행 중일 때 DB 기준선은 별도 gate로 검증한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
+```
+
+이 gate의 reset/compensation은 disposable local DB 전용이다. remote project, 실제 데이터,
+Docker volume에는 실행하지 않는다.
+
+현재 Docker Desktop 4.62.0/Engine 29.2.1에서는 stock CLI가 생성한 actual binding이 wildcard로
+해석돼 runner가 reset 전에 fail-closed한다. Q-SEC-004/A-022 해결 전에는 DB gate를 우회하거나
+DB-001을 완료로 표시하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
 
 다른 현재 디렉터리에서 실행할 때는 `-File`에 이 저장소의 `scripts/verify.ps1` 절대 경로를 전달한다. 러너는 호출된 파일 위치를 기준으로 저장소 루트를 찾는다.
 
@@ -107,7 +134,8 @@ python scripts/new_implementation_note.py --title "초기 저장소 감사" --ta
 - `apps/`: 신규 활성 애플리케이션 위치
 - `packages/`: 프론트·백엔드 공용 계약/타입 위치
 - `contracts/`: OpenAPI·JSON Schema
-- `database/`: 스키마·마이그레이션 문서
+- `supabase/migrations/`: DB 실행 권위와 `supabase/tests/database/` pgTAP
+- `database/`: 논리 projection·역순 disposable-local compensation·absence proof
 - `data/`: 공식·평가·mock 데이터의 활성 위치
 - `docs/`: 권위 문서, ADR, 구현 노트, 계획, 테스트, 인수인계
 - `scripts/`: 노트 생성·상태 캡처·드리프트 검사

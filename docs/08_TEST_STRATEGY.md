@@ -35,6 +35,22 @@
 - Supabase empty DB reset/replay와 명시적 보상 rollback/replay
 - office mapping
 
+DB-001 local baseline 후보는 다음 영구 gate를 요구한다.
+
+- pgTAP 6 files / 282 assertions
+- real backend integration 8/8, DB URL 부재 환경 exact 8 skips(`local DB gate only`)
+- 006-only compensation posture와 이전 5 files / 274 assertions 보존
+- full compensation `006→005→004→003→002→001`, absence proof, reset/replay,
+  두 번째 pgTAP/integration
+- 두 연결 사유 확인·후보·승인 concurrency와 30일 purge 경계/멱등성
+- synthetic fixture cleanup 뒤 8 table group row 합계 0
+- tooling `LocalDatabaseToolingContractTests` 전체, Ruff/Mypy, root/Web/API/contract/secret/package/diff gate
+- no-seed `/health=200`, `/ready=503`
+
+과거 DB 증거만으로는 현재 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
+Q-SEC-004/A-022의 exact loopback과 fresh full gate가 모두 통과해야 하며, 공개 운영의 보안·용량·
+백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로 사용하지 않는다.
+
 ### E2E
 
 - 정상 답변과 출처

@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: In Progress — Tasks 0~9 complete; Task 10 ready
+- Status: Blocked — Tasks 0~9 complete; Task 10 is stopped at Q-SEC-004/A-022 before version/dependency promotion, fresh DB verification, review, and commit
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -21,8 +21,8 @@
 - Decisions: D-018, D-025, D-026, D-027, D-028
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012
 - Task 9A remediation plan: `docs/superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md`
-- Active logical input: `database/schema-v1.draft.sql` at `0.2.0-draft`
-- Implementation target: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
+- Logical projection target: `database/schema-v1.draft.sql` describes the non-active `0.3.0-local` candidate; executable authority remains timestamp migrations
+- Conditional implementation target after Q-SEC-004/A-022 and all gates: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
 - Execution gate: no task below starts until the user explicitly approves this plan.
 - Execution mode: the user's recorded preference makes subagent-driven development the default. A fresh implementation agent handles one task, then specification and code-quality review occur before the next task.
 - Scope guard: no official seed, DeepSeek call, public route, readiness 200 transition, remote link/push, cloud resource, production auth, or new production dependency is authorized.
@@ -67,6 +67,7 @@ At execution, Task 1 rechecks that the release is still an official non-prerelea
 | `supabase/migrations/20260716000300_capabilities_and_functions.sql` | `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql` | Roles, ownership, forced RLS, event/failure recording, retention functions |
 | `supabase/migrations/20260716000400_candidate_workflow.sql` | `database/rollbacks/20260716000400_candidate_workflow.rollback.sql` | Failure-reason confirmation, candidate workflow, approval/rejection, audit refinement |
 | `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql` | `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql` | Five indexes and ACTIVE+OFFICIAL KB/office read functions |
+| `supabase/migrations/20260717000600_deferred_active_question_trigger_security.sql` | `database/rollbacks/20260717000600_deferred_active_question_trigger_security.rollback.sql` | Validator-only SECURITY DEFINER posture correction and matching INVOKER compensation |
 | `database/verify_db001_absent.sql` | none | After compensation, assert DB-001 schemas and roles are absent without touching Supabase-owned objects |
 
 ### Tests
@@ -1572,23 +1573,43 @@ git commit -m "test(db): verify rollback replay and concurrent approval"
 
 - Modify: `database/schema-v1.draft.sql`
 - Modify: `database/README.md`
+- Modify: `SECURITY.md`
+- Modify: `apps/api/README.md`
+- Modify: `scripts/README.md`
+- Modify: `scripts/verify_database.ps1`
+- Modify: `scripts/tests/test_supabase_tooling.py`
+- Modify: `docs/03_ARCHITECTURE.md`
 - Modify: `docs/04_DOMAIN_AND_STATE_MODEL.md`
 - Modify: `docs/07_SECURITY_PRIVACY.md`
 - Modify: `docs/08_TEST_STRATEGY.md`
 - Modify: `docs/13_IMPLEMENTATION_WORKFLOW.md`
 - Modify: `docs/14_REPOSITORY_STRUCTURE.md`
 - Modify: `docs/15_DEPLOYMENT_AND_OPERATIONS.md`
+- Modify: `docs/16_HANDOFF_GUIDE.md`
+- Modify: `docs/11_AMBIGUITY_REGISTER.md`
+- Modify: `docs/12_VERSIONING_AND_RELEASES.md`
+- Modify: `docs/adr/0011-layered-database-and-backend-enforcement.md`
+- Modify: `docs/decisions/DECISION_LOG.md` (D-018/D-025 status only)
+- Modify: `docs/discovery/DB_001_DISCOVERY_REPORT.md` (append-only current status)
+- Modify: `docs/source-of-truth/TEAM_DECISIONS.md` (local/public boundary only)
+- Modify: `docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md`
 - Modify: `CODEX_FILE_INDEX.md`
 - Modify: `README.md`
 - Modify: `TASKS.md`
-- Modify: `versions/manifest.json`
+- Inspect and preserve unchanged while A-022 is open: `versions/manifest.json`
 - Modify: `CHANGELOG.md`
 - Create: `docs/test-reports/DB-001-LOCAL-BASELINE.md`
+- Modify: `docs/test-reports/README.md`
+- Create: `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md`
 - Modify: `docs/implementation-notes/IMP-20260716-006-db-001-layered-enforcement.md`
+- Create: `docs/implementation-notes/IMP-20260717-007-db-001-local-baseline-closeout.md`
 - Modify: `docs/implementation-notes/INDEX.md`
 - Preserve unchanged: `PACKAGE_MANIFEST.json` (the original 2026-07-14 package snapshot, not an active generated-file inventory)
 
-- [ ] **Step 1: Make migration lineage authoritative**
+The additional active files above contained materially stale pre-DB, Tasks 0~5, or public-boundary
+claims discovered during Task 10 preflight. Historical task notes and legacy remain unchanged.
+
+- [x] **Step 1: Make migration lineage authoritative**
 
 Change the logical draft header to state that it is a readable logical projection of migration baseline `0.3.0-local`, not executable authority. Update its shape to match the seven enums/eight tables/provenance changes without copying grants/functions into the projection. `database/README.md` must state:
 
@@ -1599,13 +1620,20 @@ Logical projection: database/schema-v1.draft.sql.
 Official seed authority: not populated; DATA-SEED-001 remains blocked on PM-approved DATA-001.
 ```
 
-- [ ] **Step 2: Update operating and security documentation**
+- [x] **Step 2: Update operating and security documentation**
 
-Document exact bootstrap, start, full DB verify, optional stop, local credential rotation, rollback/replay, and no-seed readiness behavior. Explicitly warn that the local stack has default development credentials, no TLS/rate limits, and must not be publicly exposed. Preserve separate approval gates for remote DB, public admin, data deletion, production backup, and CORS/domain changes.
+Document exact bootstrap, runner-owned loopback start, full DB verify, optional stop, local credential rotation, rollback/replay, and no-seed readiness behavior. The runner must reject Docker Engine below 28 and any network/container/runtime binding drift before reset or credential handling. Explicitly warn that the local stack has default development credentials, no TLS/rate limits, and must not be publicly exposed. Preserve separate approval gates for remote DB, public admin, data deletion, production backup, and CORS/domain changes.
 
-- [ ] **Step 3: Update task state and versions only after evidence passes**
+- [ ] **Step 3: Update task state, dependencies, and versions only after fresh safe-runtime evidence passes — BLOCKED by Q-SEC-004/A-022**
 
-Set DB-001 to Done only after Task 9 evidence. Unblock dependencies only by replacing `DB-001` with their remaining real dependencies; do not mark DATA-001, DATA-SEED-001, READY-001, AI-001, LOG-001, or BACKUP-001 done.
+Set DB-001 to Done only after Task 9 evidence plus the Task 10 exact-loopback/full-gate/review evidence.
+Unblock dependencies only by replacing `DB-001` with their remaining real dependencies; do not mark
+DATA-001, DATA-SEED-001, READY-001, AI-001, LOG-001, or BACKUP-001 done.
+
+Task 9 evidence alone is insufficient after the Task 10 port finding. While A-022 is open, keep DB-001
+Blocked, preserve every downstream `DB-001` dependency, and keep every manifest axis at its current HEAD
+value. Apply the following promotion only after exact single-loopback runtime, fresh full DB/root/static
+verification, and independent reviews all pass.
 
 Apply version changes:
 
@@ -1627,11 +1655,11 @@ Apply version changes:
 
 Set documentation to `2.4.0` for the new executable DB baseline. Do not change product spec or API wire versions.
 
-- [ ] **Step 4: Write the DB test report and implementation note**
+- [x] **Step 4: Write the blocked candidate DB report and implementation note**
 
 The report records exact CLI/PostgreSQL/Docker versions, all six migration/compensation files and hashes, pgTAP assertion totals, API test total, reset count, `00600 → 00500 → 00400 → 00300 → 00200 → 00100` rollback order, reason-confirmation and approval concurrency results, secret-output scan result, root gate result, and `/ready=503`. The implementation note follows the repository template and includes 6W1H, commands/results, versions before/after, security/privacy/data impact, rollback, risks, and human/AI boundary.
 
-- [ ] **Step 5: Preserve the original package snapshot and inspect active files**
+- [x] **Step 5: Preserve the original package and version manifests and inspect active files**
 
 Run:
 
@@ -1640,9 +1668,11 @@ git diff --exit-code -- PACKAGE_MANIFEST.json
 rg --files -g '!legacy/**' -g '!.tools/**' -g '!supabase/.temp/**' -g '!supabase/.branches/**'
 ```
 
-Expected: the original package snapshot is unchanged. The active file inventory contains all DB-001 tracked files while ignored `.tools/`, `.env`, Supabase temporary directories, Docker state, and backups are absent.
+Expected: the original package snapshot and `versions/manifest.json` are unchanged while the blocker is
+open. The active file inventory contains all DB-001 tracked files while ignored `.tools/`, `.env`, Supabase
+temporary directories, Docker state, and backups are absent.
 
-- [ ] **Step 6: Run final verification-before-completion**
+- [ ] **Step 6: Run final verification-before-completion — BLOCKED; do not run Docker/DB before Q-SEC-004 is resolved**
 
 Invoke `superpowers:verification-before-completion`, then run:
 
@@ -1656,13 +1686,13 @@ git diff --check
 git status --short
 ```
 
-Expected: both verification gates exit 0, package/JSON/secret/diff checks pass, and Git status lists only intended DB-001 docs/report/note changes before the final commit. The known historical `check_scope_drift.py` false positive against the immutable package snapshot is not used as a DB-001 completion gate.
+Expected: the DB runner first proves an actual loopback-only Docker port and only then both verification gates exit 0; package/JSON/secret/diff checks pass, and Git status lists only intended DB-001 docs/report/note/security-runner changes before the final commit. The known historical `check_scope_drift.py` false positive against the immutable package snapshot is not used as a DB-001 completion gate.
 
-- [ ] **Step 7: Request independent reviews**
+- [ ] **Step 7: Request final independent reviews after Step 6 — BLOCKED**
 
 Invoke `superpowers:requesting-code-review`. The specification reviewer checks every approved-spec requirement. The code-quality reviewer checks SQL injection, `SECURITY DEFINER` search paths, grants/RLS, race behavior, error privacy, env preservation, compensation scope, tests, and documentation/version drift. Resolve all P0/P1 findings and rerun Step 6.
 
-- [ ] **Step 8: Commit Task 10**
+- [ ] **Step 8: Commit Task 10 after Steps 3, 6, and 7 — BLOCKED**
 
 ```powershell
 git add database docs CODEX_FILE_INDEX.md README.md TASKS.md versions/manifest.json CHANGELOG.md scripts/README.md apps/api/README.md
@@ -1707,16 +1737,24 @@ Work stops and returns to the user before any of these changes:
 ## Rollback and recovery summary
 
 - Before the executable DB baseline exists: revert the task commit.
-- On the disposable local DB: run compensation in `00500 → 00400 → 00300 → 00200 → 00100`, execute absence proof, then reset/replay.
+- On the disposable local DB: run compensation in `00600 → 00500 → 00400 → 00300 → 00200 → 00100`, execute absence proof, then reset/replay.
 - After a migration commit is shared: never edit an applied migration; add a reviewed forward migration.
 - Do not delete Docker volumes directly. `supabase stop` is allowed as a non-destructive local stop; volume deletion needs an explicit user decision if non-reproducible data exists.
 - `apps/api/.env` is ignored and preserved. If local credential provisioning fails, rerun it after reset; do not copy credentials into tracked files.
 - Official data has no row in this plan, so rollback cannot delete PM-approved official records.
 
-## Expected completion state
+## Conditional completion state after Q-SEC-004/A-022 is resolved
 
 - DB-001 is Done with reproducible local evidence.
 - PostgreSQL and FastAPI both enforce the approved structural safety rules.
 - `/health=200` and `/ready=503` remain unchanged because no approved official seed exists.
 - DATA-001 remains owned by AI/Data·Backend with PM approval target 2026-07-20.
 - The next vertical slice is DATA-SEED-001 only after DATA-001 approval; READY-001 follows the seed, not this database baseline.
+- A-021/Q-SEC-003 default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked; no `00700` is created without a human decision.
+
+## Current blocked state
+
+- DB-001 remains Blocked and `database_schema=0.2.0-draft` remains active.
+- `0.3.0-local` logical projection, report, and handoff are non-active candidate artifacts.
+- DATA-SEED-001, READY-001, LOG-001, and BACKUP-001 retain their `DB-001` dependencies.
+- Q-SEC-004/A-022 default C forbids further DB runtime work until the human chooses a path.

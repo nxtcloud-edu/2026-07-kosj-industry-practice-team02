@@ -13,6 +13,14 @@
 │  └─ shared-contracts/
 ├─ contracts/
 ├─ database/
+│  ├─ rollbacks/
+│  ├─ schema-v1.draft.sql
+│  └─ verify_db001_absent.sql
+├─ supabase/
+│  ├─ migrations/
+│  ├─ tests/database/
+│  ├─ config.toml
+│  └─ seed.sql
 ├─ data/
 │  ├─ official/
 │  ├─ evaluation/
@@ -44,3 +52,6 @@
 - 일회성 분석 결과는 `artifacts/`(gitignore) 또는 명확한 reports에 둔다.
 - 임시 이름(`final2`, `new_new`, `copy`)을 사용하지 않는다.
 - legacy는 읽기 전용에 가깝게 유지한다.
+- DB 실행 권위는 `supabase/migrations/`; `database/`의 논리 projection은 직접 실행하지 않는다.
+- `.tools/`, `.env`, `supabase/.temp/`, `supabase/.branches/`, Docker state와 backup dump는
+  transient/ignored이며 commit하지 않는다.

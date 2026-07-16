@@ -102,6 +102,14 @@ def run_database_runner_with_supabase_capture(
     *,
     full_path: bool = False,
     failure_phase: str | None = None,
+    include_docker_invocations: bool = False,
+    network_state: str = "absent",
+    runtime_state: str = "none",
+    started_runtime_state: str = "safe",
+    docker_server_version: str = "29.2.1",
+    stop_failure: bool = False,
+    stop_leaves_runtime: bool = False,
+    runner_arguments: tuple[str, ...] = (),
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     runtime_executable = ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"
     if not runtime_executable.is_file():
@@ -117,6 +125,16 @@ def run_database_runner_with_supabase_capture(
             path.mkdir(parents=True, exist_ok=True)
 
         capture_path = root / "supabase-invocations.jsonl"
+        runtime_path = root / "synthetic-docker-runtime.json"
+        runtime_path.write_text(
+            json.dumps(
+                {
+                    "network": network_state,
+                    "runtime": runtime_state,
+                }
+            ),
+            encoding="utf-8",
+        )
         if full_path:
             restoration_line = "        Restore-ProcessEnvironment -Saved $savedEnvironment"
             if source.count(restoration_line) != 1:
@@ -202,7 +220,153 @@ print({CHILD_OUTPUT_SENTINEL!r})
 print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
 raise SystemExit(0)
 '''
-        (root / "version").write_text(version_source, encoding="utf-8")
+        docker_version_source = f'''
+import json
+import os
+
+with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps(["docker", "version"]) + "\\n")
+print(os.environ["SEJONG_SYNTHETIC_DOCKER_SERVER_VERSION"])
+raise SystemExit(0)
+'''
+        (root / "version").write_text(docker_version_source, encoding="utf-8")
+        docker_network_source = '''
+import json
+import os
+import sys
+from pathlib import Path
+
+capture = Path(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"])
+state_path = Path(os.environ["SEJONG_SYNTHETIC_DOCKER_RUNTIME"])
+state = json.loads(state_path.read_text(encoding="utf-8"))
+event = ["docker", "network", *sys.argv[1:]]
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(event) + "\\n")
+if sys.argv[1] == "ls":
+    if state["network"] != "absent":
+        print("sejong-ai-local-loopback")
+    raise SystemExit(0)
+if sys.argv[1] == "inspect":
+    if state["network"] == "absent":
+        raise SystemExit(1)
+    driver = "overlay" if state["network"] == "driver-drift" else "bridge"
+    host_ip = (
+        "0.0.0.0" if state["network"] == "option-drift" else "127.0.0.1"
+    )
+    print(json.dumps({
+        "Name": (
+            "unexpected-loopback-network"
+            if state["network"] == "name-drift"
+            else "sejong-ai-local-loopback"
+        ),
+        "Driver": driver,
+        "Scope": "swarm" if state["network"] == "scope-drift" else "local",
+        "Options": {
+            "com.docker.network.bridge.host_binding_ipv4": host_ip,
+        },
+        "Labels": {
+            "com.sejong-ai.local-boundary": (
+                "unexpected-owner"
+                if state["network"] == "label-drift"
+                else "sejong-ai-local"
+            ),
+        },
+    }))
+    raise SystemExit(0)
+if sys.argv[1] == "create":
+    state["network"] = "safe"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    raise SystemExit(0)
+raise SystemExit(9)
+'''
+        (root / "network").write_text(docker_network_source, encoding="utf-8")
+        docker_ps_source = '''
+import json
+import os
+import sys
+from pathlib import Path
+
+capture = Path(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"])
+state_path = Path(os.environ["SEJONG_SYNTHETIC_DOCKER_RUNTIME"])
+state = json.loads(state_path.read_text(encoding="utf-8"))
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(["docker", "ps", *sys.argv[1:]]) + "\\n")
+if state["runtime"] == "stopped" and "-a" not in sys.argv[1:]:
+    raise SystemExit(0)
+if state["runtime"] == "multiple":
+    print("container-one")
+    print("container-two")
+elif state["runtime"] != "none":
+    print("container-one")
+raise SystemExit(0)
+'''
+        (root / "ps").write_text(docker_ps_source, encoding="utf-8")
+        docker_inspect_source = '''
+import json
+import os
+import sys
+from pathlib import Path
+
+capture = Path(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"])
+state_path = Path(os.environ["SEJONG_SYNTHETIC_DOCKER_RUNTIME"])
+state = json.loads(state_path.read_text(encoding="utf-8"))
+container_id = sys.argv[1]
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(["docker", "inspect", container_id]) + "\\n")
+runtime = state["runtime"]
+requested_host_ip = (
+    "0.0.0.0"
+    if runtime in ("unsafe-ip", "unsafe-requested")
+    else "127.0.0.1" if runtime == "unsafe-resolved" else ""
+)
+resolved_host_ip = (
+    "0.0.0.0" if runtime in ("unsafe-ip", "unsafe-resolved") else "127.0.0.1"
+)
+bindings = None if runtime == "unpublished" else {
+    "5432/tcp": [{
+        "HostIp": requested_host_ip,
+        "HostPort": "54323" if runtime == "wrong-host-port" else "54322",
+    }],
+}
+if runtime == "mixed-bindings":
+    bindings["5432/tcp"].append({"HostIp": "0.0.0.0", "HostPort": "54322"})
+if runtime == "null-binding":
+    bindings["5432/tcp"] = [None]
+networks = {} if runtime == "wrong-network" else {
+    "sejong-ai-local-loopback": {"NetworkID": "synthetic"},
+}
+name = (
+    "/supabase_db_sejong-ai-local"
+    if container_id == "container-one" and runtime != "name-drift"
+    else "/unexpected_project_container"
+)
+print(json.dumps({
+    "Name": name,
+    "State": {"Running": runtime != "stopped"},
+    "Config": {"Labels": {
+        "com.supabase.cli.project": (
+            "unexpected-project" if runtime == "label-drift" else "sejong-ai-local"
+        ),
+    }},
+    "HostConfig": {
+        "NetworkMode": (
+            "bridge" if runtime == "networkmode-drift" else "sejong-ai-local-loopback"
+        ),
+        "PortBindings": bindings,
+    },
+    "NetworkSettings": {
+        "Networks": networks,
+        "Ports": None if runtime == "unpublished" else {
+            "5432/tcp": [{
+                "HostIp": resolved_host_ip,
+                "HostPort": "54323" if runtime == "wrong-host-port" else "54322",
+            }],
+        },
+    },
+}))
+raise SystemExit(0)
+'''
+        (root / "inspect").write_text(docker_inspect_source, encoding="utf-8")
         capture_program = f'''
 import json
 import os
@@ -215,7 +379,28 @@ with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8"
 if os.environ.get("SEJONG_SYNTHETIC_FULL_PATH") == "1":
     print({CHILD_OUTPUT_SENTINEL!r})
     print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
-if invocation in (["db", "start"], ["start"]):
+if invocation in (
+    ["db", "start"],
+    ["start"],
+    ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+):
+    state_path = Path(os.environ["SEJONG_SYNTHETIC_DOCKER_RUNTIME"])
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["runtime"] = os.environ["SEJONG_SYNTHETIC_STARTED_RUNTIME"]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    if os.environ.get("SEJONG_SYNTHETIC_FAILURE_PHASE") == "start":
+        raise SystemExit(23)
+    raise SystemExit(0)
+if invocation == ["stop"]:
+    if os.environ.get("SEJONG_SYNTHETIC_STOP_FAILURE") == "1":
+        raise SystemExit(23)
+    state_path = Path(os.environ["SEJONG_SYNTHETIC_DOCKER_RUNTIME"])
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if os.environ.get("SEJONG_SYNTHETIC_STOP_LEAVES_RUNTIME") != "1":
+        state["runtime"] = "none"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(["runtime", state["runtime"]]) + "\\n")
     raise SystemExit(0)
 if invocation == ["db", "reset", "--local"]:
     raise SystemExit(0 if os.environ.get("SEJONG_SYNTHETIC_FULL_PATH") == "1" else 7)
@@ -228,7 +413,11 @@ if invocation == ["test", "db"]:
     raise SystemExit(0)
 raise SystemExit(9)
 '''
-        commands = ("db", "start", "status", "test") if full_path else ("db", "start")
+        commands = (
+            ("db", "start", "stop", "status", "test")
+            if full_path
+            else ("db", "start", "stop")
+        )
         for command in commands:
             (root / command).write_text(capture_program, encoding="utf-8")
 
@@ -262,6 +451,13 @@ raise SystemExit(0)
         }
         environment["PATH"] = str(fake_bin)
         environment["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"] = str(capture_path)
+        environment["SEJONG_SYNTHETIC_DOCKER_RUNTIME"] = str(runtime_path)
+        environment["SEJONG_SYNTHETIC_STARTED_RUNTIME"] = started_runtime_state
+        environment["SEJONG_SYNTHETIC_DOCKER_SERVER_VERSION"] = docker_server_version
+        environment["SEJONG_SYNTHETIC_STOP_FAILURE"] = "1" if stop_failure else "0"
+        environment["SEJONG_SYNTHETIC_STOP_LEAVES_RUNTIME"] = (
+            "1" if stop_leaves_runtime else "0"
+        )
         if full_path:
             environment["SEJONG_SYNTHETIC_FULL_PATH"] = "1"
             environment["SEJONG_SYNTHETIC_FAILURE_PHASE"] = failure_phase or ""
@@ -281,6 +477,7 @@ raise SystemExit(0)
                 "Bypass",
                 "-File",
                 str(runner),
+                *runner_arguments,
             ],
             cwd=root,
             capture_output=True,
@@ -295,6 +492,12 @@ raise SystemExit(0)
             invocations = [
                 json.loads(line)
                 for line in capture_path.read_text(encoding="utf-8").splitlines()
+            ]
+        if not include_docker_invocations:
+            invocations = [
+                invocation
+                for invocation in invocations
+                if not invocation or invocation[0] != "docker"
             ]
         return result, invocations
 
@@ -523,6 +726,380 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertIn('"-skipstart"', script)
         self.assertIn('"-skiprollbackreplay"', script)
 
+    def test_database_runner_rejects_docker_engine_before_28(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            docker_server_version="27.5.1",
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=PREFLIGHT-DOCKER reason=version code=2",
+        )
+        self.assertFalse(
+            any(invocation[:2] == ["db", "start"] for invocation in invocations)
+        )
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_creates_and_uses_loopback_network_before_reset(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+        )
+
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(result.stderr)
+        self.assertIn(
+            [
+                "docker",
+                "network",
+                "create",
+                "--driver",
+                "bridge",
+                "--opt",
+                "com.docker.network.bridge.host_binding_ipv4=127.0.0.1",
+                "--label",
+                "com.sejong-ai.local-boundary=sejong-ai-local",
+                "sejong-ai-local-loopback",
+            ],
+            invocations,
+        )
+        start = ["db", "start", "--network-id", "sejong-ai-local-loopback"]
+        reset = ["db", "reset", "--local"]
+        self.assertIn(start, invocations)
+        self.assertIn(reset, invocations)
+        self.assertLess(invocations.index(start), invocations.index(reset))
+        self.assertLess(
+            max(
+                index
+                for index, invocation in enumerate(invocations)
+                if invocation[:2] == ["docker", "inspect"]
+            ),
+            invocations.index(reset),
+        )
+
+    def test_database_runner_rejects_network_driver_or_option_drift(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        for network_state in (
+            "driver-drift",
+            "option-drift",
+            "name-drift",
+            "scope-drift",
+            "label-drift",
+        ):
+            with self.subTest(network_state=network_state):
+                result, invocations = run_database_runner_with_supabase_capture(
+                    script,
+                    include_docker_invocations=True,
+                    network_state=network_state,
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(
+                    result.stdout.splitlines()[-1],
+                    "[FAIL] step=VERIFY-LOCAL-DATABASE-NETWORK "
+                    "reason=invalid code=2",
+                )
+                self.assertFalse(
+                    any(invocation[:2] == ["db", "start"] for invocation in invocations)
+                )
+                self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_unsafe_existing_runtime_before_mutation(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="unsafe-ip",
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME reason=invalid code=2",
+        )
+        self.assertNotIn(
+            ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+            invocations,
+        )
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_unsafe_resolved_binding_despite_safe_request(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="unsafe-resolved",
+            runner_arguments=("-SkipStart",),
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME reason=invalid code=2",
+        )
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_stops_only_new_unsafe_runtime_before_returning_original_failure(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="none",
+            started_runtime_state="unsafe-resolved",
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME reason=invalid code=2",
+        )
+        self.assertIn(
+            ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+            invocations,
+        )
+        self.assertIn(["stop"], invocations)
+        self.assertIn(["runtime", "none"], invocations)
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+        self.assertLess(invocations.index(["stop"]), invocations.index(["runtime", "none"]))
+
+    def test_database_runner_stops_partial_runtime_when_start_command_fails(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            full_path=True,
+            failure_phase="start",
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="none",
+            started_runtime_state="unsafe-resolved",
+        )
+
+        self.assertEqual(result.returncode, 23)
+        self.assertFalse(result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=START-LOCAL-DATABASE reason=child code=23",
+        )
+        self.assertIn(["stop"], invocations)
+        self.assertIn(["runtime", "none"], invocations)
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+        self.assertLess(invocations.index(["stop"]), invocations.index(["runtime", "none"]))
+
+    def test_database_runner_reports_owned_runtime_stop_failure_without_reset(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="none",
+            started_runtime_state="unsafe-resolved",
+            stop_failure=True,
+        )
+
+        self.assertEqual(result.returncode, 23)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=STOP-UNSAFE-LOCAL-DATABASE-RUNTIME reason=child code=23",
+        )
+        self.assertIn(["stop"], invocations)
+        self.assertNotIn(["runtime", "none"], invocations)
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_stop_success_when_owned_runtime_remains(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="none",
+            started_runtime_state="unsafe-resolved",
+            stop_leaves_runtime=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=STOP-UNSAFE-LOCAL-DATABASE-RUNTIME reason=invalid code=2",
+        )
+        self.assertIn(["stop"], invocations)
+        self.assertIn(["runtime", "unsafe-resolved"], invocations)
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_never_stops_preexisting_or_skip_start_runtime(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        cases = (
+            ((), "normal-preexisting"),
+            (("-SkipStart",), "skip-start"),
+        )
+
+        for runner_arguments, label in cases:
+            with self.subTest(label=label):
+                result, invocations = run_database_runner_with_supabase_capture(
+                    script,
+                    include_docker_invocations=True,
+                    network_state="safe",
+                    runtime_state="safe",
+                    runner_arguments=runner_arguments,
+                )
+
+                self.assertEqual(result.returncode, 7)
+                self.assertNotIn(["stop"], invocations)
+                self.assertIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_runtime_identity_or_state_drift(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        for runtime_state in (
+            "stopped",
+            "label-drift",
+            "name-drift",
+            "networkmode-drift",
+            "wrong-network",
+        ):
+            with self.subTest(runtime_state=runtime_state):
+                result, invocations = run_database_runner_with_supabase_capture(
+                    script,
+                    include_docker_invocations=True,
+                    network_state="safe",
+                    runtime_state=runtime_state,
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(
+                    result.stdout.splitlines()[-1],
+                    "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME "
+                    "reason=invalid code=2",
+                )
+                self.assertFalse(
+                    any(invocation[:2] == ["db", "start"] for invocation in invocations)
+                )
+                self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_stopped_project_container_before_start(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="stopped",
+            started_runtime_state="safe",
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME reason=invalid code=2",
+        )
+        self.assertFalse(
+            any(invocation[:2] == ["db", "start"] for invocation in invocations)
+        )
+        self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_rejects_non_exact_database_port_binding(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        for runtime_state in (
+            "mixed-bindings",
+            "wrong-host-port",
+            "unsafe-requested",
+            "null-binding",
+        ):
+            with self.subTest(runtime_state=runtime_state):
+                result, invocations = run_database_runner_with_supabase_capture(
+                    script,
+                    include_docker_invocations=True,
+                    network_state="safe",
+                    runtime_state=runtime_state,
+                    runner_arguments=("-SkipStart",),
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(
+                    result.stdout.splitlines()[-1],
+                    "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME "
+                    "reason=invalid code=2",
+                )
+                self.assertNotIn(["db", "reset", "--local"], invocations)
+
+    def test_database_runner_skip_start_accepts_only_safe_existing_runtime(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            network_state="safe",
+            runtime_state="safe",
+            runner_arguments=("-SkipStart",),
+        )
+
+        self.assertEqual(result.returncode, 7)
+        self.assertNotIn(
+            ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+            invocations,
+        )
+        self.assertIn(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                "label=com.supabase.cli.project=sejong-ai-local",
+                "--format",
+                "{{.ID}}",
+            ],
+            invocations,
+        )
+        self.assertIn(["docker", "inspect", "container-one"], invocations)
+        self.assertLess(
+            invocations.index(["docker", "inspect", "container-one"]),
+            invocations.index(["db", "reset", "--local"]),
+        )
+
+    def test_database_runner_rejects_missing_multiple_or_unpublished_runtime(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        for runtime_state in ("none", "multiple", "unpublished"):
+            with self.subTest(runtime_state=runtime_state):
+                result, invocations = run_database_runner_with_supabase_capture(
+                    script,
+                    include_docker_invocations=True,
+                    network_state="safe",
+                    runtime_state=runtime_state,
+                    runner_arguments=("-SkipStart",),
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(
+                    result.stdout.splitlines()[-1],
+                    "[FAIL] step=VERIFY-LOCAL-DATABASE-RUNTIME "
+                    "reason=invalid code=2",
+                )
+                self.assertNotIn(["db", "reset", "--local"], invocations)
+
     def test_database_runner_starts_only_postgres_with_exact_cli_arguments(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
 
@@ -532,7 +1109,10 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertFalse(result.stderr)
         self.assertEqual(
             invocations,
-            [["db", "start"], ["db", "reset", "--local"]],
+            [
+                ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+                ["db", "reset", "--local"],
+            ],
         )
         self.assertEqual(
             result.stdout.splitlines(),
@@ -541,8 +1121,14 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
                 "[PASS] step=PREFLIGHT-DOCKER",
                 "[START] step=VERIFY-SUPABASE-VERSION",
                 "[PASS] step=VERIFY-SUPABASE-VERSION",
+                "[START] step=VERIFY-LOCAL-DATABASE-NETWORK",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-NETWORK",
+                "[START] step=VERIFY-LOCAL-DATABASE-RUNTIME",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-RUNTIME",
                 "[START] step=START-LOCAL-DATABASE",
                 "[PASS] step=START-LOCAL-DATABASE",
+                "[START] step=VERIFY-LOCAL-DATABASE-RUNTIME",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-RUNTIME",
                 "[START] step=RESET-DATABASE-ONE",
                 "[FAIL] step=RESET-DATABASE-ONE reason=child code=7",
             ],
@@ -551,19 +1137,49 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_database_start_capture_rejects_dead_exact_block_and_live_bare_call(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
         exact_block = '''    if (-not $skipStart) {
-        $null = Invoke-DatabaseStep `
-            -Step "START-LOCAL-DATABASE" `
-            -FilePath $supabaseBinary `
-            -Arguments @("db", "start") `
-            -WorkingDirectory $repositoryRoot
+        $runtimeAlreadyPresent = Assert-LocalDatabaseRuntime `
+            -DockerPath $dockerCommand.Source `
+            -ProjectId $localProjectId `
+            -NetworkName $localNetworkName `
+            -ExpectedContainerName $localDatabaseContainerName `
+            -WorkingDirectory $repositoryRoot `
+            -AllowAbsent
+        if (-not $runtimeAlreadyPresent) {
+            $runnerCreatedRuntime = $true
+        }
+        try {
+            $null = Invoke-DatabaseStep `
+                -Step "START-LOCAL-DATABASE" `
+                -FilePath $supabaseBinary `
+                -Arguments @("db", "start", "--network-id", $localNetworkName) `
+                -WorkingDirectory $repositoryRoot
+        }
+        catch {
+            $startFailure = $_.Exception
+            if ($runnerCreatedRuntime) {
+                Stop-OwnedUnsafeLocalDatabaseRuntime `
+                    -SupabasePath $supabaseBinary `
+                    -DockerPath $dockerCommand.Source `
+                    -ProjectId $localProjectId `
+                    -WorkingDirectory $repositoryRoot
+            }
+            throw $startFailure
+        }
     }
 '''
         mutant_block = '''    if (-not $skipStart) {
+        $runtimeAlreadyPresent = Assert-LocalDatabaseRuntime `
+            -DockerPath $dockerCommand.Source `
+            -ProjectId $localProjectId `
+            -NetworkName $localNetworkName `
+            -ExpectedContainerName $localDatabaseContainerName `
+            -WorkingDirectory $repositoryRoot `
+            -AllowAbsent
         if ($false) {
             $null = Invoke-DatabaseStep `
                 -Step "START-LOCAL-DATABASE" `
                 -FilePath $supabaseBinary `
-                -Arguments @("db", "start") `
+                -Arguments @("db", "start", "--network-id", $localNetworkName) `
                 -WorkingDirectory $repositoryRoot
         }
         $null = & $supabaseBinary start
@@ -585,22 +1201,49 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertEqual(invocations, [["start"], ["db", "reset", "--local"]])
         self.assertNotEqual(
             invocations,
-            [["db", "start"], ["db", "reset", "--local"]],
+            [
+                ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+                ["db", "reset", "--local"],
+            ],
         )
 
     def test_database_start_capture_rejects_extra_live_bare_call(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
         exact_block = '''    if (-not $skipStart) {
-        $null = Invoke-DatabaseStep `
-            -Step "START-LOCAL-DATABASE" `
-            -FilePath $supabaseBinary `
-            -Arguments @("db", "start") `
-            -WorkingDirectory $repositoryRoot
+        $runtimeAlreadyPresent = Assert-LocalDatabaseRuntime `
+            -DockerPath $dockerCommand.Source `
+            -ProjectId $localProjectId `
+            -NetworkName $localNetworkName `
+            -ExpectedContainerName $localDatabaseContainerName `
+            -WorkingDirectory $repositoryRoot `
+            -AllowAbsent
+        if (-not $runtimeAlreadyPresent) {
+            $runnerCreatedRuntime = $true
+        }
+        try {
+            $null = Invoke-DatabaseStep `
+                -Step "START-LOCAL-DATABASE" `
+                -FilePath $supabaseBinary `
+                -Arguments @("db", "start", "--network-id", $localNetworkName) `
+                -WorkingDirectory $repositoryRoot
+        }
+        catch {
+            $startFailure = $_.Exception
+            if ($runnerCreatedRuntime) {
+                Stop-OwnedUnsafeLocalDatabaseRuntime `
+                    -SupabasePath $supabaseBinary `
+                    -DockerPath $dockerCommand.Source `
+                    -ProjectId $localProjectId `
+                    -WorkingDirectory $repositoryRoot
+            }
+            throw $startFailure
+        }
     }
 '''
-        mutant_block = exact_block.replace(
-            "    }\n",
-            "        $null = & $supabaseBinary start\n    }\n",
+        self.assertTrue(exact_block.endswith("    }\n"))
+        mutant_block = (
+            exact_block[:-6]
+            + "        $null = & $supabaseBinary start\n    }\n"
         )
         self.assertEqual(script.count(exact_block), 1)
         mutant = script.replace(exact_block, mutant_block)
@@ -611,11 +1254,18 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertFalse(result.stderr)
         self.assertEqual(
             invocations,
-            [["db", "start"], ["start"], ["db", "reset", "--local"]],
+            [
+                ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+                ["start"],
+                ["db", "reset", "--local"],
+            ],
         )
         self.assertNotEqual(
             invocations,
-            [["db", "start"], ["db", "reset", "--local"]],
+            [
+                ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+                ["db", "reset", "--local"],
+            ],
         )
 
     def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
@@ -651,7 +1301,7 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertEqual(
             invocations,
             [
-                ["db", "start"],
+                ["db", "start", "--network-id", "sejong-ai-local-loopback"],
                 ["db", "reset", "--local"],
                 ["status", "-o", "env"],
                 ["provision"],
@@ -680,8 +1330,14 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
                 "[PASS] step=PREFLIGHT-DOCKER",
                 "[START] step=VERIFY-SUPABASE-VERSION",
                 "[PASS] step=VERIFY-SUPABASE-VERSION",
+                "[START] step=VERIFY-LOCAL-DATABASE-NETWORK",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-NETWORK",
+                "[START] step=VERIFY-LOCAL-DATABASE-RUNTIME",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-RUNTIME",
                 "[START] step=START-LOCAL-DATABASE",
                 "[PASS] step=START-LOCAL-DATABASE",
+                "[START] step=VERIFY-LOCAL-DATABASE-RUNTIME",
+                "[PASS] step=VERIFY-LOCAL-DATABASE-RUNTIME",
                 "[START] step=RESET-DATABASE-ONE",
                 "[PASS] step=RESET-DATABASE-ONE",
                 "[START] step=PROVISION-LOCAL-DB-LOGIN-ONE",

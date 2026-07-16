@@ -120,3 +120,21 @@ Q-DB-002. 승인·보관·권한 불변조건을 DB와 백엔드 중 어디까�
 ## 10. 현재 상태 추가 기록 — 2026-07-16 KST
 
 1~9절은 기준 commit `2a4e26b` 당시의 역사적 발견 증거로 보존한다. 이후 사용자는 DB-001 실행계획과 Q-SEC-002=A/Q-WF-001=A를 승인했고, Tasks 0~5에서 pinned local CLI와 migration `00100`~`00300`을 구현·검증했다. 현재 migration은 3/5이며 기존 172/172 pgTAP 검증 결과는 구현 노트 008에 기록돼 있다. 적용된 세 migration은 수정하지 않고 Task 6은 새 `00400` workflow migration, Task 7은 `00500` read/index migration으로 진행한다. 공식/mock seed는 여전히 0이고 `/ready=503` 경계는 유지된다.
+
+## 11. Local baseline 후보 차단 상태 추가 기록 — 2026-07-17 KST
+
+1~10절은 각 기준 시점의 역사적 발견/진행 증거로 보존한다. 이후 `00100~00500`을
+수정하지 않고 `00600` validator posture correction을 추가해 forward/compensation 각 6개,
+7 enum·8 table, pgTAP 282, backend integration 8/8, 역순 compensation/absence/reset/replay와
+synthetic 8-table zero를 과거 실행에서 검증했다. 그러나 Task 10 quality review가 actual Docker
+port의 wildcard publish를 발견했고 fail-closed runner가 reset 전에 중단했으므로 이 결과는
+현재 local baseline 완료 증거가 아니다. manifest는 `database_schema=0.2.0-draft`를 유지하고
+`0.3.0-local`은 Q-SEC-004/A-022 해결 뒤 exact loopback/full gate를 통과해야 하는 후보다.
+공식/mock seed는 0, `/ready=503`은 계속 정상이다. 상세 증거는
+`docs/test-reports/DB-001-LOCAL-BASELINE.md`와
+`docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md`에 있다.
+
+A-022/Q-SEC-004는 DB-001 local 완료와 후속 DB 의존 작업의 A/Blocker다. 무응답 기본값 C에
+따라 DB runtime과 manifest 승격을 차단한다. A-021/Q-SEC-003은 별도 public-release blocker다.
+미응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB credential을
+차단하며 `00700`은 인간 결정 전 구현하지 않는다.

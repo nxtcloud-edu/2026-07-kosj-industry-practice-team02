@@ -42,6 +42,16 @@
 - `REJECTED`
 - `RETIRED`
 
+### DataOrigin
+
+- `OFFICIAL`
+- `MOCK`
+
+### AdminRole
+
+- `OPERATOR`
+- `APPROVER`
+
 ## 불변조건
 
 1. `SUCCESS`는 source 1개 이상이 필요하다.
@@ -61,6 +71,20 @@
 15. 후보 작성은 failure가 `REASON_CONFIRMED`, `INSUFFICIENT_GROUNDING`, `candidate_eligible=true`일 때만 가능하다.
 16. 사유 확인은 `FAILED_QUESTION_REASON_CONFIRMED`/`FAILED_QUESTION` metadata audit 한 건과 같은 transaction이다.
 17. 승인과 반려는 모두 비어 있지 않은 `review_comment`를 후보와 metadata audit에 저장한다.
+18. 시민 read는 `ACTIVE + OFFICIAL` KB와 `OFFICIAL` 기관만 반환한다.
+19. `kb_documents`, `offices`, `kb_candidates`는 default 없는 `data_origin`을 필수로 가진다.
+20. 기관의 `is_official`은 직접 입력값이 아니라 `data_origin = OFFICIAL`의 generated 값이다.
+21. `used_source_ids`는 중복 없는 비어 있지 않은 문자열 배열이며 `source_count`와 길이가 같다.
+22. ACTIVE KB는 OFFICIAL provenance·승인자·승인시각·질문 예시 1개 이상을 모두 충족한다.
+23. 실패 질문은 정확히 30일 뒤 masked text만 NULL 파기하며 행·event/candidate FK는 유지한다.
+24. 감사 action은 후보 생성/제출/승인/반려와 실패 사유 확인만 허용하고 action별
+    actor·target·old/new status·changed field shape를 DB check로 고정한다.
+
+실행 후보 shape는 `0.3.0-local`의 7 enum·8 table이지만 현재 manifest는 local port blocker로
+`database_schema=0.2.0-draft`다. 위 table-local
+조건과 cross-row/transaction 조건은 timestamp migration, trigger/capability, forced RLS,
+pgTAP 및 실제 backend integration에서 이중 검증한다. 논리 projection만으로 정책을
+강제했다고 판단하지 않는다.
 
 ## 실패 사유와 후보 상태 전이
 

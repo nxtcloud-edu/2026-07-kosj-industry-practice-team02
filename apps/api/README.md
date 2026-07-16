@@ -1,13 +1,15 @@
 # apps/api
 
-세종 민원 AI 길잡이의 FastAPI 서비스다. 현재 수직 흐름은 프로세스 상태와 DB 이전
-readiness만 구현한다.
+세종 민원 AI 길잡이의 FastAPI 서비스다. 현재 public 수직 흐름은 health/readiness이며,
+내부에는 DB-001 lazy typed repository boundary가 구현됐다.
 
 ## 현재 동작
 
 - `GET /health`: 외부 의존성을 확인하지 않고 `200 {"status":"ok"}` 반환
-- `GET /ready`: DB와 승인 seed가 아직 없으므로 기본적으로 `503 SERVICE_UNAVAILABLE` 반환
-- readiness는 typed probe로 주입할 수 있지만, 이 단계에는 DB/provider 구현이나 연결이 없다.
+- `GET /ready`: DB migration은 준비됐지만 승인 seed가 0이므로 기본적으로
+  `503 SERVICE_UNAVAILABLE` 반환
+- readiness는 typed probe로 주입할 수 있지만 DB repository는 아직 public route에 연결되지
+  않았고 provider도 비활성이다.
 - API 2.0.1-draft는 `/health`와 향후 ready 상태의 `/ready` 200 body를 required·closed schema로 고정한다. pre-DB 기본값은 계속 503이다.
 - 승인된 chat request/response와 공통 503은 strict Pydantic v2 경계 모델로 같은 17개 합성 JSON fixture를 소비한다. 숫자·문자열·boolean 간 암묵적 coercion과 FALLBACK 추가 필드를 거부한다.
 - 정상 완료와 일반 `Exception` 경로의 HTTP 요청 로그는 서버가 만든 UUID, method, 라우트
@@ -17,7 +19,7 @@ readiness만 구현한다.
   INFO startup과 일반 error record는 유지하며, 현재 범위 밖인 WebSocket은 실행 명령에서도
   비활성화한다.
 
-채팅 route·관리자 API, DB migration, 외부 LLM 호출은 후속 수직 흐름이며 현재 구현에
+채팅 route·관리자 API, 공식 seed, 외부 LLM 호출은 후속 수직 흐름이며 현재 구현에
 포함되지 않는다. 요청 body·query·header·cookie·client IP·응답 본문은 일반 로그에 기록하지
 않는다.
 
@@ -27,11 +29,20 @@ readiness만 구현한다.
 현재 health/readiness 앱은 시작 시 환경변수·DB·provider를 읽거나 연결하지 않는다. DeepSeek는
 기본 비활성이고 승인된 local/private 합성 평가 단계 전에는 호출하지 않는다.
 
-DB-001의 Docker-backed 검증 gate는 로컬 DB reset 뒤 `sejong_local_login` password를 매번
+DB-001 `0.3.0-local` 후보의 Docker-backed 검증 gate는 실제 single loopback binding을
+reset 전에 먼저 확인하고, 안전할 때만 로컬 DB reset 뒤
+`sejong_local_login` password를 매번
 새로 만들거나 회전하고, 무시된 `apps/api/.env`의 `DATABASE_URL` 한 줄만 갱신한다.
-다른 줄과 provider key는 보존하며 값을 출력하지 않는다. 이 계정은 직접 table DML이
+이때 `.env` 전체 bytes를 읽지만 다른 줄과 provider key는 파싱하지 않고 byte-identical하게
+보존하며 값을 출력하지 않는다. 이 계정은 직접 table DML이
 아니라 `sejong_backend` capability만 상속한다. 현재 seed는 의도적으로 비어 있으므로 이
 준비만으로 `/ready`가 200이 되지 않으며, PM 승인 데이터 전까지 503을 유지한다.
+내부 repository는 9개 schema-qualified fixed SQL만 사용하고 native DB diagnostic을
+SQLSTATE 기반 고정 domain error로 축약한다.
+
+A-021/Q-SEC-003 default B에 따라 이 DB credential과 repository는 local/private 전용이다.
+public admin/API, public backend DB credential, remote/public 배포와 `00700`은 인간 결정 전
+금지한다.
 
 ## 로컬 명령
 

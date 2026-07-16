@@ -41,32 +41,51 @@ Supabase v2.109.1이 생성한 프로젝트는 DB-001에 필요한 로컬 Postgr
 Data API, Auth, Realtime, Storage, Studio, Local SMTP/Mailpit, Analytics, Edge Runtime과 DB pooler는
 비활성화했다. DATA-001의 PM 승인 전까지 seed는 의도적으로 비어 있다.
 
-버전 migration과 DB 테스트가 모두 존재한 다음 Docker-backed gate를 실행한다.
+DB-001의 6개 version migration/compensation과 6개 pgTAP suite가 존재하며 다음
+Docker-backed gate가 executable local baseline을 검증한다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
 ```
 
-기본 경로는 pinned CLI의 `supabase db start`를 호출해 persistent local runtime으로 PostgreSQL
-container만 시작한다. bare `supabase start`는 API를 꺼도 Kong gateway를 함께 시작할 수 있으므로
-DB-001에서 사용하지 않는다. `supabase test db`가 pgTAP 실행 중 일회성 `pg_prove` container를
+기본 경로는 Docker Engine 28+와 고정 `sejong-ai-local-loopback` network를 확인한 뒤 pinned
+CLI의 `db start --network-id sejong-ai-local-loopback`을 runner 내부에서 호출한다. bare/direct
+Supabase start는 runner의 actual binding 검증을 우회하므로 사용하지 않는다. runner는 고정
+project/container identity와 HostConfig 요청, actual `NetworkSettings.Ports`의 exact single
+`127.0.0.1:54322`를 reset/status/env 전에 검증한다. `supabase test db`가 pgTAP 실행 중 일회성 `pg_prove` container를
 사용할 수 있지만, 이는 persistent project runtime의 PostgreSQL-only 경계를 넓히지 않는다.
 
 `-SkipStart`는 이미 실행 중인 disposable local PostgreSQL container를 재사용한다.
 `-SkipRollbackReplay`는 진단 중 compensation/replay 증명만 생략하므로 완료 gate가 아니다.
 러너는 child 출력을 숨기고, 임시 process 환경변수를 복원하며, stable phase ID만
-출력한다. container를 자동 정지하거나 Docker volume을 변경하지 않는다. DB-001
-migration, rollback, pgTAP, API DB integration test가 들어오기 전에는 실행하지 않는다.
+출력한다. 안전하지 않은 새 runtime은 fail-closed 정지하되 pre-existing/`-SkipStart` runtime과
+Docker volume은 변경하지 않는다. 완료 조건은 exact loopback 뒤 pgTAP 6 files/282 assertions,
+exact six-stage rollback/absence/reset/replay와 backend integration 8/8의 fresh 재검증이다.
 
-credential provisioning은 Supabase status의 admin DSN을 메모리에서만 읽고
+현재 Docker Desktop 4.62.0/Engine 29.2.1은 optioned network에서도 stock CLI의 HostIP 생략을
+wildcard binding으로 해석했다. runner는 reset 전에 fail-closed했고 stack은 중지돼 project
+container count 0이다. runner가 새 runtime을 시작한 경우에는 `db start`가 일부 생성 뒤 실패하거나
+post-start binding 검증이 실패해도 해당 project stack을 중지하고 container 부재를 확인한다. 기존
+runtime이나 `-SkipStart` 경로는 자동 중지하지 않는다. Q-SEC-004/A-022 해결 전 실제 DB gate를
+반복하거나 우회하지 않는다.
+[Docker published ports](https://docs.docker.com/engine/network/port-publishing/)와
+[Supabase local development](https://supabase.com/docs/guides/local-development/)를 따른다.
+
+credential provisioning은 Supabase status의 admin DSN을 runner process memory/environment에서만 사용하고
 `sejong_local_login`을 생성하거나 password를 회전한 다음 `sejong_backend` capability만
-부여한다. 무시된 `apps/api/.env`의 `DATABASE_URL`만 갱신하고 주석·순서·다른
-provider secret은 그대로 보존한다. 이 파일은 commit하지 않는다.
+부여한다. 무시된 `apps/api/.env` 전체 bytes를 읽어 `DATABASE_URL`만 원자 갱신하고
+주석·순서·다른 provider 값을 파싱하지 않은 채 byte-identical하게 보존한다. 이 파일은
+commit하지 않는다.
 
 ordered SQL helper는 resolve 결과가 `database/` 안에 남는 명시적인 파일만 받는다.
 disposable local DB-001 compensation과 absence proof에만 사용하며 remote나 실제 데이터 DB에
 파괴적 SQL을 실행하라는 승인이 아니다.
+
+선택적 local stop은 `.\.tools\supabase\v2.109.1\supabase.exe stop`을 사용한다. volume
+삭제·prune은 하지 않는다. local stack은 기본 개발 credential과 TLS/rate-limit 부재를
+전제로 하므로 공개하지 않는다. A-021/Q-SEC-003 default B에 따라 `00700`은 만들지 않고
+remote/public 배포·public admin/API·public backend DB credential을 차단한다.
 
 ## 보안 경계 검사
 

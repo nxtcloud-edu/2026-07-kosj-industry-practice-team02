@@ -59,3 +59,26 @@ JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` ru
 않는다. WEB-CHAT/DEV-001D에서 live-response sentinel gate를 추가해야 한다. 난독화·인코딩된
 값도 보증하지 않으므로 두 검사는 비밀 회수·provider 설정 검토·배포 전 수동 보안 검토를
 대체하지 않는다.
+
+## Local PostgreSQL 안전 경계
+
+- DB-001 `0.3.0-local`은 exact loopback/full gate 뒤에만 승격할 후보이며 현재 manifest는
+  `0.2.0-draft`다. Docker Desktop 4.62.0/Engine 29.2.1의 stock CLI runtime이 wildcard로
+  해석돼 fail-closed했으므로 현재 localhost-only 기준선은 없다.
+- local Supabase/PostgreSQL의 개발용 기본 credential, TLS/rate-limit 부재를 전제로 한다.
+  runner는 Engine 28+, 고정 network/container identity와 actual single `127.0.0.1:54322`를
+  reset/status/env 전에 요구한다. port를 외부 interface에 bind하거나 credential을
+  public/remote 환경에서 재사용하지 않는다.
+- DB gate가 `sejong_local_login` password를 회전하고 ignored `apps/api/.env`의
+  `DATABASE_URL`만 갱신한다. `SEJONG_ADMIN_DATABASE_URL`과 `DATABASE_URL` 값, status 원문,
+  password를 terminal·문서·Git에 남기지 않는다.
+- reset/compensation/absence 명령은 disposable local DB에만 허용한다. remote project,
+  실제 데이터, Docker volume 삭제·prune에는 사용하지 않는다.
+- A-021/Q-SEC-003 기본값 B가 활성이다. public-release 전 privileged function 21개
+  search-path hardening이 남아 있으므로 remote/public 배포, public admin/API, public backend
+  DB credential을 차단하며 인간 승인 전 `00700` migration을 만들지 않는다.
+- Q-SEC-004/A-022 해결 전 local DB runtime과 후속 DB 작업도 차단한다. 추천안은 사용자가
+  Docker Desktop `Port binding behavior=default-local-port-binding`의 향후 새 container 전역
+  영향을 승인한 뒤 restart/recreate/full gate를 수행하는 것이다. 공식 근거:
+  [Docker published ports](https://docs.docker.com/engine/network/port-publishing/),
+  [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/).

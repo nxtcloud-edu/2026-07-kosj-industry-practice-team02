@@ -49,6 +49,12 @@
 - 미해결 위험
 - 롤백/다음 단계
 
+DB migration 작업은 executable `supabase/migrations/`을 timestamp 순서로 추가하고 이미
+적용·commit된 파일을 수정하지 않는다. 위험 변경마다 `database/rollbacks/`에 disposable-local
+보상 SQL을 두며, 완료 전 empty reset/replay, 역순 compensation, absence proof, 재적용,
+권한/동시성/cleanup을 함께 증명한다. `database/schema-v1.draft.sql`은 실행 권위가 아니라
+검증된 baseline의 논리 projection으로만 동기화한다.
+
 ## 중단 조건
 
 - A/Blocker 미해결

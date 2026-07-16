@@ -31,7 +31,7 @@
 
 - 버그·문구·오탈자·비호환 없는 내부 수정
 
-## 구현 노트 기록
+## 구현 노트 기록 예시
 
 ```text
 Before
@@ -46,6 +46,23 @@ After
 ```
 
 Git commit가 아직 없으면 `uncommitted`라고 기록하고, 현재 HEAD를 함께 적는다.
+
+## 현재 local DB 후보와 manifest
+
+DB-001 Task 10은 host port security blocker로 완료되지 않았다. 현재 manifest 축은 승격 전
+값을 유지한다.
+
+```text
+repo_guidance: 1.4.0
+database_schema: 0.2.0-draft
+test_suite: 0.4.2-readiness-contract
+documentation: 2.3.14
+```
+
+`0.3.0-local`은 6개 timestamp forward migration뿐 아니라 exact loopback runtime, full DB/root
+gate와 independent review가 모두 통과한 뒤에만 사용할 후보다. 현재 Docker runtime이 wildcard
+binding으로 해석돼 fail-closed했으므로 Q-SEC-004/A-022 해결 전 승격하지 않는다. 공식
+데이터·mock 데이터는 모두 `0.0.0-not-populated`이고 A-021/Q-SEC-003은 별도 public blocker다.
 
 ## 릴리스 체크
 

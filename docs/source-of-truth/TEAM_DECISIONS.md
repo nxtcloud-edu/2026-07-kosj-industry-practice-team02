@@ -68,6 +68,20 @@
 - 승인 comment: 공개 OpenAPI가 승인·반려 모두 `review_comment`를 요구하므로 내부 승인 capability도 `approve_kb_candidate(uuid,text,text,text)`를 사용해 승인 comment를 후보와 metadata audit에 저장한다. 공개 wire 계약은 바뀌지 않는다.
 - 적용된 migration은 불변이다. 이미 commit된 `00100~00500`을 수정하지 않고 deferred ACTIVE-question trigger 권한 보정은 새 `00600`에 추가하며 compensation은 `00600 → 00500 → 00400 → 00300 → 00200 → 00100` 순서다.
 - deferred ACTIVE-question trigger 실행: `app_private.validate_active_kb_question()` 하나만 새 `00600`에서 제한된 SECURITY DEFINER로 전환한다. `sejong_schema_owner`, `search_path=pg_catalog, pg_temp`(공식 PostgreSQL 17 SECURITY DEFINER 지침에 따라 임시 스키마를 마지막에 명시), PUBLIC·anon·authenticated·backend 직접 EXECUTE revoke를 재확인하며 backend private schema/table grant와 repository/admin-DSN 우회는 금지한다. 사용자의 직전 추천안 뒤 계속 진행 지시는 Q-DB-003=A 승인으로 해석했고 문자 A를 직접 입력했다고 기록하지 않는다.
+- DB local 후보: forward/compensation 각 6개, 7 enum·8 table, pgTAP 282와 backend integration
+  8/8의 역사적 기능 증거는 있으나 Task 10 host-port security gate가 미완료다. Docker Desktop
+  4.62.0/Engine 29.2.1의 stock CLI runtime이 wildcard publish로 해석돼 fail-closed 중단됐고,
+  manifest는 `database_schema=0.2.0-draft`를 유지한다. Q-SEC-004/A-022 해결과 exact loopback/full
+  gate 전에는 DB-001을 완료 또는 `0.3.0-local`로 부르지 않는다. 공식/mock seed는 0이고
+  `/ready=503`을 유지한다.
+- DB local port 경계: Docker Engine 28+와 actual single `127.0.0.1:54322` binding이 필수다.
+  Q-SEC-004의 추천안 A는 Docker Desktop `Port binding behavior=default-local-port-binding`이지만
+  향후 새 container 전역 효과와 재시작 때문에 사용자의 명시적 승인이 필요하다. 무응답 시
+  runtime/DB 후속 작업을 차단한다.
+- DB public release 경계: Q-SEC-003은 미응답이며 기본값 B를 적용한다. privileged function
+  graph 22개 중 `00600` validator 외 21개의 search path hardening이 남아 있으므로 remote/public
+  배포, public admin/API, public backend DB credential 사용을 차단한다. 인간 결정 전 `00700`을
+  만들지 않으며 이 local 기준선을 production-ready라고 부르지 않는다.
 
 ## 제출 정보
 

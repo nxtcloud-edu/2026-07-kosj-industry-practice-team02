@@ -88,3 +88,20 @@ raw request in memory
 - admin public exposure
 - RLS/auth 방식
 - 실제 사용자 데이터 테스트
+
+## DB-001 local baseline과 공개 차단
+
+- 8개 업무 table은 비노출 `app_private`에 있고 forced RLS·owner-only policy가 적용된다.
+- `PUBLIC`, browser role, backend capability role의 base-table 직접 권한은 0이다.
+- backend login은 ignored `apps/api/.env`의 `DATABASE_URL`로만 관리하고 DB gate가 매 실행
+  password를 회전한다. 관리자 DSN은 process environment에서만 사용하고 출력하지 않는다.
+- 30일 파기는 DELETE가 아닌 멱등 NULL update이며 backup restore 뒤 서비스 개방 전에
+  재실행해야 한다.
+- local stack의 기본 개발 credential, TLS/rate-limit 부재를 전제로 runner가 actual single
+  `127.0.0.1:54322`를 검증한 경우에만 사용한다. Docker/PostgreSQL port를 외부 interface에
+  공개하거나 public credential로 재사용하지 않는다. 현재 host는 wildcard 판정으로
+  Q-SEC-004/A-022 해결 전 fail-closed다.
+- A-021 감사에서 privileged execution graph 22개 중 `00600` validator만 exact
+  `search_path=pg_catalog, pg_temp`로 보정됐고 21개는 public hardening 미완료다.
+  Q-SEC-003 무응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB
+  credential은 차단한다. `00700` property migration은 인간 결정 전 만들지 않는다.

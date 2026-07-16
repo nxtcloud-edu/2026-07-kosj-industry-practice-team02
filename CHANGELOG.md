@@ -25,6 +25,11 @@
 - ADR-0011 and a written DB-001 design for private schemas, capability functions, atomic approval, retention, and layered DB/backend enforcement
 - User-approved DB-001 written specification and an execution-gated TDD plan covering pinned local tooling, five migrations/compensations, pgTAP, lazy FastAPI DB boundaries, concurrency, and rollback/replay
 - D-026/D-027 refinements for fail-closed non-superuser role verification, separate failed-question reason confirmation, immutable event classification, candidate gating, and required approval comments
+- DB-001 candidate lineage: six immutable timestamp forward migrations and six disposable-local
+  compensations for private schema, invariants, capability/RLS, candidate workflow,
+  ACTIVE+OFFICIAL reads, and deferred validator posture; version promotion remains blocked
+- Six-file pgTAP 282 assertions, real backend integration 8/8, exact
+  `006→005→004→003→002→001` compensation/absence/reset/replay gate, and local DB handoff/report
 
 ### Changed
 
@@ -51,9 +56,18 @@
 - Resolved Q-DB-002 as layered database-and-backend enforcement while keeping remote/public execution deferred
 - Approved the DB-001 written specification for planning; migration, Docker, CLI download, and DB mutation remain deferred until the new plan is explicitly approved
 - Approved the DB-001 execution plan and completed Tasks 0~5; applied migrations `00100`~`00300` remain immutable, workflow moves to `00400`, and citizen reads move to `00500`
+- Completed DB-001 Tasks 0~9 and prepared Task 10 local baseline closeout without changing
+  public API, official/mock seed, application version, or readiness; `00100~00500` remain immutable
+  and `00600` is the validator-only posture correction
+- Prepared the `repo_guidance=1.5.0`, `database_schema=0.3.0-local`,
+  `test_suite=0.5.0-db-baseline`, and documentation `2.4.0` candidate closeout, then kept the
+  committed manifest axes unchanged after the local port security blocker was reproduced
 
 ### Pending
 
 - Official KB and office data
 - Deployment accounts and URLs
-- DB-001 Tasks 6~10 implementation and final verification
+- Official seed/readiness/chat/admin vertical slices
+- Q-SEC-003/A-021 privileged-function search-path hardening before any public release;
+  default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked
+- Q-SEC-004/A-022 decision and an actual single loopback Docker binding before DB-001 local completion

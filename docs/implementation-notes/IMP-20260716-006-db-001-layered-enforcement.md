@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-16
 - Task ID: DB-001
 - Type: implementation
-- Status: In Progress — Tasks 0~9 complete; Task 10 ready
+- Status: Blocked — Task 10 Q-SEC-004/A-022 local port boundary; actual DB review, version promotion, and completion commit pending
 - Author/Agent: Codex `/root` coordinator with task-specific implementation/review agents
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `cf76b17`
@@ -30,12 +30,12 @@
 | 항목 | 기록 |
 |---|---|
 | Who — 누가 | 사용자 승인자, Codex root coordinator, task별 구현 agent, 명세 reviewer, 품질 reviewer |
-| When — 언제 | 2026-07-16 KST 시작; 완료 시각은 최종 갱신 |
+| When — 언제 | 2026-07-16 KST 시작; Task 10 closeout 2026-07-17 KST |
 | Where — 어디서 | `.worktrees/db-001-layered-enforcement`, local Docker Desktop/Supabase PostgreSQL, `apps/api`, `supabase/`, `database/`, `scripts/` |
 | What — 무엇을 | DB-001 executable local schema, capability boundary, tests, rollback/replay, lazy typed backend adapter |
 | Why — 왜 | 승인·공식 데이터·보관·개인정보 규칙이 API 실수·직접 SQL·동시 요청으로 우회되지 않게 하기 위해 |
 | How — 어떻게 | TDD RED→GREEN, task별 commit, 명세 review 후 품질 review, 최종 독립 verification |
-| How much — 어느 정도 | 6 forward migrations, 6 compensation files, 6 pgTAP suites/282 assertions, 9 DB interfaces, Task 8 API boundary 10 files, API 156 tests+4 subtests, Task 9 integration 8/8, tooling 16/16, synthetic 8-table zero, local-only 비용 0원 |
+| How much — 어느 정도 | 6 forward migrations, 6 compensation files, 6 pgTAP suites/282 assertions, 9 DB interfaces, Task 8 API boundary 10 files, API 156 tests+4 subtests, Task 9 integration 8/8, 당시 tooling 16/16, synthetic 8-table zero, local-only 비용 0원 |
 
 ## 3. 시작 전 상태
 
@@ -44,7 +44,7 @@
 - 발견한 환경 차이: `.tools/`가 Git ignored라 새 worktree에 repo-local uv가 없었고 첫 verify가 `PREFLIGHT-UV`에서 종료됨.
 - 해결: main workspace의 검증된 ignored uv 0.11.28 도구 디렉터리만 worktree `.tools/uv/`에 복구.
 - Git 상태: clean base `cf76b17`; 원격 저장소 없음; branch `codex/db-001-layered-enforcement`.
-- 비밀 경계: ignored `apps/api/.env`의 내용·길이·hash·DeepSeek key를 읽거나 출력하지 않음.
+- 시작 전 감사 비밀 경계: ignored `apps/api/.env`의 내용·길이·hash·DeepSeek key를 열거나 출력하지 않음. 이후 승인된 provisioning은 원자적 `DATABASE_URL` 교체를 위해 파일 전체 bytes를 읽지만 non-target 값을 해석·출력·별도 복사하지 않는다.
 
 ## 4. 미지의 영역·가정·인터뷰
 
@@ -145,25 +145,27 @@ fake Supabase가 실제 받은 argv만 합성 JSONL에 기록하도록 했다.
 관찰하지 못하는 세 번째 Important false-pass가 있었다. extra-bare mutant가 production과 같은
 `[['db', 'start']]`만 기록해 RED로 실패함을 확인한 뒤 중단 지점을 다음 controlled
 `['db', 'reset', '--local']`로 옮겼다. 현재 fake exact/bare start는 기록 후 0을 반환하고 reset만
-7로 중단한다. production sequence는 정확히 `[['db', 'start'], ['db', 'reset', '--local']]`이며,
-dead exact + live bare는 `[['start'], reset]`, correct + extra bare는 `[['db','start'], ['start'],
+7로 중단한다. 현재 production sequence는 정확히
+`[['db', 'start', '--network-id', 'sejong-ai-local-loopback'], ['db', 'reset', '--local']]`이며,
+dead exact + live bare는 `[['start'], reset]`, correct + extra bare는
+`[['db','start','--network-id',...], ['start'],
 reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 ## 7. 버전 전후
 
 | 축 | Before | After | 변경 이유 |
 |---|---|---|---|
-| Product spec | 2.2.0 | 진행 중 | 변경 금지 |
-| Repo guidance | 1.4.0 | 목표 1.5.0 | DB tooling 완료 후 |
-| Application | 0.1.0 | 진행 중 | wire 변경 금지 |
+| Product spec | 2.2.0 | 2.2.0 | 변경 없음 |
+| Repo guidance | 1.4.0 | 1.4.0 | Q-SEC-004 blocker로 후보 승격 보류 |
+| Application | 0.1.0 | 0.1.0 | 변경 없음 |
 | Web | 0.1.0 | 0.1.0 | 변경 없음 |
 | API | 2.0.1-draft | 2.0.1-draft | public contract 유지 |
-| DB schema | 0.2.0-draft | 목표 0.3.0-local | 모든 migration/gate 완료 후 |
+| DB schema | 0.2.0-draft | 0.2.0-draft | exact loopback/fresh full gate 전 승격 금지 |
 | Official data | 0.0.0-not-populated | 동일 | seed 금지 |
 | Mock data | 0.0.0-not-populated | 동일 | tracked seed 금지 |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | 동일 | LLM 미사용 |
-| Test suite | 0.4.2-readiness-contract | 목표 0.5.0-db-baseline | 최종 통과 후 |
-| Docs | 2.3.13 | 현재 2.3.14; 목표 2.4.0 | D-026/D-027 결정 동기화 후 최종 baseline 승격 |
+| Test suite | 0.4.2-readiness-contract | 0.4.2-readiness-contract | 후보 test version 미승격 |
+| Docs | 2.3.14 | 2.3.14 | 후보 docs version 미승격 |
 
 ## 8. 명령과 테스트 증거
 
@@ -262,12 +264,19 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - `verify_database.ps1`은 Task 9에서 stale compensation 목록을 TDD로 보정했고 reset·두 번의 274/274·5-file rollback·absence·replay까지 통과했다. 이 문단의 integration 6/8·exit 1은 Q-DB-003 결정 전 역사적 RED이며, 최종 closeout은 006 보정 뒤 integration 8/8과 full gate 통과다.
 - 당시 남아 있던 Task 9 no-Docker root gate, final secret/package/scope gate와 세 owned 파일 commit은 Task 9A 이후 모두 실행·통과·커밋됐다.
 - global `scripts/check_scope_drift.py`는 기존 `PACKAGE_MANIFEST.json`과 ignored `.tools/isolated-repo` 때문에 baseline-red이다. Task 8 파일은 보고 0이고 secret/package/diff/exact-scope 대체 gate는 통과했다.
-- DeepSeek call: DB-001 범위 밖이며 key를 읽거나 전송하지 않음.
+- DeepSeek call: DB-001 범위 밖이며 외부 provider 호출·전송 0. Provisioning은 `.env` 전체 bytes를
+  원자 갱신하기 위해 읽지만 DeepSeek key 값을 파싱·출력·별도 복사하지 않는다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
-- Privacy: Task 0~9에서 실제 env/key/시민 질문 원문 접근 0. Task 4~9는 합성 `MOCK`/`[MASKED]` fixture 또는 capability 증명용 최소 synthetic OFFICIAL fixture만 사용했고 Task 9 cleanup은 events/failures/candidates/KB/questions/offices/mappings/audits 모두 0이다. Task 7 read는 시민용 stored metadata allowlist만 반환하며, Task 8 repository는 raw answer/context token/HTTP role header/arbitrary SQL을 인자로 받지 않고 OUT_OF_SCOPE text 저장을 model에서 거부한다.
-- Security: CLI 공급망·child 비노출 경계에 더해 Task 5 forced RLS/owner-only policy/backend base-table denial, Task 6 다섯 workflow capability, Task 7 두 `STABLE SECURITY DEFINER` read allowlist와 invalid-filter diagnostic 비누출을 검증했다. Task 8은 SQLSTATE만 고정 error로 매핑하고 PostgreSQL native message/detail/parameter를 stringify/log하지 않으며, fixed schema-qualified SQL/positional parameter/lazy pool을 강제했다. Task 9은 `42501`을 `DatabaseUnavailableError`로 안전하게 축약하고 direct private access denial을 재확인했으며, 발견한 deferred trigger invoker 권한 blocker는 exact `search_path=pg_catalog, pg_temp`인 validator-only `00600`으로 해소했다. broad grant·repository/admin 우회·기존 migration 수정 금지는 유지된다. privileged graph 22개 중 나머지 unsafe path 21개는 A-021/Q-SEC-003으로 분리됐고 public release를 차단한다. 실제 `.env`/DeepSeek key는 읽지 않았다.
+- Privacy: 실제 시민 질문 원문 접근 0. Approved provisioning은 ignored `.env` 전체 bytes를 읽어
+  `DATABASE_URL`만 원자 교체했지만 non-target/provider 값을 파싱·출력·별도 복사하지 않았다.
+  Task 4~9는 합성 `MOCK`/`[MASKED]` fixture 또는 capability 증명용 최소 synthetic OFFICIAL
+  fixture만 사용했고 Task 9 cleanup은 events/failures/candidates/KB/questions/offices/mappings/audits
+  모두 0이다. Task 7 read는 시민용 stored metadata allowlist만 반환하며, Task 8 repository는 raw
+  answer/context token/HTTP role header/arbitrary SQL을 인자로 받지 않고 OUT_OF_SCOPE text 저장을
+  model에서 거부한다.
+- Security: CLI 공급망·child 비노출 경계에 더해 Task 5 forced RLS/owner-only policy/backend base-table denial, Task 6 다섯 workflow capability, Task 7 두 `STABLE SECURITY DEFINER` read allowlist와 invalid-filter diagnostic 비누출을 검증했다. Task 8은 SQLSTATE만 고정 error로 매핑하고 PostgreSQL native message/detail/parameter를 stringify/log하지 않으며, fixed schema-qualified SQL/positional parameter/lazy pool을 강제했다. Task 9은 `42501`을 `DatabaseUnavailableError`로 안전하게 축약하고 direct private access denial을 재확인했으며, 발견한 deferred trigger invoker 권한 blocker는 exact `search_path=pg_catalog, pg_temp`인 validator-only `00600`으로 해소했다. broad grant·repository/admin 우회·기존 migration 수정 금지는 유지된다. privileged graph 22개 중 나머지 unsafe path 21개는 A-021/Q-SEC-003으로 분리됐고 public release를 차단한다. 실제 provider 값은 로그·문서·Git에 노출하지 않았다.
 - Accessibility: UI 변경 없음.
 - Performance/cost: Task 7 exact five indexes와 row-local deterministic question aggregate를 추가했다. Task 8 pool은 `open=False`, min 1/max 4이고 read는 불필요한 transaction을 열지 않는다. Task 9은 disposable local DB만 호출했고 외부 provider·유료 API·인프라 비용은 0원이다.
 
@@ -275,7 +284,12 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 - 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
-- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 6/6(`20260716000100_private_schema.sql`~`20260717000600_deferred_validator_definer.sql`)과 matching compensation이 적용됐다. Task 7은 table/lineage를 바꾸지 않고 index/function/ACL만 추가했고, Task 8은 schema/data를 바꾸지 않은 채 9개 function 계약의 typed API boundary를 추가했다. Q-DB-003=A에 따라 기존 migration을 수정하지 않고 새 `00600` forward/compensation/pgTAP을 추가했다.
+- schema/lineage: manifest는 Task 10 전후 모두 `0.2.0-draft`를 유지하며 logical projection의
+  `0.3.0-local`은 미승격 후보다. executable migration 6/6(`20260716000100_private_schema.sql`~
+  `20260717000600_deferred_active_question_trigger_security.sql`)과 matching compensation의 과거
+  실행 증거는 있다. Task 7은 table/lineage를 바꾸지 않고 index/function/ACL만 추가했고,
+  Task 8은 schema/data를 바꾸지 않은 채 9개 function 계약의 typed API boundary를 추가했다.
+  Q-DB-003=A에 따라 기존 migration을 수정하지 않고 새 `00600` forward/compensation/pgTAP을 추가했다.
 - tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization과 `internal/start/start.go`, `internal/db/start/start.go`, `internal/db/test/test.go`의 실행 경계를 기준으로 DB-only drift를 보정했다.
 - verified date: 2026-07-17 KST.
 
@@ -289,7 +303,9 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - 역사적 Task 9 RED에서는 no-URL 8 skip, runner contract 16 pass, reset·274/274·다섯 보상·absence·replay·274/274를 통과했지만 실제 approval 2개가 deferred trigger 권한 때문에 실패해 6/8이었다. `00600` 보정 뒤 최종 integration은 retained diagnostic branch와 branch 제거 후 모두 8/8이다. Task 9은 완료됐고 DB-001은 Task 10 전까지 `Done`이 아니다.
 - Q-DB-003=A는 새 `00600` migration으로 `validate_active_kb_question()` 하나만 SECURITY DEFINER로 제한하고 기존 owner·exact `search_path=pg_catalog, pg_temp`·명시 revoke를 검증하는 방식이다. B는 approval 함수 안에서 constraint를 즉시 실행하지만 transaction 결합이 커 선택하지 않았다.
 - 질문 예시·ACTIVE 전환·lineage 관련 직접 write는 `READ COMMITTED` transaction 계약이다. FastAPI 기본 경로도 이 격리수준을 유지해야 하며 다른 격리수준은 안정된 `P0001`로 거부된다.
-- bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했고, persistent local runtime이 healthy PostgreSQL 하나뿐임을 확인했다. 사용자가 직접 조치할 항목은 없다.
+- bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했다. Task 10 port finding 뒤
+  stock CLI runtime도 fail-closed stop했고 project container count 0을 확인했다. 현재 사용자가
+  직접 결정할 항목은 Q-SEC-004다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
 - 최종 branch 통합 방식은 모든 검증 완료 후 finishing skill에서 사용자에게 선택받는다.
 
@@ -330,18 +346,19 @@ Task 8만 rollback할 때는 DB/schema/data compensation 없이 `git revert 3cae
 
 ### 다음 개발자 시작점
 
-D-026/D-027/D-028, ADR-0011/0012, [Task 9 closeout evidence](IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md)와 완료된 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 확인한다. 다음 작업은 Task 10 authority/version/changelog/handoff 동기화다. A-021/Q-SEC-003 caveat를 보존하고 `00700`은 인간 승인 전 구현하지 않는다.
+D-026/D-027/D-028, ADR-0011/0012, [Task 9 closeout evidence](IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md)와 완료된 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 확인한다. 이 문단의 당시 다음 작업은 Task 10 authority/version/changelog/handoff 동기화였으며 현재는 역사적 지시다. 활성 다음 순서는 Q-SEC-004 인간 결정 → safe runtime/full gate → 독립 review이고, 그 뒤에만 DATA-001 PM 승인 → DATA-SEED-001로 진행한다. A-021/Q-SEC-003 caveat를 보존하고 `00700`은 인간 승인 전 구현하지 않는다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
-- Q-SEC-002/Q-WF-001/Q-DB-003은 A로 해결됐고 인간 A/Blocker는 0개다. A-021은 별도 B/High Open/Deferred다.
+- Q-SEC-002/Q-WF-001/Q-DB-003은 A로 해결됐다. 현재 인간 A/Blocker는
+  A-022/Q-SEC-004 1개이고 A-021은 별도 B/High Open/Deferred다.
 - migration/compensation은 6/6이고 full pgTAP은 282/282다. Task 9 runner는 exact six-stage rollback/absence/replay와 integration 8/8을 통과해 commit됐다.
 - 역사적 DB integration 6/8 blocker는 `00600`으로 해소됐다. retained diagnostic branch와 제거 뒤 각각 8/8이며 cleanup은 identifier-scoped 단일 admin transaction이다.
 - pinned Starlette/httpx TestClient deprecation warning 1건은 non-failing이며 새 production dependency 승인 없이 수정하지 않았다.
 - parent KB DELETE와 explicit child question DELETE가 동시에 일어나는 경로는 잠금 순서 P2 위험이 남아 있다. 현재 삭제 API가 없어 비차단이며, 삭제 기능을 추가하기 전에 별도 concurrency test가 필요하다.
-- 다음 단계: Task 10을 실행하되 A-021 public-release blocker와 현재 version 축을 closeout 시작점까지 보존한다. `00700`은 Q-SEC-003 승인 전 구현하지 않는다.
+- 역사적 다음 단계: Task 10 실행. 현재 다음 단계는 local port security finding을 해소한 뒤 DATA-001 PM 승인 → DATA-SEED-001이며, A-021 public-release blocker를 보존하고 `00700`은 Q-SEC-003 승인 전 구현하지 않는다.
 
 ## 15. 자체 리뷰
 
@@ -394,5 +411,117 @@ A-021은 local Task 9 blocker가 아니지만 public-release blocker다.
 
 ### 인수인계
 
-Task 9은 완료, DB-001은 Task 10 ready이며 아직 Done이 아니다. Task 10은 schema
-authority/version/changelog/handoff를 동기화하고 A-021 caveat를 보존한다.
+Task 9은 완료됐고 Task 10은 schema authority/changelog/report/handoff 후보를
+동기화했다. Q-SEC-004/A-022 해결과 safe runtime/full gate 전 DB-001은 Blocked다.
+A-021/Q-SEC-003 기본값 B는 public-release blocker로 계속 보존한다.
+
+## 17. Task 10 local baseline closeout — 2026-07-17 KST
+
+### 요청·인수 기준·6W1H 보충
+
+- Who: Codex root coordinator, Task 10 implementation agent, independent preflight/spec/quality reviewers.
+- When/Where: 2026-07-17 KST, `codex/db-001-layered-enforcement` worktree.
+- What: executable migration authority와 logical projection을 동기화하고 version/task/dependency,
+  active docs, exact test report, operations handoff를 마감한다.
+- Why: 다음 개발자가 논리 draft를 실행 권위로 오인하거나 local credential/rollback을 public
+  환경에서 사용하지 않게 하고, DB-001 후보 증거와 아직 막힌 local port/seed/public release를 분리한다.
+- How/How much: product code·migration·seed·production package dependency/manifest를 바꾸지 않고
+  active docs/report/handoff와 security runner/tooling test를 포함한 현재 33개 경로를 갱신한다.
+  4개 manifest 축 후보 승격과 TASK dependency reduction은 blocker 해소 전 철회했다.
+
+Conditional acceptance는 7 enum·8 table·5 index 논리 projection, timestamp migration 권위, reverse local
+compensation, exact 6+6 SHA-256, pgTAP 282, integration 8/8, no-URL 8 skips, two resets/replay,
+synthetic 8-table zero, root/API/Web/contract/secret/package/diff PASS, `/ready=503`, A-021 default B
+public block, 공식/mock seed 0을 문서와 fresh actual loopback gate에서 함께 증명하는 것이다.
+현재는 과거 DB 증거와 후보 문서만 있으며 Q-SEC-004/A-022 때문에 완료되지 않았다.
+
+### 조사한 상태와 선택/대안
+
+- 기존 `schema-v1.draft.sql`은 6 enum, unqualified table, provenance column 부재,
+  mutable `is_official`, stale ACTIVE index와 `pgcrypto` extension을 담아 executable 001~006과
+  불일치했다.
+- `database/README`, root/API/scripts README, architecture/security/test/operations, ADR-0011,
+  plan/spec/TASKS/CHANGELOG/INDEX는 Tasks 0~5 또는 Task 10 ready 상태가 남아 있었다.
+- 선택: migration은 불변으로 보존하고 projection을 0.3.0-local의 읽기 전용 shape로만
+  동기화했다. helper/capability/trigger/RLS/GRANT 본문은 projection에 복제하지 않고 실행
+  lineage와 tests를 유일한 권한 근거로 유지했다.
+- 버린 대안: `00700` 자동 구현, public-ready 주장, logical SQL을 migration처럼 실행,
+  official/mock seed 생성, PACKAGE_MANIFEST 재생성. 모두 승인/범위/보안 경계를 위반한다.
+
+### 변경 영향
+
+- Product code/API/DB migration/data/prompt/production package dependency: 변경 없음. local verification
+  runner/tooling test만 보안 보정했고 public API 2.0.1-draft와 application 0.1.0을 유지한다.
+- Logical DB/docs: `database/schema-v1.draft.sql`을 7 enum·8 `app_private` table·3 provenance
+  column·generated `is_official`·최종 상태/감사 의미·5 index projection으로 동기화했다.
+- Task/dependencies: DB-001과 DATA-SEED/READY/LOG/BACKUP의 DB-001 dependency를 유지한다.
+- Versions: repo guidance `1.4.0`, database `0.2.0-draft`, tests
+  `0.4.2-readiness-contract`, docs `2.3.14`를 포함해 모든 manifest 축을 유지한다.
+- Security/privacy: 질문·답변·DSN/key 값을 terminal·문서·Git에 표시하거나 별도 영구 복사하지
+  않았다. runner는 captured admin DSN과 backend DSN을 process memory/environment에서만 사용하고,
+  provisioner는 `.env` 전체 bytes를 읽되 non-target 값을 파싱하지 않고 byte-identical하게 보존한다.
+  local 기본 credential, TLS/rate-limit 부재와
+  A-021/Q-SEC-003 default B public block을 active docs와 handoff에 고정했다.
+- Accessibility/performance: UI/동작 변경 없음. local test 결과를 public capacity로 일반화하지 않는다.
+- Official/mock data: 둘 다 persistent row 0, `supabase/seed.sql` data-free. DATA-001 PM 승인 목표
+  2026-07-20과 `/ready=503`을 유지한다.
+
+### 증거·재현·롤백
+
+Exact 환경, 12개 lineage hash, test totals, commits/reviews는
+[DB-001 report](../test-reports/DB-001-LOCAL-BASELINE.md)에, setup/run/migrate/seed/rollback/stop/
+recovery와 env 이름은 [handoff](../handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md)에 있다.
+Task 10 docs만 되돌릴 때는 final docs commit을 revert하고 manifest/task/docs 상태를 함께
+복원한다. DB executable objects/data는 Task 10에서 바뀌지 않아 SQL compensation이 필요 없다.
+전체 disposable-local DB 보상은 `006→005→004→003→002→001` 뒤 absence proof, 정상 복구는
+fresh reset/replay다. remote/actual-data/volume에는 실행하지 않는다.
+
+Task 10 pre-security-review historical verification(최종 완료 증거 아님):
+
+| 명령 | 실제 결과 |
+|---|---|
+| `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart` | exit 0; reset1/pgTAP1/6-stage rollback/absence/reset2/pgTAP2/integration stable phases 전부 PASS |
+| `.\.tools\supabase\v2.109.1\supabase.exe test db` | `Files=6, Tests=282`, `Result: PASS` |
+| `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1` | exit 0; root/Web/API/contract/secret/package/diff 전체 stable phase PASS |
+| API full pytest without DB URLs | `156 passed, 8 skipped, 1 warning, 4 subtests passed` |
+| focused integration without DB URLs | exact 8 skips, 각 reason `local DB gate only` |
+| package validator + JSON parse + secret scanner + `git diff --check` | 모두 exit 0; package required 12, secret finding 0, whitespace error 0 |
+| projection/version/hash/control/link/scope checks | 7 enum, 8 table, 5 index, provenance 3; manifest unchanged; 12 hashes; changed 33 paths/Markdown 30의 final non-DB rerun PASS |
+
+Task 10 initial review에서 spec `0/1/1`, quality `1/4/0`이 나왔고 actual port critical은
+fail-closed runner로 재현했다. Q-SEC-004/A-022 해결 전 fresh DB review/commit을 완료로 기록하지 않는다.
+
+두 custom verifier 초안은 제품 실패 전에 각각 projection 주석의 `GRANT/REVOKE` 단어까지
+statement로 오인한 과도한 regex와 PowerShell `Join-Path` 공백 오타로 중단됐다. statement
+anchor와 올바른 cmdlet syntax로 고친 재실행은 당시 projection/protected scope와 31-path
+control/link를 통과했다. 이후 independent quality review가 Docker wildcard port를 발견했고,
+보안 runner/test까지 현재 33-path로 확장한 뒤 fresh non-DB root/tooling/static gate는 PASS했다.
+actual loopback/full DB gate와 independent completion review는 Q-SEC-004/A-022 해결 뒤 pending이다.
+
+### 인간이 반드시 알아야 하는 내용
+
+- `0.3.0-local`은 exact loopback/full gate 뒤에만 사용할 후보이며 현재 manifest는
+  `0.2.0-draft`다. Q-SEC-004/A-022는 인간 A/Blocker다.
+- A-021/Q-SEC-003은 답변되지 않았다. 기본값 B로 public/remote, public admin/API, public
+  backend DB credential과 `00700`을 차단한다.
+- 공개 배포, CORS/domain, credential, backup, data deletion, official seed는 별도 승인 사항이다.
+
+### AI 내부 구현 세부 — 인간이 굳이 이해하지 않아도 되는 내용
+
+- Markdown link/control/stale/version/scope 검사는 active 파일만 대상으로 하고 역사적
+  implementation note의 당시 수치·상태는 증거 보존을 위해 대량 수정하지 않는다.
+- projection은 executable helper를 복제하지 않고 table shape와 table-local 의미,
+  cross-row capability invariant 설명만 유지해 권위 중복을 피한다.
+
+### Task 10 자체 review
+
+- [x] product code·migration·rollback·seed·dependency·contract 보호 경로 diff 0
+- [x] projection 7 enum·8 table·5 index·3 provenance·generated `is_official`
+- [x] blocker 발견 뒤 candidate manifest promotion 철회와 모든 축 유지
+- [x] report/handoff/implementation note/INDEX 및 active local links
+- [x] A-021/Q-SEC-003 default B, `/ready=503`, official/mock 0 보존
+- [x] 보안 runner 보정 뒤 31/31 tooling과 fresh non-DB root/static gate
+- [ ] Q-SEC-004 해결 뒤 fresh DB/root/static verification
+- [ ] independent specification review
+- [ ] independent quality/security review
+- [ ] final completion docs/version commit

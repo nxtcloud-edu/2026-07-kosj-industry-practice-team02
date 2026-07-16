@@ -10,6 +10,7 @@
 6. `TASKS.md`와 최신 plan
 7. 최근 구현 노트 3개
 8. 버전 매니페스트
+9. DB 작업이면 `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md`
 
 ## 인수인계에 반드시 포함
 
@@ -39,3 +40,7 @@ clone
 ```
 
 재현이 안 되면 handoff가 완료되지 않은 것이다.
+
+현재 DB-001 handoff는 local/private 기준선만 다룬다. official seed, READY 200, public admin,
+remote deployment, production backup은 후속 작업이며 A-021/Q-SEC-003 해결 전 공개 경로를
+열지 않는다.

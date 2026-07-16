@@ -1,6 +1,6 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Approved; execution in progress, Tasks 0~9 complete, Task 10 ready
+- Status: Approved; Tasks 0~9 complete, Task 10 blocked by Q-SEC-004/A-022 before local-baseline promotion
 - Date: 2026-07-16 (KST)
 - Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16; Q-DB-003=A on 2026-07-17
 - Related: D-025/D-026/D-027/D-028, ADR-0003/0004/0007/0008/0011/0012, TASK DB-001
@@ -10,7 +10,7 @@
 
 Create the first executable, locally reproducible Supabase/PostgreSQL schema for the Sejong civil-service AI MVP. Privacy, approval, ACTIVE-only retrieval, provenance, retention, and audit rules must be enforced in both PostgreSQL and the FastAPI service.
 
-This design converts the logical draft into an executable boundary. Tasks 0~8 installed the pinned local tooling and implemented immutable migrations `00100~00500`, compensation, pgTAP, candidate workflow, citizen reads, and a lazy typed repository. Task 9 proved six of eight real-backend integration paths; both approval paths safely rolled back because the deferred ACTIVE-question validator remained SECURITY INVOKER. Q-DB-003=A therefore adds only a new `00600` posture correction plus matching compensation and security tests. No official/mock seed exists and `/ready=503` remains correct.
+This design converts the logical draft into an executable boundary. Tasks 0~8 installed the pinned local tooling and implemented immutable migrations `00100~00500`, compensation, pgTAP, candidate workflow, citizen reads, and a lazy typed repository. Task 9 initially proved six of eight real-backend integration paths and safely rolled back both approval failures caused by the deferred SECURITY INVOKER validator. Q-DB-003=A added only a new `00600` posture correction plus matching compensation and security tests; the final real-backend result is 8/8 and the full pgTAP result is 282/282. No official/mock seed exists and `/ready=503` remains correct.
 
 ## 2. Scope
 
@@ -242,7 +242,10 @@ The implementation plan will use these responsibilities:
 - `supabase/tests/database/`: pgTAP/catalog tests with synthetic data only
 - `scripts/verify_database.ps1`: explicit Docker-required reset/test/rollback/replay gate
 
-Migration filenames use Supabase timestamp order. Timestamp lineage is not a semantic version. When the executable baseline and tests pass, `database_schema` moves from `0.2.0-draft` to `0.3.0-local`.
+Migration filenames use Supabase timestamp order. Timestamp lineage is not a semantic version. The logical
+projection describes a `0.3.0-local` candidate, but the active manifest remains `0.2.0-draft`. Only after
+Q-SEC-004/A-022 is resolved and the exact loopback/full gate and independent reviews pass may
+`database_schema` move to `0.3.0-local`.
 
 Applied and committed migrations `20260716000100` through `20260716000500` are immutable. Candidate workflow/audit refinement is `20260716000400_candidate_workflow.sql`; citizen indexes/read interfaces are `20260716000500_indexes_and_read_interfaces.sql`. Q-DB-003=A adds `20260717000600_deferred_active_question_trigger_security.sql`, which changes only `app_private.validate_active_kb_question()` to SECURITY DEFINER, reasserts owner `sejong_schema_owner`, pins exact `search_path=pg_catalog, pg_temp`, and revokes direct EXECUTE from PUBLIC, browser roles, and backend. It does not rewrite the function body, grant private access, or change public API, tables, data, seed, dependencies, retention, or readiness.
 
@@ -310,7 +313,8 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 The Q-SEC-002/Q-WF-001 refinement changes documentation from `2.3.13` to `2.3.14`. Application, API, shared contract, DB, data, prompt, and test versions stay unchanged.
 
-The later approved implementation is expected to change:
+The later approved implementation is expected to change these axes only after Q-SEC-004/A-022 and every
+fresh completion gate pass. Until then every manifest value remains unchanged:
 
 - `repo_guidance`: `1.4.0` → `1.5.0` for pinned DB tooling and verification
 - `database_schema`: `0.2.0-draft` → `0.3.0-local`
@@ -321,4 +325,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The user approved this written specification and execution plan on 2026-07-16. Tasks 0~9 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9A now passes focused 8/8, full pgTAP `Files=6, Tests=282`, six-stage compensation/replay, and real integration 8/8. DB-001 is not Done until Task 10 synchronizes schema authority, versions, changelog, and handoff. A-021 remains a B/High public-release blocker but does not block local Task 10.
+The user approved this written specification and execution plan on 2026-07-16. Tasks 0~9 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9A's historical evidence is focused 8/8, full pgTAP `Files=6, Tests=282`, six-stage compensation/replay, and real integration 8/8. Task 10 created candidate authority/report/handoff documentation, but quality review found actual wildcard Docker publishing. Q-SEC-004/A-022 therefore blocks further DB runtime, manifest/dependency promotion, final review, and commit; `database_schema=0.2.0-draft` remains active. A-021/Q-SEC-003 default B separately prohibits remote/public deployment, public admin/API, public backend DB credentials, and an unapproved `00700`.

@@ -25,6 +25,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-019 | A | 관리자 workflow | Resolved | Q-WF-001=A: 별도 backend-only `confirm_failed_question_reason(uuid,text,text,text)` capability | D-027 / ADR-0011; event 자동 사유 불변, failure 사유·적격성 재계산 |
 | A-020 | A | DB trigger 권한 | Resolved | Q-DB-003=A: 새 `00600`에서 ACTIVE-question validator 하나만 SECURITY DEFINER+owner/`search_path=pg_catalog, pg_temp`/revoke 검증, compensation은 INVOKER | D-028 / ADR-0012; 사용자의 직전 추천안 뒤 계속 진행 지시를 A 승인으로 해석, 문자 A 직접 입력 아님; `pg_temp` 마지막 명시는 D/Internal 보안 보정 |
 | A-021 | B | 기존 DB function 보안 | Open / Deferred — local Task 9 blocker 아님, public release blocker | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. data-type shadow DoS는 high-confidence plausible, privilege escalation은 conservative medium-confidence inference이며 exploit은 재현하지 않았다. | Q-SEC-003 A 추천: exact 22 signatures에 새 `00700` property-only migration. B/default: local-only 완료는 허용하되 remote/public 배포·public admin/API·public backend DB credential은 해결 전 차단 |
+| A-022 | A | local Docker port 보안 | Open / Blocker — DB-001 Task 10과 manifest 승격 차단 | Docker Desktop 4.62.0/Engine 29.2.1에서 optioned bridge network를 사용해도 stock Supabase CLI 2.109.1이 HostIP를 생략해 actual runtime은 wildcard IPv4/IPv6 binding으로 해석됐다. runner는 reset/status/credential 전에 fail-closed했고 stack을 중지해 project container 0을 확인했다. | Q-SEC-004 A 추천: Docker Desktop `Port binding behavior`를 `default-local-port-binding`으로 변경·재시작·runtime 재생성·exact loopback/full gate. 무응답 기본값 C: DB runtime/후속 dependency 차단 유지 |
 
 ## 우선도 정의
 
@@ -33,13 +34,24 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 0개다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+현재 인간 결정형 A/Blocker는 A-022/Q-SEC-004 1개다. Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 2026-07-17 D-028/ADR-0012로 해결됐다. Task 9의 역사적 RED는
-real DB 6 pass/2 approval fail이며, `00600` 구현·full gate·독립 review는 완료됐다. 이
-감사 commit 시점에는 정확한 10-path Task 9 문서 closeout만 별도 pending이다. A-021은
-B/High라 local Task 9 완료를 막지 않지만 public release는 해결 전 차단한다.
+real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
+6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
+publish가 발견됐으므로 DB-001은 `0.3.0-local` 후보를 승격하지 않고 Blocked다. A-021은
+B/High public-release blocker이고 A-022는 local 완료 blocker다.
 
 ## 열린 인터뷰 질문
+
+Q-SEC-004. Docker Desktop의 향후 모든 새 container 기본 port binding을 loopback으로 바꿀 것인가
+- 왜 지금 필요한가: stock Supabase CLI 2.109.1은 DB `PortBindings`에 HostPort만 넣고 HostIP를 생략한다. 이 PC의 Docker Desktop 4.62.0/Engine 29.2.1은 project bridge의 `host_binding_ipv4=127.0.0.1` option을 inspect에는 보존했지만 실제 `NetworkSettings.Ports`는 wildcard IPv4/IPv6 두 binding으로 해석했다. 개발용 기본 credential과 TLS/rate-limit 부재 때문에 reset·credential 처리 전 반드시 안전한 host binding을 확정해야 한다.
+- 선택지 A / 장점 / 단점: Docker Desktop 설정의 `Port binding behavior`를 `default-local-port-binding`으로 변경하고 Docker를 재시작한 뒤 stack을 새로 만들어 exact single `127.0.0.1:54322`, full six-stage DB gate, root/static gate를 재검증한다 / stock pinned CLI와 공급망을 유지하면서 host 기본 경계를 고칠 수 있지만 이 PC에서 앞으로 생성되는 다른 container의 기본 publish 동작도 바뀌고 Docker 재시작이 필요하다.
+- 선택지 B / 장점 / 단점: Supabase CLI를 project-patched build/wrapper로 교체해 DB HostIP를 명시한다 / global Docker 기본값을 바꾸지 않지만 새 binary source/digest/build/review/유지보수라는 공급망과 도구 범위가 생기며 기존 v2.109.1 공식 asset pin을 대체해야 한다.
+- 선택지 C / 장점 / 단점: fail-closed runner를 유지하고 local DB runtime을 보류한다 / host 전역 설정과 공급망을 바꾸지 않지만 DB-001, DATA-SEED-001, READY-001, LOG-001, BACKUP-001과 데모 진행이 차단된다.
+- 당신의 추천안: A. Docker Desktop UI에서 사용자가 직접 전역 영향을 확인·승인한 뒤 변경하고, restart/recreate/exact inspect/full gate가 모두 통과할 때만 manifest를 승격한다.
+- 답을 받지 못할 때 사용할 기본값: C. 실제 DB start를 더 실행하지 않고 fail-closed 상태와 현재 manifest `database_schema=0.2.0-draft`를 유지한다.
+- 영향을 받는 파일·계약·데이터·배포: Docker Desktop의 향후 새 container 기본 publish 동작, DB-001 runner/report/handoff/TASKS/manifest와 후속 DB 의존 작업. 공개 API·DB migration·공식/mock data·retention은 변하지 않는다. 공식 근거: [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/), [Supabase local development](https://supabase.com/docs/guides/local-development).
+- 답변 예시: `Q-SEC-004: A — Docker Desktop 전역 설정 변경과 재시작을 승인함.` 또는 `Q-SEC-004: C — 현재 차단 상태를 유지함.`
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.

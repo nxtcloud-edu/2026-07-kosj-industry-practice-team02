@@ -210,6 +210,311 @@ function Restore-ProcessEnvironment {
     }
 }
 
+function ConvertFrom-DatabaseJson {
+    param(
+        [string]$Value,
+        [string]$Step
+    )
+
+    try {
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            throw New-Object System.FormatException("empty JSON")
+        }
+        return $Value | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        Throw-DatabaseGateFailure -Step $Step -Reason "invalid" -Code 2
+    }
+}
+
+function Ensure-LocalDatabaseNetwork {
+    param(
+        [string]$DockerPath,
+        [string]$NetworkName,
+        [string]$WorkingDirectory
+    )
+
+    $step = "VERIFY-LOCAL-DATABASE-NETWORK"
+    [Console]::Out.WriteLine("[START] step=" + $step)
+    $listResult = Invoke-DatabaseChild `
+        -FilePath $DockerPath `
+        -Arguments @(
+            "network",
+            "ls",
+            "--filter",
+            ("name=^" + $NetworkName + '$'),
+            "--format",
+            "{{.Name}}"
+        ) `
+        -WorkingDirectory $WorkingDirectory `
+        -TimeoutMilliseconds 30000
+    if ($listResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "operational" -Code 2
+    }
+    $networkNames = @(
+        $listResult.Output -split "`r?`n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    if ($networkNames.Count -eq 0) {
+        $createResult = Invoke-DatabaseChild `
+            -FilePath $DockerPath `
+            -Arguments @(
+                "network",
+                "create",
+                "--driver",
+                "bridge",
+                "--opt",
+                "com.docker.network.bridge.host_binding_ipv4=127.0.0.1",
+                "--label",
+                "com.sejong-ai.local-boundary=sejong-ai-local",
+                $NetworkName
+            ) `
+            -WorkingDirectory $WorkingDirectory `
+            -TimeoutMilliseconds 30000
+        if ($createResult.ExitCode -ne 0) {
+            Throw-DatabaseGateFailure -Step $step -Reason "child" -Code $createResult.ExitCode
+        }
+    }
+    elseif ($networkNames.Count -ne 1 -or $networkNames[0] -cne $NetworkName) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+
+    $inspectResult = Invoke-DatabaseChild `
+        -FilePath $DockerPath `
+        -Arguments @(
+            "network",
+            "inspect",
+            $NetworkName,
+            "--format",
+            "{{json .}}"
+        ) `
+        -WorkingDirectory $WorkingDirectory `
+        -TimeoutMilliseconds 30000
+    if ($inspectResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "child" -Code $inspectResult.ExitCode
+    }
+    $network = ConvertFrom-DatabaseJson -Value $inspectResult.Output -Step $step
+    if (
+        $network.Name -cne $NetworkName -or
+        $network.Scope -cne "local" -or
+        $network.Driver -cne "bridge" -or
+        $null -eq $network.Options -or
+        $null -eq $network.Labels
+    ) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $bindingOption = $network.Options.PSObject.Properties[
+        "com.docker.network.bridge.host_binding_ipv4"
+    ]
+    if ($null -eq $bindingOption -or $bindingOption.Value -cne "127.0.0.1") {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $ownershipLabel = $network.Labels.PSObject.Properties[
+        "com.sejong-ai.local-boundary"
+    ]
+    if ($null -eq $ownershipLabel -or $ownershipLabel.Value -cne "sejong-ai-local") {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    [Console]::Out.WriteLine("[PASS] step=" + $step)
+}
+
+function Assert-LocalDatabaseRuntime {
+    param(
+        [string]$DockerPath,
+        [string]$ProjectId,
+        [string]$NetworkName,
+        [string]$ExpectedContainerName,
+        [string]$WorkingDirectory,
+        [switch]$AllowAbsent
+    )
+
+    $step = "VERIFY-LOCAL-DATABASE-RUNTIME"
+    [Console]::Out.WriteLine("[START] step=" + $step)
+    $listResult = Invoke-DatabaseChild `
+        -FilePath $DockerPath `
+        -Arguments @(
+            "ps",
+            "-a",
+            "--filter",
+            ("label=com.supabase.cli.project=" + $ProjectId),
+            "--format",
+            "{{.ID}}"
+        ) `
+        -WorkingDirectory $WorkingDirectory `
+        -TimeoutMilliseconds 30000
+    if ($listResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "operational" -Code 2
+    }
+    $containerIds = @(
+        $listResult.Output -split "`r?`n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    if ($containerIds.Count -eq 0 -and $AllowAbsent) {
+        [Console]::Out.WriteLine("[PASS] step=" + $step)
+        return $false
+    }
+    if ($containerIds.Count -ne 1) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+
+    $inspectResult = Invoke-DatabaseChild `
+        -FilePath $DockerPath `
+        -Arguments @(
+            "inspect",
+            $containerIds[0],
+            "--format",
+            "{{json .}}"
+        ) `
+        -WorkingDirectory $WorkingDirectory `
+        -TimeoutMilliseconds 30000
+    if ($inspectResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "child" -Code $inspectResult.ExitCode
+    }
+    $container = ConvertFrom-DatabaseJson -Value $inspectResult.Output -Step $step
+    $actualName = [string]$container.Name
+    if ($actualName.StartsWith("/", [System.StringComparison]::Ordinal)) {
+        $actualName = $actualName.Substring(1)
+    }
+    if ($actualName -cne $ExpectedContainerName) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    if (
+        $null -eq $container.State -or
+        $container.State.Running -ne $true -or
+        $null -eq $container.Config -or
+        $null -eq $container.Config.Labels
+    ) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $projectLabel = $container.Config.Labels.PSObject.Properties[
+        "com.supabase.cli.project"
+    ]
+    if ($null -eq $projectLabel -or $projectLabel.Value -cne $ProjectId) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    if (
+        $null -eq $container.HostConfig -or
+        $container.HostConfig.NetworkMode -cne $NetworkName -or
+        $null -eq $container.NetworkSettings -or
+        $null -eq $container.NetworkSettings.Networks -or
+        $null -eq $container.NetworkSettings.Networks.PSObject.Properties[$NetworkName]
+    ) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    if ($null -eq $container.HostConfig.PortBindings) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $publishedPorts = @($container.HostConfig.PortBindings.PSObject.Properties)
+    if ($publishedPorts.Count -ne 1 -or $publishedPorts[0].Name -cne "5432/tcp") {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    foreach ($publishedPort in $publishedPorts) {
+        $bindings = @($publishedPort.Value)
+        if ($bindings.Count -ne 1) {
+            Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+        }
+        foreach ($binding in $bindings) {
+            if ($null -eq $binding) {
+                Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+            }
+            $requestedHostIp = [string]$binding.HostIp
+            if (
+                (
+                    $requestedHostIp -cne "" -and
+                    $requestedHostIp -cne "127.0.0.1"
+                ) -or
+                [string]$binding.HostPort -cne "54322"
+            ) {
+                Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+            }
+        }
+    }
+    if ($null -eq $container.NetworkSettings.Ports) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $resolvedPorts = @($container.NetworkSettings.Ports.PSObject.Properties)
+    if ($resolvedPorts.Count -ne 1 -or $resolvedPorts[0].Name -cne "5432/tcp") {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $resolvedBindings = @($resolvedPorts[0].Value)
+    if ($resolvedBindings.Count -ne 1) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    $resolvedBinding = $resolvedBindings[0]
+    if (
+        $null -eq $resolvedBinding -or
+        [string]$resolvedBinding.HostIp -cne "127.0.0.1" -or
+        [string]$resolvedBinding.HostPort -cne "54322"
+    ) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    [Console]::Out.WriteLine("[PASS] step=" + $step)
+    return $true
+}
+
+function Stop-OwnedUnsafeLocalDatabaseRuntime {
+    param(
+        [string]$SupabasePath,
+        [string]$DockerPath,
+        [string]$ProjectId,
+        [string]$WorkingDirectory
+    )
+
+    $step = "STOP-UNSAFE-LOCAL-DATABASE-RUNTIME"
+    [Console]::Out.WriteLine("[START] step=" + $step)
+    try {
+        $stopResult = Invoke-DatabaseChild `
+            -FilePath $SupabasePath `
+            -Arguments @("stop") `
+            -WorkingDirectory $WorkingDirectory `
+            -TimeoutMilliseconds 120000
+    }
+    catch {
+        if ($_.Exception.Data.Contains("step")) {
+            throw
+        }
+        Throw-DatabaseGateFailure -Step $step -Reason "operational" -Code 2
+    }
+    if ($stopResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "child" -Code $stopResult.ExitCode
+    }
+
+    try {
+        $listResult = Invoke-DatabaseChild `
+            -FilePath $DockerPath `
+            -Arguments @(
+                "ps",
+                "-a",
+                "--filter",
+                ("label=com.supabase.cli.project=" + $ProjectId),
+                "--format",
+                "{{.ID}}"
+            ) `
+            -WorkingDirectory $WorkingDirectory `
+            -TimeoutMilliseconds 30000
+    }
+    catch {
+        if ($_.Exception.Data.Contains("step")) {
+            throw
+        }
+        Throw-DatabaseGateFailure -Step $step -Reason "operational" -Code 2
+    }
+    if ($listResult.ExitCode -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "operational" -Code 2
+    }
+    $remainingContainerIds = @(
+        $listResult.Output -split "`r?`n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    if ($remainingContainerIds.Count -ne 0) {
+        Throw-DatabaseGateFailure -Step $step -Reason "invalid" -Code 2
+    }
+    [Console]::Out.WriteLine("[PASS] step=" + $step)
+}
+
 $skipStart = $false
 $skipRollbackReplay = $false
 $skipStartSeen = $false
@@ -266,6 +571,9 @@ try {
     $sqlRunner = Join-Path $scriptDirectory "run_database_sql.py"
     $apiEnvironmentPath = Join-Path $repositoryRoot "apps\api\.env"
     $powerShellBinary = Join-Path $PSHOME "powershell.exe"
+    $localProjectId = "sejong-ai-local"
+    $localNetworkName = "sejong-ai-local-loopback"
+    $localDatabaseContainerName = "supabase_db_sejong-ai-local"
 
     foreach ($requiredFile in @(
             $supabaseBinary,
@@ -305,6 +613,19 @@ try {
     if ($dockerCheck.ExitCode -ne 0) {
         Throw-DatabaseGateFailure -Step "PREFLIGHT-DOCKER" -Reason "child" -Code $dockerCheck.ExitCode
     }
+    $dockerVersionText = $dockerCheck.Output.Trim()
+    try {
+        if ($dockerVersionText -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?$') {
+            throw New-Object System.FormatException("unsupported Docker version format")
+        }
+        $dockerVersion = [System.Version]::Parse($dockerVersionText)
+    }
+    catch {
+        Throw-DatabaseGateFailure -Step "PREFLIGHT-DOCKER" -Reason "version" -Code 2
+    }
+    if ($dockerVersion.Major -lt 28) {
+        Throw-DatabaseGateFailure -Step "PREFLIGHT-DOCKER" -Reason "version" -Code 2
+    }
     [Console]::Out.WriteLine("[PASS] step=PREFLIGHT-DOCKER")
 
     $null = Invoke-DatabaseStep `
@@ -321,12 +642,60 @@ try {
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 30000
 
+    Ensure-LocalDatabaseNetwork `
+        -DockerPath $dockerCommand.Source `
+        -NetworkName $localNetworkName `
+        -WorkingDirectory $repositoryRoot
+
+    $runnerCreatedRuntime = $false
     if (-not $skipStart) {
-        $null = Invoke-DatabaseStep `
-            -Step "START-LOCAL-DATABASE" `
-            -FilePath $supabaseBinary `
-            -Arguments @("db", "start") `
+        $runtimeAlreadyPresent = Assert-LocalDatabaseRuntime `
+            -DockerPath $dockerCommand.Source `
+            -ProjectId $localProjectId `
+            -NetworkName $localNetworkName `
+            -ExpectedContainerName $localDatabaseContainerName `
+            -WorkingDirectory $repositoryRoot `
+            -AllowAbsent
+        if (-not $runtimeAlreadyPresent) {
+            $runnerCreatedRuntime = $true
+        }
+        try {
+            $null = Invoke-DatabaseStep `
+                -Step "START-LOCAL-DATABASE" `
+                -FilePath $supabaseBinary `
+                -Arguments @("db", "start", "--network-id", $localNetworkName) `
+                -WorkingDirectory $repositoryRoot
+        }
+        catch {
+            $startFailure = $_.Exception
+            if ($runnerCreatedRuntime) {
+                Stop-OwnedUnsafeLocalDatabaseRuntime `
+                    -SupabasePath $supabaseBinary `
+                    -DockerPath $dockerCommand.Source `
+                    -ProjectId $localProjectId `
+                    -WorkingDirectory $repositoryRoot
+            }
+            throw $startFailure
+        }
+    }
+    try {
+        $null = Assert-LocalDatabaseRuntime `
+            -DockerPath $dockerCommand.Source `
+            -ProjectId $localProjectId `
+            -NetworkName $localNetworkName `
+            -ExpectedContainerName $localDatabaseContainerName `
             -WorkingDirectory $repositoryRoot
+    }
+    catch {
+        $runtimeFailure = $_.Exception
+        if ($runnerCreatedRuntime) {
+            Stop-OwnedUnsafeLocalDatabaseRuntime `
+                -SupabasePath $supabaseBinary `
+                -DockerPath $dockerCommand.Source `
+                -ProjectId $localProjectId `
+                -WorkingDirectory $repositoryRoot
+        }
+        throw $runtimeFailure
     }
 
     # Local command: db reset.
