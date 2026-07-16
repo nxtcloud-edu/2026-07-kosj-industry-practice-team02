@@ -12,6 +12,7 @@ import tomllib
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 
@@ -228,6 +229,41 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
                 env_path.read_bytes(),
                 original + b"\nDATABASE_URL=postgresql://local.invalid/new\n",
             )
+
+    def test_env_update_replace_failure_keeps_original_and_cleans_temp(self) -> None:
+        module = load_module(PROVISION_PATH, "provision_local_database_login_atomic_test")
+        original = (
+            b"# synthetic local configuration\r\n"
+            b"DATABASE_URL=old-local-value\r\n"
+            b"LLM_API_KEY=synthetic-deepseek-sentinel\r\n"
+        )
+        expected_staged = original.replace(
+            b"DATABASE_URL=old-local-value",
+            b"DATABASE_URL=postgresql://local.invalid/rotated",
+        )
+        with tempfile.TemporaryDirectory(prefix="sejong env atomic ") as directory:
+            root = Path(directory)
+            env_path = root / ".env"
+            env_path.write_bytes(original)
+
+            def fail_after_complete_write(source: str | Path, destination: str | Path) -> None:
+                staged_path = Path(source)
+                self.assertEqual(Path(destination), env_path)
+                self.assertEqual(staged_path.parent, env_path.parent)
+                self.assertTrue(staged_path.name.startswith(".env."))
+                self.assertEqual(staged_path.read_bytes(), expected_staged)
+                raise OSError("synthetic replace failure")
+
+            with patch.object(module.os, "replace", side_effect=fail_after_complete_write):
+                with self.assertRaises(OSError):
+                    module.update_env_assignment(
+                        env_path,
+                        "DATABASE_URL",
+                        "postgresql://local.invalid/rotated",
+                    )
+
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(list(root.glob(".env.*")), [])
 
     def test_provisioner_missing_admin_dsn_is_stable(self) -> None:
         environment = os.environ.copy()

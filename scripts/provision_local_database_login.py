@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import secrets
+import stat
+import tempfile
 from pathlib import Path
 
 import psycopg
@@ -45,7 +47,26 @@ def update_env_assignment(path: Path, key: str, value: str) -> None:
         updated += replacement + line_ending
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(updated)
+    existing_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f"{path.name}.",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(updated)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        if existing_mode is not None:
+            os.chmod(temporary_path, existing_mode)
+        os.replace(temporary_path, path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def provision(admin_dsn: str, env_path: Path) -> None:
@@ -80,6 +101,8 @@ def provision(admin_dsn: str, env_path: Path) -> None:
         connection.commit()
 
     backend_dsn = make_conninfo(admin_dsn, user=ROLE_NAME, password=password)
+    # PostgreSQL and filesystem replacement cannot share a transaction. A file failure keeps the
+    # previous env bytes intact; rerunning provisioning safely rotates the database password again.
     update_env_assignment(env_path, TARGET_ENV_KEY, backend_dsn)
 
 
