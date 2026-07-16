@@ -48,7 +48,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
 ```
 
-`-SkipStart`는 이미 실행 중인 disposable local stack을 재사용한다.
+기본 경로는 pinned CLI의 `supabase db start`를 호출해 persistent local runtime으로 PostgreSQL
+container만 시작한다. bare `supabase start`는 API를 꺼도 Kong gateway를 함께 시작할 수 있으므로
+DB-001에서 사용하지 않는다. `supabase test db`가 pgTAP 실행 중 일회성 `pg_prove` container를
+사용할 수 있지만, 이는 persistent project runtime의 PostgreSQL-only 경계를 넓히지 않는다.
+
+`-SkipStart`는 이미 실행 중인 disposable local PostgreSQL container를 재사용한다.
 `-SkipRollbackReplay`는 진단 중 compensation/replay 증명만 생략하므로 완료 gate가 아니다.
 러너는 child 출력을 숨기고, 임시 process 환경변수를 복원하며, stable phase ID만
 출력한다. container를 자동 정지하거나 Docker volume을 변경하지 않는다. DB-001

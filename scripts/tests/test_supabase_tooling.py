@@ -320,6 +320,12 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertIn('"-skipstart"', script)
         self.assertIn('"-skiprollbackreplay"', script)
 
+    def test_database_runner_starts_only_postgres_with_exact_cli_arguments(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('-Arguments @("db", "start")', script)
+        self.assertNotRegex(script, r'-Arguments\s+@\(\s*"start"\s*\)')
+
     def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
         rollback_paths = re.findall(

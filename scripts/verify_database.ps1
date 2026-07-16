@@ -325,7 +325,7 @@ try {
         $null = Invoke-DatabaseStep `
             -Step "START-LOCAL-DATABASE" `
             -FilePath $supabaseBinary `
-            -Arguments @("start") `
+            -Arguments @("db", "start") `
             -WorkingDirectory $repositoryRoot
     }
 

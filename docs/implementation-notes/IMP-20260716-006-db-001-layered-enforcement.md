@@ -84,7 +84,7 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 | `supabase/config.toml`, `supabase/seed.sql` | pinned CLI 생성본에서 Postgres 외 서비스와 seed를 끄고 application schema를 Data API에서 제외 | local DB-only·공식 데이터 0 경계 |
 | `scripts/provision_local_database_login.py` | 제한 login 생성/회전, capability grant, 다른 env byte를 보존하는 same-directory atomic `DATABASE_URL` 교체 | 실제 provider key 손상 없이 backend credential 제공 |
 | `scripts/run_database_sql.py` | `database/` 내부의 명시 파일만 파일별 transaction으로 실행 | 검토된 compensation/absence SQL만 허용 |
-| `scripts/verify_database.ps1` | Docker·CLI·Python preflight와 reset→pgTAP→rollback→absence→replay→integration 순서, child 비노출·timeout·env 복원 | Task 3~9 결과를 한 번에 검증할 explicit gate |
+| `scripts/verify_database.ps1` | Docker·CLI·Python preflight, exact `db start`, reset→pgTAP→rollback→absence→replay→integration 순서, child 비노출·timeout·env 복원 | PostgreSQL-only persistent runtime과 Task 3~9 결과를 한 번에 검증할 explicit gate |
 | API/scripts README와 tooling tests | 실행 시점·local-only·empty seed·DB gate 제한 및 failure behavior 문서화 | 신규 개발자 오용·secret 노출 방지 |
 
 ### 데이터 흐름/상태 변화
@@ -94,6 +94,14 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 ### 오류·빈 상태·롤백
 
 첫 verify 도구 호출은 repo-local uv 부재로 `PREFLIGHT-UV` 종료, 두 번째 호출은 tool timeout 124, 세 번째 fresh 호출은 143.6초에 24/24 통과했다. Task 1 검증 중 root가 1초 제한으로 시작한 첫 unittest 부모가 종료된 뒤 잠시 남아 두 번째 실행과 고정 임시 파일을 경합해 기존 secret-scanner 테스트 1개가 한 번 실패했다. 단일 테스트와 고립된 전체 재실행은 각각 통과해 구현 결함이 아닌 검증 명령 중첩으로 판정했다. Task 2 reviews는 deprecated `[inbucket]`이 실제 `local_smtp=true`를 끄지 못하는 drift, rollback 이름 2개, in-place `.env` 손상 위험을 발견했고 모두 TDD로 수정했다. DB password commit과 filesystem 교체는 단일 transaction이 될 수 없으므로 파일 실패는 기존 env를 보존하고 gate를 닫으며, 재실행이 password를 다시 회전해 복구한다.
+
+Task 3 첫 실행 뒤 read-only Docker inventory에서 PostgreSQL 외 persistent Kong container가
+관찰됐다. v2.109.1 source/CLI 확인 결과 bare `supabase start`는 Data API config와 별개로 Kong을
+시작하지만 `supabase db start`는 PostgreSQL만 시작한다. runner test를 먼저 exact `db start`
+요구와 bare `start` 거부로 RED 확인한 뒤 runner·계획·운영 문서를 보정했다. 이 agent는 runtime을
+정지하거나 재시작하지 않았으며, root가 기존 local project를 안전하게 전환하고 persistent
+container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 일회성 `pg_prove` container는
+테스트 실행용이며 persistent runtime 범위에 포함하지 않는다.
 
 ## 7. 버전 전후
 
@@ -136,6 +144,12 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 | final Task 2 unittest | root sequential exit 0 | 31 passed, 1 Windows symlink permission skip, 97.367s | terminal |
 | final Ruff / Mypy | exit 0 / exit 0 | Python tools 2 files | terminal |
 | final secret / CLI verify / diff | exit 0 / exit 0 / exit 0 | CLI exact version PASS, secret output 0 | terminal |
+| PostgreSQL-only start regression RED | bare `start`만 있어 exact `db start` assertion이 예상대로 실패 | focused 1 failure | agent terminal |
+| PostgreSQL-only start regression GREEN | runner가 exact `db start`를 사용하고 bare start pattern 0 | focused 1/1 | agent terminal |
+| PostgreSQL-only correction full scripts suite | exit 0 | 54 tests, 1 Windows symlink permission skip, 136.459s, OK | agent terminal |
+| Ruff/Mypy full-file audit | 기존 test의 I001/E501×2/SIM117 및 line 465 `arg-type`, 기존 helper의 import/format drift 확인; 새 test line 진단 0 | Ruff non-zero / Mypy tooling scripts 2 files pass | agent terminal |
+| changed-scope Ruff/Mypy with 확인된 baseline codes 제외 | exit 0 / exit 0 | modified test file 1개, 추가 진단 0 | agent terminal |
+| correction secret / pinned CLI / diff | exit 0 / exit 0 / exit 0 | secret output 0, exact CLI PASS, whitespace error 0 | agent terminal |
 
 ### 미실행 검증과 이유
 
@@ -147,7 +161,7 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: Task 0~2에서 실제 env/key/질문/DB 데이터 접근 0. env helper 검증은 synthetic temp fixture만 사용했다.
-- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. repository secret scan 통과.
+- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 
@@ -156,13 +170,14 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 - 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
 - schema/lineage: 아직 0.2.0-draft; migration 0.
-- tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization을 기준으로 DB-only toggle drift를 보정했다.
+- tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization과 `internal/start/start.go`, `internal/db/start/start.go`, `internal/db/test/test.go`의 실행 경계를 기준으로 DB-only drift를 보정했다.
 - verified date: 2026-07-16 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - 계획 실행은 승인됐으며 local CLI download, image pull, disposable DB reset 범위가 열렸다.
 - official CLI 2.109.1은 실제 설치됐고 PostgreSQL-only config·빈 seed·검증 runner는 준비됐지만 DB container/schema/role은 아직 만들지 않았다.
+- bare `supabase start`가 만든 Kong은 승인 범위가 아니며, root가 local project를 한 번 안전하게 전환한 뒤 persistent container가 PostgreSQL 하나뿐인지 확인해야 한다. 사용자가 직접 조치할 항목은 아니다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
 - 최종 branch 통합 방식은 모든 검증 완료 후 finishing skill에서 사용자에게 선택받는다.
 
@@ -172,6 +187,7 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 - review 순서는 명세 적합성 → 코드 품질이며 둘 다 승인되기 전 다음 task로 이동하지 않는다.
 - ignored uv copy는 worktree bootstrap일 뿐 commit 대상이 아니다.
 - Supabase v2.109.1에서 deprecated `[inbucket]` 대신 실제 `[local_smtp]`를 꺼야 한다는 upstream drift는 승인된 DB-only 의도를 유지하는 내부 호환성 보정이다.
+- 같은 버전에서 persistent DB-only 시작 명령은 `supabase db start`이다. `test db`가 만드는 일회성 `pg_prove` container는 persistent project container inventory와 구분한다.
 
 ## 13. 인수인계·재현·롤백
 
@@ -182,7 +198,8 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 3. `scripts/verify.ps1`에서 24/24 exit 0을 재현한다.
 4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 exact version PASS를 내는지 확인한다.
 5. Task 2 focused unittest 31 pass와 Ruff/Mypy/secret/diff를 재현한다.
-6. approved plan Task 3부터 순차 실행한다.
+6. local project를 안전하게 정지한 뒤 `.tools/supabase/v2.109.1/supabase.exe db start`를 child output 비노출 방식으로 실행하고 persistent inventory가 PostgreSQL 하나인지 확인한다.
+7. approved plan Task 3부터 순차 실행한다.
 
 ### 롤백
 
@@ -197,6 +214,7 @@ Task 3의 private schema/enums/tables pgTAP RED부터 시작하고 첫 migration
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
 - migration/permission/retention/concurrency test 미구현.
+- PostgreSQL-only 명령 보정 뒤 기존 Kong을 제거하는 one-time local runtime 전환과 inventory 재검증이 남아 있다.
 - 다음 단계: Task 3 private schema, seven enums, eight tables TDD.
 
 ## 15. 자체 리뷰

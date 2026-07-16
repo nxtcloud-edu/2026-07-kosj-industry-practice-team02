@@ -555,7 +555,7 @@ It rejects directories, missing files, paths outside `database/`, and empty file
 `scripts/verify_database.ps1` exposes only `-SkipStart` and `-SkipRollbackReplay`. It must:
 
 1. verify PowerShell 5.1, Docker server, pinned CLI, and API venv Python;
-2. call `supabase start` unless `-SkipStart` is present;
+2. call `supabase db start` unless `-SkipStart` is present so the persistent project runtime contains PostgreSQL only;
 3. call `supabase db reset --local`;
 4. capture `supabase status -o env` in memory, extract `DB_URL`, assign it only to child process `SEJONG_ADMIN_DATABASE_URL`, and never echo captured output;
 5. call the provisioning script;
@@ -565,7 +565,7 @@ It rejects directories, missing files, paths outside `database/`, and empty file
 9. set `SEJONG_DB_TEST_URL` from the ignored backend env without printing it, then run `pytest -q -p no:cacheprovider apps/api/tests/db/test_integration.py`;
 10. restore or remove every process environment value it changed in a `finally` block.
 
-The runner suppresses all child stdout/stderr and prints stable step IDs only. It does not stop containers automatically, touch Docker volumes directly, or call a remote Supabase command.
+The runner suppresses all child stdout/stderr and prints stable step IDs only. Bare `supabase start` is forbidden because v2.109.1 can start Kong even when the Data API is disabled. `supabase test db` may create a one-shot `pg_prove` test container; that does not change the PostgreSQL-only persistent runtime contract. The runner does not stop containers automatically, touch Docker volumes directly, or call a remote Supabase command.
 
 - [x] **Step 8: Run the focused tests**
 
@@ -616,7 +616,7 @@ Use pgTAP catalog functions plus one `is` assertion for the forbidden-column cou
 Start the local DB while suppressing the CLI credential/status payload, then run the test:
 
 ```powershell
-$startOutput = & .tools/supabase/v2.109.1/supabase.exe start 2>&1
+$startOutput = & .tools/supabase/v2.109.1/supabase.exe db start 2>&1
 if ($LASTEXITCODE -ne 0) { throw "START_LOCAL_DATABASE_FAILED" }
 Remove-Variable startOutput
 .tools/supabase/v2.109.1/supabase.exe test db
