@@ -1,4 +1,7 @@
 import ast
+import subprocess
+import sys
+import textwrap
 import tomllib
 import unittest
 from pathlib import Path
@@ -94,6 +97,87 @@ class ApiArchitectureTest(unittest.TestCase):
 
                 self.assertEqual(imported_roots & BANNED_IMPORT_ROOTS, set())
                 self.assertEqual(call_names & BANNED_CONSTRUCTION_CALLS, set())
+
+    def test_main_import_isolated_from_database_modules_pool_and_environment(self) -> None:
+        source_root = API_ROOT / "src"
+        probe = textwrap.dedent(
+            f"""
+            import builtins
+            import inspect
+            import os
+            import sys
+
+            sys.path.insert(0, {str(source_root)!r})
+
+            import fastapi
+            import starlette
+
+            original_import = builtins.__import__
+            original_environ = os.environ
+            original_getenv = os.getenv
+            application_source = os.path.normcase(os.path.abspath({str(source_root)!r}))
+
+            def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+                if name.split('.', 1)[0] in {{'psycopg', 'psycopg_pool'}}:
+                    raise AssertionError('database driver imported')
+                return original_import(name, globals, locals, fromlist, level)
+
+            def ensure_non_application_caller():
+                caller = inspect.currentframe().f_back.f_back
+                filename = os.path.normcase(os.path.abspath(caller.f_code.co_filename))
+                if filename.startswith(application_source):
+                    raise AssertionError('application environment read')
+
+            def guarded_getenv(key, default=None):
+                ensure_non_application_caller()
+                return original_getenv(key, default)
+
+            class GuardedEnvironment:
+                def __getitem__(self, key):
+                    ensure_non_application_caller()
+                    return original_environ[key]
+
+                def get(self, key, default=None):
+                    ensure_non_application_caller()
+                    return original_environ.get(key, default)
+
+                def __iter__(self):
+                    ensure_non_application_caller()
+                    return iter(original_environ)
+
+                def __len__(self):
+                    ensure_non_application_caller()
+                    return len(original_environ)
+
+                def __contains__(self, key):
+                    ensure_non_application_caller()
+                    return key in original_environ
+
+            builtins.__import__ = guarded_import
+            os.getenv = guarded_getenv
+            os.environ = GuardedEnvironment()
+
+            import sejong_ai_api.main
+
+            assert 'psycopg' not in sys.modules
+            assert 'psycopg_pool' not in sys.modules
+            assert 'sejong_ai_api.db.pool' not in sys.modules
+            assert 'sejong_ai_api.db.repository' not in sys.modules
+            print('isolated-import-safe')
+            """
+        )
+
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", probe],
+            cwd=API_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "isolated-import-safe")
+        self.assertEqual(completed.stderr, "")
 
 
 if __name__ == "__main__":
