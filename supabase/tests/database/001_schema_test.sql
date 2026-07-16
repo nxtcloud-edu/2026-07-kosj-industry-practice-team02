@@ -107,12 +107,20 @@ SELECT is(
   0,
   'private tables contain no forbidden privacy columns'
 );
-SELECT is(
-  (
-    SELECT count(*)::integer
-    FROM information_schema.tables AS tables
-    WHERE tables.table_schema = 'public'
-      AND tables.table_name = ANY (
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace AS namespaces
+    WHERE namespaces.nspname = 'public'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS tables
+    JOIN pg_catalog.pg_namespace AS namespaces
+      ON namespaces.oid = tables.relnamespace
+    WHERE namespaces.nspname = 'public'
+      AND tables.relkind = ANY (ARRAY['r', 'p', 'f']::"char"[])
+      AND tables.relname = ANY (
         ARRAY[
           'kb_documents',
           'kb_question_examples',
@@ -125,7 +133,6 @@ SELECT is(
         ]
       )
   ),
-  0,
   'public contains none of the eight domain tables'
 );
 
