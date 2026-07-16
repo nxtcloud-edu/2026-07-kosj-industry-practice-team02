@@ -89,7 +89,7 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 
 ### 데이터 흐름/상태 변화
 
-Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 실제 설치했지만 `supabase start`, role provisioning, DB runner는 migrations 전이라 실행하지 않았다. tracked seed는 설명 주석뿐이고 공식/mock row는 0이다.
+Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 설치했고, Task 3에서 local PostgreSQL을 기동해 `app_private`/`app_api`, 7 enum, 8 table을 첫 migration으로 생성했다. tracked seed는 설명 주석뿐이며 공식/mock row는 0이다. role·grant·RLS·function·trigger·index는 아직 생성하지 않았다.
 
 ### 오류·빈 상태·롤백
 
@@ -98,10 +98,10 @@ Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored
 Task 3 첫 실행 뒤 read-only Docker inventory에서 PostgreSQL 외 persistent Kong container가
 관찰됐다. v2.109.1 source/CLI 확인 결과 bare `supabase start`는 Data API config와 별개로 Kong을
 시작하지만 `supabase db start`는 PostgreSQL만 시작한다. runner test를 먼저 exact `db start`
-요구와 bare `start` 거부로 RED 확인한 뒤 runner·계획·운영 문서를 보정했다. 이 agent는 runtime을
-정지하거나 재시작하지 않았으며, root가 기존 local project를 안전하게 전환하고 persistent
-container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 일회성 `pg_prove` container는
+요구와 bare `start` 거부로 RED 확인한 뒤 runner·계획·운영 문서를 보정했다. root는 데이터 volume을 삭제하지 않고 기존 local project를 정상 종료한 뒤 `supabase db start`로 재기동했다. persistent inventory는 healthy PostgreSQL 1개(54322)이고 Kong container와 54321 bind는 각각 0임을 확인했다. `supabase test db`의 일회성 `pg_prove` container는
 테스트 실행용이며 persistent runtime 범위에 포함하지 않는다.
+
+Task 3은 pgTAP 32개를 migration 전 RED로 확인한 뒤 schema migration·역순 compensation·read-only 부재 증명을 구현했다. 초기 명세 review에서 `public` schema가 없어도 통과하는 vacuous assertion 1건을 발견해 `public` 존재와 8개 business table 부재를 하나의 non-vacuous assertion으로 교체했다. 이후 명세·품질 review가 모두 승인됐고, DB-only 전환 후 `db reset --local` exit 0과 pgTAP 32/32를 root가 다시 확인했다.
 
 후속 품질 review에서 첫 regression test가 source 전체 문자열을 검사해 주석 속 정답과 실제
 대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. AST 검사로 한 차례 강화했지만,
@@ -178,6 +178,15 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 | post-start extra-bare RED | correct call 뒤 bare start mutant가 production과 같은 `[['db','start']]`로 false-pass | focused 1 expected failure | agent terminal |
 | reset-boundary capture GREEN | production exact start→reset; dead/extra bare mutant sequence 분리; reset에서 stable exit 7 | focused 3/3, 30.953s | agent terminal |
 | reset-boundary tooling module | exit 0 | 21 tests, 59.928s, OK | agent terminal |
+| root focused start-capture rerun | exit 0 | 3/3, 36.688s | terminal |
+| independent runtime-correction quality review | 최종 APPROVED; Critical/Important 0 | 4 review rounds, false-pass 3건 TDD 폐쇄 | reviewer report |
+| Task 3 schema contract RED | migration 전 32 assertion 중 private schema 관련 30개 expected failure, 기존 privacy/public 부재 2개 pass | 1 pgTAP file | agent terminal |
+| Task 3 migration GREEN | `Files=1, Tests=32`, `Result: PASS` | 32/32 | agent/root terminal |
+| Task 3 compensation→absence→reset/replay | application schema 제거, platform schema 보존, migration 재적용, 32/32 | exit 0 | agent terminal |
+| Task 3 specification review | `public` schema 부재 시 vacuous pass 1건 수정 후 compliant | 2 rounds | commits `7a03259`, `d90ee14` |
+| Task 3 quality/security review | APPROVED; Critical/Important/Minor 0 | 1 review | reviewer report |
+| local runtime one-time transition | default stop exit 0; `db start` exit 0; persistent PostgreSQL 1 healthy/54322; Kong 0; 54321 bind 0 | 데이터 volume 삭제 0 | root terminal |
+| DB-only reset and Task 3 replay | `db reset --local` exit 0; `test db` exit 0 | 32/32 | root terminal |
 
 ### 미실행 검증과 이유
 
@@ -188,7 +197,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
-- Privacy: Task 0~2에서 실제 env/key/질문/DB 데이터 접근 0. env helper 검증은 synthetic temp fixture만 사용했다.
+- Privacy: Task 0~3에서 실제 env/key/질문 내용 접근 0. env helper 검증은 synthetic temp fixture만 사용했고, Task 3 DB에는 schema만 있으며 row는 0이다.
 - Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. behavioral start regression은 synthetic temp repo와 fake executables만 사용하며 실제 Docker/network/provider env를 호출하지 않는다. fake Supabase는 합성 argv만 ACL이 적용되는 OS temp에 기록하고 runner의 stable stdout/stderr 비노출 경계도 함께 확인한다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
@@ -197,15 +206,15 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 - 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
-- schema/lineage: 아직 0.2.0-draft; migration 0.
+- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 1/4(`20260716000100_private_schema.sql`) 생성.
 - tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization과 `internal/start/start.go`, `internal/db/start/start.go`, `internal/db/test/test.go`의 실행 경계를 기준으로 DB-only drift를 보정했다.
 - verified date: 2026-07-16 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - 계획 실행은 승인됐으며 local CLI download, image pull, disposable DB reset 범위가 열렸다.
-- official CLI 2.109.1은 실제 설치됐고 PostgreSQL-only config·빈 seed·검증 runner는 준비됐지만 DB container/schema/role은 아직 만들지 않았다.
-- bare `supabase start`가 만든 Kong은 승인 범위가 아니며, root가 local project를 한 번 안전하게 전환한 뒤 persistent container가 PostgreSQL 하나뿐인지 확인해야 한다. 사용자가 직접 조치할 항목은 아니다.
+- official CLI 2.109.1, PostgreSQL-only config·빈 seed·검증 runner가 준비됐고 local DB에 private schema·7 enum·8 table이 생성됐다. role·grant·RLS·capability function은 다음 task 범위다.
+- bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했고, persistent local runtime이 healthy PostgreSQL 하나뿐임을 확인했다. 사용자가 직접 조치할 항목은 없다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
 - 최종 branch 통합 방식은 모든 검증 완료 후 finishing skill에서 사용자에게 선택받는다.
 
@@ -226,24 +235,25 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 3. `scripts/verify.ps1`에서 24/24 exit 0을 재현한다.
 4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 exact version PASS를 내는지 확인한다.
 5. Task 2 focused unittest 31 pass와 Ruff/Mypy/secret/diff를 재현한다.
-6. local project를 안전하게 정지한 뒤 `.tools/supabase/v2.109.1/supabase.exe db start`를 child output 비노출 방식으로 실행하고 persistent inventory가 PostgreSQL 하나인지 확인한다.
-7. approved plan Task 3부터 순차 실행한다.
+6. `.tools/supabase/v2.109.1/supabase.exe db start`를 child output 비노출 방식으로 실행하고 persistent inventory가 PostgreSQL 하나인지 확인한다.
+7. `supabase db reset --local` 후 `supabase test db`가 `Files=1, Tests=32`, `Result: PASS`인지 확인한다.
+8. approved plan Task 4 invariant pgTAP RED부터 순차 실행한다.
 
 ### 롤백
 
-Task 2는 `9733ec7`, `339f04f`, `840d949`를 역순 revert하고 Task 1은 `857e2b2`, `41c6dcf`를 역순 revert한다. ignored `.tools/uv` 및 `.tools/supabase/v2.109.1`은 각 소유 경로를 검증한 뒤에만 제거한다. 아직 DB container/schema/data rollback 대상은 없다.
+Task 3 schema만 돌릴 때는 관리자 DSN을 출력하지 않는 gate 내에서 `database/rollbacks/20260716000100_private_schema.rollback.sql`을 실행하고 `database/verify_db001_absent.sql`로 application schema/role 부재와 platform schema 보존을 증명한다. 복구는 `supabase db reset --local`로 migration을 재적용한다. 코드 rollback은 `d90ee14`, `7a03259` 순으로 revert한다. Task 2는 `9733ec7`, `339f04f`, `840d949`를 역순 revert하고 Task 1은 `857e2b2`, `41c6dcf`를 역순 revert한다. ignored tool은 각 소유 경로를 검증한 뒤에만 제거한다.
 
 ### 다음 개발자 시작점
 
-Task 3의 private schema/enums/tables pgTAP RED부터 시작하고 첫 migration 전에 실패를 확인한다.
+Task 4의 table-level data quality/cross-table invariant pgTAP RED부터 시작한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
-- migration/permission/retention/concurrency test 미구현.
-- PostgreSQL-only 명령 보정 뒤 기존 Kong을 제거하는 one-time local runtime 전환과 inventory 재검증이 남아 있다.
-- 다음 단계: Task 3 private schema, seven enums, eight tables TDD.
+- permission/retention/concurrency test 미구현; migration은 1/4만 완료.
+- Task 3 table shape의 business invariant는 의도대로 Task 4 trigger/check migration 전까지 부분적이다.
+- 다음 단계: Task 4 table-level data quality and cross-table invariants TDD.
 
 ## 15. 자체 리뷰
 
@@ -254,3 +264,5 @@ Task 3의 private schema/enums/tables pgTAP RED부터 시작하고 첫 migration
 - [x] INDEX 갱신
 - [x] Task 1 명세 review와 품질 review 승인
 - [x] Task 2 명세 review와 품질 review 승인
+- [x] Task 3 RED→GREEN·compensation/replay·명세 review·품질 review 승인
+- [x] PostgreSQL-only runtime 전환·Kong/54321 부재·root 32/32 재검증

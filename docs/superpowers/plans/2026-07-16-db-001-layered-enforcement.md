@@ -597,7 +597,7 @@ git commit -m "build(db): add local database verification gate"
 - Create: `database/rollbacks/20260716000100_private_schema.rollback.sql`
 - Create: `database/verify_db001_absent.sql`
 
-- [ ] **Step 1: Write the failing pgTAP schema contract**
+- [x] **Step 1: Write the failing pgTAP schema contract**
 
 The test must call `plan(32)` and assert:
 
@@ -611,7 +611,7 @@ The test must call `plan(32)` and assert:
 
 Use pgTAP catalog functions plus one `is` assertion for the forbidden-column count. Finish with `SELECT * FROM finish();` and an automatic rollback.
 
-- [ ] **Step 2: Run the pgTAP test and confirm RED**
+- [x] **Step 2: Run the pgTAP test and confirm RED**
 
 Start the local DB while suppressing the CLI credential/status payload, then run the test:
 
@@ -624,7 +624,7 @@ Remove-Variable startOutput
 
 Expected: failure because the private schemas and tables do not exist.
 
-- [ ] **Step 3: Implement the first migration**
+- [x] **Step 3: Implement the first migration**
 
 Create both schemas and these enum values:
 
@@ -664,7 +664,7 @@ Convert all eight table definitions from `database/schema-v1.draft.sql` into `ap
 
 Do not add policies, grants, triggers, functions, indexes, official rows, or mock rows in this migration.
 
-- [ ] **Step 4: Add first-stage compensation and absence proof**
+- [x] **Step 4: Add first-stage compensation and absence proof**
 
 The compensation file runs only after later compensation files and contains:
 
@@ -677,7 +677,7 @@ COMMIT;
 
 `database/verify_db001_absent.sql` must raise if either schema or either Sejong role exists, while checking that `public` and Supabase-owned schemas still exist. It must not drop anything.
 
-- [ ] **Step 5: Reset and verify GREEN**
+- [x] **Step 5: Reset and verify GREEN**
 
 Run:
 
@@ -688,7 +688,7 @@ Run:
 
 Expected: reset exits 0 and all 32 pgTAP assertions pass.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```powershell
 git add supabase/migrations/20260716000100_private_schema.sql database/rollbacks/20260716000100_private_schema.rollback.sql database/verify_db001_absent.sql supabase/tests/database/001_schema_test.sql
