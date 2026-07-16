@@ -166,7 +166,8 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertFalse(config["realtime"]["enabled"])
         self.assertFalse(config["storage"]["enabled"])
         self.assertFalse(config["studio"]["enabled"])
-        self.assertFalse(config["inbucket"]["enabled"])
+        self.assertFalse(config["local_smtp"]["enabled"])
+        self.assertNotIn("inbucket", config)
         self.assertFalse(config["analytics"]["enabled"])
         self.assertFalse(config["edge_runtime"]["enabled"])
         self.assertFalse(config["db"]["pooler"]["enabled"])
@@ -282,6 +283,23 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertIn("test db", script)
         self.assertIn('"-skipstart"', script)
         self.assertIn('"-skiprollbackreplay"', script)
+
+    def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        rollback_paths = re.findall(
+            r'database\\rollbacks\\([^"\r\n]+\.rollback\.sql)',
+            script,
+        )
+
+        self.assertEqual(
+            rollback_paths,
+            [
+                "20260716000400_indexes_and_read_interfaces.rollback.sql",
+                "20260716000300_capabilities_and_functions.rollback.sql",
+                "20260716000200_invariants_and_lineage.rollback.sql",
+                "20260716000100_private_schema.rollback.sql",
+            ],
+        )
 
 
 class SupabaseBootstrapBehaviorTests(unittest.TestCase):

@@ -38,7 +38,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supaba
 ## 로컬 PostgreSQL gate
 
 Supabase v2.109.1이 생성한 프로젝트는 DB-001에 필요한 로컬 PostgreSQL 경로만 실행한다.
-Data API, Auth, Realtime, Storage, Studio, Inbucket, Analytics, Edge Runtime과 DB pooler는
+Data API, Auth, Realtime, Storage, Studio, Local SMTP/Mailpit, Analytics, Edge Runtime과 DB pooler는
 비활성화했다. DATA-001의 PM 승인 전까지 seed는 의도적으로 비어 있다.
 
 버전 migration과 DB 테스트가 모두 존재한 다음 Docker-backed gate를 실행한다.

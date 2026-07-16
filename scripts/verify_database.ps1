@@ -364,8 +364,8 @@ try {
     if (-not $skipRollbackReplay) {
         $rollbackFiles = @(
             (Join-Path $repositoryRoot "database\rollbacks\20260716000400_indexes_and_read_interfaces.rollback.sql"),
-            (Join-Path $repositoryRoot "database\rollbacks\20260716000300_approval_workflow.rollback.sql"),
-            (Join-Path $repositoryRoot "database\rollbacks\20260716000200_capabilities_and_retention.rollback.sql"),
+            (Join-Path $repositoryRoot "database\rollbacks\20260716000300_capabilities_and_functions.rollback.sql"),
+            (Join-Path $repositoryRoot "database\rollbacks\20260716000200_invariants_and_lineage.rollback.sql"),
             (Join-Path $repositoryRoot "database\rollbacks\20260716000100_private_schema.rollback.sql")
         )
         $null = Invoke-DatabaseStep `
