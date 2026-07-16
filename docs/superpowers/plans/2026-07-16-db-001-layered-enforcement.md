@@ -1161,11 +1161,11 @@ git commit -m "feat(db): make KB approval atomic"
 
 **Files:**
 
-- Create: `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql`
-- Create: `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql`
-- Create: `supabase/tests/database/005_citizen_reads_test.sql`
+- Created: `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql`
+- Created: `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql`
+- Created: `supabase/tests/database/005_citizen_reads_test.sql`
 
-- [ ] **Step 1: Write failing citizen-read tests**
+- [x] **Step 1: Write failing citizen-read tests**
 
 Create synthetic rows covering ACTIVE OFFICIAL, ACTIVE MOCK, DRAFT OFFICIAL, PENDING OFFICIAL, RETIRED OFFICIAL, and an office/mapping matrix. Prove:
 
@@ -1177,7 +1177,7 @@ Create synthetic rows covering ACTIVE OFFICIAL, ACTIVE MOCK, DRAFT OFFICIAL, PEN
 - backend can execute both functions but still cannot select base tables;
 - the five approved indexes exist with exact predicates/columns.
 
-- [ ] **Step 2: Run citizen-read tests and confirm RED**
+- [x] **Step 2: Run citizen-read tests and confirm RED**
 
 Run:
 
@@ -1187,7 +1187,7 @@ Run:
 
 Expected: read functions and indexes are missing.
 
-- [ ] **Step 3: Add the five indexes**
+- [x] **Step 3: Add the five indexes**
 
 Create:
 
@@ -1206,15 +1206,15 @@ CREATE INDEX idx_candidates_status
   ON app_private.kb_candidates (review_status);
 ```
 
-- [ ] **Step 4: Implement exact read functions**
+- [x] **Step 4: Implement exact read functions**
 
 Use the signatures in this plan. `list_active_kb` rejects OUT_OF_SCOPE/UNKNOWN with `P1010`, filters ACTIVE+OFFICIAL, aggregates question examples in deterministic lexical order, and returns authoritative source fields. `list_offices` rejects unsupported region/intent with `P1010`, filters OFFICIAL provenance, joins mapping, and orders by office public ID. Both are `STABLE`, `SECURITY DEFINER`, fixed-search-path functions with all objects schema-qualified.
 
-- [ ] **Step 5: Apply grants and add compensation**
+- [x] **Step 5: Apply grants and add compensation**
 
 Set owner to `sejong_schema_owner`, revoke PUBLIC/anon/authenticated execution, and grant only `sejong_backend`. The compensation drops functions first and then the five indexes; it does not alter tables or roles.
 
-- [ ] **Step 6: Reset and run the complete pgTAP suite**
+- [x] **Step 6: Reset and run the complete pgTAP suite**
 
 Run:
 
@@ -1225,12 +1225,33 @@ Run:
 
 Expected: all five database test files pass.
 
-- [ ] **Step 7: Commit Task 7**
+- [x] **Step 7: Commit Task 7**
 
 ```powershell
 git add supabase/migrations/20260716000500_indexes_and_read_interfaces.sql database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql supabase/tests/database/005_citizen_reads_test.sql
 git commit -m "feat(db): expose official citizen read capabilities"
 ```
+
+**Actual Task 7 result (2026-07-17 KST):**
+
+- Base `e05e036`; implementation commit `37b5e2c`; test-hardening commit
+  `59a69bd`. Applied migrations `00100~00400` remained unchanged.
+- The initial RED kept the previous 234 assertions green, failed 9 of the first
+  11 new catalog checks, then stopped on the absent function as expected.
+- Focused citizen-read pgTAP passed 40/40 and the full five-file suite passed
+  274/274. The hardening commit made the no-dynamic-SQL and per-function stacked
+  diagnostic checks non-vacuous without changing production behavior.
+- `00500` compensation removed exactly two functions and five indexes; the
+  preserved Task 1~6 baseline passed 234/234 plus four two-connection scenarios.
+  Fresh five-migration replay passed 274/274 plus the same four scenarios.
+- Root independently reproduced forward `274+4`, compensated `234+4`, and final
+  replay `274+4`. Final catalog evidence was
+  `functions=2 posture=2 acl=2 indexes=5 rows=0 backend_select=0`.
+- Independent review after `59a69bd` reported Critical/Important/Minor 0.
+  Persistent official/mock rows, environment/DeepSeek access, remote operations,
+  dependencies, contracts, and manifest versions all remained unchanged. Full
+  evidence is in `.superpowers/sdd/task-7-report.md` and
+  `docs/implementation-notes/IMP-20260717-002-db-001-task-7-official-citizen-reads.md`.
 
 ## Task 8: Add the lazy typed FastAPI database boundary
 
