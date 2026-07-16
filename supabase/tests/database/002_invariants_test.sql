@@ -706,10 +706,14 @@ SELECT is(
         'lock_kb_question_parents',
         'validate_active_kb_question'
       )
-      AND 'search_path=pg_catalog' = ANY (functions.proconfig)
+      AND functions.proconfig = CASE functions.proname
+        WHEN 'validate_active_kb_question' THEN
+          ARRAY['search_path=pg_catalog, pg_temp']::text[]
+        ELSE ARRAY['search_path=pg_catalog']::text[]
+      END
   ),
   12,
-  'all twelve Task 4 functions pin search_path to pg_catalog'
+  'all twelve Task 4 functions use their approved fixed search paths'
 );
 
 SELECT is(
