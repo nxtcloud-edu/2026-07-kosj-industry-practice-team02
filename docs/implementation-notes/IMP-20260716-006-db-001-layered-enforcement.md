@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-16
 - Task ID: DB-001
 - Type: implementation
-- Status: In Progress — Task 4/10 complete
+- Status: In Progress — Task 5 technical review green; acceptance awaiting Q-SEC-002
 - Author/Agent: Codex `/root` coordinator with task-specific implementation/review agents
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `cf76b17`
@@ -55,6 +55,8 @@
 | public/remote | Human deferred | remote link/push/deploy | 승인되지 않음 | 실행 금지 |
 | official data | Human/PM | 승인 seed | DATA-001 전 0 rows | readiness 503 |
 | worktree uv | Internal | ignored tool missing | verified 0.11.28 copy | baseline only |
+| Q-SEC-002 | A/Blocker — Human | non-superuser role replay를 fail-closed 검증할지 privileged auto-downgrade로 바꿀지 | 답 없음; Task 5 Step 3/완료 판정 보류 | role bootstrap·migration runner·배포 권한 |
+| Q-WF-001 | A/Blocker — Human | `NEW → REASON_CONFIRMED` 전이 capability 경계 | 답 없음; Task 6 시작 보류 | DB callable·repository·관리자 API·상태 머신 |
 
 ## 5. 설계 결정과 대안
 
@@ -90,10 +92,13 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 | `database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql` | Task 4 trigger→function→constraint→validator 역순 보상 | Task 3의 schema·8 table을 보존한 안전한 부분 rollback |
 | `supabase/tests/database/002_invariants_test.sql` | 명시적 MOCK fixture 기반 62개 pgTAP invariant assertion | text/JSON/status/source/lineage/rollback 계약 재현 |
 | `scripts/test_database_concurrency.py` | 두 DB 연결로 ACTIVE-question, event/failure, failure/candidate stale-snapshot 3개 시나리오 검증 | 기본 격리수준 계약과 deadlock 회귀를 실제 transaction으로 검증 |
+| `supabase/migrations/20260716000300_capabilities_and_functions.sql` | safe roles·ownership·ACL·forced RLS/policies, interaction recording, private/public retention과 replay fix | backend-only capability와 privacy/provenance/idempotency 강제 |
+| `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql` | Task 5 capability·policies·roles를 역순 제거하고 FORCE만 해제 | lower-layer compensation 전 안전한 local rollback |
+| `supabase/tests/database/003_capabilities_test.sql` | exact policy/function allowlist, role denial, 상태 matrix, replay, retention, diagnostic nonleak 78 assertions | privilege와 privacy 회귀의 비공허 검증 |
 
 ### 데이터 흐름/상태 변화
 
-Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 설치했고, Task 3에서 local PostgreSQL을 기동해 `app_private`/`app_api`, 7 enum, 8 table을 첫 migration으로 생성했다. Task 4는 두 번째 migration으로 table-level CHECK, validator, `updated_at`, source/lineage/ACTIVE-question trigger를 추가했다. tracked seed는 설명 주석뿐이며 공식/mock row는 0이다. role·grant·RLS·capability function·index는 아직 생성하지 않았다.
+Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 설치했고, Task 3에서 local PostgreSQL을 기동해 `app_private`/`app_api`, 7 enum, 8 table을 첫 migration으로 생성했다. Task 4는 두 번째 migration으로 table-level CHECK, validator, `updated_at`, source/lineage/ACTIVE-question trigger를 추가했다. Task 5는 세 번째 migration으로 safe capability roles, ownership/ACL, 여덟 forced-RLS table과 owner-only policies, `record_interaction`, retention helper/wrapper를 추가했다. tracked seed는 설명 주석뿐이며 공식/mock row는 0이고 index/read/workflow 함수는 아직 생성하지 않았다.
 
 ### 오류·빈 상태·롤백
 
@@ -108,6 +113,8 @@ Task 3 첫 실행 뒤 read-only Docker inventory에서 PostgreSQL 외 persistent
 Task 3은 pgTAP 32개를 migration 전 RED로 확인한 뒤 schema migration·역순 compensation·read-only 부재 증명을 구현했다. 초기 명세 review에서 `public` schema가 없어도 통과하는 vacuous assertion 1건을 발견해 `public` 존재와 8개 business table 부재를 하나의 non-vacuous assertion으로 교체했다. 이후 명세·품질 review가 모두 승인됐고, DB-only 전환 후 `db reset --local` exit 0과 pgTAP 32/32를 root가 다시 확인했다.
 
 Task 4는 migration 전 57개 assertion 중 41개가 예상대로 실패하는 RED를 확보한 뒤 불변조건과 보상 SQL을 구현했다. 첫 GREEN 이후 독립 품질·동시성 review가 양방향 trigger의 lock ordering과 stale snapshot 위험을 발견했다. reverse lookup의 불필요한 row lock과 trigger 범위를 줄이고, invariant-bearing write를 `READ COMMITTED`에서만 허용하도록 fail-closed `P0001` guard를 추가했다. 최종 pgTAP은 Task 4 62/62, 전체 94/94였고, 두 연결 3개 시나리오와 별도 deadlock probe가 통과했다. 보상 적용 뒤 Task 4 function/trigger/check는 `0|0|0`, Task 3 table은 8개 보존됐으며 replay, fixture 잔존 0, 명세·품질 재검토가 모두 승인됐다.
+
+Task 5는 capability 부재 6/6의 의도한 RED 뒤 roles·forced RLS·function/retention을 구현했다. 첫 구현의 167/167 GREEN 후 독립 review가 mutable source/office provenance 변경 뒤 동일 `request_id` replay가 `P1010`이 되는 회귀와 policy/function allowlist coverage를 발견했다. test-only RED는 Task 5 2/78 실패, 전체 172였고, committed event를 current provenance보다 먼저 비교하도록 최소 수정한 뒤 172/172가 됐다. root가 reset, 172/172, `00300 → 00200 → 00100` compensation, absence proof, fresh replay, 172/172를 독립 재현했다. 동일/충돌 최초 요청, concurrent purge, backend diagnostic sentinel 비노출 probe도 통과했고 두 review pass에 다른 blocking finding은 없다. 단, non-superuser runner가 위험 role 속성을 자동 downgrade할 수 없는 문자 명세 차이는 `Q-SEC-002` 인간 결정 전 acceptance로 닫지 않는다.
 
 후속 품질 review에서 첫 regression test가 source 전체 문자열을 검사해 주석 속 정답과 실제
 대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. AST 검사로 한 차례 강화했지만,
@@ -200,18 +207,26 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 | Task 4 compensation absence | 보상 뒤 Task 4 function/trigger/check 0, Task 3 table 8 보존 | `0|0|0|8` | agent terminal |
 | Task 4 replay and cleanup | reset/replay 뒤 94/94; Task 4 fixture row 합계 0 | PASS, rows 0 | agent/root terminal |
 | Task 4 independent reviews | 초기 lock inversion/stale snapshot 지적을 수정한 뒤 명세·품질 승인 | blocking finding 0 | reviewer reports, commits `f181ffd`, `cc22161` |
+| Task 5 initial RED | role/RLS/functions 부재의 의도한 실패 | 새 6/6 fail, 기존 94 pass | Task 5 report |
+| Task 5 initial GREEN | role/RLS/interaction/retention 구현 뒤 PASS | 167/167 | commit `fa6b755`, Task 5 report |
+| Task 5 review regression RED→GREEN | mutable provenance 뒤 replay 2/78 fail을 재현하고 committed replay-first로 수정 | 최종 Task 5 78/78, 전체 172/172 | commit `264772d`, Task 5 report |
+| Task 5 root reset/test | fresh exit 0 / exit 0 | 172/172 | root terminal |
+| Task 5 root compensation/absence/replay | `00300 → 00200 → 00100`, absence proof, fresh reset/test 모두 PASS | 재적용 172/172 | root terminal |
+| Task 5 two-session probes | identical same ID, conflicting `P1010`, purge `1→0→0`, links 보존, fixture 0 | replay 2 scenarios + purge 1 | Task 5 report |
+| Task 5 diagnostic nonleak | non-superuser backend `P1010`, sentinel diagnostic leak 0, write 0 | 1 synthetic probe | Task 5 report |
+| Task 5 independent review passes | privilege/replay coverage fix 뒤 추가 blocking finding 0 | `Q-SEC-002` acceptance만 open | reviewer reports |
 
 ### 미실행 검증과 이유
 
 - `verify_database.ps1`: 전체 capability/read/API integration 파일이 아직 없어 Task 9 최종 gate 전까지 미실행.
-- 실제 role DDL과 capability transaction: Task 5~9 Docker integration에서 실행 예정.
+- Task 5 role DDL과 capability transaction은 실행·검증됨. Task 6/7 workflow/read 함수와 Task 8/9 repository/integration은 미실행.
 - DB schema/API integration tests: migration·repository 경계가 아직 없어 미실행.
 - DeepSeek call: DB-001 범위 밖이며 key를 읽거나 전송하지 않음.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
-- Privacy: Task 0~4에서 실제 env/key/시민 질문 내용 접근 0. Task 4는 명시적 `MOCK`/`[MASKED]` fixture만 사용했고 cleanup 후 DB row는 0이다.
-- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았다. Task 4 trigger의 primary error는 고정 code/message만 사용하고 행 text를 포함하지 않으며, non-`READ COMMITTED` invariant write는 fail closed한다. 단, PostgreSQL native CHECK의 `DETAIL`에는 실패 row가 포함될 수 있어 Task 8 backend/log boundary가 `PG_EXCEPTION_DETAIL`을 폐기해야 한다. repository secret scan 통과.
+- Privacy: Task 0~5에서 실제 env/key/시민 질문 원문 접근 0. Task 4/5는 합성 `MOCK`/`[MASKED]` fixture 또는 capability 증명용 최소 synthetic OFFICIAL fixture만 사용했고 cleanup/reset 후 row는 0이다. replay와 purge는 masked text를 비교·복원하지 않는다.
+- Security: CLI 공급망·child 비노출 경계에 더해 Task 5에서 forced RLS, owner-only policy, backend base-table denial, approved SECURITY DEFINER allowlist와 diagnostic sentinel 비노출을 검증했다. 실제 `.env`/DeepSeek key는 읽지 않았다. `Q-SEC-002` role replay 방식은 인간 결정 전 열려 있다. PostgreSQL native CHECK의 `DETAIL`은 Task 8 backend/log boundary가 폐기해야 한다.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 
@@ -219,14 +234,15 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 
 - 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
-- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 2/4(`20260716000100_private_schema.sql`, `20260716000200_invariants_and_lineage.sql`) 생성.
+- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 3/4(`20260716000100_private_schema.sql`, `20260716000200_invariants_and_lineage.sql`, `20260716000300_capabilities_and_functions.sql`) 생성.
 - tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization과 `internal/start/start.go`, `internal/db/start/start.go`, `internal/db/test/test.go`의 실행 경계를 기준으로 DB-only drift를 보정했다.
 - verified date: 2026-07-16 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - 계획 실행은 승인됐으며 local CLI download, image pull, disposable DB reset 범위가 열렸다.
-- official CLI 2.109.1, PostgreSQL-only config·빈 seed·검증 runner가 준비됐고 local DB에 private schema·7 enum·8 table과 Task 4 불변조건이 생성됐다. role·grant·RLS·capability function은 Task 5 범위다.
+- official CLI 2.109.1, PostgreSQL-only config·빈 seed·검증 runner가 준비됐고 local DB에 private schema·7 enum·8 table, Task 4 불변조건, Task 5 role·grant·forced RLS·interaction/retention capability가 생성됐다.
+- `Q-SEC-002` 선택 전 Task 5는 기술 검증 녹색이지만 완료로 승인하지 않는다. `Q-WF-001`은 Task 6 시작을 막는다.
 - 질문 예시·ACTIVE 전환·lineage 관련 직접 write는 `READ COMMITTED` transaction 계약이다. FastAPI 기본 경로도 이 격리수준을 유지해야 하며 다른 격리수준은 안정된 `P0001`로 거부된다.
 - bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했고, persistent local runtime이 healthy PostgreSQL 하나뿐임을 확인했다. 사용자가 직접 조치할 항목은 없다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
@@ -240,6 +256,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - Supabase v2.109.1에서 deprecated `[inbucket]` 대신 실제 `[local_smtp]`를 꺼야 한다는 upstream drift는 승인된 DB-only 의도를 유지하는 내부 호환성 보정이다.
 - 같은 버전에서 persistent DB-only 시작 명령은 `supabase db start`이다. `test db`가 만드는 일회성 `pg_prove` container는 persistent project container inventory와 구분한다.
 - Task 4 review는 양방향 trigger의 역방향 lookup에서 row lock을 제거하고 변화 가능 column으로 trigger를 좁혔다. 두 연결 probe는 fixture UUID를 고정하고 `finally` cleanup을 수행한다.
+- Task 5 replay는 stored metadata를 먼저 비교하고 genuinely new request만 source→office 순서로 잠근다. role membership option은 grantor별 effective union으로 검사한다.
 
 ## 13. 인수인계·재현·롤백
 
@@ -251,26 +268,29 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 exact version PASS를 내는지 확인한다.
 5. Task 2 focused unittest 31 pass와 Ruff/Mypy/secret/diff를 재현한다.
 6. `.tools/supabase/v2.109.1/supabase.exe db start`를 child output 비노출 방식으로 실행하고 persistent inventory가 PostgreSQL 하나인지 확인한다.
-7. `supabase db reset --local` 후 `supabase test db`가 `Files=2, Tests=94`, `Result: PASS`인지 확인한다.
+7. `supabase db reset --local` 후 `supabase test db`가 `Files=3, Tests=172`, `Result: PASS`인지 확인한다.
 8. 관리자 DSN을 출력하지 않고 `SEJONG_ADMIN_DATABASE_URL` process env로만 전달해 `scripts/test_database_concurrency.py`가 `scenarios=3 connections=2` PASS인지 확인한다.
-9. Task 5 capability/event/retention pgTAP RED부터 시작한다.
+9. `Q-SEC-002`를 인간 결정으로 닫고 Task 5 Step 3 acceptance를 갱신한다.
+10. `Q-WF-001`을 해결한 뒤 Task 6 candidate workflow RED부터 시작한다.
 
 ### 롤백
 
-Task 4만 보상할 때는 관리자 DSN을 출력하지 않는 gate에서 `database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql`을 실행한다. Task 4 function/trigger/check가 0이고 Task 3 table 8개가 보존되는지 확인한 뒤 `supabase db reset --local`로 두 migration을 replay한다. 코드 rollback은 `cc22161`, `f181ffd`, `be69d94`를 역순 revert한다. 전체 Task 3 schema까지 되돌릴 때만 그 다음 `database/rollbacks/20260716000100_private_schema.rollback.sql`과 `database/verify_db001_absent.sql`을 사용한다. Task 2는 `9733ec7`, `339f04f`, `840d949`, Task 1은 `857e2b2`, `41c6dcf`를 각각 역순 revert한다.
+Task 5만 보상할 때는 후속 `00400`이 없는지 확인한 뒤 관리자 DSN을 출력하지 않는 gate에서 `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql`을 실행한다. 전체 DB-001은 `00300 → 00200 → 00100`과 absence proof 순서로 보상하고 fresh reset으로 복구한다. Task 5 코드 rollback은 `264772d`, `fa6b755` 순서로 revert한다. Task 4는 `cc22161`, `f181ffd`, `be69d94`, Task 2는 `9733ec7`, `339f04f`, `840d949`, Task 1은 `857e2b2`, `41c6dcf`를 각각 역순 revert한다.
 
 ### 다음 개발자 시작점
 
-Task 5의 role·forced RLS·interaction recording·30일 retention pgTAP RED부터 시작한다.
+`Q-SEC-002`를 결정 로그/필요 ADR/ambiguity register에 반영해 Task 5 acceptance를 닫고, 이어서 `Q-WF-001`을 해결한 뒤 Task 6부터 시작한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
-- role/permission/retention capability test 미구현; migration은 2/4 완료.
+- `Q-SEC-002` role replay 방식은 미결정이며 Task 5 acceptance를 막는다.
+- `Q-WF-001` reason-confirmation capability는 미결정이며 Task 6 시작을 막는다.
+- migration은 3/4 구현됐고 현재 pgTAP은 172/172다. Task 5 동시성 probe의 영구 자동화는 Task 9 소유다.
 - PostgreSQL native CHECK 오류의 `DETAIL`이 실패 row를 포함할 수 있으므로 Task 8에서 DB exception detail과 SQL parameter를 로그·응답에 남기지 않는 sanitizer를 검증해야 한다.
 - parent KB DELETE와 explicit child question DELETE가 동시에 일어나는 경로는 잠금 순서 P2 위험이 남아 있다. 현재 삭제 API가 없어 비차단이며, 삭제 기능을 추가하기 전에 별도 concurrency test가 필요하다.
-- 다음 단계: Task 5 role·forced RLS·interaction recording·30일 retention TDD.
+- 다음 단계: 두 인간 결정을 순서대로 닫고, 승인된 경계로 Task 6 workflow TDD를 시작한다.
 
 ## 15. 자체 리뷰
 
@@ -285,3 +305,6 @@ Task 5의 role·forced RLS·interaction recording·30일 retention pgTAP RED부�
 - [x] PostgreSQL-only runtime 전환·Kong/54321 부재·root 32/32 재검증
 - [x] Task 4 RED 41/57→GREEN 62/62, 전체 94/94·두 연결 3시나리오·deadlock probe 통과
 - [x] Task 4 compensation `0|0|0|8`·replay·fixture 0·명세/품질 재검토 승인
+- [x] Task 5 RED→GREEN·review fix·172/172·동시성·diagnostic 비노출·compensation/replay 기술 검증
+- [ ] Task 5 Step 3 문자 acceptance — `Q-SEC-002` 인간 결정 대기
+- [ ] Task 6 시작 — `Q-WF-001` 인간 결정 대기

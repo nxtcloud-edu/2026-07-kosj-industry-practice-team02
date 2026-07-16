@@ -804,7 +804,7 @@ git commit -m "feat(db): enforce privacy and lineage invariants"
 - Create: `supabase/migrations/20260716000300_capabilities_and_functions.sql`
 - Create: `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql`
 
-- [ ] **Step 1: Write failing capability/event/retention tests**
+- [x] **Step 1: Write failing capability/event/retention tests**
 
 The pgTAP suite must prove:
 
@@ -822,7 +822,7 @@ The pgTAP suite must prove:
 - private cutoff purge changes just-before/equal/after boundary correctly;
 - public purge accepts no caller time, is idempotent, NULLs only text, sets purge time, and preserves event/candidate links.
 
-- [ ] **Step 2: Run capability tests and confirm RED**
+- [x] **Step 2: Run capability tests and confirm RED**
 
 Run:
 
@@ -833,6 +833,18 @@ Run:
 Expected: roles/functions/RLS assertions fail.
 
 - [ ] **Step 3: Create locked-down capability roles and ownership**
+
+> **Acceptance pending — Q-SEC-002 (2026-07-16):** roles, ownership, ACLs,
+> forced RLS, and exact policies are implemented and tested. The current local
+> migration runner is intentionally non-superuser, so PostgreSQL does not allow
+> it to issue `NOSUPERUSER`, `NOREPLICATION`, or `NOBYPASSRLS` `ALTER ROLE`
+> clauses even in the disabling direction. The migration creates exact safe
+> attributes and fails closed if an existing role has a forbidden attribute;
+> it does not satisfy the literal unconditional auto-restoration sentence below.
+> Human approval is required between retaining this fail-closed minimum-privilege
+> model and introducing a privileged auto-downgrade boundary. Two independent
+> review passes found no other blocking Task 5 issue. Do not mark Task 5 Done
+> until this decision is recorded.
 
 Use idempotent `DO` blocks to create the two NOLOGIN roles, then unconditional `ALTER ROLE` statements to restore NOLOGIN and every disabled elevated attribute on every replay. Revoke `CREATE` on `public` from `PUBLIC`. Revoke all privileges on `app_private` and `app_api` from `PUBLIC`, `anon`, and `authenticated`, then grant `USAGE` on `app_api` only to `sejong_backend`. Transfer ownership of `app_private`, `app_api`, all app enums/tables/sequences/functions to `sejong_schema_owner`. Enable and force RLS on every base table, then create one owner-only `FOR ALL` policy per table:
 
@@ -847,7 +859,7 @@ WITH CHECK (true);
 
 Repeat with table-specific policy names. Do not create an `anon`, `authenticated`, or backend table policy.
 
-- [ ] **Step 4: Implement `record_interaction` exactly**
+- [x] **Step 4: Implement `record_interaction` exactly**
 
 The function uses the signature in this plan, `SECURITY DEFINER`, and:
 
@@ -868,7 +880,7 @@ The function uses the signature in this plan, `SECURITY DEFINER`, and:
 
 Store `used_source_ids` as `to_jsonb(p_used_source_ids)` and derive `source_count` with `cardinality`. For duplicate identical metadata, return the existing interaction ID and linked failure ID without comparing or rewriting a potentially purged `masked_question`.
 
-- [ ] **Step 5: Implement retention functions**
+- [x] **Step 5: Implement retention functions**
 
 Create private cutoff helper:
 
@@ -879,7 +891,7 @@ RETURNS TABLE (purged_count integer, purged_ids uuid[])
 
 It updates only rows where `masked_question IS NOT NULL AND text_expires_at <= p_cutoff`, sets `masked_question=NULL`, `text_purged_at=p_cutoff`, aggregates sorted IDs, and returns zero plus an empty UUID array when no rows change. The public `app_api.purge_expired_failed_question_text()` calls it with `clock_timestamp()` and exposes no time parameter.
 
-- [ ] **Step 6: Lock function privileges**
+- [x] **Step 6: Lock function privileges**
 
 For every new interface:
 
@@ -924,11 +936,11 @@ GRANT EXECUTE ON FUNCTION app_api.record_interaction(
 
 Grant backend `USAGE` on `app_api` only. Do not grant backend `USAGE` on `app_private`; function argument/return types remain resolvable through the function contract while base objects stay inaccessible.
 
-- [ ] **Step 7: Add capability compensation**
+- [x] **Step 7: Add capability compensation**
 
 The compensation file revokes backend function/schema grants, drops all Task 5 and Task 6 `app_api` functions, drops policies, disables forced RLS only for rollback, reassigns objects owned by `sejong_schema_owner` to `postgres`, drops owned privileges for both roles, and drops `sejong_backend` then `sejong_schema_owner`. It must execute only after the Task 7 read-interface compensation.
 
-- [ ] **Step 8: Reset and run all current DB tests**
+- [x] **Step 8: Reset and run all current DB tests**
 
 Run:
 
@@ -939,12 +951,22 @@ Run:
 
 Expected: all assertions pass; no test emits retained question text.
 
-- [ ] **Step 9: Commit Task 5**
+Actual: TDD RED was the intended 6/6 missing-capability failures. After the
+implementation and review fix, root independently reproduced reset, 172/172
+pgTAP, `00300 → 00200 → 00100` compensation, absence proof, fresh replay, and
+172/172 again. Identical/conflicting two-session replay, concurrent purge, and
+backend diagnostic nonleak probes also passed. Independent code/spec reviews
+are otherwise clean; only Step 3 `Q-SEC-002` remains open.
+
+- [x] **Step 9: Commit Task 5**
 
 ```powershell
 git add supabase/migrations/20260716000300_capabilities_and_functions.sql database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql supabase/tests/database/003_capabilities_test.sql
 git commit -m "feat(db): add backend capabilities and retention"
 ```
+
+Actual commits: `fa6b755` (`feat(db): add backend capabilities and retention`)
+and review fix `264772d` (`fix(db): stabilize capability replay guarantees`).
 
 ## Task 6: Add atomic candidate workflow and append-only audit
 
