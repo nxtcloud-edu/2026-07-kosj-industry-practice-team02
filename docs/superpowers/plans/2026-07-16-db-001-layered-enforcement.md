@@ -275,7 +275,7 @@ git commit -m "docs(db): start approved DB-001 plan"
 - Modify: `.gitignore`
 - Modify: `scripts/README.md`
 
-- [ ] **Step 1: Write the failing repository/tooling tests**
+- [x] **Step 1: Write the failing repository/tooling tests**
 
 Add tests that parse the pin JSON and script text without network access:
 
@@ -306,7 +306,7 @@ class SupabaseToolPinTests(unittest.TestCase):
 
 Also extend `RepositoryScaffoldContractTests.test_should_ignore_repository_transient_paths` so `.tools/`, `supabase/.temp/`, and `supabase/.branches/` are required ignores.
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 Run:
 
@@ -316,7 +316,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_too
 
 Expected: failures report the missing pin and bootstrap files plus missing Supabase transient ignore entries.
 
-- [ ] **Step 3: Add the exact pin manifest**
+- [x] **Step 3: Add the exact pin manifest**
 
 Create `scripts/supabase-cli.version.json` with this complete content:
 
@@ -332,7 +332,7 @@ Create `scripts/supabase-cli.version.json` with this complete content:
 }
 ```
 
-- [ ] **Step 4: Implement the checksum-gated PowerShell bootstrap**
+- [x] **Step 4: Implement the checksum-gated PowerShell bootstrap**
 
 `scripts/bootstrap_supabase.ps1` must:
 
@@ -356,7 +356,7 @@ The final success lines are exactly:
 
 `-VerifyOnly` fails with exit 2 and `[FAIL] step=VERIFY-SUPABASE-BINARY reason=missing code=2` when the local binary is absent; it never downloads.
 
-- [ ] **Step 5: Add ignore and usage documentation**
+- [x] **Step 5: Add ignore and usage documentation**
 
 Append these exact ignore entries under local DB/runtime state:
 
@@ -374,7 +374,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supaba
 
 State that the script is local tooling, not a production dependency, and never performs `login`, `link`, `db push`, or remote project operations.
 
-- [ ] **Step 6: Run focused and security tests**
+- [x] **Step 6: Run focused and security tests**
 
 Run:
 
@@ -386,7 +386,7 @@ git diff --check
 
 Expected: all tests pass, secret scan exits 0, diff check exits 0.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 ```powershell
 git add .gitignore scripts/supabase-cli.version.json scripts/bootstrap_supabase.ps1 scripts/README.md scripts/tests/test_supabase_tooling.py scripts/tests/test_repository_scaffold.py

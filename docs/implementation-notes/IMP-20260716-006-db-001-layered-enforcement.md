@@ -77,14 +77,18 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 | 파일/영역 | 변경 내용 | 이유 |
 |---|---|---|
 | plan/TASKS/이 note | 승인·In Progress·baseline 기록 | Task 0 실행 gate |
+| `scripts/supabase-cli.version.json` | 공식 Windows x64 CLI 2.109.1의 release·게시시각·asset·byte size·URL·SHA-256 exact pin | upstream 변경과 공급망 drift 차단 |
+| `scripts/bootstrap_supabase.ps1` | PS 5.1 local-only 다운로드/검증/임시 sibling 설치/정확 버전 확인/소유 경로 정리와 안정 출력 | 원격 프로젝트 동작 없이 재현 가능한 로컬 CLI 경계 |
+| `scripts/tests/test_supabase_tooling.py` | pin·인자·CWD·missing binary·잘못된 child version·동일 크기 오해시·비승인 source를 offline subprocess로 검증 | 정적 문자열 검사만으로는 놓치는 실제 PowerShell 경계 회귀 차단 |
+| `.gitignore`, `scripts/README.md`, scaffold test | Supabase 임시 경로 ignore와 local-only 사용 경계 | 산출물 커밋·원격 명령 오용 방지 |
 
 ### 데이터 흐름/상태 변화
 
-Task 0에서는 DB row/container/schema 변화가 없다. 이후 task 결과를 순차 기록한다.
+Task 0~1에서는 DB row/container/schema 변화가 없다. Task 1은 ignored `.tools/supabase/v2.109.1/`에만 설치하도록 경계를 만들었으며 실제 다운로드·설치는 Task 2 시작 때 수행한다.
 
 ### 오류·빈 상태·롤백
 
-첫 verify 도구 호출은 repo-local uv 부재로 `PREFLIGHT-UV` 종료, 두 번째 호출은 tool timeout 124, 세 번째 fresh 호출은 143.6초에 24/24 통과했다. Task 0 rollback은 이 문서 commit revert이며 ignored tool copy는 Git/data 영향이 없다.
+첫 verify 도구 호출은 repo-local uv 부재로 `PREFLIGHT-UV` 종료, 두 번째 호출은 tool timeout 124, 세 번째 fresh 호출은 143.6초에 24/24 통과했다. Task 1 검증 중 root가 1초 제한으로 시작한 첫 unittest 부모가 종료된 뒤 잠시 남아 두 번째 실행과 고정 임시 파일을 경합해 기존 secret-scanner 테스트 1개가 한 번 실패했다. 단일 테스트와 고립된 전체 재실행은 각각 통과해 구현 결함이 아닌 검증 명령 중첩으로 판정했다. Task 0~1 rollback은 관련 commits revert이며 ignored tool copy는 Git/data 영향이 없다.
 
 ## 7. 버전 전후
 
@@ -112,17 +116,25 @@ Task 0에서는 DB row/container/schema 변화가 없다. 이후 task 결과를 
 | ignored uv reconstruction | `uv 0.11.28` verified; tracked diff 0 | 1 tool | worktree `.tools/uv` |
 | second `scripts/verify.ps1` | outer tool timeout 124; no runner verdict | 124.2s | terminal |
 | third `scripts/verify.ps1` | exit 0, 24/24 stable stages | 143.6s | terminal |
+| Task 1 initial focused suite | expected RED: missing manifest/bootstrap/ignore; 후속 release-dir·argument 회귀 RED | 11 tests에서 7 expected failures | agent terminal |
+| Task 1 PowerShell argument regression | `-ArchivePath` missing value가 typed binder에서 exit 1/path stderr 노출하는 RED 재현 후 raw allowlist parser로 GREEN | focused 3/3 | commit `857e2b2` |
+| `python -B -m unittest scripts.tests.test_supabase_tooling scripts.tests.test_repository_scaffold scripts.tests.test_security_boundaries -v` | root fresh exit 0 | 28 passed, 1 Windows symlink permission skip, 48.360s | terminal |
+| `powershell ... scripts/check_secret_patterns.ps1` | exit 0, output 0 | 1 scan | terminal |
+| `git diff --check 4455ad5..HEAD` | exit 0 | whitespace error 0 | terminal |
+| independent specification review | initial P1 argument-binding disclosure found; fix 후 compliant | 2 review rounds | reviewer report |
+| independent quality/security review | APPROVED; Critical/Important 0, Minor 3 | 1 review | reviewer report |
 
 ### 미실행 검증과 이유
 
-- Supabase/Docker DB gate: Task 1/2 tooling과 migrations가 아직 없음.
+- 실제 공식 Supabase archive 성공 설치 경로: Task 2 bootstrap에서 실행 예정이며 Task 1 offline tests에서는 의도적으로 다운로드하지 않음.
+- Supabase/Docker DB gate: Task 2 config와 migrations가 아직 없음.
 - DB/API implementation tests: production/test code를 아직 변경하지 않음.
 - DeepSeek call: DB-001 범위 밖이며 key를 읽거나 전송하지 않음.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: Task 0에서 env/key/질문/DB 데이터 접근 0.
-- Security: ignored tool path만 복구; repository secret scan은 baseline gate에서 통과.
+- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 
@@ -149,25 +161,27 @@ Task 0에서는 DB row/container/schema 변화가 없다. 이후 task 결과를 
 
 ### 재현
 
-1. worktree branch가 `cf76b17`에서 분기했는지 확인한다.
+1. worktree branch가 `cf76b17`에서 분기했고 Task 1 commits `41c6dcf`, `857e2b2`가 있는지 확인한다.
 2. worktree ignored `.tools/uv/uv.exe --version`이 0.11.28인지 확인한다.
 3. `scripts/verify.ps1`에서 24/24 exit 0을 재현한다.
-4. approved plan Task 1부터 순차 실행한다.
+4. `scripts/bootstrap_supabase.ps1 -VerifyOnly`가 binary 부재 시 exact exit 2 line을 내는지 확인한다.
+5. approved plan Task 2부터 순차 실행한다.
 
 ### 롤백
 
-Task 0 commit을 revert하고 worktree를 유지한다. ignored `.tools/uv`는 필요 시 worktree 소유 경로만 검증 후 제거한다. main과 DB/data에는 rollback 대상이 없다.
+Task 1은 `857e2b2`, `41c6dcf`를 역순 revert한다. ignored `.tools/uv` 및 이후 `.tools/supabase/v2.109.1`은 각 소유 경로를 검증한 뒤에만 제거한다. main과 DB/data에는 rollback 대상이 없다.
 
 ### 다음 개발자 시작점
 
-Task 1의 failing tooling tests부터 시작하고 production bootstrap script 전에 RED를 확인한다.
+Task 2의 local config/tool runner tests부터 시작하고 config/runner 구현 전에 RED를 확인한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- Supabase CLI binary download와 공식 digest runtime verification 미실행.
+- Supabase CLI binary download와 공식 digest runtime verification 미실행; Task 2 첫 실제 증거로 수행.
+- 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
 - migration/permission/retention/concurrency test 미구현.
-- 다음 단계: Task 1 project-local CLI pin/bootstrap TDD.
+- 다음 단계: Task 2 PostgreSQL-only local config와 explicit DB gate TDD.
 
 ## 15. 자체 리뷰
 
@@ -176,3 +190,4 @@ Task 1의 failing tooling tests부터 시작하고 production bootstrap script �
 - [x] source-of-truth/계약/버전 목표 유지
 - [x] 개인정보 원문·secret 노출 없음
 - [x] INDEX 갱신
+- [x] Task 1 명세 review와 품질 review 승인
