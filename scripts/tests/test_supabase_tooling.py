@@ -1,19 +1,28 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
+from types import ModuleType
 from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[2]
 PIN_PATH = ROOT / "scripts" / "supabase-cli.version.json"
 BOOTSTRAP_PATH = ROOT / "scripts" / "bootstrap_supabase.ps1"
+CONFIG_PATH = ROOT / "supabase" / "config.toml"
+SEED_PATH = ROOT / "supabase" / "seed.sql"
+PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
+SQL_RUNNER_PATH = ROOT / "scripts" / "run_database_sql.py"
+DATABASE_RUNNER_PATH = ROOT / "scripts" / "verify_database.ps1"
 EXPECTED_PIN = {
     "version": "2.109.1",
     "release": "v2.109.1",
@@ -75,6 +84,33 @@ def run_bootstrap(
     )
 
 
+def load_module(path: Path, name: str) -> ModuleType:
+    if not path.is_file():
+        raise AssertionError(f"missing required tooling file: {path.name}")
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"cannot load tooling module: {path.name}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_python_tool(path: Path, *arguments: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    if env is not None:
+        environment.update(env)
+    return subprocess.run(
+        [str(ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"), "-B", str(path), *arguments],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+        env=environment,
+        timeout=20,
+    )
+
+
 class SupabaseToolPinTests(unittest.TestCase):
     def read_required_text(self, path: Path) -> str:
         self.assertTrue(path.is_file(), f"missing required tooling file: {path.name}")
@@ -114,6 +150,138 @@ class SupabaseToolPinTests(unittest.TestCase):
             "supabase db push",
         ):
             self.assertNotIn(forbidden_operation, lowered)
+
+
+class LocalDatabaseToolingContractTests(unittest.TestCase):
+    def test_local_config_runs_database_only_and_exposes_no_app_schema(self) -> None:
+        config = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(config["project_id"], "sejong-ai-local")
+        self.assertEqual(config["db"]["port"], 54322)
+        self.assertEqual(config["db"]["major_version"], 17)
+        self.assertFalse(config["api"]["enabled"])
+        self.assertEqual(config["api"]["schemas"], ["public", "graphql_public"])
+        self.assertEqual(config["api"]["extra_search_path"], ["public", "extensions"])
+        self.assertFalse(config["auth"]["enabled"])
+        self.assertFalse(config["realtime"]["enabled"])
+        self.assertFalse(config["storage"]["enabled"])
+        self.assertFalse(config["studio"]["enabled"])
+        self.assertFalse(config["inbucket"]["enabled"])
+        self.assertFalse(config["analytics"]["enabled"])
+        self.assertFalse(config["edge_runtime"]["enabled"])
+        self.assertFalse(config["db"]["pooler"]["enabled"])
+        self.assertFalse(config["db"]["seed"]["enabled"])
+        self.assertEqual(config["db"]["seed"]["sql_paths"], ["./seed.sql"])
+        exposed = config["api"]["schemas"] + config["api"]["extra_search_path"]
+        self.assertNotIn("app_private", exposed)
+        self.assertNotIn("app_api", exposed)
+
+    def test_seed_is_intentionally_empty_and_names_data_owners(self) -> None:
+        seed = SEED_PATH.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            seed,
+            "-- DB-001 deliberately contains no official or mock seed.\n"
+            "-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.\n"
+            "-- An empty approved-data set must keep /ready at HTTP 503.\n",
+        )
+
+    def test_env_update_preserves_every_non_target_byte(self) -> None:
+        module = load_module(PROVISION_PATH, "provision_local_database_login_test")
+        self.assertEqual(module.ROLE_NAME, "sejong_local_login")
+        self.assertEqual(module.TARGET_ENV_KEY, "DATABASE_URL")
+        original = (
+            b"# synthetic local configuration\r\n"
+            b"APP_ENV=development\r\n"
+            b"DATABASE_URL=old-local-value\r\n"
+            b"\r\n"
+            b"LLM_API_KEY=synthetic-deepseek-sentinel\r\n"
+            b"LOG_LEVEL=INFO\r\n"
+        )
+        expected = original.replace(
+            b"DATABASE_URL=old-local-value",
+            b"DATABASE_URL=postgresql://local.invalid/new-value",
+        )
+        with tempfile.TemporaryDirectory(prefix="sejong env update ") as directory:
+            env_path = Path(directory) / ".env"
+            env_path.write_bytes(original)
+
+            module.update_env_assignment(
+                env_path,
+                "DATABASE_URL",
+                "postgresql://local.invalid/new-value",
+            )
+
+            self.assertEqual(env_path.read_bytes(), expected)
+
+    def test_env_update_appends_target_without_rewriting_existing_bytes(self) -> None:
+        module = load_module(PROVISION_PATH, "provision_local_database_login_append_test")
+        original = b"# keep\nLLM_API_KEY=synthetic-deepseek-sentinel"
+        with tempfile.TemporaryDirectory(prefix="sejong env append ") as directory:
+            env_path = Path(directory) / ".env"
+            env_path.write_bytes(original)
+
+            module.update_env_assignment(env_path, "DATABASE_URL", "postgresql://local.invalid/new")
+
+            self.assertEqual(
+                env_path.read_bytes(),
+                original + b"\nDATABASE_URL=postgresql://local.invalid/new\n",
+            )
+
+    def test_provisioner_missing_admin_dsn_is_stable(self) -> None:
+        environment = os.environ.copy()
+        environment.pop("SEJONG_ADMIN_DATABASE_URL", None)
+        result = subprocess.run(
+            [
+                str(ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"),
+                "-B",
+                str(PROVISION_PATH),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+            env=environment,
+            timeout=20,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stdout.strip(),
+            "[FAIL] step=PROVISION-LOCAL-DB-LOGIN reason=missing-admin-dsn code=2",
+        )
+        self.assertFalse(result.stderr)
+
+    def test_database_sql_runner_rejects_empty_and_outside_paths(self) -> None:
+        missing_environment = {"SEJONG_ADMIN_DATABASE_URL": ""}
+        empty = run_python_tool(SQL_RUNNER_PATH, env=missing_environment)
+        outside = run_python_tool(
+            SQL_RUNNER_PATH,
+            str(ROOT / "README.md"),
+            env=missing_environment,
+        )
+
+        self.assertEqual(empty.returncode, 2)
+        self.assertEqual(
+            empty.stdout.strip(),
+            "[FAIL] step=RUN-DATABASE-SQL reason=invalid-files code=2",
+        )
+        self.assertEqual(outside.returncode, 2)
+        self.assertEqual(
+            outside.stdout.strip(),
+            "[FAIL] step=RUN-DATABASE-SQL reason=invalid-files code=2",
+        )
+        self.assertFalse(empty.stderr or outside.stderr)
+
+    def test_database_runner_has_no_remote_or_destructive_host_commands(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8").lower()
+        for forbidden in ("db push", "link", "login", "projects", "volume prune", "system prune"):
+            self.assertNotIn(forbidden, script)
+        self.assertIn("db reset", script)
+        self.assertIn("test db", script)
+        self.assertIn('"-skipstart"', script)
+        self.assertIn('"-skiprollbackreplay"', script)
 
 
 class SupabaseBootstrapBehaviorTests(unittest.TestCase):

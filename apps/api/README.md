@@ -27,6 +27,12 @@ readiness만 구현한다.
 현재 health/readiness 앱은 시작 시 환경변수·DB·provider를 읽거나 연결하지 않는다. DeepSeek는
 기본 비활성이고 승인된 local/private 합성 평가 단계 전에는 호출하지 않는다.
 
+DB-001의 Docker-backed 검증 gate는 로컬 DB reset 뒤 `sejong_local_login` password를 매번
+새로 만들거나 회전하고, 무시된 `apps/api/.env`의 `DATABASE_URL` 한 줄만 갱신한다.
+다른 줄과 provider key는 보존하며 값을 출력하지 않는다. 이 계정은 직접 table DML이
+아니라 `sejong_backend` capability만 상속한다. 현재 seed는 의도적으로 비어 있으므로 이
+준비만으로 `/ready`가 200이 되지 않으며, PM 승인 데이터 전까지 503을 유지한다.
+
 ## 로컬 명령
 
 저장소 루트에서 실행한다.

@@ -1,0 +1,3 @@
+-- DB-001 deliberately contains no official or mock seed.
+-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.
+-- An empty approved-data set must keep /ready at HTTP 503.

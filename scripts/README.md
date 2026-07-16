@@ -35,6 +35,34 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supaba
 이 CLI는 로컬 개발 도구이며 production dependency가 아니다. 스크립트는 Supabase `login`,
 `link`, `db push` 또는 다른 remote project operation을 수행하지 않는다.
 
+## 로컬 PostgreSQL gate
+
+Supabase v2.109.1이 생성한 프로젝트는 DB-001에 필요한 로컬 PostgreSQL 경로만 실행한다.
+Data API, Auth, Realtime, Storage, Studio, Inbucket, Analytics, Edge Runtime과 DB pooler는
+비활성화했다. DATA-001의 PM 승인 전까지 seed는 의도적으로 비어 있다.
+
+버전 migration과 DB 테스트가 모두 존재한 다음 Docker-backed gate를 실행한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
+```
+
+`-SkipStart`는 이미 실행 중인 disposable local stack을 재사용한다.
+`-SkipRollbackReplay`는 진단 중 compensation/replay 증명만 생략하므로 완료 gate가 아니다.
+러너는 child 출력을 숨기고, 임시 process 환경변수를 복원하며, stable phase ID만
+출력한다. container를 자동 정지하거나 Docker volume을 변경하지 않는다. DB-001
+migration, rollback, pgTAP, API DB integration test가 들어오기 전에는 실행하지 않는다.
+
+credential provisioning은 Supabase status의 admin DSN을 메모리에서만 읽고
+`sejong_local_login`을 생성하거나 password를 회전한 다음 `sejong_backend` capability만
+부여한다. 무시된 `apps/api/.env`의 `DATABASE_URL`만 갱신하고 주석·순서·다른
+provider secret은 그대로 보존한다. 이 파일은 commit하지 않는다.
+
+ordered SQL helper는 resolve 결과가 `database/` 안에 남는 명시적인 파일만 받는다.
+disposable local DB-001 compensation과 absence proof에만 사용하며 remote나 실제 데이터 DB에
+파괴적 SQL을 실행하라는 승인이 아니다.
+
 ## 보안 경계 검사
 
 ```powershell
