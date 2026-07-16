@@ -36,6 +36,7 @@ EXPECTED_PIN = {
     ),
     "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16",
 }
+CHILD_OUTPUT_SENTINEL = "postgresql://synthetic.invalid/private-question-sentinel"
 
 
 def powershell_executable() -> str:
@@ -98,6 +99,9 @@ def load_module(path: Path, name: str) -> ModuleType:
 
 def run_database_runner_with_supabase_capture(
     source: str,
+    *,
+    full_path: bool = False,
+    failure_phase: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     runtime_executable = ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"
     if not runtime_executable.is_file():
@@ -112,11 +116,76 @@ def run_database_runner_with_supabase_capture(
         for path in (scripts, fake_bin, supabase_dir, python_dir):
             path.mkdir(parents=True, exist_ok=True)
 
+        capture_path = root / "supabase-invocations.jsonl"
+        if full_path:
+            restoration_line = "        Restore-ProcessEnvironment -Saved $savedEnvironment"
+            if source.count(restoration_line) != 1:
+                raise AssertionError("runner restoration point must be unique")
+            instrumentation = restoration_line + '''
+        $adminState = if (
+            [Environment]::GetEnvironmentVariable(
+                "SEJONG_ADMIN_DATABASE_URL", "Process"
+            ) -ceq $env:SEJONG_SYNTHETIC_INITIAL_ADMIN
+        ) { "restored" } else { "changed" }
+        $backendState = if (
+            [Environment]::GetEnvironmentVariable(
+                "SEJONG_DB_TEST_URL", "Process"
+            ) -ceq $env:SEJONG_SYNTHETIC_INITIAL_BACKEND
+        ) { "restored" } else { "changed" }
+        $environmentLine = '["environment","' + $adminState + '","' + $backendState + '"]'
+        [System.IO.File]::AppendAllText(
+            $env:SEJONG_SYNTHETIC_SUPABASE_CAPTURE,
+            $environmentLine + [Environment]::NewLine,
+            [System.Text.Encoding]::UTF8
+        )
+'''
+            source = source.replace(restoration_line, instrumentation)
+
         runner = scripts / DATABASE_RUNNER_PATH.name
         runner.write_text(source, encoding="utf-8")
-        (scripts / BOOTSTRAP_PATH.name).write_text("exit 0\n", encoding="utf-8")
-        (scripts / PROVISION_PATH.name).write_text("# synthetic fixture\n", encoding="utf-8")
-        (scripts / SQL_RUNNER_PATH.name).write_text("# synthetic fixture\n", encoding="utf-8")
+        bootstrap_source = "exit 0\n"
+        provision_source = "# synthetic fixture\n"
+        sql_runner_source = "# synthetic fixture\n"
+        if full_path:
+            bootstrap_source = (
+                f'[Console]::Out.WriteLine("{CHILD_OUTPUT_SENTINEL}")\n'
+                f'[Console]::Error.WriteLine("{CHILD_OUTPUT_SENTINEL}")\n'
+                "exit 0\n"
+            )
+            provision_source = f'''
+import json
+import os
+import sys
+from pathlib import Path
+
+capture = Path(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"])
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(["provision"]) + "\\n")
+environment_path = Path.cwd() / "apps" / "api" / ".env"
+environment_path.parent.mkdir(parents=True, exist_ok=True)
+environment_path.write_text(
+    "DATABASE_URL=postgresql://synthetic.invalid/backend\\n", encoding="utf-8"
+)
+print({CHILD_OUTPUT_SENTINEL!r})
+print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
+raise SystemExit(0)
+'''
+            sql_runner_source = f'''
+import json
+import os
+import sys
+from pathlib import Path
+
+event = ["sql", *(Path(value).name for value in sys.argv[1:])]
+with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps(event) + "\\n")
+print({CHILD_OUTPUT_SENTINEL!r})
+print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
+raise SystemExit(0)
+'''
+        (scripts / BOOTSTRAP_PATH.name).write_text(bootstrap_source, encoding="utf-8")
+        (scripts / PROVISION_PATH.name).write_text(provision_source, encoding="utf-8")
+        (scripts / SQL_RUNNER_PATH.name).write_text(sql_runner_source, encoding="utf-8")
 
         for destination in (
             fake_bin / "docker.exe",
@@ -125,9 +194,16 @@ def run_database_runner_with_supabase_capture(
         ):
             shutil.copy2(runtime_executable, destination)
 
-        (root / "version").write_text("raise SystemExit(0)\n", encoding="utf-8")
-        capture_path = root / "supabase-invocations.jsonl"
-        capture_program = '''
+        version_source = "raise SystemExit(0)\n"
+        if full_path:
+            version_source = f'''
+import sys
+print({CHILD_OUTPUT_SENTINEL!r})
+print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
+raise SystemExit(0)
+'''
+        (root / "version").write_text(version_source, encoding="utf-8")
+        capture_program = f'''
 import json
 import os
 import sys
@@ -136,14 +212,48 @@ from pathlib import Path
 invocation = [Path(sys.argv[0]).name, *sys.argv[1:]]
 with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps(invocation) + "\\n")
+if os.environ.get("SEJONG_SYNTHETIC_FULL_PATH") == "1":
+    print({CHILD_OUTPUT_SENTINEL!r})
+    print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
 if invocation in (["db", "start"], ["start"]):
     raise SystemExit(0)
 if invocation == ["db", "reset", "--local"]:
-    raise SystemExit(7)
+    raise SystemExit(0 if os.environ.get("SEJONG_SYNTHETIC_FULL_PATH") == "1" else 7)
+if invocation == ["status", "-o", "env"]:
+    print('DB_URL="postgresql://synthetic.invalid/admin"')
+    raise SystemExit(0)
+if invocation == ["test", "db"]:
+    if os.environ.get("SEJONG_SYNTHETIC_FAILURE_PHASE") == "pgtap-one":
+        raise SystemExit(17)
+    raise SystemExit(0)
 raise SystemExit(9)
 '''
-        for command in ("db", "start"):
+        commands = ("db", "start", "status", "test") if full_path else ("db", "start")
+        for command in commands:
             (root / command).write_text(capture_program, encoding="utf-8")
+
+        if full_path:
+            pytest_package = root / "pytest"
+            pytest_package.mkdir()
+            (pytest_package / "__init__.py").write_text("", encoding="utf-8")
+            (pytest_package / "__main__.py").write_text(
+                f'''
+import json
+import os
+import sys
+from pathlib import Path
+
+event = ["pytest", Path(sys.argv[-1]).name]
+with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps(event) + "\\n")
+print({CHILD_OUTPUT_SENTINEL!r})
+print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
+if os.environ.get("SEJONG_SYNTHETIC_FAILURE_PHASE") == "integration":
+    raise SystemExit(19)
+raise SystemExit(0)
+''',
+                encoding="utf-8",
+            )
 
         environment = {
             key: os.environ[key]
@@ -152,6 +262,17 @@ raise SystemExit(9)
         }
         environment["PATH"] = str(fake_bin)
         environment["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"] = str(capture_path)
+        if full_path:
+            environment["SEJONG_SYNTHETIC_FULL_PATH"] = "1"
+            environment["SEJONG_SYNTHETIC_FAILURE_PHASE"] = failure_phase or ""
+            environment["SEJONG_SYNTHETIC_INITIAL_ADMIN"] = "initial-admin-sentinel"
+            environment["SEJONG_SYNTHETIC_INITIAL_BACKEND"] = "initial-backend-sentinel"
+            environment["SEJONG_ADMIN_DATABASE_URL"] = environment[
+                "SEJONG_SYNTHETIC_INITIAL_ADMIN"
+            ]
+            environment["SEJONG_DB_TEST_URL"] = environment[
+                "SEJONG_SYNTHETIC_INITIAL_BACKEND"
+            ]
         result = subprocess.run(
             [
                 powershell_executable(),
@@ -507,12 +628,123 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertEqual(
             rollback_paths,
             [
-                "20260716000400_indexes_and_read_interfaces.rollback.sql",
+                "20260717000600_deferred_active_question_trigger_security.rollback.sql",
+                "20260716000500_indexes_and_read_interfaces.rollback.sql",
+                "20260716000400_candidate_workflow.rollback.sql",
                 "20260716000300_capabilities_and_functions.rollback.sql",
                 "20260716000200_invariants_and_lineage.rollback.sql",
                 "20260716000100_private_schema.rollback.sql",
             ],
         )
+
+    def test_database_runner_full_path_orders_replay_and_restores_environment(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            full_path=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.stderr)
+        self.assertFalse(CHILD_OUTPUT_SENTINEL in result.stdout)
+        self.assertEqual(
+            invocations,
+            [
+                ["db", "start"],
+                ["db", "reset", "--local"],
+                ["status", "-o", "env"],
+                ["provision"],
+                ["test", "db"],
+                [
+                    "sql",
+                    "20260717000600_deferred_active_question_trigger_security.rollback.sql",
+                    "20260716000500_indexes_and_read_interfaces.rollback.sql",
+                    "20260716000400_candidate_workflow.rollback.sql",
+                    "20260716000300_capabilities_and_functions.rollback.sql",
+                    "20260716000200_invariants_and_lineage.rollback.sql",
+                    "20260716000100_private_schema.rollback.sql",
+                ],
+                ["sql", "verify_db001_absent.sql"],
+                ["db", "reset", "--local"],
+                ["provision"],
+                ["test", "db"],
+                ["pytest", "test_integration.py"],
+                ["environment", "restored", "restored"],
+            ],
+        )
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "[START] step=PREFLIGHT-DOCKER",
+                "[PASS] step=PREFLIGHT-DOCKER",
+                "[START] step=VERIFY-SUPABASE-VERSION",
+                "[PASS] step=VERIFY-SUPABASE-VERSION",
+                "[START] step=START-LOCAL-DATABASE",
+                "[PASS] step=START-LOCAL-DATABASE",
+                "[START] step=RESET-DATABASE-ONE",
+                "[PASS] step=RESET-DATABASE-ONE",
+                "[START] step=PROVISION-LOCAL-DB-LOGIN-ONE",
+                "[PASS] step=PROVISION-LOCAL-DB-LOGIN-ONE",
+                "[START] step=TEST-PGTAP-ONE",
+                "[PASS] step=TEST-PGTAP-ONE",
+                "[START] step=ROLLBACK-DB001",
+                "[PASS] step=ROLLBACK-DB001",
+                "[START] step=VERIFY-DB001-ABSENT",
+                "[PASS] step=VERIFY-DB001-ABSENT",
+                "[START] step=RESET-DATABASE-TWO",
+                "[PASS] step=RESET-DATABASE-TWO",
+                "[START] step=PROVISION-LOCAL-DB-LOGIN-TWO",
+                "[PASS] step=PROVISION-LOCAL-DB-LOGIN-TWO",
+                "[START] step=TEST-PGTAP-TWO",
+                "[PASS] step=TEST-PGTAP-TWO",
+                "[START] step=TEST-DATABASE-INTEGRATION",
+                "[PASS] step=TEST-DATABASE-INTEGRATION",
+            ],
+        )
+
+    def test_database_runner_propagates_pgtap_failure_and_restores_environment(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            full_path=True,
+            failure_phase="pgtap-one",
+        )
+
+        self.assertEqual(result.returncode, 17)
+        self.assertFalse(result.stderr)
+        self.assertFalse(CHILD_OUTPUT_SENTINEL in result.stdout)
+        self.assertEqual(invocations[-1], ["environment", "restored", "restored"])
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=TEST-PGTAP-ONE reason=child code=17",
+        )
+
+    def test_database_runner_propagates_integration_failure_without_child_output(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            full_path=True,
+            failure_phase="integration",
+        )
+
+        self.assertEqual(result.returncode, 19)
+        self.assertFalse(result.stderr)
+        self.assertFalse(CHILD_OUTPUT_SENTINEL in result.stdout)
+        self.assertEqual(invocations[-2], ["pytest", "test_integration.py"])
+        self.assertEqual(invocations[-1], ["environment", "restored", "restored"])
+        self.assertEqual(
+            result.stdout.splitlines()[-1],
+            "[FAIL] step=TEST-DATABASE-INTEGRATION reason=child code=19",
+        )
+
+    def test_database_runner_source_never_names_external_llm_key(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        forbidden_name = "LLM" + "_" + "API" + "_" + "KEY"
+
+        self.assertNotIn(forbidden_name, script)
 
 
 class SupabaseBootstrapBehaviorTests(unittest.TestCase):
