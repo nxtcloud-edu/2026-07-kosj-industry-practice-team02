@@ -5,7 +5,7 @@
 ### 민원 운영자
 
 - 실패 질문 확인
-- 자동 폴백 사유 검토·정정
+- backend-only 사유 확인 capability로 자동 폴백 사유 검토·정정
 - KB 후보 적격성 확인
 - KB 후보 작성
 - 승인 요청
@@ -30,6 +30,16 @@ MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할
 
 모호한 질문은 FOLLOWUP이며 후보 전환 대상이 아니다.
 
+### 사유 확인 불변조건
+
+- 새 실패 행은 `NEW`이며 최초에는 부모 `interaction_events`의 intent와 자동 fallback reason이 일치한다.
+- `interaction_events.fallback_reason`은 최초 자동 분류 기록이므로 수정하지 않는다.
+- OPERATOR만 별도 backend capability로 `NEW → REASON_CONFIRMED`를 수행할 수 있다.
+- 확인값은 `INSUFFICIENT_GROUNDING`, `PERSONAL_LOOKUP`, `LEGAL_JUDGMENT` 중 하나이며 `failed_questions.fallback_reason`에만 저장한다.
+- 확인 시 `candidate_eligible = (fallback_reason = INSUFFICIENT_GROUNDING)`을 다시 계산한다.
+- 후보 작성은 `REASON_CONFIRMED`, `INSUFFICIENT_GROUNDING`, `candidate_eligible=true`를 모두 만족한 행에서만 가능하다.
+- 동시 확인에서는 한 transaction만 성공하고 나머지는 잘못된 상태로 거부한다.
+
 ## 3. 상태 머신
 
 ```text
@@ -53,6 +63,7 @@ NEW
 6. 최종 확인일이 입력됐다.
 7. 수수료·기간 등 변경 가능한 정보의 기준일과 주의사항이 명확하다.
 8. 작성자와 승인자가 다르다.
+9. 승인과 반려 모두 비어 있지 않은 `review_comment`가 있다.
 
 ## 5. AI의 역할
 
@@ -88,10 +99,27 @@ created_at
 - KB 답변 전체 스냅샷
 - 개인정보
 
+사유 확인 감사 row는 다음 metadata만 사용한다.
+
+```text
+action = FAILED_QUESTION_REASON_CONFIRMED
+target_type = FAILED_QUESTION
+old_status = NEW
+new_status = REASON_CONFIRMED
+changed_field_names = 실제 변경된 status/fallback_reason/candidate_eligible 필드명
+```
+
+최초 자동 사유나 질문 본문을 snapshot으로 복사하지 않는다. 후보 감사 action은 기존
+`CANDIDATE_CREATED`, `CANDIDATE_SUBMITTED`, `CANDIDATE_APPROVED`,
+`CANDIDATE_REJECTED`를 유지한다.
+
 ## 7. 승인 API 검증
 
 - 운영자 역할의 승인 요청은 403 반환
+- OPERATOR 외 역할의 사유 확인·정정은 403 반환
+- 이미 확인됐거나 잘못된 상태의 사유 확인은 409 반환
 - 작성자와 actor_id가 동일한 승인 요청은 409 또는 403 반환
 - 출처·확인일 누락 시 422 반환
+- 승인과 반려 모두 공백이 아닌 `review_comment`를 요구
 - APPROVED 후보만 ACTIVE KB 생성
 - REJECTED 후보는 검색 대상 제외

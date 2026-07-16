@@ -1,16 +1,16 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Approved by user for implementation planning on 2026-07-16; execution pending plan approval
+- Status: Approved; execution in progress, Tasks 0~5 complete
 - Date: 2026-07-16 (KST)
-- Approved approach: Q-DB-002=A on 2026-07-16
-- Related: D-025, ADR-0003/0004/0007/0008/0011, TASK DB-001
+- Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16
+- Related: D-025/D-026/D-027, ADR-0003/0004/0007/0008/0011, TASK DB-001
 - Discovery evidence: `docs/discovery/DB_001_DISCOVERY_REPORT.md`
 
 ## 1. Goal
 
 Create the first executable, locally reproducible Supabase/PostgreSQL schema for the Sejong civil-service AI MVP. Privacy, approval, ACTIVE-only retrieval, provenance, retention, and audit rules must be enforced in both PostgreSQL and the FastAPI service.
 
-This design converts the current logical draft into a migration-ready boundary. It does not yet install the CLI, pull images, start containers, write migrations, or seed data.
+This design converts the logical draft into an executable boundary. Tasks 0~5 have installed the pinned local tooling and implemented migrations `00100~00300`; no official/mock seed exists and `/ready=503` remains correct. The remaining workflow/read/repository work follows this refined approved design.
 
 ## 2. Scope
 
@@ -79,6 +79,8 @@ Base tables have RLS enabled and forced. The only permissive policy is for the N
 
 The generated local login is credential provisioning, not schema lineage. A bootstrap script creates or rotates it after reset using a random password and writes only the final connection URL to an ignored local env file. Tracked migration and documentation contain no password.
 
+The migration executor remains the PostgreSQL 17 non-superuser runner. Role creation specifies all safe attributes. On replay it reasserts only `NOLOGIN`, `NOCREATEDB`, and `NOCREATEROLE`, which that runner may apply, then verifies `NOSUPERUSER`, `NOREPLICATION`, `NOBYPASSRLS`, role settings, and effective memberships in catalogs. Any unsafe pre-existing role fails closed. No privileged auto-downgrade or privileged bootstrap is added.
+
 ## 5. Logical model hardening
 
 The eight current tables remain. Their physical location changes from implicit `public` to `app_private`.
@@ -119,7 +121,9 @@ There is no implicit official default. Test fixtures explicitly use MOCK.
 - `used_source_ids` is a JSON array of unique non-empty public IDs.
 - `source_count` equals the array length. SUCCESS source IDs must resolve to ACTIVE+OFFICIAL KB at write time.
 - `selected_region`, when present, is one of the three supported regions.
-- A failed row can only reference a FALLBACK event with identical intent and fallback reason.
+- On initial insertion, a `NEW` failed row can only reference a FALLBACK event and must match that event's intent and fallback reason.
+- The event intent/reason is the immutable initial automated classification.
+- On OPERATOR confirmation, only `failed_questions.fallback_reason`, `candidate_eligible`, and status may change. The parent event is not rewritten, preserving request-id replay semantics.
 - SUCCESS and FOLLOWUP cannot have a fallback reason or failed row.
 - OUT_OF_SCOPE records metadata only and rejects any masked text.
 - INSUFFICIENT_GROUNDING creates a candidate-eligible row only when a safe masked question is supplied.
@@ -130,9 +134,9 @@ There is no implicit official default. Test fixtures explicitly use MOCK.
 ### 5.5 Candidate and audit state
 
 - `failed_questions.status` and `kb_candidates.review_status` keep the existing enum but gain table-specific allowed-state checks.
-- A candidate can only reference an eligible INSUFFICIENT_GROUNDING failure.
+- A candidate can only reference a `REASON_CONFIRMED`, eligible INSUFFICIENT_GROUNDING failure.
 - Candidate source, department, verified date, generalized representative question, and answer fields must be non-empty before submission.
-- `audit_logs` accepts an allowlisted action, target type, old/new status, changed field names, and optional review comment.
+- `audit_logs` accepts allowlisted candidate actions plus `FAILED_QUESTION_REASON_CONFIRMED`; target types include `KB_CANDIDATE` and `FAILED_QUESTION`. Reason confirmation records `NEW → REASON_CONFIRMED` and only actual changed field names from `status`, `fallback_reason`, and `candidate_eligible`.
 - Audit INSERT is available only inside approved state-transition functions. UPDATE and DELETE are unavailable to the backend role.
 - Audit rows do not contain question or answer snapshots.
 
@@ -143,13 +147,23 @@ There is no implicit official default. Test fixtures explicitly use MOCK.
 | `app_api.list_active_kb` | Return ACTIVE+OFFICIAL KB records and question examples for an allowed intent | Read-only closed row set |
 | `app_api.list_offices` | Return OFFICIAL office cards for region and intent | Read-only closed row set |
 | `app_api.record_interaction` | Insert metadata event and, only when permitted, a masked failure row | One event and zero/one failure |
+| `app_api.confirm_failed_question_reason` | OPERATOR confirms/corrects one NEW failure reason while preserving the event classification | Failure transition, re-derived eligibility, one metadata audit row |
 | `app_api.create_kb_candidate` | Create DRAFTED candidate from eligible failure | One candidate and audit row |
 | `app_api.submit_kb_candidate` | Validate completeness and move to PENDING_APPROVAL | Candidate transition and audit row |
-| `app_api.approve_kb_candidate` | Lock candidate, enforce different APPROVER, create ACTIVE KB/question example, link candidate | Exactly one KB, link, transition, audit row |
+| `app_api.approve_kb_candidate` | Lock candidate, enforce different APPROVER and required review comment, create ACTIVE KB/question example, link candidate | Exactly one KB, link, transition, audit row |
 | `app_api.reject_kb_candidate` | Lock candidate, require different APPROVER and comment, move to REJECTED | Transition and audit row |
 | `app_api.purge_expired_failed_question_text` | Purge expired text at DB current time | Count and IDs only, idempotent |
 
 The backend never sends client-provided role headers directly to these interfaces. It resolves the local/private demo actor first. DB functions then repeat structural checks such as `actor_role = APPROVER` and `actor_id <> created_by`.
+
+The refined exact internal signatures are:
+
+```sql
+app_api.confirm_failed_question_reason(uuid, text, text, text) RETURNS void
+app_api.approve_kb_candidate(uuid, text, text, text) RETURNS text
+```
+
+The four confirmation arguments are failure ID, actor ID, actor role, and confirmed fallback reason. The fourth approval argument is the required trimmed review comment. Existing OpenAPI already exposes the reason PATCH and requires `review_comment` for both review decisions, so this is not a public wire change.
 
 Internal test code can call a private cutoff-parameterized purge helper inside a transaction. The backend-callable purge interface accepts no time argument, preventing a caller from advancing the cutoff.
 
@@ -170,16 +184,24 @@ Internal test code can call a private cutoff-parameterized purge helper inside a
 4. It inserts a failure only for an allowed FALLBACK with retained safe masked text.
 5. Any failure rolls back both inserts; exception data contains no question text.
 
-### 7.3 Candidate approval
+### 7.3 Failure reason confirmation
+
+1. Function requires OPERATOR, locks the failed row, and requires `NEW`.
+2. It validates one stored failure reason, leaves the parent event untouched, and updates only the failure reason, re-derived eligibility, and status `REASON_CONFIRMED`.
+3. It inserts one `FAILED_QUESTION_REASON_CONFIRMED`/`FAILED_QUESTION` metadata audit row with actual changed field names.
+4. Concurrent confirmation serializes on the failed row; one succeeds and later attempts return `P1003` without another audit row.
+5. Candidate creation locks the same failure and requires confirmed INSUFFICIENT_GROUNDING eligibility.
+
+### 7.4 Candidate approval
 
 1. Function locks the candidate with `FOR UPDATE`.
 2. It verifies PENDING_APPROVAL, APPROVER role, different actor, complete official source data, and allowed provenance.
 3. It creates one ACTIVE KB and one generalized initial question example.
 4. It updates the candidate with APPROVED, reviewer, timestamp, and activated KB ID.
-5. It appends an audit row in the same transaction.
+5. It stores the required trimmed review comment on the candidate and appends it as metadata in the audit row in the same transaction.
 6. Duplicate/concurrent approval sees the terminal state and creates nothing else.
 
-### 7.4 Retention and restore
+### 7.5 Retention and restore
 
 1. The public maintenance wrapper uses DB current time.
 2. It updates only expired, non-null `masked_question` fields and sets `text_purged_at`.
@@ -213,12 +235,15 @@ The implementation plan will use these responsibilities:
 - `supabase/migrations/*_private_schema.sql`
 - `supabase/migrations/*_invariants_and_lineage.sql`
 - `supabase/migrations/*_capabilities_and_functions.sql`
+- `supabase/migrations/*_candidate_workflow.sql`
 - `supabase/migrations/*_indexes_and_read_interfaces.sql`
-- `database/rollbacks/`: reverse-order compensation SQL for the same four stages
+- `database/rollbacks/`: reverse-order compensation SQL for the same five stages
 - `supabase/tests/database/`: pgTAP/catalog tests with synthetic data only
 - `scripts/verify_database.ps1`: explicit Docker-required reset/test/rollback/replay gate
 
 Migration filenames use Supabase timestamp order. Timestamp lineage is not a semantic version. When the executable baseline and tests pass, `database_schema` moves from `0.2.0-draft` to `0.3.0-local`.
+
+Applied and committed migrations `20260716000100` through `20260716000300` are immutable. Candidate workflow/audit refinement is `20260716000400_candidate_workflow.sql`; citizen indexes/read interfaces shift to `20260716000500_indexes_and_read_interfaces.sql`.
 
 The bootstrap script rechecks official release metadata during implementation. It fails closed if the exact asset digest cannot be verified. It does not use global install, floating latest, or npm lifecycle scripts. CLI/status output that may contain local credentials is suppressed or reduced to non-secret health state.
 
@@ -226,7 +251,7 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 - Applied migration files are immutable; corrections use new forward migrations.
 - Initial compensation is allowed only against the disposable local DB.
-- Rollback runs in reverse: read interfaces/indexes → capabilities/functions/roles → invariants/triggers → private tables/types.
+- Rollback runs in reverse: `00500` read interfaces/indexes → `00400` candidate workflow/audit → `00300` capabilities/functions/roles → `00200` invariants/triggers → `00100` private tables/types.
 - The verification gate confirms objects and privileges are removed, then performs a fresh reset/replay and reruns tests.
 - No wrapper executes remote push, volume prune, or destructive real-data commands.
 - Future non-reproducible data requires a gitignored dump before destructive change. Restore must run retention purge before readiness.
@@ -244,10 +269,14 @@ The bootstrap script rechecks official release metadata during implementation. I
 - `PUBLIC`, `anon`, `authenticated`, and `sejong_backend` direct base-table CRUD all fail
 - backend capability role can execute only allowlisted `app_api` interfaces
 - SECURITY DEFINER functions have fixed search paths and no PUBLIC execute
+- role replay reasserts runner-permitted attributes and fails closed on unsafe elevated attributes, memberships, or settings
 
 ### State and concurrency
 
 - self approval, OPERATOR approval, incomplete candidate, wrong state, and cross-origin activation fail
+- only OPERATOR can confirm one NEW failure; concurrent duplicate confirmation yields one transition/audit and one `P1003`
+- confirmation preserves event reason, updates only failure reason/eligibility/status, and candidate creation requires confirmed IG eligibility
+- approval and rejection both require a non-empty review comment
 - two concurrent approvals produce one ACTIVE KB, one activated link, and one approval audit row
 - rejected, retired, pending, draft, and mock KB never appear in citizen reads
 
@@ -276,7 +305,7 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 ## 12. Version impact
 
-This design-only commit changes documentation from `2.3.11` to `2.3.12`. Application, API, shared contract, DB, data, prompt, and test versions stay unchanged.
+The Q-SEC-002/Q-WF-001 refinement changes documentation from `2.3.13` to `2.3.14`. Application, API, shared contract, DB, data, prompt, and test versions stay unchanged.
 
 The later approved implementation is expected to change:
 
@@ -289,4 +318,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The user approved this written specification on 2026-07-16. The task-by-task TDD plan is `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md`. Migration SQL, CLI download, image pull, container start, and DB mutation begin only after the user separately approves that execution plan.
+The user approved this written specification and execution plan on 2026-07-16. Tasks 0~5 are complete. Q-SEC-002=A accepts the existing Task 5 fail-closed role model, and Q-WF-001=A unblocks Task 6. Task 6 must begin with RED tests for the new `00400` workflow migration; no additional human blocker remains.

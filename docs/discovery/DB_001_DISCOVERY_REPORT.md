@@ -116,3 +116,7 @@ Q-DB-002. 승인·보관·권한 불변조건을 DB와 백엔드 중 어디까�
 ## 9. 이번 감사의 변경·비변경
 
 발견 문서·레지스터·백로그·상태 문서만 갱신한다. 제품 코드, 공개 계약, 논리 SQL, migration, DB, seed, env, key, container, image, 외부 서비스는 변경하거나 실행하지 않는다.
+
+## 10. 현재 상태 추가 기록 — 2026-07-16 KST
+
+1~9절은 기준 commit `2a4e26b` 당시의 역사적 발견 증거로 보존한다. 이후 사용자는 DB-001 실행계획과 Q-SEC-002=A/Q-WF-001=A를 승인했고, Tasks 0~5에서 pinned local CLI와 migration `00100`~`00300`을 구현·검증했다. 현재 migration은 3/5이며 기존 172/172 pgTAP 검증 결과는 구현 노트 008에 기록돼 있다. 적용된 세 migration은 수정하지 않고 Task 6은 새 `00400` workflow migration, Task 7은 `00500` read/index migration으로 진행한다. 공식/mock seed는 여전히 0이고 `/ready=503` 경계는 유지된다.

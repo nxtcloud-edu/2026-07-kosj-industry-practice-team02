@@ -23,7 +23,8 @@
 - PowerShell 5.1-compatible 24-stage local verification gate with exact runtime preflight, frozen/default and warm-offline modes, fail-fast exit preservation, scoped synthetic Web secret checks, and metadata-only diagnostics
 - DB-001 executable-schema discovery report covering migration lineage, atomic approval, retention, ACTIVE-only access, provenance, permissions, rollback, and database test gaps
 - ADR-0011 and a written DB-001 design for private schemas, capability functions, atomic approval, retention, and layered DB/backend enforcement
-- User-approved DB-001 written specification and an execution-gated TDD plan covering pinned local tooling, four migrations/compensations, pgTAP, lazy FastAPI DB boundaries, concurrency, and rollback/replay
+- User-approved DB-001 written specification and an execution-gated TDD plan covering pinned local tooling, five migrations/compensations, pgTAP, lazy FastAPI DB boundaries, concurrency, and rollback/replay
+- D-026/D-027 refinements for fail-closed non-superuser role verification, separate failed-question reason confirmation, immutable event classification, candidate gating, and required approval comments
 
 ### Changed
 
@@ -49,9 +50,10 @@
 - Updated the database environment record after verifying the local Docker engine, while keeping Supabase CLI installation and migration execution behind written DB design review
 - Resolved Q-DB-002 as layered database-and-backend enforcement while keeping remote/public execution deferred
 - Approved the DB-001 written specification for planning; migration, Docker, CLI download, and DB mutation remain deferred until the new plan is explicitly approved
+- Approved the DB-001 execution plan and completed Tasks 0~5; applied migrations `00100`~`00300` remain immutable, workflow moves to `00400`, and citizen reads move to `00500`
 
 ### Pending
 
 - Official KB and office data
 - Deployment accounts and URLs
-- DB-001 implementation plan approval
+- DB-001 Tasks 6~10 implementation and final verification

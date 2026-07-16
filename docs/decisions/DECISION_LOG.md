@@ -26,6 +26,8 @@
 | D-022 | 2026-07-14 | 대화 기억 방식은 화면 기록·문맥 전달·서버 저장을 구분해 설명받은 뒤 결정 | Superseded by D-024 | Q-CHAT-001 | 사용자 |
 | D-023 | 2026-07-14 | DeepSeek는 정확히 `deepseek-v4-flash`, thinking off, max output 1024, 동시성 1, 요청당 재시도 최대 1회, run당 외부 전송 시도 총 30회로 제한 | Confirmed for local/private synthetic evaluation; no top-up, cap/장애 시 template 또는 정책 폴백 | Q-LLM-004, ADR-0005 | 사용자 |
 | D-024 | 2026-07-14 | 화면 대화는 현재 탭 메모리에만 두고 서버 세션·raw transcript를 저장하지 않으며 15분 서명형 client-carried context token을 사용 | Confirmed; API 2.0.0-draft breaking change, token is not auth and contains no free text/PII/official facts | Q-CHAT-001, ADR-0010 | 사용자 |
-| D-025 | 2026-07-16 | 승인·보관·ACTIVE 공식 검색·권한 규칙은 DB function/trigger/RLS/GRANT와 백엔드 검증에서 이중 강제 | Confirmed; written spec approved, implementation plan approval pending; remote/public scope unchanged | Q-DB-002, ADR-0011, DB-001 plan | 사용자 |
+| D-025 | 2026-07-16 | 승인·보관·ACTIVE 공식 검색·권한 규칙은 DB function/trigger/RLS/GRANT와 백엔드 검증에서 이중 강제 | Confirmed; written spec and execution plan approved, implementation in progress; remote/public scope unchanged | Q-DB-002, ADR-0011, DB-001 plan | 사용자 |
+| D-026 | 2026-07-16 | PostgreSQL 17 non-superuser migration runner를 유지하고 role replay는 허용된 속성만 재적용한 뒤 위험 속성·membership·setting을 catalog 검증해 fail closed | Confirmed; no privileged auto-downgrade/bootstrap; Task 5 accepted | Q-SEC-002, ADR-0011, IMP-20260716-009 | 사용자 |
+| D-027 | 2026-07-16 | 별도 backend-only 사유 확인 capability로 `NEW → REASON_CONFIRMED`를 원자 처리하고 event의 최초 자동 사유는 불변, failure 사유·적격성만 정정; 후보는 확인 완료 IG만 허용하며 승인 comment도 필수 | Confirmed; internal DB/repository refinement, existing OpenAPI wire unchanged; Task 6 unblocked | Q-WF-001, ADR-0011, IMP-20260716-009 | 사용자 |
 
 새 결정은 기존 값을 덮어쓰지 않고 새 행과 ADR/노트 링크를 추가한다.

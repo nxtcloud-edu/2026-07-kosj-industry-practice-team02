@@ -3,17 +3,17 @@
 - Date/Time (KST): 2026-07-16T22:42:19+09:00
 - Task ID: DB-001-T5
 - Type: implementation/status
-- Status: Awaiting Human Decision
+- Status: Done — Q-SEC-002=A accepted Task 5; Q-WF-001=A unblocked Task 6
 - Author/Agent: Codex `/root` coordinator, Task 5 구현·검토 agents, 문서 closeout agent
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: Task 5 `67a40df`; 문서 closeout `264772d`
-- Related plan/ADR/RFP: `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md`, ADR-0011, D-018/D-025, RFP F-11/F-12/F-13, `.superpowers/sdd/task-5-brief.md`, `.superpowers/sdd/task-5-report.md`
+- Related plan/ADR/RFP: `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md`, ADR-0011, D-018/D-025/D-026/D-027, RFP F-11/F-12/F-13, `.superpowers/sdd/task-5-brief.md`, `.superpowers/sdd/task-5-report.md`
 
 ## 1. 사용자 요청과 완료 기준
 
 ### 요청
 
-사용자는 승인된 DB-001 계획을 계속 구현하고, 독립적인 작업은 agent로 병렬 처리해 빠르게 진행하라고 요청했다. 이 기록은 Task 5의 역할·forced RLS·interaction 기록·30일 text retention 구현과 검증 결과를 동기화하되, 새로 확인된 인간 보안 결정 `Q-SEC-002` 전에는 Task 5를 완료로 선언하지 않는다.
+사용자는 승인된 DB-001 계획을 계속 구현하고, 독립적인 작업은 agent로 병렬 처리해 빠르게 진행하라고 요청했다. 이 기록은 Task 5의 역할·forced RLS·interaction 기록·30일 text retention 구현과 검증 결과를 남겼고, 이후 Q-SEC-002=A가 현재 fail-closed model을 승인해 Task 5가 완료됐다. Q-WF-001=A도 Task 6의 별도 사유 확인 capability를 승인했다.
 
 ### Acceptance Criteria
 
@@ -48,8 +48,8 @@
 
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
-| Q-SEC-002 | A/Blocker — Human | non-superuser migration runner에서 위험 role 속성을 fail-closed 검증할지, privileged runner를 도입해 자동 downgrade할지 | 답 없음. 현재 구현은 최소권한 local-first에 맞춘 fail-closed 검증이며 Task 5 Step 3의 문자 그대로인 acceptance는 보류 | role bootstrap, migration replay, 배포 권한, 운영 복구, 보안 위협모델 |
-| Q-WF-001 | A/Blocker — Human | `failed_questions.NEW → REASON_CONFIRMED`를 수행할 내부 capability를 추가할지, candidate 생성과 결합하거나 상태/공개 계약을 바꿀지 | 답 없음. 독립 `confirm_failed_question_reason` capability가 현재 추천안이나 인간 승인 전 구현 금지 | Task 6 DB 함수, backend repository, 관리자 API 계약, 상태 머신·감사 이력 |
+| Q-SEC-002 | Resolved — Human | fail-closed non-superuser runner와 privileged auto-downgrade 중 선택 | A: 현재 model 유지, unsafe role 중단 / D-026 | Task 5 acceptance 완료 |
+| Q-WF-001 | Resolved — Human | `NEW → REASON_CONFIRMED` capability 경계 | A: 별도 backend-only capability / D-027 | Task 6 구현 가능 |
 | DB-T5-RC | Operational | Task 4 invariant-bearing write isolation | 기존 승인 계약인 `READ COMMITTED`; 다른 격리수준은 fail closed | `record_interaction`과 후속 repository |
 | DB-T5-DATA | Safety | test/probe 데이터 성격 | synthetic fixture만 사용하고 종료 후 0 rows | 공식/mock lineage와 privacy |
 
@@ -62,7 +62,7 @@
 - `record_interaction`은 caller 입력을 enum cast/native constraint 전에 `P1010 / INVALID_INTERACTION`으로 검증하고, 이미 commit된 `request_id` replay를 현재 source/office provenance 조회보다 먼저 판정한다.
 - 새 요청은 source→office 순서로 잠그고 `INSERT ... ON CONFLICT DO NOTHING RETURNING` 뒤 re-read해 동시 최초 요청도 하나의 event로 수렴시켰다.
 - retention은 private exact-cutoff helper와 caller time을 받지 않는 public wrapper로 나눴고, text만 NULL 처리하며 행과 FK를 보존했다.
-- role replay의 위험 속성은 현재 runner 권한 안에서 자동 변경하지 않고 검증 실패로 중단한다. 이 선택의 제품 acceptance는 `Q-SEC-002` 답변 전 보류한다.
+- role replay의 위험 속성은 현재 runner 권한 안에서 자동 변경하지 않고 검증 실패로 중단한다. Q-SEC-002=A가 이 최소권한 선택을 승인했다.
 
 ### 이유
 
@@ -74,8 +74,8 @@
 - replay 때 ACTIVE/OFFICIAL source와 office를 다시 검증: 과거 동일 요청의 결과가 현재 데이터 변경에 따라 달라지는 review 재현 실패로 제외.
 - replay 때 `masked_question` 비교 또는 복원: retention 후 replay가 text를 되살릴 수 있어 제외.
 - public purge에 caller cutoff 노출: 보관 기간 우회가 가능해 제외.
-- non-superuser runner에서 불가능한 `ALTER ROLE ... NOSUPERUSER/NOREPLICATION/NOBYPASSRLS`를 실행했다고 가장: 실제 PostgreSQL 권한과 다르므로 제외. privileged auto-downgrade는 `Q-SEC-002` 승인 전 선택하지 않음.
-- Task 6 reason confirmation을 임의 구현: 공개/내부 계약과 상태 머신을 바꾸므로 `Q-WF-001` 전 보류.
+- non-superuser runner에서 불가능한 `ALTER ROLE ... NOSUPERUSER/NOREPLICATION/NOBYPASSRLS`를 실행했다고 가장: 실제 PostgreSQL 권한과 다르므로 제외. Q-SEC-002=A로 privileged auto-downgrade도 제외.
+- candidate 생성에 사유 확인을 암묵 결합: Q-WF-001=A가 별도 backend-only capability를 선택해 제외.
 
 ## 6. 구현 상세
 
@@ -85,7 +85,7 @@
 | `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql` | grants/functions/policies/role-owned dependency를 역순 제거하고 FORCE만 해제; lower compensation 전제 | disposable local DB에서 Task 5를 복구 가능하게 함 |
 | `supabase/tests/database/003_capabilities_test.sql` | exact role/RLS/policy/function allowlist, 상태 matrix, replay, retention, backend diagnostic 비노출 포함 78 assertions | vacuous ACL/policy 검사와 mutable-provenance replay 회귀를 차단 |
 | `.superpowers/sdd/task-5-report.md` | RED/GREEN·동시성·compensation·review fix 증거 | ignored coordination evidence; 실행 권위는 migration/test 파일에 유지 |
-| 이 note·plan·ambiguity register·INDEX | 기술 완료 증거와 `Q-SEC-002`/`Q-WF-001` 보류 상태 기록 | 인간 결정 전 허위 완료를 방지하고 다음 개발자가 재현 가능하게 함 |
+| 이 note·plan·ambiguity register·INDEX | 기술 완료 증거와 후속 `Q-SEC-002`/`Q-WF-001` 해결 상태 기록 | 인간 결정 전 허위 완료와 결정 후 stale blocker를 모두 방지 |
 
 ### 데이터 흐름/상태 변화
 
@@ -99,8 +99,8 @@
 
 - invalid/status conflict/replay conflict/cutoff NULL은 caller text 없는 stable `P1010` 메시지로 fail closed하며 write 0건이다.
 - purge 대상이 없으면 `0`과 empty UUID array를 반환하며 반복 호출도 동일하다.
-- compensation은 `00400` read interface가 남아 있으면 중단하고, 정상 역순에서는 Task 5 capability와 roles를 제거하되 PUBLIC `public` schema CREATE를 복원하지 않는다.
-- `Q-SEC-002`가 privileged auto-downgrade를 선택하면 현재 migration을 소급 편집하지 않고, 공유 migration 정책에 따라 별도 reviewed forward migration/runner 변경으로 보정한다.
+- compensation은 후속 `00500` read와 `00400` workflow가 남아 있으면 중단하고, 정상 역순에서는 Task 5 capability와 roles를 제거하되 PUBLIC `public` schema CREATE를 복원하지 않는다.
+- Q-SEC-002=A이므로 현재 migration의 fail-closed replay를 유지하고 privileged runner 변경은 하지 않는다.
 
 ## 7. 버전 전후
 
@@ -127,7 +127,7 @@
 | Web | 0.1.0 | 0.1.0 | UI 변경 없음 |
 | API | 2.0.1-draft | 2.0.1-draft | 공개 계약 변경 없음 |
 | Shared contracts | 0.2.1 | 0.2.1 | 계약 변경 없음 |
-| DB schema manifest | 0.2.0-draft | 0.2.0-draft | executable migration은 3/4이나 Task 10까지 승격 보류 |
+| DB schema manifest | 0.2.0-draft | 0.2.0-draft | executable migration은 3/5이나 Task 10까지 승격 보류 |
 | Official data | 0.0.0-not-populated | 동일 | 공식 seed 0 rows |
 | Mock data | 0.0.0-not-populated | 동일 | tracked mock seed 0 rows |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | 동일 | LLM 미사용 |
@@ -150,20 +150,20 @@
 | 두 독립 PostgreSQL session — identical/conflicting first request | 동일 요청은 같은 ID, 충돌은 wait 뒤 `P1010`; native `23505` 없음 | 2 scenarios, fixture 0 | Task 5 report lines 308~320 |
 | 두 독립 PostgreSQL session — concurrent purge | A `1`, B wait 뒤 `0`, third `0`; exact cutoff와 event/candidate link 보존 | 2 sessions, fixture 0 | Task 5 report lines 322~335 |
 | non-superuser backend diagnostic capture | `P1010`, stable message, 모든 diagnostic field에 sentinel 없음, write 0 | 1 synthetic probe | Task 5 report lines 293~306 |
-| 독립 review 두 차례 | replay/policy/function test 보강 뒤 코드·명세상 추가 blocking finding 0 | `Q-SEC-002`만 acceptance 미결정 | reviewer reports, commits `fa6b755`·`264772d` |
+| 독립 review 두 차례 | replay/policy/function test 보강 뒤 코드·명세상 추가 blocking finding 0 | Q-SEC-002=A로 acceptance 완료 | reviewer reports, commits `fa6b755`·`264772d`, D-026 |
 
 ### 미실행 검증과 이유
 
-- Task 5 acceptance 완료 표시는 `Q-SEC-002` 인간 결정 전 의도적으로 수행하지 않았다.
+- Task 5 acceptance는 후속 Q-SEC-002=A 결정으로 완료됐다.
 - `verify_database.ps1` 전체 gate는 Task 6~9 함수/read/repository/integration 파일이 아직 없어 Task 9 전까지 미실행이다.
 - Task 9가 소유할 영구 두-connection integration test는 아직 만들지 않았다. Task 5에서는 독립 local session probe로 현재 race 동작만 확인했다.
-- Task 6 reason confirmation 함수는 `Q-WF-001` 전 구현하지 않았다.
+- Task 6 reason confirmation 함수는 이 note 시점에는 미구현이며, Q-WF-001=A 이후 새 `00400`에서 구현한다.
 - DeepSeek/API/UI/accessibility 실행은 DB-001 Task 5 범위 밖이며 외부 호출 0이다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: 질문 원문 입력·저장 0. 함수는 이미 마스킹된 선택적 text만 받으며 FOLLOWUP/OUT_OF_SCOPE/SUCCESS text를 거부한다. replay와 purge가 text를 비교·복원하지 않는다.
-- Security: forced RLS와 owner-only policies, base-table CRUD 거부, allowlisted SECURITY DEFINER owner/search_path/EXECUTE를 실제 backend role에서 검증했다. error diagnostic sentinel 비노출도 검증했다. `Q-SEC-002` 전 role bootstrap acceptance는 열어 둔다.
+- Security: forced RLS와 owner-only policies, base-table CRUD 거부, allowlisted SECURITY DEFINER owner/search_path/EXECUTE를 실제 backend role에서 검증했다. error diagnostic sentinel 비노출도 검증했다. Q-SEC-002=A가 role bootstrap acceptance를 닫았다.
 - Accessibility: DB/문서 변경뿐이며 UI·키보드·대비 영향 없음.
 - Performance/cost: source→office deterministic locking과 indexed request ID replay를 사용한다. concurrent insert/purge wait는 의도한 transaction serialization이다. local Docker 자원 외 외부 API·cloud·유료 비용 0원.
 
@@ -171,15 +171,15 @@
 
 - 공식 데이터: 0 rows; 공식 seed·PM 승인 데이터 변경 없음.
 - mock/AI 생성: tracked seed 0 rows. 테스트와 probe는 합성 UUID/`MOCK` fixture 또는 capability 증명에 필요한 최소 synthetic OFFICIAL fixture만 transaction/local reset 안에서 사용했고 최종 잔존 0이다.
-- schema/lineage: executable migration은 `00100`~`00300` 3/4까지 존재한다. 실행 권위는 timestamp migration이고 logical draft/manifest 승격은 Task 10 소유다.
+- schema/lineage: executable migration은 `00100`~`00300` 3/5까지 존재한다. 실행 권위는 timestamp migration이고 logical draft/manifest 승격은 Task 10 소유다.
 - 출처명·URL·확인일: caller/LLM이 생성하지 않고 잠긴 ACTIVE+OFFICIAL KB/office row에서만 해석한다.
 - verified date: 2026-07-16 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
-- `Q-SEC-002`에 답해야 Task 5를 완료 처리할 수 있다. 선택지는 (A) 현재 non-superuser runner의 최소권한을 유지하고 기존 role에 위험 속성이 보이면 자동 수정 대신 migration을 중단하는 fail-closed 방식, (B) privileged provisioning 경계를 추가해 위험 속성을 자동 downgrade하는 방식이다. 현재 local-first·0원 범위에는 A가 더 단순하지만, 선택은 보안/배포 권한 결정이므로 인간 승인 대상이다.
-- `Q-WF-001`은 Task 6 시작 전 답해야 한다. 현재 state machine은 failure reason 확인을 요구하지만 backend가 table DML을 할 수 없고 승인된 callable 목록에는 그 전이 함수가 없다. 독립 internal capability 추가가 추천되지만 공개/내부 계약을 바꾸므로 임의 구현하지 않았다.
-- Task 5 SQL 동작, 현재 runner에서의 권한 경계, 172/172 tests, replay/purge concurrency, diagnostic nonleak, compensation/replay는 모두 녹색이다. 다만 이는 `Q-SEC-002`의 문자 명세 acceptance를 대신하지 않는다.
+- Q-SEC-002=A: 현재 non-superuser runner와 unsafe-role fail-closed 검증을 유지하며 privileged bootstrap은 추가하지 않는다.
+- Q-WF-001=A: 새 별도 reason-confirmation capability를 `00400`에 구현하고 event 자동 사유는 불변으로 둔다. 후보는 확인 완료 IG만 허용한다.
+- Task 5 SQL 동작, 권한 경계, 172/172 tests, replay/purge concurrency, diagnostic nonleak, compensation/replay는 모두 녹색이며 acceptance도 완료됐다.
 - remote/public DB, official ACTIVE seed, production role bootstrap, data deletion, 새 production dependency는 승인되지 않았다.
 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
@@ -198,27 +198,26 @@
 2. local-only 환경에서 `supabase db reset --local` 뒤 `supabase test db`를 실행해 `Files=3, Tests=172, Result: PASS`를 확인한다.
 3. process environment에만 local admin DSN을 두고 `00300 → 00200 → 00100` compensation과 `database/verify_db001_absent.sql`을 실행한다. DSN/child error detail은 출력하지 않는다.
 4. 다시 reset/test해 172/172와 fixture 0을 확인한다.
-5. `Q-SEC-002` 답을 decision log/필요 ADR/ambiguity register에 반영한 뒤 Step 3 acceptance를 결정한다. B라면 공유 migration을 소급 편집하지 말고 reviewed forward change로 처리한다.
-6. Task 6 전 `Q-WF-001`을 확정하고 DB callable/repository/계약 계획을 함께 갱신한다.
+5. D-026/D-027과 ADR-0011의 refined decision을 확인한다.
+6. 적용된 `00100~00300`을 수정하지 않고 `00400_candidate_workflow.sql` RED부터 시작한다.
 
 ### 롤백
 
-- disposable local DB에서는 후속 `00400`을 먼저 보상한 뒤 `00300`, `00200`, `00100` 순서로 실행하고 absence proof를 수행한다. 정상 복구는 fresh `db reset --local`이다.
+- disposable local DB 목표 순서는 `00500`, `00400`, `00300`, `00200`, `00100` compensation 뒤 absence proof다. 현재 Task 5만 적용된 상태에서는 `00300 → 00200 → 00100`을 사용한다. 정상 복구는 fresh `db reset --local`이다.
 - Task 5 코드만 되돌릴 때는 `264772d` 뒤 `fa6b755` 순서로 revert한다. 적용된/공유된 migration을 직접 수정하지 않는다.
 - 이 문서 commit만 잘못됐으면 해당 docs commit을 revert하면 되며 제품 schema/data에는 변화가 없다.
 
 ### 다음 개발자 시작점
 
-먼저 `Q-SEC-002`를 사용자에게 정식 질문 형식으로 제시하고 답을 기록한다. Task 5 acceptance를 닫은 뒤 `Q-WF-001`을 해결해야 Task 6의 candidate workflow를 안전하게 시작할 수 있다.
+D-026/D-027이 반영된 plan에서 새 `00400` candidate workflow/audit RED부터 시작한다. 시민 read/index는 `00500`으로 이동했다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- `Q-SEC-002`: fail-closed non-superuser verification과 privileged auto-downgrade 중 미결정; Task 5 acceptance 블로커.
-- `Q-WF-001`: reason-confirmation capability 경계 미결정; Task 6 시작 블로커.
+- Q-SEC-002/Q-WF-001은 A로 해결됐고 인간 A/Blocker는 0개다.
 - 현재 concurrent probes는 one-off local evidence다. Task 9에서 영구 자동화해야 한다.
 - PostgreSQL native CHECK `DETAIL`과 SQL parameters를 Task 8 repository가 로그/응답에 남기지 않는 sanitizer 검증이 여전히 필요하다.
 - parent KB와 child question explicit delete 동시성은 삭제 API 추가 전 별도 검증이 필요한 P2 위험이다.
-- 다음 단계: 인간 결정을 받아 source-of-truth/ADR/plan을 동기화하고, 블로커가 해소되면 Task 6 RED부터 시작한다.
+- 다음 단계: immutable 새 `00400` workflow migration의 Task 6 RED부터 시작한다.
 
 ## 15. 자체 리뷰
 

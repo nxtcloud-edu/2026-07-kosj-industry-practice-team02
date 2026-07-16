@@ -4,7 +4,7 @@
 
 **Goal:** Build a checksum-pinned, locally reproducible Supabase/PostgreSQL baseline that enforces privacy, provenance, approval, retention, citizen-read, and backend-only capability rules in both the database and a lazy FastAPI repository boundary.
 
-**Architecture:** Business tables and enums live in non-exposed `app_private`; only reviewed `SECURITY DEFINER` functions in `app_api` are executable by the NOLOGIN `sejong_backend` capability role. Four forward migrations and four reverse compensation scripts are tested with pgTAP, Python integration tests, and reset/rollback/replay, while the FastAPI process keeps database I/O lazy and adds no public routes or wire-contract changes.
+**Architecture:** Business tables and enums live in non-exposed `app_private`; only reviewed `SECURITY DEFINER` functions in `app_api` are executable by the NOLOGIN `sejong_backend` capability role. Five immutable forward migrations and five reverse compensation scripts are tested with pgTAP, Python integration tests, and reset/rollback/replay, while the FastAPI process keeps database I/O lazy and adds no public routes or wire-contract changes.
 
 **Tech Stack:** Supabase CLI `v2.109.1`, PostgreSQL 17, SQL/PLpgSQL, pgTAP, Windows PowerShell 5.1, Python 3.12.13, psycopg 3.3.4 with `psycopg_pool`, pytest 9.1.1, existing local Docker Desktop.
 
@@ -18,7 +18,7 @@
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
 - Approved specification: `docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md`
-- Decisions: D-018, D-025
+- Decisions: D-018, D-025, D-026, D-027
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011
 - Active logical input: `database/schema-v1.draft.sql` at `0.2.0-draft`
 - Implementation target: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
@@ -63,8 +63,9 @@ At execution, Task 1 rechecks that the release is still an official non-prerelea
 |---|---|---|
 | `supabase/migrations/20260716000100_private_schema.sql` | `database/rollbacks/20260716000100_private_schema.rollback.sql` | Schemas, seven enums, eight tables |
 | `supabase/migrations/20260716000200_invariants_and_lineage.sql` | `database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql` | JSON/text/state checks, updated-at and ACTIVE-question constraint triggers |
-| `supabase/migrations/20260716000300_capabilities_and_functions.sql` | `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql` | Roles, ownership, forced RLS, event/failure/candidate/approval/rejection/purge functions |
-| `supabase/migrations/20260716000400_indexes_and_read_interfaces.sql` | `database/rollbacks/20260716000400_indexes_and_read_interfaces.rollback.sql` | Five indexes and ACTIVE+OFFICIAL KB/office read functions |
+| `supabase/migrations/20260716000300_capabilities_and_functions.sql` | `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql` | Roles, ownership, forced RLS, event/failure recording, retention functions |
+| `supabase/migrations/20260716000400_candidate_workflow.sql` | `database/rollbacks/20260716000400_candidate_workflow.rollback.sql` | Failure-reason confirmation, candidate workflow, approval/rejection, audit refinement |
+| `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql` | `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql` | Five indexes and ACTIVE+OFFICIAL KB/office read functions |
 | `database/verify_db001_absent.sql` | none | After compensation, assert DB-001 schemas and roles are absent without touching Supabase-owned objects |
 
 ### Tests
@@ -146,6 +147,13 @@ app_api.record_interaction(
   p_masked_question text
 ) RETURNS TABLE (interaction_id uuid, failed_question_id uuid)
 
+app_api.confirm_failed_question_reason(
+  p_failed_question_id uuid,
+  p_actor_id text,
+  p_actor_role text,
+  p_confirmed_fallback_reason text
+) RETURNS void
+
 app_api.create_kb_candidate(
   p_failed_question_id uuid,
   p_actor_id text,
@@ -175,7 +183,8 @@ app_api.submit_kb_candidate(
 app_api.approve_kb_candidate(
   p_candidate_id uuid,
   p_actor_id text,
-  p_actor_role text
+  p_actor_role text,
+  p_review_comment text
 ) RETURNS text
 
 app_api.reject_kb_candidate(
@@ -832,21 +841,20 @@ Run:
 
 Expected: roles/functions/RLS assertions fail.
 
-- [ ] **Step 3: Create locked-down capability roles and ownership**
+- [x] **Step 3: Create locked-down capability roles and ownership**
 
-> **Acceptance pending — Q-SEC-002 (2026-07-16):** roles, ownership, ACLs,
-> forced RLS, and exact policies are implemented and tested. The current local
-> migration runner is intentionally non-superuser, so PostgreSQL does not allow
-> it to issue `NOSUPERUSER`, `NOREPLICATION`, or `NOBYPASSRLS` `ALTER ROLE`
-> clauses even in the disabling direction. The migration creates exact safe
-> attributes and fails closed if an existing role has a forbidden attribute;
-> it does not satisfy the literal unconditional auto-restoration sentence below.
-> Human approval is required between retaining this fail-closed minimum-privilege
-> model and introducing a privileged auto-downgrade boundary. Two independent
-> review passes found no other blocking Task 5 issue. Do not mark Task 5 Done
-> until this decision is recorded.
-
-Use idempotent `DO` blocks to create the two NOLOGIN roles, then unconditional `ALTER ROLE` statements to restore NOLOGIN and every disabled elevated attribute on every replay. Revoke `CREATE` on `public` from `PUBLIC`. Revoke all privileges on `app_private` and `app_api` from `PUBLIC`, `anon`, and `authenticated`, then grant `USAGE` on `app_api` only to `sejong_backend`. Transfer ownership of `app_private`, `app_api`, all app enums/tables/sequences/functions to `sejong_schema_owner`. Enable and force RLS on every base table, then create one owner-only `FOR ALL` policy per table:
+Q-SEC-002=A accepts the implemented PostgreSQL 17 non-superuser model. Use
+idempotent `DO` blocks to create both roles with every safe attribute. On replay,
+unconditionally restore the runner-permitted `NOLOGIN`, `NOCREATEDB`, and
+`NOCREATEROLE` attributes, then catalog-verify `NOSUPERUSER`, `NOREPLICATION`,
+`NOBYPASSRLS`, role settings, and effective memberships. An unsafe existing role
+fails closed; no privileged auto-downgrade/bootstrap is introduced. Revoke
+`CREATE` on `public` from `PUBLIC`. Revoke all privileges on `app_private` and
+`app_api` from `PUBLIC`, `anon`, and `authenticated`, then grant `USAGE` on
+`app_api` only to `sejong_backend`. Transfer ownership of `app_private`,
+`app_api`, all app enums/tables/sequences/functions to `sejong_schema_owner`.
+Enable and force RLS on every base table, then create one owner-only `FOR ALL`
+policy per table:
 
 ```sql
 CREATE POLICY kb_documents_owner_all
@@ -938,7 +946,7 @@ Grant backend `USAGE` on `app_api` only. Do not grant backend `USAGE` on `app_pr
 
 - [x] **Step 7: Add capability compensation**
 
-The compensation file revokes backend function/schema grants, drops all Task 5 and Task 6 `app_api` functions, drops policies, disables forced RLS only for rollback, reassigns objects owned by `sejong_schema_owner` to `postgres`, drops owned privileges for both roles, and drops `sejong_backend` then `sejong_schema_owner`. It must execute only after the Task 7 read-interface compensation.
+The compensation file revokes backend Task 5 function/schema grants, drops Task 5 functions, drops policies, disables forced RLS only for rollback, reassigns objects owned by `sejong_schema_owner` to `postgres`, drops owned privileges for both roles, and drops `sejong_backend` then `sejong_schema_owner`. It executes only after the Task 7 `00500` and Task 6 `00400` compensations. Existing defensive `DROP FUNCTION IF EXISTS` identities remain harmless, but the new workflow compensation owns removal of workflow functions.
 
 - [x] **Step 8: Reset and run all current DB tests**
 
@@ -956,7 +964,7 @@ implementation and review fix, root independently reproduced reset, 172/172
 pgTAP, `00300 → 00200 → 00100` compensation, absence proof, fresh replay, and
 172/172 again. Identical/conflicting two-session replay, concurrent purge, and
 backend diagnostic nonleak probes also passed. Independent code/spec reviews
-are otherwise clean; only Step 3 `Q-SEC-002` remains open.
+are clean. Q-SEC-002=A accepts the fail-closed role behavior, so Task 5 is complete.
 
 - [x] **Step 9: Commit Task 5**
 
@@ -972,23 +980,32 @@ and review fix `264772d` (`fix(db): stabilize capability replay guarantees`).
 
 **Files:**
 
-- Modify: `supabase/migrations/20260716000300_capabilities_and_functions.sql`
-- Modify: `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql`
+- Create: `supabase/migrations/20260716000400_candidate_workflow.sql`
+- Create: `database/rollbacks/20260716000400_candidate_workflow.rollback.sql`
 - Create: `supabase/tests/database/004_approval_test.sql`
+
+Applied and committed migrations `00100~00300` are immutable. All Task 6
+constraints, trigger replacements, functions, grants, and audit allowlist changes
+belong to the new `00400` forward migration and its matching compensation.
 
 - [ ] **Step 1: Write failing approval tests**
 
 Use explicit MOCK and OFFICIAL fixtures to prove:
 
 - only OPERATOR can create and submit candidates;
-- candidate creation requires an eligible INSUFFICIENT_GROUNDING failure;
+- only OPERATOR can confirm a NEW failure reason;
+- confirmation preserves the parent event's initial automated reason, updates only the failure reason/status/re-derived eligibility, and writes exactly one `FAILED_QUESTION_REASON_CONFIRMED` audit row;
+- duplicate/concurrent confirmation produces one success and one `P1003`, with one audit row;
+- candidate creation requires `REASON_CONFIRMED`, eligible INSUFFICIENT_GROUNDING failure;
+- concurrent confirmation/candidate creation serializes on the failure row and cannot create from NEW or corrected ineligible failures;
 - submit requires creator ownership, DRAFTED state, and complete content/source fields;
 - OPERATOR approval/rejection raises `P1001`;
 - creator approval/rejection raises `P1002`;
 - wrong candidate state raises `P1003`;
 - incomplete content raises `P1004`;
 - MOCK activation raises `P1005`;
-- approval creates exactly one ACTIVE OFFICIAL KB, exactly one generalized initial question example, candidate link/status/reviewer/timestamp, and exactly one approval audit row;
+- approval and rejection both require a trimmed non-empty review comment;
+- approval creates exactly one ACTIVE OFFICIAL KB, exactly one generalized initial question example, candidate link/status/reviewer/timestamp/comment, and exactly one approval audit row;
 - rejection requires non-empty comment and writes one rejection audit row;
 - audit UPDATE and DELETE fail for backend;
 - audit rows contain only allowlisted action, target/status, changed-field names, optional review comment, actor, and timestamp.
@@ -1001,11 +1018,30 @@ Run:
 .tools/supabase/v2.109.1/supabase.exe test db
 ```
 
-Expected: missing candidate functions cause failure.
+Expected: missing `00400` reason-confirmation/candidate functions and audit/lineage refinements cause failure.
 
-- [ ] **Step 3: Implement candidate creation and submission**
+- [ ] **Step 3: Implement reason confirmation, candidate creation, and submission**
 
-Implement the exact signatures from this plan. Both functions are SECURITY DEFINER with fixed search path, explicit `FOR UPDATE` locks where an existing row changes, and stable SQLSTATE errors. Creation writes one DRAFTED candidate and `CANDIDATE_CREATED` audit row. Submission verifies OPERATOR role, creator identity, DRAFTED state, complete non-empty content, valid arrays, and then moves to PENDING_APPROVAL with one `CANDIDATE_SUBMITTED` audit row.
+Implement the exact signatures from this plan. All functions are SECURITY DEFINER with fixed search path, explicit `FOR UPDATE` locks where an existing row changes, and stable SQLSTATE errors.
+
+`confirm_failed_question_reason(uuid,text,text,text)` requires OPERATOR, locks a
+NEW failure, validates one stored failure reason, and leaves
+`interaction_events.fallback_reason` unchanged. It updates only the failure's
+reason, `candidate_eligible = (reason = 'INSUFFICIENT_GROUNDING')`, and status to
+`REASON_CONFIRMED`. It writes one metadata-only audit row with action
+`FAILED_QUESTION_REASON_CONFIRMED`, target `FAILED_QUESTION`, status
+`NEW → REASON_CONFIRMED`, and only the actual changed field names among
+`status`, `fallback_reason`, and `candidate_eligible`. Wrong role is `P1001`,
+wrong/duplicate state is `P1003`, and invalid reason/lineage is `P1010`.
+
+Replace the earlier lineage trigger behavior in this forward migration so only a
+NEW failure must match its immutable parent event. A confirmed failure may retain
+an operator-corrected reason. Direct changes that invalidate an existing
+candidate remain forbidden. Candidate creation locks the failure and requires
+`REASON_CONFIRMED + INSUFFICIENT_GROUNDING + candidate_eligible=true`, writes one
+DRAFTED candidate and `CANDIDATE_CREATED` audit row. Submission verifies OPERATOR
+role, creator identity, DRAFTED state, complete non-empty content, valid arrays,
+and then moves to PENDING_APPROVAL with one `CANDIDATE_SUBMITTED` audit row.
 
 Allowed audit actions are exactly:
 
@@ -1014,21 +1050,22 @@ CANDIDATE_CREATED
 CANDIDATE_SUBMITTED
 CANDIDATE_APPROVED
 CANDIDATE_REJECTED
+FAILED_QUESTION_REASON_CONFIRMED
 ```
 
-Allowed target type is exactly `KB_CANDIDATE`. Changed field lists for the four actions are fixed server values, not caller inputs.
+Allowed target types are `KB_CANDIDATE` and `FAILED_QUESTION`. Candidate changed-field lists are fixed server values, not caller inputs; confirmation derives its allowlisted changed-field names from actual changes and never stores a question/reason snapshot.
 
 - [ ] **Step 4: Implement atomic approval**
 
 `approve_kb_candidate` must:
 
-1. require `APPROVER`, lock candidate `FOR UPDATE`, and reject creator identity;
+1. accept exact signature `approve_kb_candidate(uuid,text,text,text)`, require `APPROVER`, a trimmed non-empty review comment, lock candidate `FOR UPDATE`, and reject creator identity;
 2. require `PENDING_APPROVAL`, complete content/source, and `OFFICIAL` origin;
 3. generate public ID as `KB-` plus all 32 uppercase hexadecimal characters of candidate UUID with hyphens removed, making it a deterministic one-to-one mapping;
 4. insert one ACTIVE KB with candidate content, creator, approver, and approval time;
 5. insert candidate `representative_question` as the first question example;
-6. update candidate to APPROVED and set reviewer/time/activated KB ID;
-7. insert one approval audit row;
+6. update candidate to APPROVED and set reviewer/time/activated KB ID/review comment;
+7. insert one approval audit row with the review comment;
 8. return the generated public ID;
 9. rely on the transaction and deferred ACTIVE-question trigger so any failure rolls back all four writes.
 
@@ -1038,11 +1075,14 @@ Allowed target type is exactly `KB_CANDIDATE`. Changed field lists for the four 
 
 - [ ] **Step 6: Apply ownership and execute grants**
 
-For each of the four candidate interfaces, set owner, revoke PUBLIC, and grant only `sejong_backend`, using exact argument type lists. The backend retains no audit-table INSERT/UPDATE/DELETE grant.
+For each of the five workflow interfaces, set owner, revoke PUBLIC/anon/authenticated, and grant only `sejong_backend`, using exact argument type lists. The backend retains no direct failed-question, candidate, or audit-table INSERT/UPDATE/DELETE grant.
 
 - [ ] **Step 7: Extend compensation and run tests**
 
-Ensure the Task 5 compensation drops candidate functions before roles. Run:
+The `00400` compensation revokes workflow execute grants, drops the five workflow
+functions, restores replaced Task 4 trigger/constraint definitions, removes the
+reason-confirmation audit allowlist extension, and leaves Task 5 roles/RLS/event/
+retention intact. It must run after `00500` and before `00300`. Run:
 
 ```powershell
 .tools/supabase/v2.109.1/supabase.exe db reset --local
@@ -1054,7 +1094,7 @@ Expected: all suites pass.
 - [ ] **Step 8: Commit Task 6**
 
 ```powershell
-git add supabase/migrations/20260716000300_capabilities_and_functions.sql database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql supabase/tests/database/004_approval_test.sql
+git add supabase/migrations/20260716000400_candidate_workflow.sql database/rollbacks/20260716000400_candidate_workflow.rollback.sql supabase/tests/database/004_approval_test.sql
 git commit -m "feat(db): make KB approval atomic"
 ```
 
@@ -1062,8 +1102,8 @@ git commit -m "feat(db): make KB approval atomic"
 
 **Files:**
 
-- Create: `supabase/migrations/20260716000400_indexes_and_read_interfaces.sql`
-- Create: `database/rollbacks/20260716000400_indexes_and_read_interfaces.rollback.sql`
+- Create: `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql`
+- Create: `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql`
 - Create: `supabase/tests/database/005_citizen_reads_test.sql`
 
 - [ ] **Step 1: Write failing citizen-read tests**
@@ -1129,7 +1169,7 @@ Expected: all five database test files pass.
 - [ ] **Step 7: Commit Task 7**
 
 ```powershell
-git add supabase/migrations/20260716000400_indexes_and_read_interfaces.sql database/rollbacks/20260716000400_indexes_and_read_interfaces.rollback.sql supabase/tests/database/005_citizen_reads_test.sql
+git add supabase/migrations/20260716000500_indexes_and_read_interfaces.sql database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql supabase/tests/database/005_citizen_reads_test.sql
 git commit -m "feat(db): expose official citizen read capabilities"
 ```
 
@@ -1209,6 +1249,7 @@ InteractionWrite(request_id, intent, answer_status, fallback_reason, used_source
                  response_time_ms, selected_region, routed_office_public_id,
                  is_test, masked_question)
 InteractionWriteResult(interaction_id, failed_question_id)
+FailureReasonConfirmation(failed_question_id, actor, fallback_reason)
 CandidateDraft(failed_question_id, actor, title, representative_question, category,
                answer_summary, procedure_steps, required_documents, processing_time,
                fee, department, source_title, source_url, last_verified_at, caution,
@@ -1229,7 +1270,7 @@ Backend validation duplicates the DB's simple structural checks: trimmed IDs/tex
 
 - [ ] **Step 5: Write failing repository/pool tests**
 
-Use async fake pool/connection/cursor objects to verify methods call only these fixed statements with positional parameters: `SELECT * FROM app_api.list_active_kb(%s)`, `SELECT * FROM app_api.list_offices(%s, %s)`, `SELECT * FROM app_api.record_interaction(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.create_kb_candidate(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.submit_kb_candidate(%s, %s, %s)`, `SELECT app_api.approve_kb_candidate(%s, %s, %s)`, `SELECT app_api.reject_kb_candidate(%s, %s, %s, %s)`, and `SELECT * FROM app_api.purge_expired_failed_question_text()`. Verify commit on success, rollback on failure, typed row mapping, and absence of question/answer text in exception output. Extend `test_architecture.py` so importing `sejong_ai_api.main` does not import `psycopg` or construct a pool.
+Use async fake pool/connection/cursor objects to verify methods call only these fixed statements with positional parameters: `SELECT * FROM app_api.list_active_kb(%s)`, `SELECT * FROM app_api.list_offices(%s, %s)`, `SELECT * FROM app_api.record_interaction(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.confirm_failed_question_reason(%s, %s, %s, %s)`, `SELECT app_api.create_kb_candidate(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.submit_kb_candidate(%s, %s, %s)`, `SELECT app_api.approve_kb_candidate(%s, %s, %s, %s)`, `SELECT app_api.reject_kb_candidate(%s, %s, %s, %s)`, and `SELECT * FROM app_api.purge_expired_failed_question_text()`. Verify commit on success, rollback on failure, typed row mapping, and absence of question/answer text in exception output. Extend `test_architecture.py` so importing `sejong_ai_api.main` does not import `psycopg` or construct a pool.
 
 - [ ] **Step 6: Implement explicit lazy pool creation**
 
@@ -1254,9 +1295,9 @@ No module reads environment variables and no pool opens at import time.
 
 - [ ] **Step 7: Implement the repository protocol and adapter**
 
-`SejongRepository` declares these exact async methods and return types: `list_active_kb(intent: Intent) -> Sequence[KnowledgeRecord]`, `list_offices(region: Region, intent: Intent) -> Sequence[OfficeRecord]`, `record_interaction(event: InteractionWrite) -> InteractionWriteResult`, `create_kb_candidate(draft: CandidateDraft) -> UUID`, `submit_kb_candidate(candidate_id: UUID, actor: Actor) -> None`, `approve_kb_candidate(candidate_id: UUID, actor: Actor) -> str`, `reject_kb_candidate(candidate_id: UUID, actor: Actor, review_comment: str) -> None`, and `purge_expired_failed_question_text() -> PurgeResult`. Import `Sequence` from `collections.abc`; the concrete adapter returns immutable tuples and both read methods allow an empty result.
+`SejongRepository` declares these exact async methods and return types: `list_active_kb(intent: Intent) -> Sequence[KnowledgeRecord]`, `list_offices(region: Region, intent: Intent) -> Sequence[OfficeRecord]`, `record_interaction(event: InteractionWrite) -> InteractionWriteResult`, `confirm_failed_question_reason(failed_question_id: UUID, actor: Actor, fallback_reason: FallbackReason) -> None`, `create_kb_candidate(draft: CandidateDraft) -> UUID`, `submit_kb_candidate(candidate_id: UUID, actor: Actor) -> None`, `approve_kb_candidate(candidate_id: UUID, actor: Actor, review_comment: str) -> str`, `reject_kb_candidate(candidate_id: UUID, actor: Actor, review_comment: str) -> None`, and `purge_expired_failed_question_text() -> PurgeResult`. Import `Sequence` from `collections.abc`; the concrete adapter returns immutable tuples and both read methods allow an empty result.
 
-`PsycopgSejongRepository` receives an already-created pool and uses `async with pool.connection()` plus `async with connection.transaction()` for writes. Reads use a connection context and row factory; no method accepts raw question, answer, context token, role header, or arbitrary SQL. Candidate approval/rejection accepts a pre-resolved `Actor` rather than an HTTP header value.
+`PsycopgSejongRepository` receives an already-created pool and uses `async with pool.connection()` plus `async with connection.transaction()` for writes. Reads use a connection context and row factory; no method accepts raw question, answer, context token, role header, or arbitrary SQL. Reason confirmation and candidate approval/rejection accept a pre-resolved `Actor` rather than an HTTP header value; both review paths require a validated non-empty comment.
 
 All SQL strings are module constants with fixed `app_api` function names. Parameters are passed separately. Catch `psycopg.Error`, call `map_database_error`, and raise the mapped exception without logging values.
 
@@ -1290,9 +1331,9 @@ git commit -m "feat(api): add lazy typed database boundary"
 
 - [ ] **Step 1: Write local-only integration tests**
 
-Mark the module with `pytestmark = pytest.mark.skipif(not os.getenv("SEJONG_DB_TEST_URL"), reason="local DB gate only")`. Tests must use unique synthetic IDs and transaction cleanup. Create exactly these six async tests: `test_identical_request_replay_writes_one_event`, `test_conflicting_request_replay_maps_p1010`, `test_two_concurrent_approvals_create_one_active_kb_and_audit`, `test_purge_boundary_is_exact_and_idempotent`, `test_backend_login_cannot_select_private_tables`, and `test_mock_and_non_active_rows_never_reach_citizen_reads`.
+Mark the module with `pytestmark = pytest.mark.skipif(not os.getenv("SEJONG_DB_TEST_URL"), reason="local DB gate only")`. Tests must use unique synthetic IDs and transaction cleanup. Create exactly these eight async tests: `test_identical_request_replay_writes_one_event`, `test_conflicting_request_replay_maps_p1010`, `test_two_concurrent_reason_confirmations_write_one_audit`, `test_candidate_creation_requires_confirmed_reason`, `test_two_concurrent_approvals_create_one_active_kb_and_audit`, `test_purge_boundary_is_exact_and_idempotent`, `test_backend_login_cannot_select_private_tables`, and `test_mock_and_non_active_rows_never_reach_citizen_reads`.
 
-For the concurrent test, use two independent connections released by one `asyncio.Event`, gather both calls, assert one returns the KB public ID, the other maps `P1003`, then query through a test-only admin connection to assert one KB, one candidate link, and one approval audit. Test strings are synthetic and marked MOCK except the minimal OFFICIAL approval fixture required to prove activation.
+For each concurrent test, use two independent connections released by one `asyncio.Event`. Reason confirmation must produce one `REASON_CONFIRMED` failure, preserve the event reason, write one metadata audit, and map the loser to `P1003`. Approval must return one KB public ID, map the loser to `P1003`, and leave one KB, one candidate link, and one approval audit. Test strings are synthetic and marked MOCK except the minimal OFFICIAL approval fixture required to prove activation.
 
 - [ ] **Step 2: Run the integration test without a DB URL**
 
@@ -1311,7 +1352,7 @@ Add synthetic child-command fixtures to prove the PowerShell runner:
 - preserves child exit code for DB test failures;
 - suppresses child output containing sentinel DSNs/questions;
 - restores `SEJONG_ADMIN_DATABASE_URL` and `SEJONG_DB_TEST_URL` on success and failure;
-- runs compensation files in exact `00400`, `00300`, `00200`, `00100` order;
+- runs compensation files in exact `00500`, `00400`, `00300`, `00200`, `00100` order;
 - runs absence proof before the second reset;
 - never reads or replaces `LLM_API_KEY`.
 
@@ -1422,7 +1463,7 @@ Set documentation to `2.4.0` for the new executable DB baseline. Do not change p
 
 - [ ] **Step 4: Write the DB test report and implementation note**
 
-The report records exact CLI/PostgreSQL/Docker versions, migration list and hashes, pgTAP assertion totals, API test total, reset count, rollback order, concurrency result, secret-output scan result, root gate result, and `/ready=503`. The implementation note follows the repository template and includes 6W1H, commands/results, versions before/after, security/privacy/data impact, rollback, risks, and human/AI boundary.
+The report records exact CLI/PostgreSQL/Docker versions, all five migration/compensation files and hashes, pgTAP assertion totals, API test total, reset count, `00500 → 00400 → 00300 → 00200 → 00100` rollback order, reason-confirmation and approval concurrency results, secret-output scan result, root gate result, and `/ready=503`. The implementation note follows the repository template and includes 6W1H, commands/results, versions before/after, security/privacy/data impact, rollback, risks, and human/AI boundary.
 
 - [ ] **Step 5: Preserve the original package snapshot and inspect active files**
 
@@ -1473,6 +1514,7 @@ git commit -m "docs(db): record executable local baseline"
 | 30-day NULL purge, row/FK preserved | Tasks 4, 5, 9 | boundary/idempotency tests |
 | ACTIVE+OFFICIAL KB/office only | Task 7 | citizen-read pgTAP/integration |
 | author cannot self-approve | Tasks 6, 8 | approval pgTAP/model tests |
+| reason confirmation preserves event and gates candidate eligibility | Tasks 6, 8, 9 | approval pgTAP/repository/two-connection tests |
 | atomic approval and concurrency safety | Tasks 6, 9 | pgTAP plus two-connection test |
 | audit metadata only and append-only | Tasks 4, 6 | catalog/grant/approval tests |
 | fixed-search-path SECURITY DEFINER and narrow execute grants | Tasks 5-7 | catalog privilege tests |
@@ -1499,7 +1541,7 @@ Work stops and returns to the user before any of these changes:
 ## Rollback and recovery summary
 
 - Before the executable DB baseline exists: revert the task commit.
-- On the disposable local DB: run compensation in `00400 → 00300 → 00200 → 00100`, execute absence proof, then reset/replay.
+- On the disposable local DB: run compensation in `00500 → 00400 → 00300 → 00200 → 00100`, execute absence proof, then reset/replay.
 - After a migration commit is shared: never edit an applied migration; add a reviewed forward migration.
 - Do not delete Docker volumes directly. `supabase stop` is allowed as a non-destructive local stop; volume deletion needs an explicit user decision if non-reproducible data exists.
 - `apps/api/.env` is ignored and preserved. If local credential provisioning fails, rerun it after reset; do not copy credentials into tracked files.

@@ -21,8 +21,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-015 | B | 오류 계약 | Resolved | 정책 응답은 200, 안전 대체가 없는 기술 장애는 503 `SERVICE_UNAVAILABLE` envelope | Q-API-001 / ADR-0009 |
 | A-016 | B | 복구 | Defaulted for disposable local demo; public deferred | 재현 가능한 migration+승인 seed 우선, 파괴 변경/마일스톤 전 gitignored 수동 dump, local RPO 24h/RTO 60m, 30일 넘은 dump 삭제, 복구 후 개방 전 retention 재실행 | 실제/비재현 데이터·공개 운영 전 인간 재승인 |
 | A-017 | B | DB 안전 경계 | Resolved | Q-DB-002: DB function/trigger/RLS/GRANT + 백엔드 이중 검증 | 2026-07-16 사용자 A 승인 / D-025 / ADR-0011 |
-| A-018 | A | DB role 보안 | Open — blocks Task 5 acceptance | Q-SEC-002: non-superuser runner에서 위험 role 속성을 fail-closed 검증할지, privileged runner로 자동 downgrade할지 | 최소권한 local-first에는 fail-closed 유지 추천; 답 전 Task 5 Step 3/Done 보류 |
-| A-019 | A | 관리자 workflow | Open — blocks Task 6 | Q-WF-001: `NEW → REASON_CONFIRMED`를 위한 내부 capability를 추가할지, candidate 생성과 결합하거나 상태/공개 계약을 바꿀지 | 독립 backend-only `confirm_failed_question_reason` capability 추천; 답 전 Task 6 구현 금지 |
+| A-018 | A | DB role 보안 | Resolved | Q-SEC-002=A: non-superuser PG17 runner 유지, 허용된 role 속성 재적용+catalog 검증, unsafe role fail closed | D-026 / ADR-0011; privileged auto-downgrade/bootstrap 없음 |
+| A-019 | A | 관리자 workflow | Resolved | Q-WF-001=A: 별도 backend-only `confirm_failed_question_reason(uuid,text,text,text)` capability | D-027 / ADR-0011; event 자동 사유 불변, failure 사유·적격성 재계산 |
 
 ## 우선도 정의
 
@@ -31,9 +31,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 2개다. `Q-SEC-002`는 Task 5 acceptance를,
-`Q-WF-001`은 Task 6 시작을 막는다. DB-001 실행계획 자체는 이미 승인됐지만,
-해당 경계를 임의로 선택하거나 구현하지 않는다.
+현재 인간 결정형 A/Blocker는 0개다. Q-SEC-002와 Q-WF-001은 2026-07-16
+사용자 선택 A로 해결됐다. DB-001은 Task 5까지 완료됐고 Task 6 구현을 진행할 수 있다.
 
 ## 질문 규칙
 
