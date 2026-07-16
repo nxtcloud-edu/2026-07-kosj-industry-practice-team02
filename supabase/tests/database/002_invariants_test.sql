@@ -738,9 +738,14 @@ SELECT ok(
     SELECT count(*) = 4
       AND pg_catalog.bool_and(
         CASE triggers.tgname
-          WHEN 'trg_failed_questions_validate_event' THEN columns.names = ARRAY[
-            'fallback_reason', 'intent', 'interaction_event_id'
-          ]::text[]
+          WHEN 'trg_failed_questions_validate_event' THEN columns.names =
+            CASE WHEN pg_catalog.to_regprocedure(
+              'app_api.confirm_failed_question_reason(uuid,text,text,text)'
+            ) IS NULL THEN ARRAY[
+              'fallback_reason', 'intent', 'interaction_event_id'
+            ]::text[] ELSE ARRAY[
+              'fallback_reason', 'intent', 'interaction_event_id', 'status'
+            ]::text[] END
           WHEN 'trg_interaction_events_validate_failure' THEN columns.names = ARRAY[
             'answer_status', 'fallback_reason', 'intent'
           ]::text[]

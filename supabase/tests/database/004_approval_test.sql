@@ -39,7 +39,10 @@ INSERT INTO app_private.interaction_events (
    '60000000-0000-4000-8000-000000000219'),
   ('60000000-0000-4000-8000-000000000210', 'BULKY_WASTE', 'FALLBACK',
    'INSUFFICIENT_GROUNDING', 0, '[]', 1, true,
-   '60000000-0000-4000-8000-000000000220');
+   '60000000-0000-4000-8000-000000000220'),
+  ('60000000-0000-4000-8000-000000000221', 'BULKY_WASTE', 'FALLBACK',
+   'INSUFFICIENT_GROUNDING', 0, '[]', 1, true,
+   '60000000-0000-4000-8000-000000000231');
 
 INSERT INTO app_private.failed_questions (
   id, interaction_event_id, masked_question, intent, fallback_reason,
@@ -74,6 +77,9 @@ INSERT INTO app_private.failed_questions (
    'BULKY_WASTE', 'INSUFFICIENT_GROUNDING', true, 'NEW'),
   ('60000000-0000-4000-8000-000000000310',
    '60000000-0000-4000-8000-000000000210', '[MASKED] synthetic rollback',
+   'BULKY_WASTE', 'INSUFFICIENT_GROUNDING', true, 'NEW'),
+  ('60000000-0000-4000-8000-000000000311',
+   '60000000-0000-4000-8000-000000000221', '[MASKED] synthetic late rollback',
    'BULKY_WASTE', 'INSUFFICIENT_GROUNDING', true, 'NEW');
 
 CREATE TEMPORARY TABLE task6_candidates (
@@ -211,6 +217,43 @@ SELECT is(
   'workflow interfaces grant no effective PUBLIC execute'
 );
 
+SELECT ok(
+  pg_catalog.pg_get_functiondef(
+    'app_private.validate_failed_question_event()'::regprocedure
+  ) ~ 'FOR[[:space:]]+SHARE'
+  AND pg_catalog.pg_get_functiondef(
+    'app_private.validate_failed_question_event()'::regprocedure
+  ) !~ 'FOR[[:space:]]+UPDATE',
+  'failure lineage takes a parent SHARE lock compatible with replay ordering'
+);
+
+SELECT is(
+  (
+    SELECT pg_catalog.count(*)::integer
+    FROM pg_catalog.pg_trigger AS triggers
+    JOIN pg_catalog.pg_class AS tables ON tables.oid = triggers.tgrelid
+    JOIN pg_catalog.pg_namespace AS namespaces
+      ON namespaces.oid = tables.relnamespace
+    JOIN pg_catalog.pg_proc AS functions ON functions.oid = triggers.tgfoid
+    WHERE namespaces.nspname = 'app_private'
+      AND tables.relname = 'failed_questions'
+      AND triggers.tgname = 'trg_failed_questions_validate_event'
+      AND NOT triggers.tgisinternal
+      AND functions.proname = 'validate_failed_question_event'
+      AND (
+        SELECT pg_catalog.array_agg(attributes.attname::text ORDER BY attributes.attname)
+        FROM pg_catalog.unnest(triggers.tgattr::smallint[]) AS numbers(attnum)
+        JOIN pg_catalog.pg_attribute AS attributes
+          ON attributes.attrelid = tables.oid
+          AND attributes.attnum = numbers.attnum
+      ) = ARRAY[
+        'fallback_reason', 'intent', 'interaction_event_id', 'status'
+      ]::text[]
+  ),
+  1,
+  'status-only changes also fire event-lineage validation'
+);
+
 -- Confirmation role, reason, state, lineage, changed-field order, and event
 -- immutability. The parent event always retains its automated reason.
 SELECT throws_ok(
@@ -273,6 +316,13 @@ SELECT throws_ok(
   )$sql$,
   'P1003', 'INVALID_WORKFLOW_STATE', 'duplicate confirmation is rejected'
 );
+SELECT throws_ok(
+  $sql$UPDATE app_private.failed_questions
+    SET status = 'NEW'
+    WHERE id = '60000000-0000-4000-8000-000000000301'$sql$,
+  'P0001', 'FAILED_EVENT_MISMATCH',
+  'same-reason confirmed failure cannot revert to NEW'
+);
 SELECT is(
   (SELECT pg_catalog.count(*)::integer FROM app_private.audit_logs
    WHERE target_id = '60000000-0000-4000-8000-000000000301'),
@@ -323,6 +373,13 @@ SELECT ok(
       AND changed_field_names = '["status","fallback_reason"]'::jsonb
   ),
   'reason-only correction records canonical actual changed fields'
+);
+SELECT throws_ok(
+  $sql$UPDATE app_private.failed_questions
+    SET status = 'NEW'
+    WHERE id = '60000000-0000-4000-8000-000000000303'$sql$,
+  'P0001', 'FAILED_EVENT_MISMATCH',
+  'corrected unlinked failure cannot revert to NEW without parent reason match'
 );
 
 SELECT lives_ok(
@@ -788,12 +845,81 @@ INSERT INTO app_private.kb_documents (
   'https://example.invalid/t6/collision', DATE '2026-07-16', 'DRAFT',
   'T6-OPERATOR'
 );
-SELECT throws_ok(
-  $sql$SELECT app_api.approve_kb_candidate(
-    (SELECT candidate_id FROM task6_candidates WHERE label = 'rollback'),
-    'T6-APPROVER', 'APPROVER', 'Synthetic collision review'
-  )$sql$,
-  '23505', NULL, 'approval collision surfaces without partial workflow writes'
+DO $capture_collision$
+DECLARE
+  v_candidate_id uuid := (
+    SELECT candidate_id FROM task6_candidates WHERE label = 'rollback'
+  );
+  v_comment constant text := 'Synthetic collision review';
+  v_state text;
+  v_message text;
+  v_detail text;
+  v_hint text;
+  v_context text;
+  v_schema text;
+  v_table text;
+  v_column text;
+  v_constraint text;
+  v_datatype text;
+BEGIN
+  BEGIN
+    PERFORM app_api.approve_kb_candidate(
+      v_candidate_id, 'T6-APPROVER', 'APPROVER', v_comment
+    );
+    INSERT INTO pg_temp.task6_error_diagnostics VALUES (
+      '00000', 'NO_ERROR', NULL, NULL, NULL,
+      NULL, NULL, NULL, NULL, NULL
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_state = RETURNED_SQLSTATE,
+      v_message = MESSAGE_TEXT,
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT,
+      v_context = PG_EXCEPTION_CONTEXT,
+      v_schema = SCHEMA_NAME,
+      v_table = TABLE_NAME,
+      v_column = COLUMN_NAME,
+      v_constraint = CONSTRAINT_NAME,
+      v_datatype = PG_DATATYPE_NAME;
+    INSERT INTO pg_temp.task6_error_diagnostics VALUES (
+      v_state, v_message, v_detail, v_hint, v_context, v_schema, v_table,
+      v_column, v_constraint, v_datatype
+    );
+  END;
+END;
+$capture_collision$;
+SELECT ok(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        diagnostics.returned_sqlstate = 'P1003'
+        AND diagnostics.message_text = 'INVALID_WORKFLOW_STATE'
+        AND COALESCE(diagnostics.exception_detail, '') = ''
+        AND COALESCE(diagnostics.exception_hint, '') = ''
+        AND COALESCE(diagnostics.schema_name, '') = ''
+        AND COALESCE(diagnostics.table_name, '') = ''
+        AND COALESCE(diagnostics.column_name, '') = ''
+        AND COALESCE(diagnostics.constraint_name, '') = ''
+        AND COALESCE(diagnostics.datatype_name, '') = ''
+        AND pg_catalog.strpos(
+          COALESCE(diagnostics.exception_context, ''),
+          (SELECT candidate_id::text FROM task6_candidates
+           WHERE label = 'rollback')
+        ) = 0
+        AND pg_catalog.strpos(
+          pg_catalog.concat_ws(
+            E'\n', diagnostics.exception_detail, diagnostics.exception_hint,
+            diagnostics.exception_context, diagnostics.schema_name,
+            diagnostics.table_name, diagnostics.column_name,
+            diagnostics.constraint_name, diagnostics.datatype_name
+          ),
+          'KB-'
+        ) = 0
+      )
+    FROM task6_error_diagnostics AS diagnostics
+  ),
+  'approval collision maps to nonleaking stable P1003 diagnostics'
 );
 SELECT ok(
   EXISTS (
@@ -814,6 +940,93 @@ SELECT ok(
       AND audit.action = 'CANDIDATE_APPROVED'
   ),
   'failed approval rolls back candidate and approval audit changes'
+);
+TRUNCATE task6_error_diagnostics;
+
+-- Inject a transaction-scoped audit failure after KB/question/candidate writes.
+-- The trigger and helper are removed in this same test transaction.
+SELECT app_api.confirm_failed_question_reason(
+  '60000000-0000-4000-8000-000000000311', 'T6-OPERATOR', 'OPERATOR',
+  'INSUFFICIENT_GROUNDING'
+);
+INSERT INTO task6_candidates
+SELECT 'late-rollback', app_api.create_kb_candidate(
+  '60000000-0000-4000-8000-000000000311', 'T6-OPERATOR', 'OPERATOR',
+  'Synthetic late rollback candidate',
+  'Synthetic generalized late rollback question', 'BULKY_WASTE',
+  'Synthetic late rollback answer', '[]', '[]', NULL, NULL,
+  'Synthetic department', 'Synthetic official source',
+  'https://example.invalid/t6/late-rollback', DATE '2026-07-16',
+  NULL, 'OFFICIAL'
+);
+SELECT app_api.submit_kb_candidate(
+  (SELECT candidate_id FROM task6_candidates WHERE label = 'late-rollback'),
+  'T6-OPERATOR', 'OPERATOR'
+);
+
+CREATE FUNCTION pg_temp.task6_test_fail_late_approval_audit()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog
+AS $function$
+BEGIN
+  IF NEW.action = 'CANDIDATE_APPROVED'
+     AND NEW.review_comment = 'Synthetic late-stage failure' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001', MESSAGE = 'SYNTHETIC_LATE_APPROVAL_FAILURE';
+  END IF;
+  RETURN NEW;
+END
+$function$;
+CREATE TRIGGER trg_task6_test_fail_late_approval_audit
+BEFORE INSERT ON app_private.audit_logs
+FOR EACH ROW
+EXECUTE FUNCTION pg_temp.task6_test_fail_late_approval_audit();
+
+SELECT throws_ok(
+  $sql$SELECT app_api.approve_kb_candidate(
+    (SELECT candidate_id FROM task6_candidates WHERE label = 'late-rollback'),
+    'T6-APPROVER', 'APPROVER', 'Synthetic late-stage failure'
+  )$sql$,
+  'P0001', 'SYNTHETIC_LATE_APPROVAL_FAILURE',
+  'late audit failure aborts approval after prior writes'
+);
+
+DROP TRIGGER trg_task6_test_fail_late_approval_audit
+  ON app_private.audit_logs;
+DROP FUNCTION pg_temp.task6_test_fail_late_approval_audit();
+
+SELECT ok(
+  EXISTS (
+    SELECT 1 FROM task6_candidates AS result
+    JOIN app_private.kb_candidates AS candidates
+      ON candidates.id = result.candidate_id
+    WHERE result.label = 'late-rollback'
+      AND candidates.review_status = 'PENDING_APPROVAL'
+      AND candidates.reviewed_by IS NULL
+      AND candidates.review_comment IS NULL
+      AND candidates.approved_at IS NULL
+      AND candidates.activated_kb_id IS NULL
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM app_private.kb_question_examples AS questions
+    WHERE questions.question_example =
+      'Synthetic generalized late rollback question'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM app_private.kb_documents AS kb
+    WHERE kb.public_id = 'KB-' || pg_catalog.upper(pg_catalog.replace(
+      (SELECT candidate_id::text FROM task6_candidates
+       WHERE label = 'late-rollback'), '-', ''
+    ))
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM task6_candidates AS result
+    JOIN app_private.audit_logs AS audit ON audit.target_id = result.candidate_id
+    WHERE result.label = 'late-rollback'
+      AND audit.action = 'CANDIDATE_APPROVED'
+  ),
+  'late failure rolls back KB, question, candidate link/state, and approval audit'
 );
 
 -- Audit action/status/role/field/comment shapes cannot be cross-combined.

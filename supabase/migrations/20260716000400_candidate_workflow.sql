@@ -199,11 +199,19 @@ BEGIN
       MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
   END IF;
 
+  IF TG_OP = 'UPDATE'
+     AND OLD.status = 'REASON_CONFIRMED'
+     AND NEW.status = 'NEW' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'FAILED_EVENT_MISMATCH';
+  END IF;
+
   SELECT event.answer_status, event.intent, event.fallback_reason
   INTO v_answer_status, v_intent, v_fallback_reason
   FROM app_private.interaction_events AS event
   WHERE event.id = NEW.interaction_event_id
-  FOR UPDATE;
+  FOR SHARE;
 
   IF NOT FOUND THEN
     RETURN NEW;
@@ -343,7 +351,7 @@ $function$;
 DROP TRIGGER trg_failed_questions_validate_event
   ON app_private.failed_questions;
 CREATE TRIGGER trg_failed_questions_validate_event
-BEFORE INSERT OR UPDATE OF interaction_event_id, intent, fallback_reason
+BEFORE INSERT OR UPDATE OF interaction_event_id, intent, fallback_reason, status
 ON app_private.failed_questions
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_failed_question_event();
 
@@ -732,20 +740,26 @@ BEGIN
     pg_catalog.replace(v_candidate.id::text, '-', '')
   );
 
-  INSERT INTO app_private.kb_documents (
-    public_id, data_origin, category, service_name, answer_summary,
-    procedure_steps, required_documents, processing_time, fee, department,
-    source_title, source_url, last_verified_at, caution, status,
-    created_by, approved_by, approved_at
-  ) VALUES (
-    v_public_id, 'OFFICIAL', v_candidate.category, v_candidate.title,
-    v_candidate.answer_summary, v_candidate.procedure_steps,
-    v_candidate.required_documents, v_candidate.processing_time,
-    v_candidate.fee, v_candidate.department, v_candidate.source_title,
-    v_candidate.source_url, v_candidate.last_verified_at, v_candidate.caution,
-    'ACTIVE', v_candidate.created_by, p_actor_id, v_approved_at
-  )
-  RETURNING id INTO v_kb_id;
+  BEGIN
+    INSERT INTO app_private.kb_documents (
+      public_id, data_origin, category, service_name, answer_summary,
+      procedure_steps, required_documents, processing_time, fee, department,
+      source_title, source_url, last_verified_at, caution, status,
+      created_by, approved_by, approved_at
+    ) VALUES (
+      v_public_id, 'OFFICIAL', v_candidate.category, v_candidate.title,
+      v_candidate.answer_summary, v_candidate.procedure_steps,
+      v_candidate.required_documents, v_candidate.processing_time,
+      v_candidate.fee, v_candidate.department, v_candidate.source_title,
+      v_candidate.source_url, v_candidate.last_verified_at, v_candidate.caution,
+      'ACTIVE', v_candidate.created_by, p_actor_id, v_approved_at
+    )
+    RETURNING id INTO v_kb_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P1003', MESSAGE = 'INVALID_WORKFLOW_STATE';
+  END;
 
   INSERT INTO app_private.kb_question_examples (
     kb_document_id, question_example

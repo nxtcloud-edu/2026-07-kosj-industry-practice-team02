@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import os
+import queue
+import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
 import psycopg
 from psycopg import Connection
-
 
 LINEAGE_ERROR = "LINEAGE_WRITE_REQUIRES_READ_COMMITTED"
 QUESTION_ERROR = "KB_QUESTION_WRITE_REQUIRES_READ_COMMITTED"
@@ -19,13 +22,14 @@ EVENT_ID = "45000000-0000-4000-8000-000000000201"
 REQUEST_ID = "45000000-0000-4000-8000-000000000211"
 FAILURE_ID = "45000000-0000-4000-8000-000000000301"
 CANDIDATE_ID = "45000000-0000-4000-8000-000000000401"
+REPLAY_EVENT_ID = "45000000-0000-4000-8000-000000000202"
+REPLAY_REQUEST_ID = "45000000-0000-4000-8000-000000000212"
+REPLAY_FAILURE_ID = "45000000-0000-4000-8000-000000000302"
 
 
 def rollback_quietly(connection: Connection[Any]) -> None:
-    try:
+    with contextlib.suppress(psycopg.Error):
         connection.execute("ROLLBACK")
-    except psycopg.Error:
-        pass
 
 
 def run_transaction(
@@ -64,17 +68,21 @@ def fetch_count(connection: Connection[Any], statement: str) -> int:
 
 def cleanup(connection: Connection[Any]) -> None:
     def remove_fixtures(active: Connection[Any]) -> None:
+        active.execute("DELETE FROM app_private.audit_logs WHERE target_id = %s", (CANDIDATE_ID,))
         active.execute(
-            "DELETE FROM app_private.audit_logs WHERE target_id = %s", (CANDIDATE_ID,)
+            "DELETE FROM app_private.audit_logs WHERE target_id = %s",
+            (REPLAY_FAILURE_ID,),
+        )
+        active.execute("DELETE FROM app_private.kb_candidates WHERE id = %s", (CANDIDATE_ID,))
+        active.execute("DELETE FROM app_private.failed_questions WHERE id = %s", (FAILURE_ID,))
+        active.execute("DELETE FROM app_private.interaction_events WHERE id = %s", (EVENT_ID,))
+        active.execute(
+            "DELETE FROM app_private.failed_questions WHERE id = %s",
+            (REPLAY_FAILURE_ID,),
         )
         active.execute(
-            "DELETE FROM app_private.kb_candidates WHERE id = %s", (CANDIDATE_ID,)
-        )
-        active.execute(
-            "DELETE FROM app_private.failed_questions WHERE id = %s", (FAILURE_ID,)
-        )
-        active.execute(
-            "DELETE FROM app_private.interaction_events WHERE id = %s", (EVENT_ID,)
+            "DELETE FROM app_private.interaction_events WHERE id = %s",
+            (REPLAY_EVENT_ID,),
         )
         active.execute("DELETE FROM app_private.kb_documents WHERE id = %s", (KB_ID,))
 
@@ -212,9 +220,7 @@ def probe_question_and_active(
     )
 
 
-def probe_event_failure(
-    read_committed: Connection[Any], repeatable_read: Connection[Any]
-) -> None:
+def probe_event_failure(read_committed: Connection[Any], repeatable_read: Connection[Any]) -> None:
     cleanup(read_committed)
     setup_event(read_committed, with_failure=False)
 
@@ -272,7 +278,172 @@ def probe_failure_candidate(
     )
 
 
-def run_probes(admin_dsn: str) -> None:
+def setup_replay_confirm(connection: Connection[Any]) -> None:
+    def insert_fixtures(active: Connection[Any]) -> None:
+        active.execute(
+            """
+            INSERT INTO app_private.interaction_events (
+              id, intent, answer_status, fallback_reason, source_count,
+              used_source_ids, response_time_ms, is_test, request_id
+            ) VALUES (
+              %s, 'BULKY_WASTE', 'FALLBACK', 'INSUFFICIENT_GROUNDING',
+              0, '[]'::jsonb, 1, true, %s
+            )
+            """,
+            (REPLAY_EVENT_ID, REPLAY_REQUEST_ID),
+        )
+        active.execute(
+            """
+            INSERT INTO app_private.failed_questions (
+              id, interaction_event_id, masked_question, intent, fallback_reason,
+              candidate_eligible, status
+            ) VALUES (
+              %s, %s, '[MASKED] MOCK replay-confirm failure', 'BULKY_WASTE',
+              'INSUFFICIENT_GROUNDING', true, 'NEW'
+            )
+            """,
+            (REPLAY_FAILURE_ID, REPLAY_EVENT_ID),
+        )
+
+    run_transaction(connection, insert_fixtures)
+
+
+def probe_replay_confirm_lock_order(admin_dsn: str) -> None:
+    worker_pid: queue.Queue[int] = queue.Queue(maxsize=1)
+    worker_result: queue.Queue[BaseException | None] = queue.Queue(maxsize=1)
+    worker_done = threading.Event()
+
+    def confirm_reason() -> None:
+        try:
+            with psycopg.connect(admin_dsn, autocommit=True) as connection:
+                worker_pid.put(connection.info.backend_pid)
+                connection.execute("BEGIN")
+                connection.execute("SET LOCAL deadlock_timeout = '100ms'")
+                connection.execute("SET LOCAL lock_timeout = '5s'")
+                connection.execute("SET LOCAL statement_timeout = '10s'")
+                try:
+                    connection.execute(
+                        "SELECT app_api.confirm_failed_question_reason(%s, %s, %s, %s)",
+                        (
+                            REPLAY_FAILURE_ID,
+                            "MOCK-T4-OPERATOR",
+                            "OPERATOR",
+                            "INSUFFICIENT_GROUNDING",
+                        ),
+                    )
+                    connection.execute("COMMIT")
+                    worker_result.put(None)
+                except BaseException as error:
+                    rollback_quietly(connection)
+                    worker_result.put(error)
+        except BaseException as error:
+            if worker_pid.empty():
+                worker_pid.put(-1)
+            if worker_result.empty():
+                worker_result.put(error)
+        finally:
+            worker_done.set()
+
+    with psycopg.connect(admin_dsn, autocommit=True) as replay:
+        cleanup(replay)
+        setup_replay_confirm(replay)
+        replay.execute("BEGIN")
+        replay.execute("SET LOCAL deadlock_timeout = '100ms'")
+        replay.execute("SET LOCAL lock_timeout = '5s'")
+        replay.execute("SET LOCAL statement_timeout = '10s'")
+        replay.execute(
+            "SELECT 1 FROM app_private.interaction_events WHERE id = %s FOR SHARE",
+            (REPLAY_EVENT_ID,),
+        )
+
+        worker = threading.Thread(target=confirm_reason, daemon=True)
+        worker.start()
+        pid = worker_pid.get(timeout=3)
+        if pid < 0:
+            worker.join(timeout=3)
+            error = worker_result.get_nowait()
+            if error is not None:
+                raise error
+            raise AssertionError("CONFIRM_WORKER_START_FAILED")
+
+        deadline = time.monotonic() + 3
+        while not worker_done.is_set() and time.monotonic() < deadline:
+            waiting = replay.execute(
+                """
+                SELECT wait_event_type = 'Lock'
+                FROM pg_catalog.pg_stat_activity
+                WHERE pid = %s
+                """,
+                (pid,),
+            ).fetchone()
+            if waiting is not None and bool(waiting[0]):
+                break
+            time.sleep(0.02)
+
+        replay_error: BaseException | None = None
+        replay_row: tuple[object, ...] | None = None
+        try:
+            replay_row = replay.execute(
+                """
+                SELECT * FROM app_api.record_interaction(
+                  %s, 'BULKY_WASTE', 'FALLBACK', 'INSUFFICIENT_GROUNDING',
+                  ARRAY[]::text[], 1, NULL, NULL, true,
+                  '[MASKED] MOCK replay-confirm failure'
+                )
+                """,
+                (REPLAY_REQUEST_ID,),
+            ).fetchone()
+            replay.execute("COMMIT")
+        except BaseException as error:
+            replay_error = error
+            rollback_quietly(replay)
+
+        worker.join(timeout=10)
+        if worker.is_alive():
+            raise AssertionError("REPLAY_CONFIRM_WORKER_TIMEOUT")
+        confirm_error = worker_result.get_nowait()
+
+        for operation_error in (replay_error, confirm_error):
+            if isinstance(operation_error, psycopg.Error) and operation_error.sqlstate == "40P01":
+                raise AssertionError("REPLAY_CONFIRM_DEADLOCK") from None
+            if operation_error is not None:
+                raise operation_error
+
+        if replay_row is None or tuple(str(value) for value in replay_row) != (
+            REPLAY_EVENT_ID,
+            REPLAY_FAILURE_ID,
+        ):
+            raise AssertionError("REPLAY_RETURNED_DIFFERENT_LINEAGE")
+        lineage = replay.execute(
+            """
+            SELECT events.fallback_reason::text, failures.status::text,
+                   failures.fallback_reason::text
+            FROM app_private.interaction_events AS events
+            JOIN app_private.failed_questions AS failures
+              ON failures.interaction_event_id = events.id
+            WHERE events.id = %s AND failures.id = %s
+            """,
+            (REPLAY_EVENT_ID, REPLAY_FAILURE_ID),
+        ).fetchone()
+        if lineage != (
+            "INSUFFICIENT_GROUNDING",
+            "REASON_CONFIRMED",
+            "INSUFFICIENT_GROUNDING",
+        ):
+            raise AssertionError("REPLAY_CONFIRM_LINEAGE_INVALID")
+        audit_count = fetch_count(
+            replay,
+            f"SELECT count(*) FROM app_private.audit_logs "
+            f"WHERE target_id = '{REPLAY_FAILURE_ID}'::uuid "
+            f"AND action = 'FAILED_QUESTION_REASON_CONFIRMED'",
+        )
+        if audit_count != 1:
+            raise AssertionError("REPLAY_CONFIRM_AUDIT_COUNT_INVALID")
+
+        cleanup(replay)
+
+
+def run_probes(admin_dsn: str) -> int:
     if not admin_dsn.strip():
         raise ValueError("ADMIN_DATABASE_URL_REQUIRED")
 
@@ -284,9 +455,27 @@ def run_probes(admin_dsn: str) -> None:
             probe_question_and_active(read_committed, repeatable_read)
             probe_event_failure(read_committed, repeatable_read)
             probe_failure_candidate(read_committed, repeatable_read)
+            workflow_available = fetch_count(
+                read_committed,
+                """
+                SELECT (
+                  pg_catalog.to_regprocedure(
+                    'app_api.confirm_failed_question_reason(uuid,text,text,text)'
+                  ) IS NOT NULL
+                )::integer
+                """,
+            )
         finally:
             rollback_quietly(repeatable_read)
             cleanup(read_committed)
+
+    if workflow_available:
+        try:
+            probe_replay_confirm_lock_order(admin_dsn)
+        finally:
+            with psycopg.connect(admin_dsn, autocommit=True) as cleanup_connection:
+                cleanup(cleanup_connection)
+    return 3 + workflow_available
 
 
 def main() -> int:
@@ -296,7 +485,7 @@ def main() -> int:
         return 2
 
     try:
-        run_probes(admin_dsn)
+        scenario_count = run_probes(admin_dsn)
     except psycopg.Error:
         print("[FAIL] step=DATABASE-CONCURRENCY reason=database code=1")
         return 1
@@ -304,7 +493,7 @@ def main() -> int:
         print("[FAIL] step=DATABASE-CONCURRENCY reason=invariant code=1")
         return 1
 
-    print("[PASS] step=DATABASE-CONCURRENCY scenarios=3 connections=2")
+    print(f"[PASS] step=DATABASE-CONCURRENCY scenarios={scenario_count} connections=2")
     return 0
 
 
