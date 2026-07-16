@@ -104,12 +104,14 @@ container가 DB 하나뿐임을 별도로 검증한다. `supabase test db`의 �
 테스트 실행용이며 persistent runtime 범위에 포함하지 않는다.
 
 후속 품질 review에서 첫 regression test가 source 전체 문자열을 검사해 주석 속 정답과 실제
-대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. 동일 mutant가 기존 checker에서
-`True`가 되어 RED로 실패함을 확인한 뒤 PowerShell parser의 live `CommandAst` 검사로 교체했다.
-이제 `START-LOCAL-DATABASE` step 호출은 정확히 하나여야 하며 command name, pinned binary 변수,
-`@("db", "start")`, working-directory 변수의 AST type/text/value가 모두 일치해야 한다. 주석,
-dead string, command/argument 대소문자, extra argument, variable argument/binary, duplicate invocation
-mutant는 모두 거부한다.
+대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. AST 검사로 한 차례 강화했지만,
+재검토에서 exact 호출을 `if ($false)`에 두고 live direct bare `start`를 실행하면 syntactic AST가
+통과하는 Important 우회가 재현됐다. 이 mutant가 기존 AST checker에서 `True`가 되는 RED를 확보한
+뒤 static control-flow 주장을 제거했다. 현재 test는 실제 `verify_database.ps1`을 synthetic temp
+repo에서 실행한다. API venv Python launcher를 fake Docker/Supabase/Python executable로 복사하고,
+fake Supabase가 실제 받은 argv만 합성 JSONL에 기록한 뒤 exit 7로 gate를 안전하게 중단한다.
+production은 첫/유일 start invocation `['db', 'start']`와 stable 비노출 출력만 만들며, dead exact
+block + live direct bare mutant는 `['start']`로 관찰돼 같은 계약을 통과하지 못한다.
 
 ## 7. 버전 전후
 
@@ -160,9 +162,13 @@ mutant는 모두 거부한다.
 | correction secret / pinned CLI / diff | exit 0 / exit 0 / exit 0 | secret output 0, exact CLI PASS, whitespace error 0 | agent terminal |
 | independent correction quality review | whole-source string test의 false-pass Important 1건 | fix required | reviewer report |
 | AST mutant regression RED | 주석 속 정답 + live alternate-case arguments가 기존 checker에서 `True` | focused 1 expected failure | agent terminal |
-| AST contract GREEN | actual runner pass; comment/dead-string/case/extra/variable/wrong-binary/duplicate mutants reject | focused 2/2 | agent terminal |
-| case-insensitive duplicate mutant RED→GREEN | PowerShell의 case-insensitive command 중복을 추가 재현하고 AST 수집도 case-insensitive로 보정 | focused expected failure 후 2/2 pass | agent terminal |
+| AST contract GREEN (superseded) | actual runner pass; comment/dead-string/case/extra/variable/wrong-binary/duplicate mutants reject | focused 2/2 | agent terminal |
+| case-insensitive duplicate mutant RED→GREEN (superseded) | PowerShell의 case-insensitive command 중복을 추가 재현하고 AST 수집도 case-insensitive로 보정 | focused expected failure 후 2/2 pass | agent terminal |
 | corrected tooling module | exit 0 | 20 tests, 64.560s, OK | agent terminal |
+| independent correction quality re-review | dead exact AST + live direct bare start false-pass Important 1건 | behavioral fix required | reviewer report |
+| behavioral bypass RED | `if ($false)` exact call + direct bare invocation이 AST checker에서 `True` | focused 1 expected failure | agent terminal |
+| actual runner argument capture GREEN | production `['db','start']`, mutant `['start']`, stable exit 7/no stderr | focused 2/2, 16.930s | agent terminal |
+| behavioral correction tooling module | exit 0 | 20 tests, 53.179s, OK | agent terminal |
 
 ### 미실행 검증과 이유
 
@@ -174,7 +180,7 @@ mutant는 모두 거부한다.
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: Task 0~2에서 실제 env/key/질문/DB 데이터 접근 0. env helper 검증은 synthetic temp fixture만 사용했다.
-- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. start regression은 source를 stdin으로 local PowerShell parser에 전달해 live AST만 검사하며 Docker·network·provider env를 읽지 않는다. repository secret scan 통과.
+- Security: CLI URL·크기·SHA-256·child version을 exact 비교하고, 인자/child/예외/경로 값을 출력하지 않으며, cleanup은 `.tools/supabase/` 하위의 자체 임시 경로로 제한했다. 실제 `.env`/DeepSeek key는 읽지 않았고 atomic failure injection에서 기존 provider line byte와 CRLF 보존·temp cleanup을 확인했다. bare `start` 대신 `db start`를 강제해 불필요한 persistent Kong listener를 제거하는 방향으로 경계를 좁혔다. behavioral start regression은 synthetic temp repo와 fake executables만 사용하며 실제 Docker/network/provider env를 호출하지 않는다. fake Supabase는 합성 argv만 ACL이 적용되는 OS temp에 기록하고 runner의 stable stdout/stderr 비노출 경계도 함께 확인한다. repository secret scan 통과.
 - Accessibility: UI 변경 없음.
 - Performance/cost: baseline local CPU/disk 사용; 외부 유료 API/인프라 비용 0원.
 

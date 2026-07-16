@@ -36,71 +36,6 @@ EXPECTED_PIN = {
     ),
     "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16",
 }
-DATABASE_START_AST_PROBE = r'''
-$source = [Console]::In.ReadToEnd()
-$tokens = $null
-$parseErrors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseInput(
-    $source,
-    [ref]$tokens,
-    [ref]$parseErrors
-)
-$commands = @($ast.FindAll({
-    param($node)
-    $node -is [System.Management.Automation.Language.CommandAst] -and
-        $node.GetCommandName() -ieq "Invoke-DatabaseStep"
-}, $true))
-$records = @()
-foreach ($command in $commands) {
-    $elements = @()
-    foreach ($element in $command.CommandElements) {
-        $value = $null
-        if ($element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
-            $value = $element.Value
-        }
-        elseif ($element -is [System.Management.Automation.Language.VariableExpressionAst]) {
-            $value = $element.VariablePath.UserPath
-        }
-        $elements += [pscustomobject]@{
-            type = $element.GetType().Name
-            text = $element.Extent.Text
-            value = $value
-        }
-    }
-    $records += [pscustomobject]@{ elements = @($elements) }
-}
-[pscustomobject]@{
-    parse_error_count = @($parseErrors).Count
-    commands = @($records)
-} | ConvertTo-Json -Compress -Depth 6
-'''
-EXPECTED_DATABASE_START_ELEMENTS = [
-    {
-        "type": "StringConstantExpressionAst",
-        "text": "Invoke-DatabaseStep",
-        "value": "Invoke-DatabaseStep",
-    },
-    {"type": "CommandParameterAst", "text": "-Step", "value": None},
-    {
-        "type": "StringConstantExpressionAst",
-        "text": '"START-LOCAL-DATABASE"',
-        "value": "START-LOCAL-DATABASE",
-    },
-    {"type": "CommandParameterAst", "text": "-FilePath", "value": None},
-    {
-        "type": "VariableExpressionAst",
-        "text": "$supabaseBinary",
-        "value": "supabaseBinary",
-    },
-    {"type": "CommandParameterAst", "text": "-Arguments", "value": None},
-    {"type": "ArrayExpressionAst", "text": '@("db", "start")', "value": None},
-    {"type": "CommandParameterAst", "text": "-WorkingDirectory", "value": None},
-    {
-        "type": "VariableExpressionAst",
-        "text": "$repositoryRoot",
-        "value": "repositoryRoot",
-    },
-]
 
 
 def powershell_executable() -> str:
@@ -161,40 +96,82 @@ def load_module(path: Path, name: str) -> ModuleType:
     return module
 
 
-def database_start_contract_is_exact(source: str) -> bool:
-    result = subprocess.run(
-        [
-            powershell_executable(),
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            DATABASE_START_AST_PROBE,
-        ],
-        input=source,
-        capture_output=True,
-        check=False,
-        encoding="utf-8",
-        errors="replace",
-        timeout=20,
-    )
-    if result.returncode != 0 or result.stderr:
-        raise AssertionError("PowerShell AST probe failed")
-    payload = json.loads(result.stdout)
-    if payload["parse_error_count"] != 0:
-        return False
-    start_commands = []
-    for command in payload.get("commands") or []:
-        elements = command["elements"]
-        if any(
-            element["type"] == "CommandParameterAst"
-            and element["text"] == "-Step"
-            and index + 1 < len(elements)
-            and elements[index + 1]["type"] == "StringConstantExpressionAst"
-            and elements[index + 1]["value"] == "START-LOCAL-DATABASE"
-            for index, element in enumerate(elements)
+def run_database_runner_with_start_capture(
+    source: str,
+) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+    runtime_executable = ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"
+    if not runtime_executable.is_file():
+        raise AssertionError("API venv Python is required for the synthetic runner fixture")
+
+    with tempfile.TemporaryDirectory(prefix="sejong database runner ") as directory:
+        root = Path(directory)
+        scripts = root / "scripts"
+        fake_bin = root / "fake-bin"
+        supabase_dir = root / ".tools" / "supabase" / "v2.109.1"
+        python_dir = root / "apps" / "api" / ".venv" / "Scripts"
+        for path in (scripts, fake_bin, supabase_dir, python_dir):
+            path.mkdir(parents=True, exist_ok=True)
+
+        runner = scripts / DATABASE_RUNNER_PATH.name
+        runner.write_text(source, encoding="utf-8")
+        (scripts / BOOTSTRAP_PATH.name).write_text("exit 0\n", encoding="utf-8")
+        (scripts / PROVISION_PATH.name).write_text("# synthetic fixture\n", encoding="utf-8")
+        (scripts / SQL_RUNNER_PATH.name).write_text("# synthetic fixture\n", encoding="utf-8")
+
+        for destination in (
+            fake_bin / "docker.exe",
+            supabase_dir / "supabase.exe",
+            python_dir / "python.exe",
         ):
-            start_commands.append(elements)
-    return start_commands == [EXPECTED_DATABASE_START_ELEMENTS]
+            shutil.copy2(runtime_executable, destination)
+
+        (root / "version").write_text("raise SystemExit(0)\n", encoding="utf-8")
+        capture_path = root / "start-invocations.jsonl"
+        capture_program = '''
+import json
+import os
+import sys
+from pathlib import Path
+
+invocation = [Path(sys.argv[0]).name, *sys.argv[1:]]
+with open(os.environ["SEJONG_SYNTHETIC_START_CAPTURE"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps(invocation) + "\\n")
+raise SystemExit(7)
+'''
+        for command in ("db", "start"):
+            (root / command).write_text(capture_program, encoding="utf-8")
+
+        environment = {
+            key: os.environ[key]
+            for key in ("COMSPEC", "PATHEXT", "SystemRoot", "TEMP", "TMP", "WINDIR")
+            if key in os.environ
+        }
+        environment["PATH"] = str(fake_bin)
+        environment["SEJONG_SYNTHETIC_START_CAPTURE"] = str(capture_path)
+        result = subprocess.run(
+            [
+                powershell_executable(),
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(runner),
+            ],
+            cwd=root,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+            env=environment,
+            timeout=30,
+        )
+        invocations = []
+        if capture_path.is_file():
+            invocations = [
+                json.loads(line)
+                for line in capture_path.read_text(encoding="utf-8").splitlines()
+            ]
+        return result, invocations
 
 
 def run_python_tool(path: Path, *arguments: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -424,47 +401,59 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_database_runner_starts_only_postgres_with_exact_cli_arguments(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
 
-        self.assertTrue(database_start_contract_is_exact(script))
+        result, invocations = run_database_runner_with_start_capture(script)
 
-    def test_database_start_contract_rejects_non_exact_live_command_asts(self) -> None:
-        exact_call = '''
-Invoke-DatabaseStep `
-    -Step "START-LOCAL-DATABASE" `
-    -FilePath $supabaseBinary `
-    -Arguments @("db", "start") `
-    -WorkingDirectory $repositoryRoot
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(result.stderr)
+        self.assertEqual(invocations, [["db", "start"]])
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "[START] step=PREFLIGHT-DOCKER",
+                "[PASS] step=PREFLIGHT-DOCKER",
+                "[START] step=VERIFY-SUPABASE-VERSION",
+                "[PASS] step=VERIFY-SUPABASE-VERSION",
+                "[START] step=START-LOCAL-DATABASE",
+                "[FAIL] step=START-LOCAL-DATABASE reason=child code=7",
+            ],
+        )
+
+    def test_database_start_capture_rejects_dead_exact_block_and_live_bare_call(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        exact_block = '''    if (-not $skipStart) {
+        $null = Invoke-DatabaseStep `
+            -Step "START-LOCAL-DATABASE" `
+            -FilePath $supabaseBinary `
+            -Arguments @("db", "start") `
+            -WorkingDirectory $repositoryRoot
+    }
 '''
-        mutants = {
-            "correct text only in comment and alternate argument casing": '''
-# -Arguments @("db", "start")
-Invoke-DatabaseStep `
-    -Step "START-LOCAL-DATABASE" `
-    -FilePath $supabaseBinary `
-    -Arguments @("DB", "START") `
-    -WorkingDirectory $repositoryRoot
-''',
-            "correct text only in dead string and extra argument": '''
-@'
--Arguments @("db", "start")
-'@
-Invoke-DatabaseStep `
-    -Step "START-LOCAL-DATABASE" `
-    -FilePath $supabaseBinary `
-    -Arguments @("db", "start", "extra") `
-    -WorkingDirectory $repositoryRoot
-''',
-            "variable arguments": exact_call.replace('@("db", "start")', "$startArguments"),
-            "wrong executable variable": exact_call.replace(
-                "$supabaseBinary", "$unapprovedBinary"
-            ),
-            "duplicate start command": exact_call + exact_call,
-            "duplicate with alternate command casing": exact_call
-            + exact_call.replace("Invoke-DatabaseStep", "invoke-databasestep"),
+        mutant_block = '''    if (-not $skipStart) {
+        if ($false) {
+            $null = Invoke-DatabaseStep `
+                -Step "START-LOCAL-DATABASE" `
+                -FilePath $supabaseBinary `
+                -Arguments @("db", "start") `
+                -WorkingDirectory $repositoryRoot
         }
+        $null = & $supabaseBinary start
+        if ($LASTEXITCODE -ne 0) {
+            Throw-DatabaseGateFailure `
+                -Step "START-LOCAL-DATABASE" `
+                -Reason "child" `
+                -Code $LASTEXITCODE
+        }
+    }
+'''
+        self.assertEqual(script.count(exact_block), 1)
+        mutant = script.replace(exact_block, mutant_block)
 
-        for name, mutant in mutants.items():
-            with self.subTest(name=name):
-                self.assertFalse(database_start_contract_is_exact(mutant))
+        result, invocations = run_database_runner_with_start_capture(mutant)
+
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(result.stderr)
+        self.assertEqual(invocations, [["start"]])
+        self.assertNotEqual(invocations, [["db", "start"]])
 
     def test_database_runner_uses_exact_newest_first_compensation_order(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
