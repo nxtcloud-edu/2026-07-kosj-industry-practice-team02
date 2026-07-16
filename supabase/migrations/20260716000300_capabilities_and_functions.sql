@@ -263,6 +263,7 @@ DECLARE
   v_source_public_id text;
   v_source_row_id uuid;
   v_routed_office_id uuid;
+  v_existing_routed_office_public_id text;
   v_interaction_id uuid;
   v_failed_question_id uuid;
   v_existing app_private.interaction_events%ROWTYPE;
@@ -408,7 +409,46 @@ BEGIN
   END IF;
   v_used_source_ids := pg_catalog.to_jsonb(p_used_source_ids);
 
-  -- Always lock sources in lexical order, then the routed office.
+  -- A committed request is an immutable idempotency record. Compare it before
+  -- consulting mutable ACTIVE/OFFICIAL provenance, and never compare retained
+  -- question text, which may already have been purged.
+  SELECT events.* INTO v_existing
+  FROM app_private.interaction_events AS events
+  WHERE events.request_id = p_request_id
+  FOR SHARE;
+
+  IF FOUND THEN
+    IF v_existing.routed_office_id IS NOT NULL THEN
+      SELECT offices.public_id INTO v_existing_routed_office_public_id
+      FROM app_private.offices AS offices
+      WHERE offices.id = v_existing.routed_office_id;
+    END IF;
+
+    IF v_existing.intent IS DISTINCT FROM v_intent
+       OR v_existing.answer_status IS DISTINCT FROM v_answer_status
+       OR v_existing.fallback_reason IS DISTINCT FROM v_fallback_reason
+       OR v_existing.source_count IS DISTINCT FROM v_source_count
+       OR v_existing.used_source_ids IS DISTINCT FROM v_used_source_ids
+       OR v_existing.response_time_ms IS DISTINCT FROM p_response_time_ms
+       OR v_existing.selected_region IS DISTINCT FROM p_selected_region
+       OR v_existing_routed_office_public_id
+          IS DISTINCT FROM p_routed_office_public_id
+       OR v_existing.is_test IS DISTINCT FROM p_is_test THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P1010', MESSAGE = 'INVALID_INTERACTION';
+    END IF;
+
+    v_interaction_id := v_existing.id;
+    SELECT failures.id INTO v_failed_question_id
+    FROM app_private.failed_questions AS failures
+    WHERE failures.interaction_event_id = v_interaction_id
+    FOR SHARE;
+
+    RETURN QUERY SELECT v_interaction_id, v_failed_question_id;
+    RETURN;
+  END IF;
+
+  -- New writes always lock sources in lexical order, then the routed office.
   IF p_answer_status = 'SUCCESS' THEN
     FOR v_source_public_id IN
       SELECT sources.public_id

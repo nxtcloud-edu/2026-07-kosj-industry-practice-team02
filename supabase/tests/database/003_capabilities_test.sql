@@ -177,36 +177,75 @@ SELECT is(
   'all eight base tables force RLS'
 );
 
-SELECT ok(
+SELECT is(
   (
-    SELECT pg_catalog.count(*) = 8
+    SELECT pg_catalog.count(*)::integer
     FROM pg_catalog.pg_policy AS policies
     JOIN pg_catalog.pg_class AS relations ON relations.oid = policies.polrelid
     JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = relations.relnamespace
     WHERE namespaces.nspname = 'app_private'
-      AND policies.polname IN (
-        'kb_documents_owner_all', 'kb_question_examples_owner_all',
-        'offices_owner_all', 'office_service_mappings_owner_all',
-        'interaction_events_owner_all', 'failed_questions_owner_all',
-        'kb_candidates_owner_all', 'audit_logs_owner_all'
-      )
-  )
-  AND (
-    SELECT pg_catalog.count(*) = 8
-    FROM pg_catalog.pg_policy AS policies
-    JOIN pg_catalog.pg_class AS relations ON relations.oid = policies.polrelid
-    JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = relations.relnamespace
-    WHERE namespaces.nspname = 'app_private'
-      AND policies.polcmd = '*'
-      AND policies.polpermissive
-      AND policies.polroles = ARRAY[
+  ),
+  8,
+  'app_private has exactly eight policies total'
+);
+
+SELECT results_eq(
+  $actual$
+    SELECT relations.relname::text COLLATE "C",
+      policies.polname::text COLLATE "C",
+      policies.polcmd::text COLLATE "C",
+      policies.polpermissive,
+      policies.polroles = ARRAY[
         (SELECT roles.oid FROM pg_catalog.pg_roles AS roles
          WHERE roles.rolname = 'sejong_schema_owner')
-      ]::oid[]
-      AND pg_catalog.pg_get_expr(policies.polqual, policies.polrelid) = 'true'
-      AND pg_catalog.pg_get_expr(policies.polwithcheck, policies.polrelid) = 'true'
-  ),
-  'each table has exactly one true owner-only FOR ALL policy'
+      ]::oid[] AS owner_only,
+      pg_catalog.pg_get_expr(
+        policies.polqual, policies.polrelid
+      )::text COLLATE "C" AS using_expression,
+      pg_catalog.pg_get_expr(
+        policies.polwithcheck, policies.polrelid
+      )::text COLLATE "C" AS check_expression
+    FROM pg_catalog.pg_policy AS policies
+    JOIN pg_catalog.pg_class AS relations ON relations.oid = policies.polrelid
+    JOIN pg_catalog.pg_namespace AS namespaces
+      ON namespaces.oid = relations.relnamespace
+    WHERE namespaces.nspname = 'app_private'
+    ORDER BY relations.relname COLLATE "C"
+  $actual$,
+  $expected$
+    SELECT expected.table_name COLLATE "C",
+      expected.policy_name COLLATE "C",
+      expected.command_name COLLATE "C",
+      expected.is_permissive,
+      expected.owner_only,
+      expected.using_expression COLLATE "C",
+      expected.check_expression COLLATE "C"
+    FROM (
+      VALUES
+        ('audit_logs'::text, 'audit_logs_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('failed_questions'::text, 'failed_questions_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('interaction_events'::text, 'interaction_events_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('kb_candidates'::text, 'kb_candidates_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('kb_documents'::text, 'kb_documents_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('kb_question_examples'::text, 'kb_question_examples_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('office_service_mappings'::text,
+         'office_service_mappings_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('offices'::text, 'offices_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text)
+    ) AS expected(
+      table_name, policy_name, command_name, is_permissive, owner_only,
+      using_expression, check_expression
+    )
+    ORDER BY expected.table_name COLLATE "C"
+  $expected$,
+  'each table has its exact true owner-only permissive FOR ALL policy'
 );
 
 SELECT is(
@@ -295,6 +334,92 @@ SELECT ok(
   ) IS NULL,
   'app_api exposes no caller-controlled cutoff overload'
 );
+
+SELECT results_eq(
+  $actual$
+    SELECT functions.oid
+    FROM pg_catalog.pg_proc AS functions
+    JOIN pg_catalog.pg_namespace AS namespaces
+      ON namespaces.oid = functions.pronamespace
+    WHERE namespaces.nspname = 'app_api'
+    ORDER BY functions.oid
+  $actual$,
+  $expected$
+    SELECT approved.oid
+    FROM pg_catalog.unnest(
+      pg_catalog.array_remove(
+        ARRAY[
+          pg_catalog.to_regprocedure('app_api.list_active_kb(text)')::oid,
+          pg_catalog.to_regprocedure('app_api.list_offices(text,text)')::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.record_interaction(uuid,text,text,text,text[],integer,text,text,boolean,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.create_kb_candidate(uuid,text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,date,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.submit_kb_candidate(uuid,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.approve_kb_candidate(uuid,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.reject_kb_candidate(uuid,text,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.purge_expired_failed_question_text()'
+          )::oid
+        ]::oid[],
+        NULL::oid
+      )
+    ) AS approved(oid)
+    ORDER BY approved.oid
+  $expected$,
+  'app_api contains only approved DB-001 interface identities'
+);
+
+SELECT is(
+  (
+    SELECT pg_catalog.count(*)::integer
+    FROM pg_catalog.pg_proc AS functions
+    JOIN pg_catalog.pg_namespace AS namespaces
+      ON namespaces.oid = functions.pronamespace
+    WHERE namespaces.nspname = 'app_api'
+      AND pg_catalog.has_function_privilege(
+        'sejong_backend', functions.oid, 'EXECUTE'
+      )
+      AND functions.oid <> ALL (
+        pg_catalog.array_remove(
+          ARRAY[
+            pg_catalog.to_regprocedure('app_api.list_active_kb(text)')::oid,
+            pg_catalog.to_regprocedure('app_api.list_offices(text,text)')::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.record_interaction(uuid,text,text,text,text[],integer,text,text,boolean,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.create_kb_candidate(uuid,text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,date,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.submit_kb_candidate(uuid,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.approve_kb_candidate(uuid,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.reject_kb_candidate(uuid,text,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.purge_expired_failed_question_text()'
+            )::oid
+          ]::oid[],
+          NULL::oid
+        )
+      )
+  ),
+  0,
+  'backend has no EXECUTE outside the approved app_api allowlist'
+);
+
 SELECT throws_ok(
   $sql$SELECT *
         FROM app_private.purge_expired_failed_question_text_at(NULL)$sql$,
@@ -442,6 +567,19 @@ CREATE TEMPORARY TABLE task5_purge_results (
   purged_ids uuid[] NOT NULL
 ) ON COMMIT DROP;
 
+CREATE TEMPORARY TABLE task5_error_diagnostics (
+  returned_sqlstate text NOT NULL,
+  message_text text NOT NULL,
+  exception_detail text,
+  exception_hint text,
+  exception_context text,
+  schema_name text,
+  table_name text,
+  column_name text,
+  constraint_name text,
+  datatype_name text
+) ON COMMIT DROP;
+
 -- Exercise RLS through a real non-superuser backend member. Test-only direct
 -- grants prove FORCE RLS independently of the production ACL denial.
 CREATE ROLE sejong_task5_backend_probe
@@ -461,6 +599,7 @@ GRANT USAGE ON SCHEMA app_private TO sejong_task5_backend_probe;
 GRANT USAGE ON SCHEMA extensions TO sejong_task5_backend_probe;
 GRANT SELECT, INSERT ON app_private.interaction_events
   TO sejong_task5_backend_probe;
+GRANT INSERT ON task5_error_diagnostics TO sejong_task5_backend_probe;
 
 SET LOCAL ROLE sejong_task5_backend_probe;
 SELECT is(
@@ -602,14 +741,83 @@ SELECT throws_ok(
   )$sql$,
   'P1010', 'INVALID_INTERACTION', 'NULL is_test maps to stable P1010'
 );
-SELECT throws_ok(
-  $sql$SELECT * FROM app_api.record_interaction(
-    '50000000-0000-4000-8000-000000000225', 'BULKY_WASTE',
-    'FALLBACK', 'PERSONAL_LOOKUP', ARRAY[]::text[], 1,
-    NULL, NULL, true, 'MASKED_SENTINEL_MUST_NOT_LEAK '
-  )$sql$,
-  'P1010', 'INVALID_INTERACTION',
-  'invalid masked text emits only stable nonleaking sentinel'
+SET LOCAL ROLE sejong_task5_backend_probe;
+DO $capture_nonleak$
+DECLARE
+  v_sentinel constant text := 'MASKED_SENTINEL_MUST_NOT_LEAK ';
+  v_state text;
+  v_message text;
+  v_detail text;
+  v_hint text;
+  v_context text;
+  v_schema text;
+  v_table text;
+  v_column text;
+  v_constraint text;
+  v_datatype text;
+BEGIN
+  BEGIN
+    PERFORM 1
+    FROM app_api.record_interaction(
+      '50000000-0000-4000-8000-000000000225', 'BULKY_WASTE',
+      'FALLBACK', 'PERSONAL_LOOKUP', ARRAY[]::text[], 1,
+      NULL, NULL, true, v_sentinel
+    );
+
+    INSERT INTO pg_temp.task5_error_diagnostics
+    VALUES (
+      '00000', 'NO_ERROR', NULL, NULL, NULL,
+      NULL, NULL, NULL, NULL, NULL
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_state = RETURNED_SQLSTATE,
+      v_message = MESSAGE_TEXT,
+      v_detail = PG_EXCEPTION_DETAIL,
+      v_hint = PG_EXCEPTION_HINT,
+      v_context = PG_EXCEPTION_CONTEXT,
+      v_schema = SCHEMA_NAME,
+      v_table = TABLE_NAME,
+      v_column = COLUMN_NAME,
+      v_constraint = CONSTRAINT_NAME,
+      v_datatype = PG_DATATYPE_NAME;
+
+    INSERT INTO pg_temp.task5_error_diagnostics
+    VALUES (
+      v_state, v_message, v_detail, v_hint, v_context,
+      v_schema, v_table, v_column, v_constraint, v_datatype
+    );
+  END;
+END;
+$capture_nonleak$;
+RESET ROLE;
+
+SELECT ok(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        diagnostics.returned_sqlstate = 'P1010'
+        AND diagnostics.message_text = 'INVALID_INTERACTION'
+        AND pg_catalog.strpos(
+          pg_catalog.concat_ws(
+            E'\n', diagnostics.returned_sqlstate,
+            diagnostics.message_text, diagnostics.exception_detail,
+            diagnostics.exception_hint, diagnostics.exception_context,
+            diagnostics.schema_name, diagnostics.table_name,
+            diagnostics.column_name, diagnostics.constraint_name,
+            diagnostics.datatype_name
+          ),
+          'MASKED_SENTINEL_MUST_NOT_LEAK'
+        ) = 0
+      )
+    FROM task5_error_diagnostics AS diagnostics
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM app_private.interaction_events AS events
+    WHERE events.request_id = '50000000-0000-4000-8000-000000000225'
+  ),
+  'real backend member gets stable nonleaking diagnostics and zero writes'
 );
 
 -- SUCCESS provenance, exact metadata, sequential replay, and conflict.
@@ -640,6 +848,49 @@ SELECT ok(
        WHERE request_id = '50000000-0000-4000-8000-000000000301'),
   'identical replay returns existing IDs and writes no duplicate'
 );
+
+UPDATE app_private.kb_documents
+SET status = 'DRAFT', data_origin = 'MOCK'
+WHERE public_id IN ('T5-KB-ACTIVE-A', 'T5-KB-ACTIVE-B');
+UPDATE app_private.offices
+SET data_origin = 'MOCK'
+WHERE public_id = 'T5-OFFICE-OFFICIAL';
+
+SELECT lives_ok(
+  $sql$
+    INSERT INTO task5_results
+    SELECT 'success-replay-after-provenance-change',
+      result.interaction_id, result.failed_question_id
+    FROM app_api.record_interaction(
+      '50000000-0000-4000-8000-000000000301',
+      'BULKY_WASTE', 'SUCCESS', NULL,
+      ARRAY['T5-KB-ACTIVE-A', 'T5-KB-ACTIVE-B'], 17,
+      '아름동', 'T5-OFFICE-OFFICIAL', true, NULL
+    ) AS result
+  $sql$,
+  'identical replay does not revalidate mutable source or office provenance'
+);
+
+SELECT ok(
+  (SELECT first.interaction_id = replay.interaction_id
+     AND first.failed_question_id IS NULL
+     AND replay.failed_question_id IS NULL
+   FROM task5_results AS first
+   JOIN task5_results AS replay
+     ON replay.label = 'success-replay-after-provenance-change'
+   WHERE first.label = 'success-first')
+  AND (SELECT pg_catalog.count(*) = 1
+       FROM app_private.interaction_events
+       WHERE request_id = '50000000-0000-4000-8000-000000000301'),
+  'provenance-stable replay returns prior IDs and writes no duplicate'
+);
+
+UPDATE app_private.kb_documents
+SET status = 'ACTIVE', data_origin = 'OFFICIAL'
+WHERE public_id IN ('T5-KB-ACTIVE-A', 'T5-KB-ACTIVE-B');
+UPDATE app_private.offices
+SET data_origin = 'OFFICIAL'
+WHERE public_id = 'T5-OFFICE-OFFICIAL';
 
 SELECT ok(
   EXISTS (
