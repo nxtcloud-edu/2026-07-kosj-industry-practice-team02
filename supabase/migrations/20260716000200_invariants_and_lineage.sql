@@ -482,8 +482,7 @@ BEGIN
   SELECT failure.intent, failure.fallback_reason
   INTO v_failure_intent, v_failure_reason
   FROM app_private.failed_questions AS failure
-  WHERE failure.interaction_event_id = OLD.id
-  FOR UPDATE;
+  WHERE failure.interaction_event_id = OLD.id;
 
   IF NOT FOUND THEN
     RETURN NEW;
@@ -544,7 +543,6 @@ BEGIN
     SELECT 1
     FROM app_private.kb_candidates AS candidate
     WHERE candidate.failed_question_id = OLD.id
-    FOR UPDATE
   )
   INTO v_has_candidate;
 
@@ -572,6 +570,13 @@ DECLARE
   v_new_parent uuid;
   v_parent_id uuid;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'KB_QUESTION_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   IF TG_OP = 'INSERT' THEN
     v_new_parent := NEW.kb_document_id;
   ELSIF TG_OP = 'DELETE' THEN
@@ -679,19 +684,23 @@ BEFORE INSERT OR UPDATE ON app_private.interaction_events
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_interaction_event_sources();
 
 CREATE TRIGGER trg_failed_questions_validate_event
-BEFORE INSERT OR UPDATE ON app_private.failed_questions
+BEFORE INSERT OR UPDATE OF interaction_event_id, intent, fallback_reason
+ON app_private.failed_questions
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_failed_question_event();
 
 CREATE TRIGGER trg_interaction_events_validate_failure
-BEFORE UPDATE ON app_private.interaction_events
+BEFORE UPDATE OF intent, answer_status, fallback_reason
+ON app_private.interaction_events
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_interaction_event_failure();
 
 CREATE TRIGGER trg_kb_candidates_validate_failure
-BEFORE INSERT OR UPDATE ON app_private.kb_candidates
+BEFORE INSERT OR UPDATE OF failed_question_id
+ON app_private.kb_candidates
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_kb_candidate_failure();
 
 CREATE TRIGGER trg_failed_questions_validate_candidate
-BEFORE UPDATE ON app_private.failed_questions
+BEFORE UPDATE OF candidate_eligible, fallback_reason
+ON app_private.failed_questions
 FOR EACH ROW EXECUTE FUNCTION app_private.validate_failed_question_candidate();
 
 CREATE TRIGGER trg_kb_question_examples_lock_parents

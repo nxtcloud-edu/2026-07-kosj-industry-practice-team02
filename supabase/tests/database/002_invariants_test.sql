@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(57);
+SELECT plan(60);
 
 -- Explicit transaction-scoped MOCK fixtures. OFFICIAL below means only the
 -- provenance branch under test; no fixture survives this file's rollback.
@@ -695,12 +695,100 @@ SELECT is(
       AND functions.proname IN (
         'is_nonempty_text',
         'is_text_array',
-        'set_updated_at'
+        'is_unique_text_array',
+        'is_allowed_audit_changed_fields',
+        'set_updated_at',
+        'validate_interaction_event_sources',
+        'validate_failed_question_event',
+        'validate_interaction_event_failure',
+        'validate_kb_candidate_failure',
+        'validate_failed_question_candidate',
+        'lock_kb_question_parents',
+        'validate_active_kb_question'
       )
       AND 'search_path=pg_catalog' = ANY (functions.proconfig)
   ),
-  3,
-  'all three reusable helpers pin search_path to pg_catalog'
+  12,
+  'all twelve Task 4 functions pin search_path to pg_catalog'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_catalog.pg_proc AS functions
+    JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = functions.pronamespace
+    JOIN pg_catalog.pg_language AS languages ON languages.oid = functions.prolang
+    WHERE namespaces.nspname = 'app_private'
+      AND functions.proname IN (
+        'is_nonempty_text',
+        'is_text_array',
+        'is_unique_text_array',
+        'is_allowed_audit_changed_fields'
+      )
+      AND languages.lanname = 'sql'
+      AND functions.provolatile = 'i'
+      AND functions.proisstrict
+  ),
+  4,
+  'all four SQL validators are immutable and strict'
+);
+
+SELECT ok(
+  (
+    SELECT count(*) = 4
+      AND pg_catalog.bool_and(
+        CASE triggers.tgname
+          WHEN 'trg_failed_questions_validate_event' THEN columns.names = ARRAY[
+            'fallback_reason', 'intent', 'interaction_event_id'
+          ]::text[]
+          WHEN 'trg_interaction_events_validate_failure' THEN columns.names = ARRAY[
+            'answer_status', 'fallback_reason', 'intent'
+          ]::text[]
+          WHEN 'trg_kb_candidates_validate_failure' THEN columns.names = ARRAY[
+            'failed_question_id'
+          ]::text[]
+          WHEN 'trg_failed_questions_validate_candidate' THEN columns.names = ARRAY[
+            'candidate_eligible', 'fallback_reason'
+          ]::text[]
+          ELSE false
+        END
+      )
+    FROM pg_catalog.pg_trigger AS triggers
+    JOIN pg_catalog.pg_class AS tables ON tables.oid = triggers.tgrelid
+    JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = tables.relnamespace
+    CROSS JOIN LATERAL (
+      SELECT pg_catalog.array_agg(attributes.attname::text ORDER BY attributes.attname) AS names
+      FROM pg_catalog.unnest(triggers.tgattr::smallint[]) AS numbers(attnum)
+      JOIN pg_catalog.pg_attribute AS attributes
+        ON attributes.attrelid = tables.oid
+        AND attributes.attnum = numbers.attnum
+    ) AS columns
+    WHERE namespaces.nspname = 'app_private'
+      AND NOT triggers.tgisinternal
+      AND triggers.tgname IN (
+        'trg_failed_questions_validate_event',
+        'trg_interaction_events_validate_failure',
+        'trg_kb_candidates_validate_failure',
+        'trg_failed_questions_validate_candidate'
+      )
+  )
+  AND pg_catalog.pg_get_functiondef(
+    'app_private.validate_interaction_event_failure()'::regprocedure
+  ) !~* 'FOR[[:space:]]+UPDATE'
+  AND pg_catalog.pg_get_functiondef(
+    'app_private.validate_failed_question_candidate()'::regprocedure
+  ) !~* 'FOR[[:space:]]+UPDATE',
+  'lineage UPDATE triggers are column scoped and reverse validators do not lock children'
+);
+
+SELECT ok(
+  pg_catalog.pg_get_functiondef(
+    'app_private.lock_kb_question_parents()'::regprocedure
+  ) ~ 'current_setting\(''transaction_isolation''\)'
+  AND pg_catalog.pg_get_functiondef(
+    'app_private.lock_kb_question_parents()'::regprocedure
+  ) LIKE '%KB_QUESTION_WRITE_REQUIRES_READ_COMMITTED%',
+  'question parent lock fails closed outside read committed isolation'
 );
 
 -- Remove every transaction-scoped fixture, force deferred checks, and prove none remain.
@@ -710,9 +798,16 @@ DELETE FROM app_private.kb_candidates
 WHERE source_url LIKE 'https://example.invalid/t4/%';
 DELETE FROM app_private.failed_questions
 WHERE interaction_event_id IN (
-  SELECT id FROM app_private.interaction_events WHERE is_test
+  SELECT id
+  FROM app_private.interaction_events
+  WHERE request_id BETWEEN
+    '40000000-0000-4000-8000-000000000211'::uuid
+    AND '40000000-0000-4000-8000-000000000233'::uuid
 );
-DELETE FROM app_private.interaction_events WHERE is_test;
+DELETE FROM app_private.interaction_events
+WHERE request_id BETWEEN
+  '40000000-0000-4000-8000-000000000211'::uuid
+  AND '40000000-0000-4000-8000-000000000233'::uuid;
 DELETE FROM app_private.offices
 WHERE source_url LIKE 'https://example.invalid/t4/%';
 DELETE FROM app_private.kb_documents
@@ -735,9 +830,17 @@ SELECT is(
       FROM app_private.failed_questions AS failures
       JOIN app_private.interaction_events AS events
         ON events.id = failures.interaction_event_id
-      WHERE events.is_test
+      WHERE events.request_id BETWEEN
+        '40000000-0000-4000-8000-000000000211'::uuid
+        AND '40000000-0000-4000-8000-000000000233'::uuid
     )
-    + (SELECT count(*) FROM app_private.interaction_events WHERE is_test)
+    + (
+      SELECT count(*)
+      FROM app_private.interaction_events
+      WHERE request_id BETWEEN
+        '40000000-0000-4000-8000-000000000211'::uuid
+        AND '40000000-0000-4000-8000-000000000233'::uuid
+    )
     + (
       SELECT count(*) FROM app_private.offices
       WHERE source_url LIKE 'https://example.invalid/t4/%'
