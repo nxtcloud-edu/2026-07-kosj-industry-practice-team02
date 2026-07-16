@@ -984,13 +984,15 @@ and review fix `264772d` (`fix(db): stabilize capability replay guarantees`).
 - Create: `database/rollbacks/20260716000400_candidate_workflow.rollback.sql`
 - Create: `supabase/tests/database/004_approval_test.sql`
 - Modify: `supabase/tests/database/003_capabilities_test.sql`
+- Modify: `supabase/tests/database/002_invariants_test.sql`
+- Modify: `scripts/test_database_concurrency.py`
 - Modify: `database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql`
 
 Applied and committed migrations `00100~00300` are immutable. All Task 6
 constraints, trigger replacements, functions, grants, and audit allowlist changes
 belong to the new `00400` forward migration and its matching compensation.
 
-- [ ] **Step 1: Write failing approval tests**
+- [x] **Step 1: Write failing approval tests**
 
 Use explicit MOCK and OFFICIAL fixtures to prove:
 
@@ -1017,7 +1019,7 @@ Use explicit MOCK and OFFICIAL fixtures to prove:
   exact four-argument confirmation and approval identities and rejects every
   other `app_api` EXECUTE grant.
 
-- [ ] **Step 2: Run approval tests and confirm RED**
+- [x] **Step 2: Run approval tests and confirm RED**
 
 Run:
 
@@ -1027,7 +1029,7 @@ Run:
 
 Expected: missing `00400` reason-confirmation/candidate functions and audit/lineage refinements cause failure.
 
-- [ ] **Step 3: Implement reason confirmation, candidate creation, and submission**
+- [x] **Step 3: Implement reason confirmation, candidate creation, and submission**
 
 Implement the exact signatures from this plan. All functions are SECURITY DEFINER with fixed search path, explicit `FOR UPDATE` locks where an existing row changes, and stable SQLSTATE errors.
 
@@ -1084,7 +1086,7 @@ reviewer, comment, approval time, and activated KB; REJECTED has reviewer and
 comment but no approval time or activated KB. The existing different-reviewer
 constraint remains mandatory.
 
-- [ ] **Step 4: Implement atomic approval**
+- [x] **Step 4: Implement atomic approval**
 
 `approve_kb_candidate` must:
 
@@ -1098,11 +1100,11 @@ constraint remains mandatory.
 8. return the generated public ID;
 9. rely on the transaction and deferred ACTIVE-question trigger so any failure rolls back all four writes.
 
-- [ ] **Step 5: Implement atomic rejection**
+- [x] **Step 5: Implement atomic rejection**
 
 `reject_kb_candidate` requires APPROVER, a different actor, PENDING_APPROVAL, and a trimmed non-empty comment of at most 1000 characters. It updates the candidate and inserts one audit row in the same transaction. It never copies candidate question/answer content into audit.
 
-- [ ] **Step 6: Apply ownership and execute grants**
+- [x] **Step 6: Apply ownership and execute grants**
 
 For each of the five workflow interfaces, set owner, revoke PUBLIC/anon/authenticated, and grant only `sejong_backend`, using exact argument type lists. The backend retains no direct failed-question, candidate, or audit-table INSERT/UPDATE/DELETE grant.
 
@@ -1111,7 +1113,7 @@ allowlist: add `confirm_failed_question_reason(uuid,text,text,text)` and replace
 the old planned three-argument approval identity with
 `approve_kb_candidate(uuid,text,text,text)` in both allowlist assertions.
 
-- [ ] **Step 7: Extend compensation and run tests**
+- [x] **Step 7: Extend compensation and run tests**
 
 The `00400` compensation revokes workflow execute grants, drops the five workflow
 functions, restores replaced Task 4 trigger/constraint definitions, removes the
@@ -1131,12 +1133,29 @@ later migration.
 
 Expected: all suites pass.
 
-- [ ] **Step 8: Commit Task 6**
+- [x] **Step 8: Commit Task 6**
 
 ```powershell
-git add supabase/migrations/20260716000400_candidate_workflow.sql database/rollbacks/20260716000400_candidate_workflow.rollback.sql database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql supabase/tests/database/003_capabilities_test.sql supabase/tests/database/004_approval_test.sql
+git add supabase/migrations/20260716000400_candidate_workflow.sql database/rollbacks/20260716000400_candidate_workflow.rollback.sql database/rollbacks/20260716000300_capabilities_and_functions.rollback.sql supabase/tests/database/002_invariants_test.sql supabase/tests/database/003_capabilities_test.sql supabase/tests/database/004_approval_test.sql scripts/test_database_concurrency.py
 git commit -m "feat(db): make KB approval atomic"
 ```
+
+**Actual result (2026-07-17 KST):**
+
+- Started from `dee1ccb`; implementation commits were `cd18ff6`, semantic review
+  fix `2ba566d`, and formatting-only gate fix `72b7ab1`.
+- Initial RED stopped at the missing workflow interface. Independent review then
+  reproduced focused RED 5/62 plus a deterministic replay/confirmation `40P01`
+  deadlock before the lock-order, monotonic-lineage, and collision-diagnostic fix.
+- Final focused workflow pgTAP was 62/62; full reset/replay was 234/234.
+- Forward and replay concurrency passed 4 scenarios with 2 connections;
+  compensated Task 1~5 passed 172/172 and the original 3 concurrency scenarios.
+- The `00300` compensation guard failed closed as expected while `00400` remained;
+  004 compensation restored the exact Task 4 trigger/validator definitions.
+- Ruff format/check, Ruff lint, mypy, tooling target, concurrency, secret scan,
+  `git diff --check`, and independent code review were clean. Full evidence is
+  in `.superpowers/sdd/task-6-report.md` and
+  `docs/implementation-notes/IMP-20260717-001-db-001-task-6-atomic-candidate-workflow.md`.
 
 ## Task 7: Add ACTIVE+OFFICIAL citizen reads and indexes
 
