@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: In Progress
+- Status: Blocked — Q-DB-003 deferred trigger permission decision
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -1494,6 +1494,46 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
 Expected: existing 24-stage gate still exits 0 and does not start or require Docker.
+
+### Task 9 partial evidence and Q-DB-003 blocker — 2026-07-17 KST
+
+Keep all Task 9 step checkboxes unchecked until the complete gate passes. The
+three Task 9 implementation files are uncommitted and remain the only code/test
+scope for this task.
+
+- With both DB URL environment names absent from the child process, exactly eight
+  integration tests skip with reason `local DB gate only` and no implicit
+  connection.
+- The stale compensation-order test failed first. After the runner-only fix,
+  `LocalDatabaseToolingContractTests` passes 16/16 and proves exact
+  `00500 → 00400 → 00300 → 00200 → 00100`, child exit preservation, sentinel
+  suppression, environment restoration, absence-before-reset ordering, and no
+  LLM key token in runner source.
+- The disposable gate passes reset one, pgTAP 274/274, five-file rollback,
+  DB-001 absence, reset/replay two, and pgTAP 274/274. Real-DB integration is
+  exactly 6 passed and 2 failed; both failures are backend approval paths.
+- Safe catalog evidence is `validate_active_kb_question()`
+  `prosecdef=false` and backend private-schema usage=false. The SECURITY DEFINER
+  approval function reaches commit, where the deferred SECURITY INVOKER trigger
+  cannot read its private tables. SQLSTATE `42501` is reduced to the fixed
+  `DatabaseUnavailableError`; native diagnostics are not exposed.
+- Both failed approval transactions roll back atomically: candidate remains
+  PENDING_APPROVAL, activated link is NULL, and activated KB, required question,
+  and approval audit counts are zero. Cleanup leaves events, failures,
+  candidates, KB documents, questions, offices, mappings, and audits all zero.
+
+`Q-DB-003` is an A/Blocker. Option A (recommended) adds a new versioned `006`
+migration that makes only `app_private.validate_active_kb_question()` SECURITY
+DEFINER while verifying its existing owner, fixed `search_path=pg_catalog`, and
+explicit direct-EXECUTE revokes; matching compensation restores SECURITY
+INVOKER. Option B changes `approve_kb_candidate` to execute the deferred
+constraint immediately inside the definer function; this avoids a definer
+trigger but couples approval to constraint names and transaction constraint
+mode, so it is not recommended. Without a human answer, remain blocked: do not
+grant backend private-schema access, add a repository/admin-DSN workaround,
+modify an applied migration, or proceed to Task 10. API contracts, data, package
+dependencies, and remote/public deployment remain unchanged. Full evidence is
+in `docs/implementation-notes/IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md`.
 
 - [ ] **Step 6: Commit Task 9**
 
