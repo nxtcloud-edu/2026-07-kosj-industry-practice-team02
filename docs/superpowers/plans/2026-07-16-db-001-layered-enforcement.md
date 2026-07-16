@@ -73,6 +73,7 @@ At execution, Task 1 rechecks that the release is still an official non-prerelea
 |---|---|
 | `supabase/tests/database/001_schema_test.sql` | Exact schemas, enums, tables, columns, generated provenance field, forbidden privacy fields |
 | `supabase/tests/database/002_invariants_test.sql` | JSON arrays, text/state/provenance, event/failure linkage, ACTIVE question constraint |
+| `scripts/test_database_concurrency.py` | Two-connection isolation probes for ACTIVE-question, event/failure, and failure/candidate stale-snapshot races |
 | `supabase/tests/database/003_capabilities_test.sql` | Function signatures, fixed search paths, RLS, grants, event/failure behavior, retention |
 | `supabase/tests/database/004_approval_test.sql` | Role/state/self-approval/source completeness, atomic activation, append-only audit |
 | `supabase/tests/database/005_citizen_reads_test.sql` | ACTIVE+OFFICIAL visibility and rejection of mock/draft/pending/retired records |
@@ -702,8 +703,9 @@ git commit -m "feat(db): create private domain schema"
 - Create: `supabase/tests/database/002_invariants_test.sql`
 - Create: `supabase/migrations/20260716000200_invariants_and_lineage.sql`
 - Create: `database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql`
+- Create: `scripts/test_database_concurrency.py`
 
-- [ ] **Step 1: Write failing invariant tests**
+- [x] **Step 1: Write failing invariant tests**
 
 The pgTAP test must use explicit `MOCK` fixtures and prove:
 
@@ -722,7 +724,7 @@ The pgTAP test must use explicit `MOCK` fixtures and prove:
 - candidate and failure table-specific statuses reject irrelevant enum values;
 - audit actions, target types, and changed-field arrays are allowlisted and contain non-empty strings.
 
-- [ ] **Step 2: Run the invariant test and confirm RED**
+- [x] **Step 2: Run the invariant test and confirm RED**
 
 Run:
 
@@ -732,7 +734,7 @@ Run:
 
 Expected: assertions for JSON/text/status/cross-table rules fail.
 
-- [ ] **Step 3: Add reusable private validators**
+- [x] **Step 3: Add reusable private validators**
 
 Implement immutable, strict, schema-qualified helpers:
 
@@ -764,17 +766,19 @@ $$;
 
 Create a single `set_updated_at()` trigger function and attach it only to `kb_documents`, `failed_questions`, and `kb_candidates`.
 
-- [ ] **Step 4: Add exact checks and deferred constraint triggers**
+- [x] **Step 4: Add exact checks and deferred constraint triggers**
 
 Add named checks for all bullets in Step 1. Cross-table rules must be in trigger functions that query only schema-qualified `app_private` objects. The ACTIVE-question rule uses constraint triggers declared `DEFERRABLE INITIALLY DEFERRED` on KB status changes and question-example INSERT/UPDATE/DELETE so the approval transaction can insert ACTIVE KB and its first example before commit.
 
 The event/failure trigger verifies identical intent and fallback reason and requires the parent event status to be FALLBACK. The candidate trigger requires an eligible INSUFFICIENT_GROUNDING failure. No trigger error includes a text field value.
 
-- [ ] **Step 5: Add reverse-order invariant compensation**
+Review-driven concurrency hardening makes invariant-bearing writes an explicit `READ COMMITTED` operational contract. Non-`READ COMMITTED` writes fail closed with stable `P0001` messages, and the two-connection probe covers the three stale-snapshot lineages without retaining fixture rows.
+
+- [x] **Step 5: Add reverse-order invariant compensation**
 
 The rollback file drops constraint triggers first, then ordinary triggers, then their functions, then every named constraint added by this migration. It does not drop a table, schema, role, or Supabase-owned object.
 
-- [ ] **Step 6: Reset and run schema plus invariant tests**
+- [x] **Step 6: Reset and run schema plus invariant tests**
 
 Run:
 
@@ -785,10 +789,10 @@ Run:
 
 Expected: both files pass and transaction cleanup leaves no fixture rows.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 7: Commit Task 4**
 
 ```powershell
-git add supabase/migrations/20260716000200_invariants_and_lineage.sql database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql supabase/tests/database/002_invariants_test.sql
+git add supabase/migrations/20260716000200_invariants_and_lineage.sql database/rollbacks/20260716000200_invariants_and_lineage.rollback.sql supabase/tests/database/002_invariants_test.sql scripts/test_database_concurrency.py
 git commit -m "feat(db): enforce privacy and lineage invariants"
 ```
 
