@@ -24,7 +24,8 @@
 │  ├─ decisions/
 │  ├─ plans/
 │  ├─ superpowers/
-│  │  └─ specs/
+│  │  ├─ specs/
+│  │  └─ plans/
 │  ├─ implementation-notes/
 │  ├─ test-reports/
 │  ├─ data-lineage/

@@ -2,12 +2,12 @@
 
 - 기준 commit: 2a4e26b
 - 감사일: 2026-07-16 KST
-- 상태: Discovery complete; Q-DB-002=A resolved, 서면 설계 명세 사용자 검토 대기
+- 상태: Discovery complete; Q-DB-002=A resolved, 서면 설계 명세 Approved, 실행계획 사용자 승인 대기
 - 범위: 문서·논리 SQL·로컬 도구 상태의 읽기 전용 감사
 
 ## 1. 결론
 
-DB 실행 기술은 Docker local stack과 Supabase CLI 버전 SQL로 확정됐고, 2026-07-16 사용자는 안전 불변조건을 DB와 백엔드 양쪽에서 강제하는 접근 A를 승인했다. 서면 설계 명세 검토 전에는 CLI 설치·image pull·container 시작·migration 생성/적용을 하지 않는다.
+DB 실행 기술은 Docker local stack과 Supabase CLI 버전 SQL로 확정됐고, 2026-07-16 사용자는 안전 불변조건을 DB와 백엔드 양쪽에서 강제하는 접근 A와 그 서면 설계 명세를 승인했다. [DB-001 실행계획](../superpowers/plans/2026-07-16-db-001-layered-enforcement.md)의 별도 사용자 승인 전에는 CLI 설치·image pull·container 시작·migration 생성/적용을 하지 않는다.
 
 추천은 접근 A다. 승인 전환·보관 파기·상태 전이는 DB function/trigger와 제약으로 원자적으로 강제하고, RLS/GRANT로 브라우저 역할을 차단하며, 백엔드에서도 같은 정책을 이중 검증한다.
 
@@ -91,7 +91,7 @@ Q-DB-002. 승인·보관·권한 불변조건을 DB와 백엔드 중 어디까�
 - Windows amd64 공식 release asset을 .tools/supabase/<exact-version>에 두고 release SHA-256 digest를 tracked bootstrap manifest에 고정해 exact 비교한다.
 - 공식 digest를 독립 확인할 수 없으면 설치를 중단한다. latest·beta·global npm install은 사용하지 않는다.
 - 현재 pnpm install은 ignore-scripts이므로 CLI postinstall에 기대지 않는 공식 binary bootstrap을 우선한다.
-- 사용자가 서면 DB 설계 명세를 검토한 뒤에만 install, image pull, supabase init/start를 수행한다.
+- 사용자가 [DB-001 실행계획](../superpowers/plans/2026-07-16-db-001-layered-enforcement.md)을 승인한 뒤에만 install, image pull, supabase init/start를 수행한다.
 - stack 출력에는 local secret key가 포함될 수 있으므로 원문을 구현 노트·로그에 전달하지 않는다.
 
 공식 링크:

@@ -1,6 +1,6 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Written design pending user review
+- Status: Approved by user for implementation planning on 2026-07-16; execution pending plan approval
 - Date: 2026-07-16 (KST)
 - Approved approach: Q-DB-002=A on 2026-07-16
 - Related: D-025, ADR-0003/0004/0007/0008/0011, TASK DB-001
@@ -289,4 +289,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The design is accepted for planning when the user confirms this written specification. After that confirmation, `superpowers:writing-plans` creates a task-by-task TDD plan. Migration SQL, CLI download, image pull, container start, and DB mutation begin only during the separately approved execution of that plan.
+The user approved this written specification on 2026-07-16. The task-by-task TDD plan is `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md`. Migration SQL, CLI download, image pull, container start, and DB mutation begin only after the user separately approves that execution plan.

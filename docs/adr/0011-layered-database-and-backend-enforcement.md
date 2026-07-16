@@ -1,6 +1,6 @@
 # ADR-0011: DB와 백엔드의 계층형 안전 규칙 강제
 
-- Status: Accepted for DB-001 design; implementation pending written-spec review
+- Status: Accepted; written specification approved, implementation pending plan approval
 - Date: 2026-07-16
 - Deciders: 사용자, Codex
 - Related: Q-DB-002, D-025, ADR-0003/0004/0007/0008, DB-001

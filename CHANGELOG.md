@@ -23,6 +23,7 @@
 - PowerShell 5.1-compatible 24-stage local verification gate with exact runtime preflight, frozen/default and warm-offline modes, fail-fast exit preservation, scoped synthetic Web secret checks, and metadata-only diagnostics
 - DB-001 executable-schema discovery report covering migration lineage, atomic approval, retention, ACTIVE-only access, provenance, permissions, rollback, and database test gaps
 - ADR-0011 and a written DB-001 design for private schemas, capability functions, atomic approval, retention, and layered DB/backend enforcement
+- User-approved DB-001 written specification and an execution-gated TDD plan covering pinned local tooling, four migrations/compensations, pgTAP, lazy FastAPI DB boundaries, concurrency, and rollback/replay
 
 ### Changed
 
@@ -47,9 +48,10 @@
 - Preserved the local `.pnpm-store/` cache while adding it to the tested transient-path ignore contract so it cannot be committed accidentally
 - Updated the database environment record after verifying the local Docker engine, while keeping Supabase CLI installation and migration execution behind written DB design review
 - Resolved Q-DB-002 as layered database-and-backend enforcement while keeping remote/public execution deferred
+- Approved the DB-001 written specification for planning; migration, Docker, CLI download, and DB mutation remain deferred until the new plan is explicitly approved
 
 ### Pending
 
 - Official KB and office data
 - Deployment accounts and URLs
-- DB-001 written design specification review and implementation plan approval
+- DB-001 implementation plan approval
