@@ -1,6 +1,6 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Approved; execution in progress, Tasks 0~8 complete, Task 9 partial 6/8 with Task 9A remediation in progress
+- Status: Approved; execution in progress, Tasks 0~9 complete, Task 10 ready
 - Date: 2026-07-16 (KST)
 - Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16; Q-DB-003=A on 2026-07-17
 - Related: D-025/D-026/D-027/D-028, ADR-0003/0004/0007/0008/0011/0012, TASK DB-001
@@ -321,4 +321,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The user approved this written specification and execution plan on 2026-07-16. Tasks 0~8 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9 remains incomplete at historical 6/8 while the linked Task 9A remediation plan runs RED→GREEN and the six-stage full gate; no human A/Blocker remains.
+The user approved this written specification and execution plan on 2026-07-16. Tasks 0~9 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9A now passes focused 8/8, full pgTAP `Files=6, Tests=282`, six-stage compensation/replay, and real integration 8/8. DB-001 is not Done until Task 10 synchronizes schema authority, versions, changelog, and handoff. A-021 remains a B/High public-release blocker but does not block local Task 10.

@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: In Progress — Q-DB-003 resolved; Task 9A deferred-trigger remediation pending
+- Status: In Progress — Tasks 0~9 complete; Task 10 ready
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -1432,13 +1432,13 @@ git commit -m "feat(api): add lazy typed database boundary"
 - Modify: `scripts/verify_database.ps1`
 - Modify: `scripts/tests/test_supabase_tooling.py`
 
-- [ ] **Step 1: Write local-only integration tests**
+- [x] **Step 1: Write local-only integration tests**
 
 Mark the module with `pytestmark = pytest.mark.skipif(not os.getenv("SEJONG_DB_TEST_URL"), reason="local DB gate only")`. Tests must use unique synthetic IDs and transaction cleanup. Create exactly these eight async tests: `test_identical_request_replay_writes_one_event`, `test_conflicting_request_replay_maps_p1010`, `test_two_concurrent_reason_confirmations_write_one_audit`, `test_candidate_creation_requires_confirmed_reason`, `test_two_concurrent_approvals_create_one_active_kb_and_audit`, `test_purge_boundary_is_exact_and_idempotent`, `test_backend_login_cannot_select_private_tables`, and `test_mock_and_non_active_rows_never_reach_citizen_reads`.
 
 For each concurrent test, use two independent connections released by one `asyncio.Event`. Reason confirmation must produce one `REASON_CONFIRMED` failure, preserve the event reason, write one metadata audit, and map the loser to `P1003`. Approval must return one KB public ID, map the loser to `P1003`, and leave one KB, one candidate link, and one approval audit. Test strings are synthetic and marked MOCK except the minimal OFFICIAL approval fixture required to prove activation.
 
-- [ ] **Step 2: Run the integration test without a DB URL**
+- [x] **Step 2: Run the integration test without a DB URL**
 
 Run:
 
@@ -1448,18 +1448,18 @@ uv run --directory apps/api --frozen pytest -q -p no:cacheprovider tests/db/test
 
 Expected: all tests skip with the exact reason `local DB gate only`; no implicit connection occurs.
 
-- [ ] **Step 3: Complete runner tests for failure and environment restoration**
+- [x] **Step 3: Complete runner tests for failure and environment restoration**
 
 Add synthetic child-command fixtures to prove the PowerShell runner:
 
 - preserves child exit code for DB test failures;
 - suppresses child output containing sentinel DSNs/questions;
 - restores `SEJONG_ADMIN_DATABASE_URL` and `SEJONG_DB_TEST_URL` on success and failure;
-- runs compensation files in exact `00500`, `00400`, `00300`, `00200`, `00100` order;
+- runs compensation files in exact `00600`, `00500`, `00400`, `00300`, `00200`, `00100` order;
 - runs absence proof before the second reset;
 - never reads or replaces `LLM_API_KEY`.
 
-- [ ] **Step 4: Run the full disposable-local DB gate**
+- [x] **Step 4: Run the full disposable-local DB gate**
 
 Run:
 
@@ -1486,7 +1486,7 @@ TEST-DATABASE-INTEGRATION
 
 No DSN, key, password, question, SQL statement, Docker credential, or Supabase status payload may appear in stdout/stderr.
 
-- [ ] **Step 5: Run the no-Docker gate again**
+- [x] **Step 5: Run the no-Docker gate again**
 
 Run:
 
@@ -1496,11 +1496,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 Expected: existing 24-stage gate still exits 0 and does not start or require Docker.
 
-### Task 9 partial evidence and resolved Q-DB-003 — 2026-07-17 KST
+### Task 9 historical RED and resolved Q-DB-003 — 2026-07-17 KST
 
-Keep all Task 9 step checkboxes unchecked until the complete gate passes. The
-three Task 9 implementation files are uncommitted and remain the only code/test
-scope for this task.
+The following evidence preserves the pre-remediation RED. The complete gate now
+passes and the Task 9 checkboxes are checked; do not reinterpret the history as
+the final state.
 
 - With both DB URL environment names absent from the child process, exactly eight
   integration tests skip with reason `local DB gate only` and no implicit
@@ -1536,7 +1536,30 @@ gate pass. API contracts, data, package dependencies, and remote/public
 deployment remain unchanged. Historical 6/8 evidence remains in
 `docs/implementation-notes/IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md`.
 
-- [ ] **Step 6: Commit Task 9**
+### Task 9 completion evidence — 2026-07-17 KST
+
+- RED: real integration 6 pass/2 fail; corrected `006` pgTAP 2/8 meaningful
+  failures after collation correction; two focused tooling order failures.
+- GREEN: focused `006` 8/8, full pgTAP `Files=6, Tests=282`, `00600`-only full
+  posture PASS, compensated prior five `Files=5, Tests=274`.
+- retained diagnostic branch integration 8/8, then branch removal and integration
+  8/8. Review fix `228d8cb` consolidated cleanup into one identifier-scoped admin
+  transaction without changing the eight public assertions.
+- full gate passed `006→005→004→003→002→001`, absence, reset/replay, second
+  pgTAP 282, and integration 8/8. Tooling 16/16, Ruff format/lint, strict Mypy,
+  root/web/API/contract/secret/package/diff and synthetic eight-table zero passed.
+- implementation commits: `5266abc` (authorized four-path SQL/test correction;
+  stale `002_invariants_test.sql` assertion only, immutable migration edit 0),
+  `04a944f` (Task 9 three paths), `228d8cb` (integration evidence fix one path).
+- independent initial specification review found Important 1/Minor 1; `228d8cb`
+  resolved both. Final specification and quality reviews are each 0/0/0.
+- root coordinator independently reran full DB gate exit 0, pgTAP 282, root gate
+  exit 0, tooling 16/16, no-URL exact 8 skips, zero-row PASS, protected-scope diff
+  0, and clean worktree.
+- A-021 remains a B/High local follow-up and public-release blocker. Task 10 must
+  preserve that caveat and must not mark public deployment ready.
+
+- [x] **Step 6: Commit Task 9**
 
 ```powershell
 git add apps/api/tests/db/test_integration.py scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py

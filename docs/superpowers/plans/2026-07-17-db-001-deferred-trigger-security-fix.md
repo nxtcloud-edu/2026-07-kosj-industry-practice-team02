@@ -26,7 +26,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-T9A-PLAN`
-- Status: Approved; implementation pending
+- Status: Done — implemented, independently reviewed, and verified
 - Date: 2026-07-17 KST
 - Branch: `codex/db-001-layered-enforcement`
 - Worktree: `.worktrees/db-001-layered-enforcement`
@@ -42,6 +42,13 @@ Create during the remediation implementation:
 - `supabase/migrations/20260717000600_deferred_active_question_trigger_security.sql` — forward-only function posture correction.
 - `database/rollbacks/20260717000600_deferred_active_question_trigger_security.rollback.sql` — local compensation to the `00500` SECURITY INVOKER posture.
 - `supabase/tests/database/006_deferred_trigger_security_test.sql` — exact catalog, ACL, trigger, and private-access regression.
+
+Authorized test-only synchronization:
+
+- `supabase/tests/database/002_invariants_test.sql` — update only the stale exact
+  validator search-path assertion to `pg_catalog, pg_temp`; preserve the other
+  eleven `pg_catalog` assertions and the prior 274-test baseline. This is not an
+  immutable migration edit and makes the first implementation commit four paths.
 
 Modify only when resuming the already-started Task 9 gate:
 
@@ -73,7 +80,7 @@ Preserve unchanged:
 - Modify: `scripts/tests/test_supabase_tooling.py`
 - Modify: `apps/api/tests/db/test_integration.py`
 
-- [ ] **Step 1: Verify scope and snapshot the three pre-existing Task 9 files**
+- [x] **Step 1: Verify scope and snapshot the three pre-existing Task 9 files**
 
 Run:
 
@@ -96,7 +103,7 @@ contains exact copies of all three files—including the untracked integration
 file—and a hash manifest. Verify each listed SHA-256 against `Get-FileHash`
 before continuing. Stop if any unrelated path is dirty or a hash differs.
 
-- [ ] **Step 2: Reproduce the real backend approval RED before adding `00600`**
+- [x] **Step 2: Reproduce the real backend approval RED before adding `00600`**
 
 Run against the healthy disposable local DB:
 
@@ -110,7 +117,7 @@ absence proof, reset/replay two, and pgTAP 274/274 pass; the stable
 two approval paths fail through the fixed safe database-unavailable boundary.
 No native diagnostic or environment value is public output.
 
-- [ ] **Step 3: Add the pgTAP security contract before production SQL**
+- [x] **Step 3: Add the pgTAP security contract before production SQL**
 
 Create `supabase/tests/database/006_deferred_trigger_security_test.sql` with
 exactly this transaction-scoped catalog test:
@@ -320,7 +327,7 @@ SELECT * FROM finish();
 ROLLBACK;
 ```
 
-- [ ] **Step 4: Change the runner expectation before the runner**
+- [x] **Step 4: Change the runner expectation before the runner**
 
 In both exact rollback lists in `scripts/tests/test_supabase_tooling.py`, use
 this newest-first sequence and change nothing else:
@@ -339,7 +346,7 @@ this newest-first sequence and change nothing else:
 The behavioral full-path invocation list must prepend the same `00600` filename
 inside its single `['sql', ...]` entry.
 
-- [ ] **Step 5: Run both focused RED checks**
+- [x] **Step 5: Run both focused RED checks**
 
 Run:
 
@@ -353,7 +360,7 @@ INVOKER; the two tooling tests are nonzero because the runner still has only fiv
 compensation paths. Preserve the exact failure counts in the Task 9 report and do
 not weaken any assertion.
 
-- [ ] **Step 6: Add the minimal forward migration**
+- [x] **Step 6: Add the minimal forward migration**
 
 Create `supabase/migrations/20260717000600_deferred_active_question_trigger_security.sql`
 with exactly:
@@ -377,7 +384,7 @@ Verify this exact PostgreSQL 17 syntax through the pinned local reset and focuse
 pgTAP command. Do not add a function body, grant, table/data statement, or a
 second changed function.
 
-- [ ] **Step 7: Add the exact matching compensation**
+- [x] **Step 7: Add the exact matching compensation**
 
 Create
 `database/rollbacks/20260717000600_deferred_active_question_trigger_security.rollback.sql`
@@ -401,7 +408,7 @@ COMMIT;
 Expected: compensation changes only `prosecdef` back to false and preserves owner,
 search path, revocations, function body, triggers, tables, and data.
 
-- [ ] **Step 8: Reset and run the new pgTAP GREEN**
+- [x] **Step 8: Reset and run the new pgTAP GREEN**
 
 Run:
 
@@ -415,7 +422,7 @@ Expected: reset and focused pgTAP exit 0. Full pgTAP exits 0 with six files; cop
 the emitted `Files` and `Tests` totals into the Task 9 report after the command
 returns instead of predicting a new assertion total.
 
-- [ ] **Step 9: Prove `00600`-only compensation and the exact `00500` baseline**
+- [x] **Step 9: Prove `00600`-only compensation and the exact `00500` baseline**
 
 In one PowerShell process, capture the local status payload in memory, set the
 admin URL only for child processes, apply the compensation, and print only stable
@@ -647,7 +654,7 @@ Expected: the stable compensation posture verdict passes and the single baseline
 invocation reports `Files=5, Tests=274`. The new 006 test is intentionally not
 run against the compensated posture.
 
-- [ ] **Step 10: Restore the six-migration state and update the runner**
+- [x] **Step 10: Restore the six-migration state and update the runner**
 
 Run reset once, then prepend the new compensation path in
 `scripts/verify_database.ps1` without changing phase names or output behavior:
@@ -669,7 +676,7 @@ $rollbackFiles = @(
 )
 ```
 
-- [ ] **Step 11: Prove approval GREEN before and after removing the temporary branch**
+- [x] **Step 11: Prove approval GREEN before and after removing the temporary branch**
 
 First retain the temporary `BACKEND_APPROVAL_BOUNDARY_BLOCKED` diagnostic branch
 and run the six-migration integration gate without another compensation replay:
@@ -706,7 +713,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 Expected: the post-removal gate remains exactly 8/8 with the same one-success,
 one-safe-`P1003`, one-KB/question/link/audit proof.
 
-- [ ] **Step 12: Run focused tooling, formatting, and typing GREEN**
+- [x] **Step 12: Run focused tooling, formatting, and typing GREEN**
 
 Run:
 
@@ -719,7 +726,7 @@ apps\api\.venv\Scripts\python.exe -B -m unittest scripts.tests.test_supabase_too
 
 Expected: all 16 tooling tests, Ruff formatting/lint, and strict Mypy pass.
 
-- [ ] **Step 13: Run the complete six-stage disposable DB gate**
+- [x] **Step 13: Run the complete six-stage disposable DB gate**
 
 Run:
 
@@ -734,7 +741,7 @@ must leave one successful public ID, one safe `P1003` loser, one ACTIVE OFFICIAL
 KB, one required question, one candidate link, one approval audit, and no native
 diagnostic in public output.
 
-- [ ] **Step 14: Run the no-Docker root regression and safety gates**
+- [x] **Step 14: Run the no-Docker root regression and safety gates**
 
 Run:
 
@@ -804,12 +811,13 @@ no diff. Status contains only the three new remediation files and the three
 authorized Task 9 files. The final probe prints only
 `TASK9A-SYNTHETIC-ROWS PASS` after proving all eight table counts are zero.
 
-- [ ] **Step 15: Commit the remediation and resumed Task 9 in two exact commits**
+- [x] **Step 15: Commit the remediation and resumed Task 9 in two exact commits**
 
-First commit only the new migration, compensation, and pgTAP file:
+The first commit includes the three new remediation files and the authorized
+stale `002` assertion synchronization:
 
 ```powershell
-git add supabase/migrations/20260717000600_deferred_active_question_trigger_security.sql database/rollbacks/20260717000600_deferred_active_question_trigger_security.rollback.sql supabase/tests/database/006_deferred_trigger_security_test.sql
+git add supabase/migrations/20260717000600_deferred_active_question_trigger_security.sql database/rollbacks/20260717000600_deferred_active_question_trigger_security.rollback.sql supabase/tests/database/006_deferred_trigger_security_test.sql supabase/tests/database/002_invariants_test.sql
 git commit -m "fix(db): secure deferred active question trigger"
 ```
 
@@ -820,8 +828,26 @@ git add scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py apps/
 git commit -m "test(db): verify rollback replay and concurrent approval"
 ```
 
-Expected: each commit contains exactly three paths; no documentation, version,
-contract, env, data, dependency, or immutable migration path is staged.
+Actual: `5266abc` contains exactly those four SQL/test paths, `04a944f` contains
+the three Task 9 paths, and `228d8cb` later tightens only the integration cleanup
+evidence. No documentation, version, contract, env, data, dependency, or
+immutable migration path is included.
+
+## Actual execution evidence — 2026-07-17 KST
+
+- RED: real integration 6 pass/2 fail; corrected `006` pgTAP 2/8 meaningful
+  failures after collation correction; tooling expected RED 2.
+- GREEN: focused `006` 8/8, full pgTAP `Files=6, Tests=282`, `00600`-only full
+  posture PASS, compensated prior suite `Files=5, Tests=274`.
+- retained diagnostic branch integration 8/8; branch removal integration 8/8;
+  final cleanup is one identifier-scoped admin transaction.
+- full runner: exact `006→005→004→003→002→001`, absence, reset/replay, pgTAP2,
+  and integration all PASS. Tooling 16/16, Ruff format/lint, strict Mypy,
+  no-Docker root/web/API/contract/secret/package/diff, and eight-table zero PASS.
+- review: initial specification Important 1/Minor 1, fixed by `228d8cb`; final
+  specification 0/0/0 and quality 0/0/0.
+- root independent rerun: full DB gate exit 0, pgTAP 282, root gate exit 0,
+  tooling 16/16, no-URL exact 8 skips, zero-row PASS, protected diff 0, clean.
 
 ## Independent review checkpoint
 
@@ -874,13 +900,15 @@ commit succeeds with exactly those paths.
 
 ## Remaining risk outside `00600`
 
-Ambiguity A-021 is deliberately not implemented here. The local catalog shows
-all nine existing `app_api` SECURITY DEFINER functions still use
-`proconfig=['search_path=pg_catalog']`, while `sejong_backend` has effective
-database TEMP. No exploit was reproduced. Before public deployment, investigate
-their bodies, ACLs, and call behavior and obtain human approval for any separate
-forward-migration hardening. D-028 and this plan authorize only the deferred
-validator posture correction.
+Ambiguity A-021 is deliberately not implemented here. The read-only audit found
+a 22-function privileged execution graph: nine `app_api` SECURITY DEFINER plus
+13 nested/trigger `app_private`; after the corrected validator, 21 paths remain
+`pg_catalog`-only while `sejong_backend` has effective database TEMP. Application
+relations/helpers are qualified and dynamic SQL is absent. Data-type shadow DoS
+is high-confidence plausible, privilege escalation is conservative
+medium-confidence inference, and neither was exploit-reproduced. Q-SEC-003 A
+proposes a separate property-only `00700`; default remains local-only with
+remote/public release blocked. D-028 and this plan authorize only `00600`.
 
 ## Rollback and recovery
 
@@ -923,11 +951,11 @@ Remove-Item -LiteralPath supabase\migrations\20260717000600_deferred_active_ques
 - Remote compensation, actual-data deletion, public deployment, credential policy,
   and Docker volume deletion remain separate human approval gates.
 
-## Target completion criteria
+## Completion criteria
 
-- [ ] Q-DB-003 remains resolved by D-028/ADR-0012.
-- [ ] Six immutable forward migrations and six local compensation files are verified.
-- [ ] Backend private schema/table grants remain zero.
-- [ ] Real integration is 8/8 and concurrent approval is atomic.
-- [ ] Task 9 is complete and Task 10 is ready, while DB-001 and manifest versions
+- [x] Q-DB-003 remains resolved by D-028/ADR-0012.
+- [x] Six immutable forward migrations and six local compensation files are verified.
+- [x] Backend private schema/table grants remain zero.
+- [x] Real integration is 8/8 and concurrent approval is atomic.
+- [x] Task 9 is complete and Task 10 is ready, while DB-001 and manifest versions
   remain incomplete until Task 10.

@@ -1,6 +1,6 @@
 # ADR-0012: deferred ACTIVE-question trigger의 제한된 SECURITY DEFINER 실행
 
-- Status: Accepted; implementation pending
+- Status: Accepted; implemented and verified
 - Date: 2026-07-17
 - Deciders: 사용자, Codex
 - Related: Q-DB-003, D-028, ADR-0003/0004/0007/0008/0011, DB-001 Task 9
@@ -121,3 +121,24 @@ compensation을 사용하지 않는다.
 - real backend integration 8/8와 concurrent approval 단일 성공/단일 audit
 - full disposable DB gate, no-Docker root gate, Ruff/Mypy, secret/package/diff/scope
 - synthetic row 8범주 0과 독립 spec/quality review
+
+## Implementation result — 2026-07-17 KST
+
+- correction commit `5266abc`은 새 `00600` forward/compensation/pgTAP과 stale
+  `002_invariants_test.sql` search-path assertion 동기화, 정확히 4개 test/SQL
+  path만 포함했다. 기존 immutable migration `00100`~`00500`은 수정하지 않았다.
+- Task 9 commit `04a944f`과 review fix `228d8cb`은 runner/tooling/integration
+  3개 path만 변경했다. cleanup은 identifier-scoped 단일 admin transaction으로
+  강화됐다.
+- historical RED는 real integration 6 pass/2 fail, 새 `006` pgTAP은 collation
+  correction 뒤 의미 있는 2/8 failure, tooling은 expected RED 2개였다.
+- GREEN은 focused `006` 8/8, full pgTAP `Files=6, Tests=282`, compensation full
+  posture PASS, compensated prior baseline `Files=5, Tests=274`, retained diagnostic
+  branch 8/8와 제거 뒤 8/8이다.
+- full gate는 exact `006→005→004→003→002→001`, absence, reset/replay, 두 번째
+  pgTAP, integration을 모두 통과했다. tooling 16/16, Ruff/Mypy/root/API/web/
+  contract/secret/package/diff와 synthetic 8-table zero도 PASS다.
+- initial specification review Important 1/Minor 1은 `228d8cb`로 보정됐다. final
+  specification과 quality review는 각각 Critical/Important/Minor 0/0/0이다.
+- A-021은 local Task 9 blocker가 아니지만 public-release blocker다. Task 10은
+  이 caveat와 모든 현재 version 축을 보존해야 한다.

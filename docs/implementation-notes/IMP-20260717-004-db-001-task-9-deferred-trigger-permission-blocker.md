@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-17T03:43:16+09:00
 - Task ID: DB-001-T9
 - Type: implementation/status
-- Status: Decision resolved — Q-DB-003=A; implementation pending
+- Status: Done — historical blocker resolved; Task 9 verified
 - Author/Agent: Codex `/root` coordinator, Task 9 implementation agent, documentation synchronization agent
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `7af6764`
@@ -34,7 +34,7 @@
 | What — 무엇을 | 8개 통합 테스트와 전체 rollback/replay gate를 작성·실행하고, deferred ACTIVE-question trigger 권한 blocker를 확인 |
 | Why — 왜 | backend role의 private table 직접 접근을 막으면서 승인 함수가 원자적으로 ACTIVE KB와 필수 질문을 만들 수 있어야 하기 때문 |
 | How — 어떻게 | no-URL gate, tooling RED→GREEN, disposable reset→pgTAP→5-file rollback→absence→reset/replay→pgTAP→integration, 안전 catalog/cleanup probe |
-| How much — 어느 정도 | 구현 파일 3개 미커밋, 통합 테스트 8개 중 6 pass/2 fail, pgTAP 274/274 두 번 통과, cleanup 8범주 모두 0, 외부 비용 0원 |
+| How much — 어느 정도 | 당시 작업 트리의 구현 파일 3개, 통합 테스트 8개 중 6 pass/2 fail, pgTAP 274/274 두 번 통과, cleanup 8범주 모두 0, 외부 비용 0원 |
 
 ## 3. 시작 전 상태
 
@@ -55,7 +55,7 @@
 
 ### 선택
 
-현재 선택은 A다. 기존 deferred constraint 의미를 유지하면서 검증 함수 하나만 기존 `sejong_schema_owner` 권한으로 실행하게 한다. 새 versioned `00600` migration은 함수의 `SECURITY DEFINER`, owner, exact `search_path=pg_catalog, pg_temp`, PUBLIC/anon/authenticated/backend 직접 EXECUTE revoke를 catalog와 pgTAP으로 비공허하게 검증하고, matching compensation은 `SECURITY INVOKER`로 복원해야 한다. 실제 구현은 아직 pending이며 이 역사적 6/8 노트를 완료 증거로 사용하지 않는다.
+선택 A는 `5266abc`에서 구현됐다. 기존 deferred constraint 의미를 유지하면서 검증 함수 하나만 기존 `sejong_schema_owner` 권한으로 실행한다. 새 versioned `00600`은 함수의 `SECURITY DEFINER`, owner, exact `search_path=pg_catalog, pg_temp`, PUBLIC/anon/authenticated/backend 직접 EXECUTE revoke를 catalog와 pgTAP으로 검증하고, matching compensation은 `SECURITY INVOKER`로 복원한다. 이 노트의 6/8 수치는 역사적 RED이며 아래 closeout addendum가 최종 증거다.
 
 ### 이유
 
@@ -117,7 +117,7 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 | Official data | 0.0.0-not-populated | 동일 | seed 없음 |
 | Mock data | 0.0.0-not-populated | 동일 | tracked seed 없음 |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | 동일 | LLM 미사용 |
-| Test suite | 0.4.2-readiness-contract | 0.4.2-readiness-contract | Task 9 6/8로 baseline 승격 금지 |
+| Test suite | 0.4.2-readiness-contract | 0.4.2-readiness-contract | 최종 282·integration 8/8이지만 manifest 승격은 Task 10 소유 |
 | Docs | 2.3.14 | 2.3.14 | blocker 상태 동기화이며 manifest release 없음 |
 
 ## 8. 명령과 테스트 증거
@@ -135,8 +135,8 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 
 ### 미실행 검증과 이유
 
-- 당시 Task 9 Step 4의 “integration 8/8” 완료 기준은 미결정 Q-DB-003 경계 때문에 달성하지 못했다. 현재 결정은 해결됐지만 구현은 pending이다.
-- no-Docker root gate, final secret/package/scope gate, Task 9 독립 review와 commit은 blocker 해소 후 전체 재검증 대상으로 남긴다.
+- 당시 Task 9 Step 4의 “integration 8/8” 완료 기준은 미결정 Q-DB-003 경계 때문에 달성하지 못했다. 현재는 구현·review·8/8 재검증이 완료됐다.
+- no-Docker root gate, final secret/package/scope gate, 독립 review와 commit은 아래 closeout evidence에서 모두 PASS다.
 - Task 10 문서·version baseline 승격과 DB-001 Done 전환은 실행하지 않는다.
 - DeepSeek/API 외부 호출은 범위 밖이며 실제 key/env 값은 읽거나 출력하지 않았다.
 
@@ -151,7 +151,7 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 
 - 공식 데이터: 0 rows; 공식 seed를 만들거나 변경하지 않았다.
 - mock/AI 생성: 영구 row 0; 테스트 fixture만 명시적 synthetic sample로 생성 후 삭제했다.
-- schema/lineage: 현재 적용 권위는 immutable `00100`~`00500`. 새 `00600`과 compensation은 D-028/ADR-0012의 승인 범위이며 아직 구현되지 않았다.
+- schema/lineage: 적용 권위는 immutable `00100`~`00500`과 새 `00600`; matching compensation까지 6단계다. DB schema manifest 승격은 Task 10 소유다.
 - verified date: 2026-07-17 KST.
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
@@ -160,43 +160,43 @@ backend role에 `app_private` USAGE나 table 권한을 주면 capability-only �
 - B는 승인 함수 안에서 deferred constraint를 즉시 실행하지만 transaction constraint mode와 함수/constraint 결합이 커 선택하지 않았다.
 - broad grant, repository 우회, 기존 migration 수정은 계속 금지한다.
 - API 공개 계약, 공식/mock 데이터, dependency, remote/public 배포, 비용은 어느 선택지에서도 변경하지 않는다.
-- 현재 통합 결과는 6/8이며 DB-001과 Task 9는 완료가 아니다.
+- 역사적 통합 RED는 6/8이었고 최종 통합은 8/8이다. Task 9은 완료됐지만 DB-001은 Task 10 전 Done이 아니다.
 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
 
 - Windows pytest hang은 selector event-loop policy로 해결됐으며 blocker와 별개다.
 - test-only pool은 open 후 `resize(1, 1)`로 순서를 바로잡았다.
-- Task 9의 임시 `BACKEND_APPROVAL_BOUNDARY_BLOCKED` 진단 branch는 A/B 구현 후 성공 assertion이 통과할 때만 제거한다. generic safe backend-error wrapper와 success assertions는 유지한다.
+- Task 9의 임시 `BACKEND_APPROVAL_BOUNDARY_BLOCKED` 진단 branch를 유지한 채 8/8을 먼저 증명한 뒤 제거했고, 다시 8/8을 통과했다. generic safe backend-error wrapper와 success assertions는 유지했다.
 - citizen-read test는 blocker 전용 우회가 없으므로 그대로 둔다.
 
 ## 13. 인수인계·재현·롤백
 
 ### 재현
 
-1. base `7af6764`와 dirty scope가 Task 9 세 파일뿐인지 확인한다.
+1. 구현 commits `5266abc`, `04a944f`, `228d8cb`과 이 closeout commit을 확인한다.
 2. 두 DB URL을 child process에서 제거하고 통합 파일을 실행해 8 skip과 exact reason을 확인한다. 값은 출력하지 않는다.
 3. local DB를 기동한 뒤 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart`를 실행한다.
-4. reset/274 pgTAP/5-file rollback/absence/reset-replay/274 pgTAP 통과 후 integration 6/8에서 고정 실패하는지 확인한다.
-5. 안전 catalog probe로 trigger `prosecdef=false`, backend private-schema usage=false만 확인하고 DSN/SQL/native diagnostic은 출력하지 않는다.
+4. reset/282 pgTAP/`006→005→004→003→002→001` rollback/absence/reset-replay/282 pgTAP 뒤 integration 8/8을 확인한다.
+5. 안전 catalog/pgTAP probe로 validator owner, `prosecdef=true`, exact `search_path=pg_catalog, pg_temp`, 직접 EXECUTE revoke와 backend private base-table denial을 확인하고 DSN/native diagnostic은 출력하지 않는다.
 6. rollback/cleanup probe에서 상태 invariants와 8범주 합성 row 0을 확인한다.
 
 ### 롤백
 
 - 이 문서 동기화는 해당 문서 commit 하나를 revert하면 되며 Task 9 구현 파일 3개에는 영향을 주지 않는다.
 - 승인 후 A를 구현할 때는 새 `006` compensation이 `validate_active_kb_question()`을 `SECURITY INVOKER`로 복원하고 새 pgTAP catalog assertion을 제거 전 검증해야 한다.
-- Task 9 구현 자체를 버릴 경우 아직 미커밋인 세 파일만 별도 보존/폐기 판단한다. 이 문서 작업은 그 파일들을 stage하거나 수정하지 않는다.
+- 당시 Task 9 구현 자체를 버릴 경우 작업 트리의 세 파일만 별도 보존/폐기하도록 기록했다. 현재 해당 구현은 후속 보정과 검증을 거쳐 커밋됐으므로 이 문장은 역사적 롤백 판단만 설명한다.
 
 ### 다음 개발자 시작점
 
-D-028/ADR-0012/ambiguity register와 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 먼저 확인한다. 새 `00600` migration·matching compensation·pgTAP을 RED→GREEN으로 별도 구현하고, 그 뒤 Task 9 세 dirty 파일을 사용해 full runner 8/8, root gate, secret/scope, 독립 review를 재실행한다.
+D-028/ADR-0012/ambiguity register와 완료된 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 확인한다. 다음 시작점은 Task 10이며 A-021 public-release caveat를 보존한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- 인간 A/Blocker는 0개다. Q-DB-003=A 구현과 검증은 pending이다.
+- 인간 A/Blocker는 0개다. Q-DB-003=A 구현과 검증은 완료됐다.
 - definer validator는 owner/exact `search_path=pg_catalog, pg_temp`/direct EXECUTE revoke/body hash/exact trigger binding/private privilege 0을 catalog와 pgTAP으로 모두 증명해야 한다.
 - A-021은 기존 app_api SECURITY DEFINER 9개의 `pg_catalog`-only posture를 public 배포 전 별도 조사·승인할 B/High 위험이며 이번 `00600` 범위가 아니다.
-- Task 9 세 파일은 미커밋 상태이므로 다른 문서 변경과 함께 stage하면 안 된다.
-- Task 9A full gate 전 DB schema/test/docs version과 Task 10을 변경하지 않는다.
+- Task 9 세 파일은 `04a944f`로 commit됐고 `228d8cb`이 cleanup evidence를 보정했다.
+- DB schema/test/docs manifest 승격과 Task 10 문서는 이 closeout이 아니라 Task 10에서 변경한다.
 
 ## 15. 자체 리뷰
 
@@ -206,4 +206,38 @@ D-028/ADR-0012/ambiguity register와 [Task 9A plan](../superpowers/plans/2026-07
 - [x] source-of-truth/계약/버전 무변경 확인
 - [x] 개인정보 원문·secret/env 값 노출 없음
 - [x] 구현 노트 INDEX 갱신
-- [x] Task 9 구현 파일 3개 미수정·미stage·미commit
+- [x] 역사적 blocker note 작성 시 Task 9 구현 파일 3개 미수정·미stage·미commit
+
+## 16. Resolution and closeout — 2026-07-17 KST
+
+### 6W1H delta
+
+- Who/When: root coordinator, implementation agent, specification/quality
+  reviewers가 2026-07-17 KST에 blocker를 구현·검증했다.
+- Where/What: `00600` forward/compensation/pgTAP과 Task 9 runner/tooling/integration.
+- Why/How: private grant 없이 deferred invariant를 실행하기 위해 TDD,
+  compensation/replay, retained-before-removal integration, independent review.
+- How much: focused 8/8, full pgTAP 282, integration 8/8, tooling 16/16,
+  synthetic table 8개 zero, 비용 0원.
+
+### Evidence
+
+- commits `5266abc`/`04a944f`/`228d8cb`; first commit의 4번째 path는 stale
+  `002_invariants_test.sql` exact assertion test-only 동기화다.
+- GREEN: `Files=6, Tests=282`; `00600` full posture PASS; compensated
+  `Files=5, Tests=274`; exact `006→005→004→003→002→001`; absence/replay PASS.
+- integration은 diagnostic branch 유지/제거 뒤 각각 8/8. cleanup은 최종
+  identifier-scoped 단일 admin transaction이다.
+- Ruff format/lint, strict Mypy, root/web/API/contract/secret/package/diff,
+  no-URL exact 8 skips와 zero-row PASS.
+- initial spec review Important 1/Minor 1은 `228d8cb`로 해결됐고 final spec과
+  quality는 각각 Critical/Important/Minor 0/0/0이다.
+- 이 closeout의 exact 10 docs에 대해 local link/control/stale/secret/package,
+  protected scope 0, `git diff --check`를 재검증해 모두 PASS했다.
+
+### Versions, security, privacy, data, rollback, handoff
+
+모든 version 축은 유지됐다. API/table/data/seed/retention/dependency/cost/remote
+state는 불변이고 secret/DSN/question/answer는 기록하지 않았다. rollback은 `00600`
+compensation 후 기존 274 baseline, 전체는 006부터 역순이다. Task 9은 완료,
+DB-001은 Task 10 ready다. A-021은 local blocker가 아니지만 public-release blocker다.
