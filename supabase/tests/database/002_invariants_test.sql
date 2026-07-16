@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(60);
+SELECT plan(62);
 
 -- Explicit transaction-scoped MOCK fixtures. OFFICIAL below means only the
 -- provenance branch under test; no fixture survives this file's rollback.
@@ -789,6 +789,38 @@ SELECT ok(
     'app_private.lock_kb_question_parents()'::regprocedure
   ) LIKE '%KB_QUESTION_WRITE_REQUIRES_READ_COMMITTED%',
   'question parent lock fails closed outside read committed isolation'
+);
+
+SELECT ok(
+  pg_catalog.pg_get_functiondef(
+    'app_private.validate_active_kb_question()'::regprocedure
+  ) ~ 'current_setting\(''transaction_isolation''\)'
+  AND pg_catalog.pg_get_functiondef(
+    'app_private.validate_active_kb_question()'::regprocedure
+  ) LIKE '%KB_ACTIVE_TRANSITION_REQUIRES_READ_COMMITTED%',
+  'parent ACTIVE transition fails closed outside read committed isolation'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_catalog.pg_proc AS functions
+    JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = functions.pronamespace
+    WHERE namespaces.nspname = 'app_private'
+      AND functions.proname IN (
+        'validate_interaction_event_sources',
+        'validate_failed_question_event',
+        'validate_interaction_event_failure',
+        'validate_kb_candidate_failure',
+        'validate_failed_question_candidate'
+      )
+      AND pg_catalog.pg_get_functiondef(functions.oid)
+        ~ 'current_setting\(''transaction_isolation''\)'
+      AND pg_catalog.pg_get_functiondef(functions.oid)
+        LIKE '%LINEAGE_WRITE_REQUIRES_READ_COMMITTED%'
+  ),
+  5,
+  'all five cross-table lineage validators fail closed outside read committed isolation'
 );
 
 -- Remove every transaction-scoped fixture, force deferred checks, and prove none remain.

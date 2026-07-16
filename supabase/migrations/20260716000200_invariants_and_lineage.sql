@@ -399,6 +399,13 @@ AS $function$
 DECLARE
   v_invalid_source boolean;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   IF NEW.answer_status <> 'SUCCESS' THEN
     RETURN NEW;
   END IF;
@@ -447,6 +454,13 @@ DECLARE
   v_intent app_private.intent_code;
   v_fallback_reason app_private.fallback_reason;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   SELECT event.answer_status, event.intent, event.fallback_reason
   INTO v_answer_status, v_intent, v_fallback_reason
   FROM app_private.interaction_events AS event
@@ -479,6 +493,13 @@ DECLARE
   v_failure_intent app_private.intent_code;
   v_failure_reason app_private.fallback_reason;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   SELECT failure.intent, failure.fallback_reason
   INTO v_failure_intent, v_failure_reason
   FROM app_private.failed_questions AS failure
@@ -510,6 +531,13 @@ DECLARE
   v_candidate_eligible boolean;
   v_fallback_reason app_private.fallback_reason;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   SELECT failure.candidate_eligible, failure.fallback_reason
   INTO v_candidate_eligible, v_fallback_reason
   FROM app_private.failed_questions AS failure
@@ -539,6 +567,13 @@ AS $function$
 DECLARE
   v_has_candidate boolean;
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation')
+     IS DISTINCT FROM 'read committed' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'LINEAGE_WRITE_REQUIRES_READ_COMMITTED';
+  END IF;
+
   SELECT EXISTS (
     SELECT 1
     FROM app_private.kb_candidates AS candidate
@@ -619,6 +654,23 @@ DECLARE
   v_status app_private.kb_status;
   v_parent_exists boolean;
 BEGIN
+  IF TG_TABLE_NAME = 'kb_documents' THEN
+    IF (
+         (TG_OP = 'INSERT' AND NEW.status = 'ACTIVE')
+         OR (
+           TG_OP = 'UPDATE'
+           AND OLD.status IS DISTINCT FROM NEW.status
+           AND NEW.status = 'ACTIVE'
+         )
+       )
+       AND pg_catalog.current_setting('transaction_isolation')
+         IS DISTINCT FROM 'read committed' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'KB_ACTIVE_TRANSITION_REQUIRES_READ_COMMITTED';
+    END IF;
+  END IF;
+
   IF TG_TABLE_NAME = 'kb_documents' THEN
     IF TG_OP = 'INSERT' THEN
       v_new_parent := NEW.id;
