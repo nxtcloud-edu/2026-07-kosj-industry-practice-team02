@@ -27,7 +27,8 @@
 | `docs/decisions/DECISION_LOG.md` | 사용자 결정 로그 |
 | `docs/adr/` | 장기 아키텍처 결정 |
 | `docs/discovery/INTERVIEW_ANSWERS.md` | 인터뷰 답변 원문·해석·해결 상태 |
-| `docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md` | A/Blocker 0, 사용자 승인 대기 Draft 실행계획 |
+| `docs/superpowers/specs/` | 구현계획 전에 사용자가 검토하는 기능·아키텍처 서면 설계 |
+| `docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md` | 승인된 전체 실행계획과 단계별 gate |
 
 ## 모든 작업 후 갱신할 파일
 

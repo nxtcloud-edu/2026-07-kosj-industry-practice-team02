@@ -7,4 +7,4 @@
 - 자동 down migration을 가정하지 않고 위험 변경마다 명시적 보상/rollback SQL, 백업·복구 절차를 기록한다.
 - 원격 `db push`, 파괴적 변경, 데이터 삭제·이동은 인간 승인 전 금지한다.
 
-2026-07-16 확인 결과 Docker daemon이 Linux container mode로 응답한다. Supabase CLI, supabase/ 설정, 실행 migration, DB 통합 테스트는 아직 없다. Q-DB-002 기본값 또는 답변을 반영한 DB 설계 명세 승인 전에는 CLI 설치·image pull·container 시작·migration 생성/실행을 하지 않는다. 상세 간극과 추천 경계는 [DB-001 발견 감사 보고서](../docs/discovery/DB_001_DISCOVERY_REPORT.md)를 따른다.
+2026-07-16 확인 결과 Docker daemon이 Linux container mode로 응답한다. Supabase CLI, supabase/ 설정, 실행 migration, DB 통합 테스트는 아직 없다. Q-DB-002는 A로 해결됐으며 [ADR-0011](../docs/adr/0011-layered-database-and-backend-enforcement.md)에 따라 DB와 backend에서 규칙을 이중 강제한다. [서면 설계 명세](../docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md) 사용자 검토 전에는 CLI 설치·image pull·container 시작·migration 생성/실행을 하지 않는다.

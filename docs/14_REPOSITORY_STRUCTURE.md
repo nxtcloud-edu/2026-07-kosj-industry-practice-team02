@@ -23,6 +23,8 @@
 │  ├─ adr/
 │  ├─ decisions/
 │  ├─ plans/
+│  ├─ superpowers/
+│  │  └─ specs/
 │  ├─ implementation-notes/
 │  ├─ test-reports/
 │  ├─ data-lineage/

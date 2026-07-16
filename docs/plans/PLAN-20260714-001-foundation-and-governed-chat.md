@@ -187,7 +187,7 @@ Approved — 2026-07-15 사용자가 `진행`으로 최종 계획·초기 프로
 
 - app/web: 스캐폴딩 완료 시 `0.1.0`.
 - api: 현재 `2.0.0-draft`; Q-CHAT-001의 `session_id` 제거/required nullable context를 ADR-0010의 major draft로 기록. 첫 수직 흐름 구현 시 같은 계약을 동결하고 호환 변경만 minor/patch로 관리.
-- schema: 현재 `0.2.0-draft`; 첫 실행 migration에서 `0.1.0` migration lineage 시작.
+- schema: 현재 `0.2.0-draft`; timestamp migration 계보는 semantic version과 분리하고 첫 실행·검증 완료 시 manifest를 호환 가능한 `0.3.0-local`로 올린다.
 - data: PM 승인 seed 전 `0.0.0-not-populated`, 20 KB/3 office 승인 후 `0.1.0`.
 - prompts: provider/model policy는 `0.0.2-deepseek-v4-flash-selected`; 실제 prompt 작성·평가 승인 후 `0.1.0`.
 - tests: 현재 `0.3.0-spec`, scaffold 실행 테스트 추가 후 호환 minor, 회귀 완료 `1.0.0` 검토.

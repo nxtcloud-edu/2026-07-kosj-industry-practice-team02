@@ -22,6 +22,7 @@
 - Deterministic OpenAPI TypeScript generation/check commands and strict Pydantic raw-JSON consumers for the same 17 contract fixtures
 - PowerShell 5.1-compatible 24-stage local verification gate with exact runtime preflight, frozen/default and warm-offline modes, fail-fast exit preservation, scoped synthetic Web secret checks, and metadata-only diagnostics
 - DB-001 executable-schema discovery report covering migration lineage, atomic approval, retention, ACTIVE-only access, provenance, permissions, rollback, and database test gaps
+- ADR-0011 and a written DB-001 design for private schemas, capability functions, atomic approval, retention, and layered DB/backend enforcement
 
 ### Changed
 
@@ -44,10 +45,11 @@
 - Patched the public draft to API 2.0.1-draft: `/health` and ready-state `/ready` 200 bodies are required closed schemas, and FALLBACK extras are rejected consistently across OpenAPI, standalone JSON Schema, and Pydantic
 - Scoped pnpm dependency verification/offline and six synthetic Web build environment values with exact restoration, while suppressing child output that could disclose paths or values
 - Preserved the local `.pnpm-store/` cache while adding it to the tested transient-path ignore contract so it cannot be committed accidentally
-- Updated the database environment record after verifying the local Docker engine, while keeping Supabase CLI installation and migration execution behind Q-DB-002 design approval
+- Updated the database environment record after verifying the local Docker engine, while keeping Supabase CLI installation and migration execution behind written DB design review
+- Resolved Q-DB-002 as layered database-and-backend enforcement while keeping remote/public execution deferred
 
 ### Pending
 
 - Official KB and office data
 - Deployment accounts and URLs
-- Q-DB-002 database-and-backend enforcement ownership decision
+- DB-001 written design specification review and implementation plan approval
