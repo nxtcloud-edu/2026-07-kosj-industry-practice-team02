@@ -38,6 +38,8 @@ logs/
 .tmp/
 tmp/
 .tools/
+supabase/.temp/
+supabase/.branches/
 *.sqlite
 *.sqlite3
 

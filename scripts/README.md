@@ -20,6 +20,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offl
 
 공개 옵션은 `-Offline` 하나뿐이다. 오프라인 모드는 warm cache를 요구하며 pnpm/uv offline을 강제한다. 성공·실패 하위 명령의 원문 출력은 비밀·경로 유출을 막기 위해 전달하지 않고 stable step ID만 표시한다. child 실패는 해당 종료코드를 보존하고, 버전·실행·복원 같은 운영 오류는 2를 반환한다. 러너 자체는 삭제와 서버 실행을 하지 않는다.
 
+## 프로젝트 로컬 Supabase CLI
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1 -VerifyOnly
+```
+
+첫 명령은 고정된 공식 Windows amd64 release archive의 byte count와 SHA-256을 확인한 뒤
+`.tools/supabase/v2.109.1/`에 프로젝트 로컬 CLI만 설치한다. 두 번째 명령은 다운로드 없이
+설치된 실행 파일과 정확한 버전만 확인한다. 별도 archive를 검증하려면 첫 명령에
+`-ArchivePath <zip>`을 추가한다.
+
+이 CLI는 로컬 개발 도구이며 production dependency가 아니다. 스크립트는 Supabase `login`,
+`link`, `db push` 또는 다른 remote project operation을 수행하지 않는다.
+
 ## 보안 경계 검사
 
 ```powershell

@@ -88,6 +88,8 @@ class RepositoryScaffoldContractTests(unittest.TestCase):
             ".worktrees/",
             ".superpowers/",
             ".tools/",
+            "supabase/.temp/",
+            "supabase/.branches/",
         }
         self.assertEqual(required - ignored, set())
 
