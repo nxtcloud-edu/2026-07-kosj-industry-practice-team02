@@ -1268,7 +1268,7 @@ git commit -m "feat(db): expose official citizen read capabilities"
 - Create: `apps/api/tests/db/test_repository.py`
 - Modify: `apps/api/tests/test_architecture.py`
 
-- [ ] **Step 1: Write failing error/model tests**
+- [x] **Step 1: Write failing error/model tests**
 
 Define expected public Python API in tests:
 
@@ -1309,7 +1309,7 @@ def test_actor_and_event_validation_rejects_unsafe_combinations() -> None:
         )
 ```
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 Run:
 
@@ -1319,7 +1319,7 @@ uv run --directory apps/api --frozen pytest -q -p no:cacheprovider tests/db/test
 
 Expected: import failures for missing DB modules.
 
-- [ ] **Step 3: Implement frozen typed models**
+- [x] **Step 3: Implement frozen typed models**
 
 Use `str, Enum` enums whose values exactly match PostgreSQL enums. Use frozen, slotted dataclasses for:
 
@@ -1344,15 +1344,15 @@ PurgeResult(purged_count, purged_ids)
 
 Backend validation duplicates the DB's simple structural checks: trimmed IDs/text, supported intent/region, unique sources, non-negative response time, exact fallback matrix, no OUT_OF_SCOPE retained text, non-empty string arrays, and actor role checks. It does not attempt cross-row validation that belongs to the transaction.
 
-- [ ] **Step 4: Implement stable domain errors**
+- [x] **Step 4: Implement stable domain errors**
 
 `DatabaseRuleError` exposes only `code` and a stable safe message from an internal constant map. `map_database_error(exc)` reads only `exc.sqlstate`; listed states map to `DatabaseRuleError`, while unlisted DB exceptions become `DatabaseUnavailableError("DATABASE_OPERATION_FAILED")` with the original exception chained but not stringified or logged.
 
-- [ ] **Step 5: Write failing repository/pool tests**
+- [x] **Step 5: Write failing repository/pool tests**
 
 Use async fake pool/connection/cursor objects to verify methods call only these fixed statements with positional parameters: `SELECT * FROM app_api.list_active_kb(%s)`, `SELECT * FROM app_api.list_offices(%s, %s)`, `SELECT * FROM app_api.record_interaction(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.confirm_failed_question_reason(%s, %s, %s, %s)`, `SELECT app_api.create_kb_candidate(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)`, `SELECT app_api.submit_kb_candidate(%s, %s, %s)`, `SELECT app_api.approve_kb_candidate(%s, %s, %s, %s)`, `SELECT app_api.reject_kb_candidate(%s, %s, %s, %s)`, and `SELECT * FROM app_api.purge_expired_failed_question_text()`. Verify commit on success, rollback on failure, typed row mapping, and absence of question/answer text in exception output. Extend `test_architecture.py` so importing `sejong_ai_api.main` does not import `psycopg` or construct a pool.
 
-- [ ] **Step 6: Implement explicit lazy pool creation**
+- [x] **Step 6: Implement explicit lazy pool creation**
 
 `pool.py` must contain only:
 
@@ -1373,7 +1373,7 @@ def create_pool(database_url: str) -> AsyncConnectionPool:
 
 No module reads environment variables and no pool opens at import time.
 
-- [ ] **Step 7: Implement the repository protocol and adapter**
+- [x] **Step 7: Implement the repository protocol and adapter**
 
 `SejongRepository` declares these exact async methods and return types: `list_active_kb(intent: Intent) -> Sequence[KnowledgeRecord]`, `list_offices(region: Region, intent: Intent) -> Sequence[OfficeRecord]`, `record_interaction(event: InteractionWrite) -> InteractionWriteResult`, `confirm_failed_question_reason(failed_question_id: UUID, actor: Actor, fallback_reason: FallbackReason) -> None`, `create_kb_candidate(draft: CandidateDraft) -> UUID`, `submit_kb_candidate(candidate_id: UUID, actor: Actor) -> None`, `approve_kb_candidate(candidate_id: UUID, actor: Actor, review_comment: str) -> str`, `reject_kb_candidate(candidate_id: UUID, actor: Actor, review_comment: str) -> None`, and `purge_expired_failed_question_text() -> PurgeResult`. Import `Sequence` from `collections.abc`; the concrete adapter returns immutable tuples and both read methods allow an empty result.
 
@@ -1381,7 +1381,7 @@ No module reads environment variables and no pool opens at import time.
 
 All SQL strings are module constants with fixed `app_api` function names. Parameters are passed separately. Catch `psycopg.Error`, call `map_database_error`, and raise the mapped exception without logging values.
 
-- [ ] **Step 8: Run API verification**
+- [x] **Step 8: Run API verification**
 
 Run:
 
@@ -1394,12 +1394,34 @@ uv run --directory apps/api --frozen pytest -q -p no:cacheprovider
 
 Expected: all checks pass, `/health` behavior is unchanged, `/ready` remains 503, and no public route imports the repository.
 
-- [ ] **Step 9: Commit Task 8**
+- [x] **Step 9: Commit Task 8**
 
 ```powershell
 git add apps/api/src/sejong_ai_api/db apps/api/tests/db apps/api/tests/test_architecture.py
 git commit -m "feat(api): add lazy typed database boundary"
 ```
+
+**Actual Task 8 evidence (2026-07-17 KST):**
+
+- Base `ab86c09`; implementation commit `3cae552`, exactly the ten declared Task
+  8 files and no route, contract, migration, seed, dependency, lock, or version
+  change.
+- Phase 1 RED was two missing `sejong_ai_api.db` imports; focused GREEN was
+  81 passed. Phase 2 RED was the missing pool module; focused GREEN was 31
+  passed plus four unittest subtests.
+- An interim ACTIVE-read invariant review added two failing question-example
+  tests before the minimal validator made both pass.
+- Fresh agent and root verification passed Ruff format for 22 files, Ruff lint,
+  strict Mypy for 22 files, and full API pytest with 156 passed plus four
+  unittest subtests. One pinned Starlette/httpx deprecation warning is non-
+  failing and requires a separately approved dependency change.
+- Secret, package, whitespace, exact owned-file, and Task-8 scope checks passed.
+  Global `check_scope_drift.py` remains baseline-red only for
+  `PACKAGE_MANIFEST.json` and ignored `.tools/isolated-repo`; no Task 8 file is
+  reported.
+- Independent review of `ab86c09..3cae552` reported Critical 0, Important 0,
+  Minor 0. Full evidence: `.superpowers/sdd/task-8-report.md` and
+  `docs/implementation-notes/IMP-20260717-003-db-001-task-8-lazy-typed-database-boundary.md`.
 
 ## Task 9: Prove concurrency, idempotency, retention boundaries, and rollback/replay
 

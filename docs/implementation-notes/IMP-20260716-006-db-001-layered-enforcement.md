@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-16
 - Task ID: DB-001
 - Type: implementation
-- Status: In Progress — Task 7/10 complete; Task 8 ready
+- Status: In Progress — Task 8/10 complete; Task 9 ready
 - Author/Agent: Codex `/root` coordinator with task-specific implementation/review agents
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `cf76b17`
@@ -32,10 +32,10 @@
 | Who — 누가 | 사용자 승인자, Codex root coordinator, task별 구현 agent, 명세 reviewer, 품질 reviewer |
 | When — 언제 | 2026-07-16 KST 시작; 완료 시각은 최종 갱신 |
 | Where — 어디서 | `.worktrees/db-001-layered-enforcement`, local Docker Desktop/Supabase PostgreSQL, `apps/api`, `supabase/`, `database/`, `scripts/` |
-| What — 무엇을 | DB-001 executable local schema, capability boundary, tests, rollback/replay, backend adapter |
+| What — 무엇을 | DB-001 executable local schema, capability boundary, tests, rollback/replay, lazy typed backend adapter |
 | Why — 왜 | 승인·공식 데이터·보관·개인정보 규칙이 API 실수·직접 SQL·동시 요청으로 우회되지 않게 하기 위해 |
 | How — 어떻게 | TDD RED→GREEN, task별 commit, 명세 review 후 품질 review, 최종 독립 verification |
-| How much — 어느 정도 | 5 forward migrations, 5 compensation files, 5 pgTAP suites, 9 DB interfaces, local-only 비용 0원 |
+| How much — 어느 정도 | 5 forward migrations, 5 compensation files, 5 pgTAP suites, 9 DB interfaces, Task 8 API boundary 10 files, DB 274 assertions+4 concurrency, API 156 tests+4 subtests, local-only 비용 0원 |
 
 ## 3. 시작 전 상태
 
@@ -102,10 +102,13 @@ DB 권한과 state transition은 task 간 의존성이 강해 한 task의 drift�
 | `supabase/migrations/20260716000500_indexes_and_read_interfaces.sql` | ACTIVE+OFFICIAL KB와 OFFICIAL region+intent office를 위한 exact five indexes·two backend-only read functions | 시민 근거/기관 결과를 승인된 stored metadata로 제한 |
 | `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql` | 두 read function과 다섯 index만 역순 제거 | Task 6 기준선을 보존하는 부분 보상 |
 | `supabase/tests/database/005_citizen_reads_test.sql` | exact catalog/ACL/index와 상태·출처·정렬·고정 diagnostic 40 assertions | mock/non-active/private 열 노출 회귀 차단 |
+| `apps/api/src/sejong_ai_api/db/{__init__,errors,models}.py` | safe package export, SQLSTATE-only stable error mapping, exact enum·frozen/slotted typed models·structural validators | native DB diagnostic 누출과 잘못된 backend input을 pool 접근 전 차단 |
+| `apps/api/src/sejong_ai_api/db/{pool,repository}.py` | unopened explicit pool factory, repository protocol, fixed 9-SQL psycopg adapter, typed immutable reads·transactional writes | import/env side effect 없이 backend-only capability 호출 경계 고정 |
+| `apps/api/tests/db/`, `apps/api/tests/test_architecture.py` | DB focused 112 passed(81+31), 전체 API 156 passed+main-import 4 subtests | SQL/parameter/transaction/mapping과 driver/pool/env lazy-import 회귀 차단 |
 
 ### 데이터 흐름/상태 변화
 
-Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 설치했고, Task 3에서 local PostgreSQL을 기동해 `app_private`/`app_api`, 7 enum, 8 table을 첫 migration으로 생성했다. Task 4는 두 번째 migration으로 table-level CHECK, validator, `updated_at`, source/lineage/ACTIVE-question trigger를 추가했다. Task 5는 세 번째 migration으로 safe capability roles, ownership/ACL, 여덟 forced-RLS table과 owner-only policies, `record_interaction`, retention helper/wrapper를 추가했다. Task 6는 네 번째 migration으로 event의 최초 자동 사유를 보존하면서 failure를 확인/정정하고, eligible failure에서 후보 작성·제출·별도 승인/반려·ACTIVE OFFICIAL KB 전환·metadata-only audit을 원자적으로 수행하는 다섯 backend-only interface를 추가했다. Task 7은 다섯 번째 migration으로 ACTIVE+OFFICIAL KB와 OFFICIAL region+intent office만 반환하는 두 backend-only read interface와 exact five indexes를 추가했다. tracked seed는 설명 주석뿐이며 공식/mock persistent row는 0이다.
+Task 0~2에서는 DB row/container/schema 변화가 없다. Task 2에서 ignored `.tools/supabase/v2.109.1/`에 공식 archive를 설치했고, Task 3에서 local PostgreSQL을 기동해 `app_private`/`app_api`, 7 enum, 8 table을 첫 migration으로 생성했다. Task 4는 두 번째 migration으로 table-level CHECK, validator, `updated_at`, source/lineage/ACTIVE-question trigger를 추가했다. Task 5는 세 번째 migration으로 safe capability roles, ownership/ACL, 여덟 forced-RLS table과 owner-only policies, `record_interaction`, retention helper/wrapper를 추가했다. Task 6는 네 번째 migration으로 event의 최초 자동 사유를 보존하면서 failure를 확인/정정하고, eligible failure에서 후보 작성·제출·별도 승인/반려·ACTIVE OFFICIAL KB 전환·metadata-only audit을 원자적으로 수행하는 다섯 backend-only interface를 추가했다. Task 7은 다섯 번째 migration으로 ACTIVE+OFFICIAL KB와 OFFICIAL region+intent office만 반환하는 두 backend-only read interface와 exact five indexes를 추가했다. Task 8은 DB/schema/data를 변경하지 않고 이 9개 capability를 safe typed model·sqlstate-only error·lazy pool·fixed SQL repository로 연결했다. public route는 아직 연결하지 않았고 tracked seed는 설명 주석뿐이며 공식/mock persistent row는 0이다.
 
 ### 오류·빈 상태·롤백
 
@@ -126,6 +129,8 @@ Task 5는 capability 부재 6/6의 의도한 RED 뒤 roles·forced RLS·function
 Task 6는 새 workflow interface 부재 RED 뒤 초기 228/228 GREEN을 만들었다. 독립 review가 replay/confirmation lock inversion, confirmed failure reversal, deterministic KB-ID collision의 native diagnostic을 발견했다. focused RED 5/62와 deterministic `40P01`을 재현한 뒤 parent event `FOR SHARE`, status-aware monotonic lineage trigger, 단일 KB INSERT의 `P1003` collision mapping으로 보정했다. 최종 root 검증은 reset/forward 234/234와 4개 concurrency scenario, 003 guard expected fail, 004 compensation, Task 1~5 172/172와 3개 compensated scenario, fresh replay 234/234와 4개 scenario를 모두 통과했다. 두 probe command 조합 실패는 PowerShell/로컬 CLI 경로 quoting 문제로 제품 SQL failure가 아니며 secret 노출이나 성공한 rollback 외 DB mutation은 없었다. 독립 code review는 clean이다.
 
 Task 7은 새 citizen read/index가 없는 상태에서 기존 234 assertions가 통과하고 새 catalog checks 9/11이 실패한 뒤 undefined function으로 멈추는 RED를 확보했다. exact five indexes와 `list_active_kb`/`list_offices`를 구현한 뒤 focused 40/40, full 274/274가 통과했다. test-only hardening은 dynamic SQL 부재와 함수별 stacked diagnostic 비누출 검사를 비공허하게 강화했다. `00500` compensation 뒤 함수/index는 0, Task 1~6은 234/234와 concurrency 4 scenarios를 보존했고 fresh five-migration replay는 274/274+4를 통과했다. root가 forward `274+4`, compensated `234+4`, final replay `274+4`를 독립 재현했으며 final catalog는 `functions=2 posture=2 acl=2 indexes=5 rows=0 backend_select=0`, 독립 review는 Critical/Important/Minor 0이다.
+
+Task 8은 error/model production module이 없는 상태의 import error 2개 RED와 pool module 부재 RED를 먼저 확보한 뒤, exact enum·frozen/slotted model·safe error mapping과 explicit unopened pool·repository protocol/adapter를 구현했다. 초기 GREEN 후 ACTIVE KB가 question example 적어도 1개를 가져야 한다는 DB invariant의 Python mirror 누락을 focused 2-test RED로 재현하고 최소 validator로 닫았다. 최종 API는 156 passed+4 subtests, Ruff/Mypy clean이며 exact 10 files·독립 review Critical/Important/Minor 0이다. native DB message/detail/parameter는 stringify/log하지 않고 고정 code로만 축약된다.
 
 후속 품질 review에서 첫 regression test가 source 전체 문자열을 검사해 주석 속 정답과 실제
 대소문자 변형 호출을 구분하지 못하는 false-pass가 발견됐다. AST 검사로 한 차례 강화했지만,
@@ -238,26 +243,31 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 | Task 7 compensation preservation | `00500`만 보상, read function/index absence, 이전 기준선 | 함수 0, index 0; 234/234 + concurrency 4 | Task 7 report/root terminal |
 | Task 7 fresh replay/root verification | five migrations, full pgTAP, two-connection probe | 274/274 + concurrency 4; root forward/compensated/final 재현 | Task 7 report/root terminal |
 | Task 7 catalog/static/review | catalog/ACL/privacy count, secret/diff, 독립 review | `2/2/2/5/0/0`; secret 0; C/I/M 0 | Task 7 report/reviewer result |
+| Task 8 Phase 1 error/model RED→GREEN | DB import 2개 부재 RED 후 typed model·safe error mapping | 81 passed | Task 8 report/agent terminal |
+| Task 8 Phase 2 repository RED→GREEN | pool 부재 RED 후 lazy pool·protocol·fixed-SQL adapter·import isolation | 31 passed + 4 subtests | Task 8 report/agent terminal |
+| Task 8 interim ACTIVE question invariant | missing-validation RED 후 minimal model guard | focused 2/2 | Task 8 report |
+| Task 8 API root+agent verification | Ruff format/lint, strict Mypy, full pytest | 22 files clean; 156 passed + 4 subtests | Task 8 report/root+agent terminal |
+| Task 8 static/scope/review | secret/package/diff/exact 10-file checks, independent review | PASS; Critical/Important/Minor 0 | Task 8 report/reviewer result |
 
 ### 미실행 검증과 이유
 
-- `verify_database.ps1`: 전체 capability/read/API integration 파일이 아직 없어 Task 9 최종 gate 전까지 미실행.
-- Task 5 role DDL, Task 6 workflow transaction, Task 7 read 함수는 실행·검증됨. Task 8/9 repository/integration은 미실행.
-- DB/API integration tests: executable migration은 검증됐지만 backend repository 경계가 아직 없어 Task 8까지 미실행.
+- `verify_database.ps1`: Task 8 repository는 구현·unit 검증됐지만 Task 9 real-DB integration/전체 rollback gate가 아직 없어 최종 runner는 Task 9까지 미실행. 현재 runner의 rollback 목록은 없는 `20260716000400_indexes_and_read_interfaces.rollback.sql`을 가리키고 `20260716000400_candidate_workflow.rollback.sql`을 빠뜨린 stale 상태이므로, 이 충돌은 계획대로 Task 9가 테스트 먼저 보정한다.
+- Task 5 role DDL, Task 6 workflow transaction, Task 7 read 함수, Task 8 lazy typed repository는 구현·검증됨. Task 9 DB/API integration 8개와 complete compensation/replay는 미실행.
+- global `scripts/check_scope_drift.py`는 기존 `PACKAGE_MANIFEST.json`과 ignored `.tools/isolated-repo` 때문에 baseline-red이다. Task 8 파일은 보고 0이고 secret/package/diff/exact-scope 대체 gate는 통과했다.
 - DeepSeek call: DB-001 범위 밖이며 key를 읽거나 전송하지 않음.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
-- Privacy: Task 0~7에서 실제 env/key/시민 질문 원문 접근 0. Task 4~7은 합성 `MOCK`/`[MASKED]` fixture 또는 capability 증명용 최소 synthetic OFFICIAL fixture만 사용했고 cleanup/reset 후 row는 0이다. Task 7 read는 시민용 stored metadata allowlist만 반환하며 raw question/answer/transcript/private operator 열은 반환하지 않는다.
-- Security: CLI 공급망·child 비노출 경계에 더해 Task 5 forced RLS/owner-only policy/backend base-table denial, Task 6 다섯 workflow capability, Task 7 두 `STABLE SECURITY DEFINER` read allowlist와 invalid-filter diagnostic 비누출을 검증했다. 실제 `.env`/DeepSeek key는 읽지 않았다. Q-SEC-002=A로 non-superuser fail-closed replay를 확정했다. PostgreSQL native CHECK의 `DETAIL`은 Task 8 backend/log boundary가 폐기해야 한다.
+- Privacy: Task 0~8에서 실제 env/key/시민 질문 원문 접근 0. Task 4~7은 합성 `MOCK`/`[MASKED]` fixture 또는 capability 증명용 최소 synthetic OFFICIAL fixture만 사용했고 cleanup/reset 후 row는 0이다. Task 7 read는 시민용 stored metadata allowlist만 반환하며, Task 8 repository는 raw answer/context token/HTTP role header/arbitrary SQL을 인자로 받지 않고 OUT_OF_SCOPE text 저장을 model에서 거부한다.
+- Security: CLI 공급망·child 비노출 경계에 더해 Task 5 forced RLS/owner-only policy/backend base-table denial, Task 6 다섯 workflow capability, Task 7 두 `STABLE SECURITY DEFINER` read allowlist와 invalid-filter diagnostic 비누출을 검증했다. Task 8은 SQLSTATE만 고정 error로 매핑하고 PostgreSQL native message/detail/parameter를 stringify/log하지 않으며, fixed schema-qualified SQL/positional parameter/lazy pool을 강제했다. 실제 `.env`/DeepSeek key는 읽지 않았다.
 - Accessibility: UI 변경 없음.
-- Performance/cost: Task 7 exact five indexes와 row-local deterministic question aggregate를 추가했다. 실제 데이터가 없어 production query plan은 미측정이며 외부 유료 API/인프라 비용은 0원이다.
+- Performance/cost: Task 7 exact five indexes와 row-local deterministic question aggregate를 추가했다. Task 8 pool은 `open=False`, min 1/max 4이고 read는 불필요한 transaction을 열지 않는다. 실제 DB·provider를 호출하지 않았고 외부 유료 API/인프라 비용은 0원이다.
 
 ## 10. 데이터와 출처 영향
 
 - 공식 데이터: 0 rows. `supabase/seed.sql`은 DATA-001/DATA-SEED-001 소유를 설명하는 주석 3줄뿐이다.
 - mock/AI 생성: 0 rows.
-- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 5/5(`20260716000100_private_schema.sql`~`20260716000500_indexes_and_read_interfaces.sql`) 생성. Task 7은 table/lineage를 바꾸지 않고 index/function/ACL만 추가한다.
+- schema/lineage: version manifest는 Task 10 전까지 0.2.0-draft 유지; executable migration 5/5(`20260716000100_private_schema.sql`~`20260716000500_indexes_and_read_interfaces.sql`) 생성. Task 7은 table/lineage를 바꾸지 않고 index/function/ACL만 추가했고, Task 8은 schema/data를 바꾸지 않은 채 9개 function 계약의 typed API boundary를 추가했다.
 - tooling source: official Supabase CLI tag `v2.109.1`; `apps/cli-go/pkg/config/config.go`의 `local_smtp` mapping/deprecated `inbucket` normalization과 `internal/start/start.go`, `internal/db/start/start.go`, `internal/db/test/test.go`의 실행 경계를 기준으로 DB-only drift를 보정했다.
 - verified date: 2026-07-17 KST.
 
@@ -267,6 +277,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - official CLI 2.109.1, PostgreSQL-only config·빈 seed·검증 runner가 준비됐고 local DB에 private schema·7 enum·8 table, Task 4 불변조건, Task 5 role·grant·forced RLS·interaction/retention capability가 생성됐다.
 - Q-SEC-002=A로 Task 5를 완료했고, Q-WF-001=A의 별도 사유 확인 capability와 새 `00400` workflow migration을 구현·검증해 Task 6를 완료했다.
 - `00500`의 ACTIVE+OFFICIAL KB와 OFFICIAL 기관 read를 구현·검증해 Task 7을 완료했다. 실제 공식 데이터는 0이므로 `/ready=503` 상태는 유지한다.
+- Task 8의 lazy typed FastAPI DB boundary가 구현됐다. native DB diagnostic은 SQLSTATE 기반 고정 error로만 축약되고, pool은 명시적 생성 전에 열리지 않는다. public route는 아직 연결되지 않았다.
 - 질문 예시·ACTIVE 전환·lineage 관련 직접 write는 `READ COMMITTED` transaction 계약이다. FastAPI 기본 경로도 이 격리수준을 유지해야 하며 다른 격리수준은 안정된 `P0001`로 거부된다.
 - bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했고, persistent local runtime이 healthy PostgreSQL 하나뿐임을 확인했다. 사용자가 직접 조치할 항목은 없다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
@@ -283,6 +294,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - Task 5 replay는 stored metadata를 먼저 비교하고 genuinely new request만 source→office 순서로 잠근다. role membership option은 grantor별 effective union으로 검사한다.
 - Task 6 confirmation은 event 최초 사유를 바꾸지 않고 failure 사유·eligibility·상태만 갱신한다. parent `FOR SHARE`와 failure/candidate `FOR UPDATE` 순서, monotonic status trigger, 단일 KB INSERT collision mapping이 replay/approval 동시성·비누출 경계를 유지한다.
 - Task 7 read는 enum cast 전 text allowlist, exact owner/ACL, 고정 `search_path`, schema-qualified SQL, `C` collation 정렬을 사용한다. test-hardening은 두 함수 모두의 no-dynamic-SQL과 stacked diagnostic 비누출을 비공허하게 확인한다.
+- Task 8 model은 PostgreSQL enum을 `str, Enum`으로 mirror하고 frozen/slotted dataclass로 입출력을 제한한다. repository는 fixed SQL 9개만 positional parameter로 호출하며 read는 tuple, write는 connection+transaction context를 사용한다.
 
 ## 13. 인수인계·재현·롤백
 
@@ -297,15 +309,17 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 7. `supabase db reset --local` 후 `supabase test db`가 `Files=5, Tests=274`, `Result: PASS`인지 확인한다.
 8. 관리자 DSN을 출력하지 않고 `SEJONG_ADMIN_DATABASE_URL` process env로만 전달해 `scripts/test_database_concurrency.py`가 `scenarios=4 connections=2` PASS인지 확인한다.
 9. D-026/D-027과 refined plan을 확인한다.
-10. final catalog가 `functions=2 posture=2 acl=2 indexes=5 rows=0 backend_select=0`인지 확인하고 Task 8의 lazy typed FastAPI DB boundary RED부터 시작한다.
+10. final catalog가 `functions=2 posture=2 acl=2 indexes=5 rows=0 backend_select=0`인지 확인한다.
+11. `.\.tools\uv\uv.exe run --directory apps/api --frozen ruff format --check src tests`, `ruff check`, `mypy`, `pytest -q -p no:cacheprovider`를 실행해 22 files format/lint/strict type 검사와 API 156 passed+4 subtests를 확인한다.
+12. [Task 8 완료 노트](IMP-20260717-003-db-001-task-8-lazy-typed-database-boundary.md)를 확인한 뒤 Task 9 real-DB integration test 8개의 RED를 시작한다.
 
 ### 롤백
 
-Task 7만 보상할 때는 관리자 DSN을 출력하지 않고 process environment로만 전달해 `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql`을 실행한다. read function/index 부재, Task 1~6 234/234와 concurrency 4개를 확인하고 fresh reset으로 274/274+4를 복구한다. 전체 DB-001 목표 순서는 `00500 → 00400 → 00300 → 00200 → 00100`과 absence proof이다. Task 7 코드 rollback은 test-only `59a69bd`, 최초 구현 `37b5e2c` 순서로 revert한다. 이후 Task 6은 formatting-only `72b7ab1`, review fix `2ba566d`, 최초 구현 `cd18ff6`, Task 5는 `264772d`, `fa6b755`, Task 4는 `cc22161`, `f181ffd`, `be69d94`, Task 2는 `9733ec7`, `339f04f`, `840d949`, Task 1은 `857e2b2`, `41c6dcf`를 각각 역순 revert한다.
+Task 8만 rollback할 때는 DB/schema/data compensation 없이 `git revert 3cae552`를 실행하고 기존 API 게이트와 Task 7 `274/274+4`를 재확인한다. Task 7만 보상할 때는 관리자 DSN을 출력하지 않고 process environment로만 전달해 `database/rollbacks/20260716000500_indexes_and_read_interfaces.rollback.sql`을 실행한다. read function/index 부재, Task 1~6 234/234와 concurrency 4개를 확인하고 fresh reset으로 274/274+4를 복구한다. 전체 DB-001 목표 순서는 `00500 → 00400 → 00300 → 00200 → 00100`과 absence proof이다. Task 7 코드 rollback은 test-only `59a69bd`, 최초 구현 `37b5e2c` 순서로 revert한다. 이후 Task 6은 formatting-only `72b7ab1`, review fix `2ba566d`, 최초 구현 `cd18ff6`, Task 5는 `264772d`, `fa6b755`, Task 4는 `cc22161`, `f181ffd`, `be69d94`, Task 2는 `9733ec7`, `339f04f`, `840d949`, Task 1은 `857e2b2`, `41c6dcf`를 각각 역순 revert한다.
 
 ### 다음 개발자 시작점
 
-D-026/D-027, ADR-0011, [Task 7 완료 노트](IMP-20260717-002-db-001-task-7-official-citizen-reads.md)를 확인한 뒤 Task 8 lazy typed FastAPI DB boundary의 error/model test RED부터 시작한다. `00100~00500` forward migration은 immutable로 취급한다.
+D-026/D-027, ADR-0011, [Task 8 완료 노트](IMP-20260717-003-db-001-task-8-lazy-typed-database-boundary.md)를 확인한 뒤 Task 9 real-DB integration 8개의 RED부터 시작한다. `00100~00500` forward migration과 Task 8의 typed model/SQL 시그니처는 baseline으로 취급한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
@@ -313,9 +327,11 @@ D-026/D-027, ADR-0011, [Task 7 완료 노트](IMP-20260717-002-db-001-task-7-off
 - Docker image pull 크기/시간 미측정.
 - Q-SEC-002/Q-WF-001은 A로 해결됐고 인간 A/Blocker는 0개다.
 - migration은 5/5 구현됐고 현재 pgTAP은 274/274다. Task 6에서 replay-vs-confirm까지 영구 concurrency script에 추가했으며 Task 9가 전체 gate 연결을 소유한다.
-- PostgreSQL native CHECK 오류의 `DETAIL`이 실패 row를 포함할 수 있으므로 Task 8에서 DB exception detail과 SQL parameter를 로그·응답에 남기지 않는 sanitizer를 검증해야 한다.
+- `scripts/verify_database.ps1`의 compensation 파일 목록이 Task 6/7 실제 파일명과 불일치하는 stale 상태다. Task 9의 runner regression test RED→GREEN 범위이며, 보정 전에 최종 DB-001 gate로 사용하지 않는다.
+- Task 8에서 PostgreSQL native CHECK `DETAIL`과 SQL parameter를 응답/로그에 남기지 않는 sqlstate-only sanitizer를 구현·검증했다. Task 9에서 real DB 오류 경로와 integration runner에 영구 연결해야 한다.
+- pinned Starlette/httpx TestClient deprecation warning 1건은 non-failing이며 새 production dependency 승인 없이 수정하지 않았다.
 - parent KB DELETE와 explicit child question DELETE가 동시에 일어나는 경로는 잠금 순서 P2 위험이 남아 있다. 현재 삭제 API가 없어 비차단이며, 삭제 기능을 추가하기 전에 별도 concurrency test가 필요하다.
-- 다음 단계: Task 8 lazy typed FastAPI repository boundary TDD를 시작한다.
+- 다음 단계: Task 9 real DB concurrency·idempotency·retention·complete rollback/replay TDD를 시작한다.
 
 ## 15. 자체 리뷰
 
@@ -335,3 +351,4 @@ D-026/D-027, ADR-0011, [Task 7 완료 노트](IMP-20260717-002-db-001-task-7-off
 - [x] Task 6 gate 해소 — Q-WF-001=A / D-027
 - [x] Task 6 RED→GREEN·review fix·234/234·concurrency 4/3·compensation/replay·독립 review clean
 - [x] Task 7 RED→GREEN·test hardening·274/274·concurrency 4·compensation/replay·독립 review clean
+- [x] Task 8 two-phase RED→GREEN·ACTIVE invariant RED→GREEN·Ruff/Mypy·API 156+4·exact 10 files·독립 review clean
