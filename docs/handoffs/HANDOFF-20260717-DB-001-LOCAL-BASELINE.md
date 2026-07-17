@@ -1,11 +1,11 @@
 # Handoff — DB-001 Local/Private Candidate (Blocked)
 
 - Date: 2026-07-17 KST
-- Branch/commit: `codex/db-001-layered-enforcement` / evidence baseline `85067d0`;
-  Task 10 blocked and uncommitted
+- Branch/commit: `codex/db-001-layered-enforcement` / functional evidence baseline `85067d0`,
+  blocked-security checkpoint `b94372a`; current Q-SEC-006 sync pending commit
 - Current manifest: repo guidance `1.4.0`, database `0.2.0-draft`, tests
   `0.4.2-readiness-contract`, docs `2.3.14`; `0.3.0-local`은 미승격 후보
-- Scope: local PostgreSQL candidate; Q-SEC-005/A-023 해결 전 runtime 사용 금지
+- Scope: local PostgreSQL candidate; Q-SEC-006/A-024 해결 전 runtime 사용 금지
 
 ## 구현된 후보 범위
 
@@ -39,16 +39,17 @@ corepack.cmd pnpm install --frozen-lockfile --ignore-scripts
 
 CLI bootstrap은 official asset byte count와 SHA-256을 확인해 `.tools/`에만 설치한다. `.tools/`,
 `.env`, Supabase temp/branch state와 Docker state는 commit하지 않는다. 이 Setup은 도구 준비만
-설명하며 Q-SEC-005 해결 전 DB container start/reset 권한을 주지 않는다.
+설명하며 Q-SEC-006 해결 전 DB container start/reset 권한을 주지 않는다.
 
 ## 실행/테스트 명령
 
 전체 DB gate는 start→reset→login rotation→pgTAP→6단계 compensation→absence→reset/replay→
 pgTAP→backend integration 순서다.
 
-현재는 아래 DB 명령을 실행하지 않는다. Q-SEC-004=A의 1차 전역 binding 변경은 IPv6 wildcard를
-남겼다. Q-SEC-005에서 더 강한 전역 정책을 인간이 승인하고 Docker restart/recreate와 probe를
-마친 뒤에만 runner를 재실행한다.
+현재는 아래 DB 명령을 실행하지 않는다. Q-SEC-004=A의 `default-local`과 Q-SEC-005=A의
+`local-only` 전역 binding 변경은 모두 IPv6 wildcard를 남겼다. Q-SEC-006에서 explicit HostIP를
+넣는 project-local CLI/toolchain 공급망을 인간이 승인하고 source/diff/hash/probe를 검증한 뒤에만
+runner를 재실행한다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
@@ -145,7 +146,7 @@ backup은 없고 단일 PC 손실 위험이 남는다.
 
 - A-021/Q-SEC-003 미해결: privileged execution graph 22개 중 `00600` validator만 exact
   `pg_catalog, pg_temp`; 나머지 21개는 public hardening 전이다.
-- Q-SEC-003 무응답 기본값 B: A-023이 별도로 해결된 경우에도 local/private 범위만 허용한다.
+- Q-SEC-003 무응답 기본값 B: A-024가 별도로 해결된 경우에도 local/private 범위만 허용한다.
   remote/public 배포, public admin/API, public backend DB credential과 `00700`은 차단한다.
 - local stack은 개발용 기본 credential을 포함하고 production TLS/rate limit/admin protection이
   없다. 현재 stock CLI runtime은 wildcard로 판정됐고 runner가 reset 전에 중단했다. stack은
@@ -156,19 +157,20 @@ backup은 없고 단일 PC 손실 위험이 남는다.
 
 ## 인간이 알아야 하는 결정
 
-- D-018/D-025/D-026/D-027/D-028과 ADR-0008/0011/0012가 local DB 경계를 고정한다.
+- D-018/D-025/D-026/D-027/D-028/D-029/D-030과 ADR-0008/0011/0012가 local DB 경계를 고정한다.
 - remote/public DB, public admin, data deletion, official seed, backup, CORS/domain, 새 production
   dependency는 이 handoff로 승인되지 않는다.
 - Q-SEC-003을 A로 결정하면 별도 reviewed `00700` property-only migration 계획과 전체 replay가
   필요하다. 현재는 B가 기본이며 인간 답변을 가장하지 않는다.
 - Q-SEC-004=A/D-029는 적용됐지만 HostIP 미지정 probe가 `127.0.0.1`+`::`를 생성해 불충분했다.
-  Q-SEC-005/A-023은 더 강한 `local-only-port-binding` 전역 정책과 patched CLI/보류 사이의
-  인간 결정이다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)
+  Q-SEC-005=A/D-030의 `local-only-port-binding`도 동일하게 불충분했다. Q-SEC-006/A-024는
+  explicit HostIP를 넣는 checksum-pinned project-local CLI/Go toolchain과 보류 사이의 인간
+  결정이다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)
 
 ## 다음 작업과 Acceptance Criteria
 
-1. Q-SEC-005: 인간 결정과 safe Docker restart/recreate/exact runtime/full gate.
-2. Q-SEC-005의 safe runtime/full gate와 independent reviews가 모두 통과한 뒤에만 DB-001을
+1. Q-SEC-006: 인간 결정과 project-local CLI source/diff/toolchain/hash/safe exact runtime gate.
+2. Q-SEC-006의 safe runtime/full gate와 independent reviews가 모두 통과한 뒤에만 DB-001을
    `0.3.0-local`/Done으로 승격하고 후속 DB 의존성을 해제한다.
 3. DATA-001: AI/Data·Backend가 공식 KB 20·기관 3+·매핑 10~12를 작성하고 PM이 출처·확인일·
    표현·origin·승인자를 2026-07-20 목표로 전수 승인한다.

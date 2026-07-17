@@ -129,13 +129,14 @@ Q-DB-002. 승인·보관·권한 불변조건을 DB와 백엔드 중 어디까�
 synthetic 8-table zero를 과거 실행에서 검증했다. 그러나 Task 10 quality review가 actual Docker
 port의 wildcard publish를 발견했고 fail-closed runner가 reset 전에 중단했으므로 이 결과는
 현재 local baseline 완료 증거가 아니다. manifest는 `database_schema=0.2.0-draft`를 유지하고
-`0.3.0-local`은 Q-SEC-005/A-023 해결 뒤 exact loopback/full gate를 통과해야 하는 후보다.
+`0.3.0-local`은 Q-SEC-006/A-024 해결 뒤 exact loopback/full gate를 통과해야 하는 후보다.
 공식/mock seed는 0, `/ready=503`은 계속 정상이다. 상세 증거는
 `docs/test-reports/DB-001-LOCAL-BASELINE.md`와
 `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md`에 있다.
 
-A-023/Q-SEC-005는 DB-001 local 완료와 후속 DB 의존 작업의 A/Blocker다. Q-SEC-004=A/D-029의
-1차 보정은 actual IPv6 wildcard를 남겨 완료 근거가 아니다. 무응답 기본값 C에
+A-024/Q-SEC-006은 DB-001 local 완료와 후속 DB 의존 작업의 A/Blocker다. Q-SEC-004=A/D-029와
+Q-SEC-005=A/D-030의 두 Docker Desktop 보정은 actual IPv6 wildcard를 남겨 완료 근거가 아니다.
+명시적 `127.0.0.1` control만 단일 loopback이었고 로컬 Go toolchain은 없다. 무응답 기본값 C에
 따라 DB runtime과 manifest 승격을 차단한다. A-021/Q-SEC-003은 별도 public-release blocker다.
 미응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB credential을
 차단하며 `00700`은 인간 결정 전 구현하지 않는다.

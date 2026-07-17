@@ -71,14 +71,15 @@
 - DB local 후보: forward/compensation 각 6개, 7 enum·8 table, pgTAP 282와 backend integration
   8/8의 역사적 기능 증거는 있으나 Task 10 host-port security gate가 미완료다. Docker Desktop
   4.62.0/Engine 29.2.1의 stock CLI runtime이 wildcard publish로 해석돼 fail-closed 중단됐고,
-  manifest는 `database_schema=0.2.0-draft`를 유지한다. Q-SEC-005/A-023 해결과 exact loopback/full
+  manifest는 `database_schema=0.2.0-draft`를 유지한다. Q-SEC-006/A-024 해결과 exact loopback/full
   gate 전에는 DB-001을 완료 또는 `0.3.0-local`로 부르지 않는다. 공식/mock seed는 0이고
   `/ready=503`을 유지한다.
 - DB local port 경계: Docker Engine 28+와 actual single `127.0.0.1:54322` binding이 필수다.
-  Q-SEC-004=A/D-029로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용하고
-  완전 재시작했지만, HostIP 미지정 probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께
-  생성했다. explicit `127.0.0.1` probe만 단일 loopback이었다. 승인 설정은 유지하되 완료
-  근거로 사용하지 않으며 A-023/Q-SEC-005 답변 전 runtime/DB 후속 작업을 차단한다.
+  Q-SEC-004=A/D-029의 `default-local-port-binding`과 Q-SEC-005=A/D-030의
+  `local-only-port-binding`을 각각 적용·재시작했지만 HostIP 미지정 probe는 모두 IPv4
+  `127.0.0.1`과 IPv6 wildcard `::`를 함께 생성했다. explicit `127.0.0.1` control만 단일
+  loopback이었다. 현재 `local-only-port-binding`을 유지하되 완료 근거로 사용하지 않으며
+  A-024/Q-SEC-006 답변 전 runtime/DB 후속 작업을 차단한다.
 - DB public release 경계: Q-SEC-003은 미응답이며 기본값 B를 적용한다. privileged function
   graph 22개 중 `00600` validator 외 21개의 search path hardening이 남아 있으므로 remote/public
   배포, public admin/API, public backend DB credential 사용을 차단한다. 인간 결정 전 `00700`을

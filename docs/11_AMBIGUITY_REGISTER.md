@@ -26,7 +26,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-020 | A | DB trigger 권한 | Resolved | Q-DB-003=A: 새 `00600`에서 ACTIVE-question validator 하나만 SECURITY DEFINER+owner/`search_path=pg_catalog, pg_temp`/revoke 검증, compensation은 INVOKER | D-028 / ADR-0012; 사용자의 직전 추천안 뒤 계속 진행 지시를 A 승인으로 해석, 문자 A 직접 입력 아님; `pg_temp` 마지막 명시는 D/Internal 보안 보정 |
 | A-021 | B | 기존 DB function 보안 | Open / Deferred — local Task 9 blocker 아님, public release blocker | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. data-type shadow DoS는 high-confidence plausible, privilege escalation은 conservative medium-confidence inference이며 exploit은 재현하지 않았다. | Q-SEC-003 A 추천: exact 22 signatures에 새 `00700` property-only migration. B/default: local-only 완료는 허용하되 remote/public 배포·public admin/API·public backend DB credential은 해결 전 차단 |
 | A-022 | A | local Docker port 보안 1차 결정 | Resolved decision / remediation insufficient | Q-SEC-004=A로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용·재시작했다. 빈 HostIP probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었고 explicit `127.0.0.1` probe만 단일 loopback이었다. | D-029; 승인 결정은 기록하되 exact local 완료 근거로 사용하지 않음 |
-| A-023 | A | local Docker IPv6 port 보안 | Open / Blocker — DB-001 Task 10과 manifest 승격 차단 | stock Supabase CLI 2.109.1이 HostIP를 생략하고 `default-local-port-binding`도 IPv6 wildcard `::`를 남긴다. 두 probe는 즉시 제거됐고 project/all container count는 0이다. | Q-SEC-005 A 추천: 더 강한 `local-only-port-binding` 전역 정책을 승인받아 재시작·probe·exact runtime을 재검증. 무응답 기본값 C: DB runtime/후속 dependency 차단 |
+| A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
+| A-024 | A | local Supabase CLI port 공급망 | Open / Blocker — DB-001 Task 10과 manifest 승격 차단 | Docker 전역/네트워크 보정 3개가 모두 빈 HostIP의 IPv6 wildcard를 제거하지 못했고 explicit HostIP만 actual exact loopback을 만들었다. 로컬 Go toolchain은 없다. | Q-SEC-006 A 추천: official v2.109.1 source에서 DB HostIP만 명시하는 project-local patched CLI를 source/diff/toolchain/binary hash와 함께 pin. 무응답 C: DB runtime/후속 dependency 차단 |
 
 ## 우선도 정의
 
@@ -35,24 +36,25 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 A-023/Q-SEC-005 1개다. Q-SEC-002와 Q-WF-001은 2026-07-16에
-해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
+현재 인간 결정형 A/Blocker는 A-024/Q-SEC-006 1개다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
-publish가 발견됐고 승인된 1차 보정도 IPv6 wildcard를 남겼으므로 DB-001은 `0.3.0-local` 후보를
-승격하지 않고 Blocked다. A-021은 B/High public-release blocker이고 A-023은 local 완료 blocker다.
+publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 남겼으므로 DB-001은
+`0.3.0-local` 후보를 승격하지 않고 Blocked다. A-021은 B/High public-release blocker이고
+A-024는 local 완료 blocker다.
 
 ## 열린 인터뷰 질문
 
-Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하는 더 강한 전역 정책을 승인할 것인가
-- 왜 지금 필요한가: Q-SEC-004=A의 `default-local-port-binding`은 빈 HostIP 요청을 실제 `127.0.0.1`과 IPv6 wildcard `::` 두 binding으로 해석했다. stock Supabase CLI는 HostIP를 명시하지 않으므로 exact local 기준을 통과할 수 없다. explicit `127.0.0.1` probe는 단일 loopback이어서 원인은 애플리케이션·DB가 아니라 Docker Desktop port policy와 CLI 요청 경계로 확인됐다.
-- 선택지 A / 장점 / 단점: Docker Desktop `Port binding behavior=local-only-port-binding`을 적용·완전 재시작하고 동일 probe 뒤 Supabase full gate를 실행한다 / stock 공식 CLI pin을 유지하면서 IPv4·IPv6 공개를 전역 차단할 가능성이 가장 높지만, 앞으로 다른 container가 명시적으로 LAN 공개를 요청해도 loopback으로 제한될 수 있다.
-- 선택지 B / 장점 / 단점: project-patched Supabase CLI에서 DB HostIP를 `127.0.0.1`로 명시한다 / 전역 동작을 더 강화하지 않지만 새 binary source/digest/build/review/유지보수라는 공급망과 도구 범위가 생긴다.
-- 선택지 C / 장점 / 단점: 현재 `default-local-port-binding`과 fail-closed runner를 유지하고 DB runtime을 보류한다 / 승인 범위를 넓히지 않지만 DB-001과 후속 DB 의존 작업이 계속 차단된다.
-- 당신의 추천안: A. 현재 PC의 container가 0개이고 local-first 개발 전용이므로 강한 local-only 정책을 적용하되, 설정 유지와 실제 단일 `127.0.0.1`을 probe로 먼저 확인하고 실패하면 즉시 중단한다.
-- 답을 받지 못할 때 사용할 기본값: C. 현재 설정은 유지하되 실제 DB start/reset을 실행하지 않고 manifest `database_schema=0.2.0-draft`와 후속 dependency 차단을 유지한다.
-- 영향을 받는 파일·계약·데이터·배포: Docker Desktop의 향후 새 container 전체 port publish 동작, DB-001 runner/report/handoff/TASKS/manifest와 후속 DB 의존 작업. 공개 API·migration·공식/mock data·retention은 변하지 않는다.
-- 답변 예시: `Q-SEC-005: A — local-only 전역 설정과 재시작을 승인함.` 또는 `Q-SEC-005: C — 현재 차단 상태를 유지함.`
+Q-SEC-006. stock Supabase CLI의 DB publish 요청을 project-scoped explicit IPv4 loopback으로 바꿀 것인가
+- 왜 지금 필요한가: network `host_binding_ipv4`, Docker Desktop `default-local-port-binding`, `local-only-port-binding`이 모두 HostIP 생략 요청을 actual `127.0.0.1`+IPv6 wildcard `::`로 만들었다. 반면 explicit `127.0.0.1` control은 두 설정에서 모두 단일 loopback이었다. 세 보정 실패 뒤 exact guard를 완화할 수 없고, stock CLI 2.109.1의 빈 HostIP가 남은 원인 경계다.
+- 선택지 A / 장점 / 단점: exact official v2.109.1 source에서 local DB port binding의 HostIP만 `127.0.0.1`로 지정하는 최소 patch를 만들고 source tag/commit·patch diff·Go toolchain·binary SHA-256을 project-local로 pin한 뒤 tooling test와 actual probe를 통과시킨다 / root cause를 project 범위에서 직접 해결하고 explicit control로 actual 결과가 입증됐지만, 현재 없는 Go 개발 도구와 fork 공급망·업스트림 갱신 유지보수가 추가된다.
+- 선택지 B / 장점 / 단점: stock CLI를 유지하고 Docker Desktop의 모든 새 network를 IPv4-only로 바꾸는 추가 전역 보정을 승인해 재시험한다 / CLI fork는 없지만 모든 새 container network의 IPv6를 끄며 port publish wildcard 제거 효과도 아직 입증되지 않은 네 번째 환경 시도다.
+- 선택지 C / 장점 / 단점: 현재 `local-only-port-binding`과 fail-closed runner를 유지하고 DB runtime을 보류한다 / 추가 도구·전역 변경은 없지만 DB-001과 후속 DB 의존 작업이 계속 차단된다.
+- 당신의 추천안: A. 세 환경 보정이 동일하게 실패했고 explicit HostIP만 반복 통과했으므로 원인 위치를 직접 고친다. 단, 새 production dependency가 아니라 checksum-pinned local tooling으로 제한하고 source/diff/build/reproducibility review를 완료한다.
+- 답을 받지 못할 때 사용할 기본값: C. DB start/reset·credential·SQL을 실행하지 않고 manifest `database_schema=0.2.0-draft`와 후속 dependency 차단을 유지한다.
+- 영향을 받는 파일·계약·데이터·배포: Supabase CLI local pin/bootstrap, runner/tooling test, supply-chain 문서, DB-001 report/handoff/TASKS/manifest가 영향받는다. 공개 API·migration·공식/mock data·retention·production dependency는 바꾸지 않는다.
+- 답변 예시: `Q-SEC-006: A — 최소 patched CLI와 Go local toolchain pin을 승인함.` 또는 `Q-SEC-006: C — 현재 차단 상태를 유지함.`
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.
@@ -64,10 +66,15 @@ Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전
 
 ## 해결된 인터뷰 질문
 
+Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하는 더 강한 전역 정책을 승인할 것인가
+- 결정: A / D-030. 사용자가 2026-07-17 `Q-SEC-005: A`라고 명시했다.
+- 적용 결과: `PortBindingBehavior=local-only-port-binding`을 저장하고 Docker Desktop을 재시작했다. HostIP 생략 probe는 다시 `127.0.0.1`과 `::` 두 binding이었고 explicit `127.0.0.1` control은 단일 loopback이었다. 두 probe를 제거했고 Supabase DB start/reset/status/credential/SQL은 실행하지 않았다.
+- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. A-024/Q-SEC-006이 후속 local 완료 blocker다.
+
 Q-SEC-004. Docker Desktop의 향후 모든 새 container 기본 port binding을 loopback으로 바꿀 것인가
 - 결정: A / D-029. 사용자가 2026-07-17 `ㅇㅇ 승인할게. 계속 ㄱㄱ`라고 명시했다.
 - 적용 결과: `PortBindingBehavior=default-local-port-binding`을 저장하고 Docker Desktop을 완전 재시작했다. 빈 HostIP probe의 실제 결과는 `127.0.0.1`과 `::` 두 binding이어서 exact local 기준에는 실패했다. explicit `127.0.0.1` probe는 단일 loopback이었다. 두 probe는 제거했고 DB reset/status/credential 처리는 실행하지 않았다.
-- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. A-023/Q-SEC-005가 후속 local 완료 blocker다.
+- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시 A-023/Q-SEC-005로 이관했고, 그 보정도 실패해 현재 blocker는 A-024/Q-SEC-006이다.
 
 Q-DB-003. backend 승인 commit에서 deferred ACTIVE-question trigger를 어떤 권한으로 실행할 것인가
 - 결정: A / D-028 / ADR-0012. 사용자는 문자 `A`를 직접 입력하지 않았고, 직전 추천안 뒤 `이거 끝나면 계속해서 진행해줘. 5시간 동안 루프 ㄱㄱ`라고 지시했다. 이를 추천안 A의 실행 승인으로 투명하게 해석했다.

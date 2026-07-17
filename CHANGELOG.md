@@ -66,6 +66,10 @@
   restarted the engine; an actual HostIP-omitted probe resolved to IPv4 `127.0.0.1` plus IPv6
   wildcard `::`, while an explicit `127.0.0.1` control resolved to one loopback binding. Both
   disposable probes were removed and no Supabase DB mutation was run
+- Applied the approved Q-SEC-005 `local-only-port-binding` policy and restarted Docker Desktop;
+  the HostIP-omitted probe still resolved to `127.0.0.1` plus IPv6 wildcard `::`, while the explicit
+  `127.0.0.1` control remained single-loopback. Both probes were removed, container count returned to
+  zero, and no Supabase DB mutation was run
 
 ### Pending
 
@@ -74,5 +78,5 @@
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;
   default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked
-- Q-SEC-005/A-023 decision and an actual single loopback Docker binding before DB-001 local completion;
-  the unanswered default keeps all Supabase DB runtime and manifest promotion blocked
+- Q-SEC-006/A-024 decision on a checksum-pinned project-local CLI patch that explicitly binds the DB
+  port to `127.0.0.1`; the unanswered default keeps all Supabase DB runtime and manifest promotion blocked

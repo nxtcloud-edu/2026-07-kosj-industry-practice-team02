@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-17T10:12:50+09:00
 - Task ID: DB-001-T10-QSEC004
 - Type: decision/security/investigation
-- Status: Blocked — Q-SEC-004=A/D-029 applied; Q-SEC-005/A-023 human decision required
+- Status: Historical decision checkpoint — Q-SEC-004=A/D-029 applied; Q-SEC-005=A/D-030 also proved insufficient; current blocker Q-SEC-006/A-024
 - Author/Agent: Codex `/root`
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `53edf18`
@@ -53,7 +53,8 @@
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
 | A-022/Q-SEC-004 | Resolved | `default-local-port-binding` 전역 변경 승인 | D-029, 설정 유지 | IPv4 loopback은 적용됐으나 exact gate 실패 |
-| A-023/Q-SEC-005 | A/Blocker Human | IPv6 wildcard까지 막는 `local-only-port-binding` 전역 정책 또는 patched CLI | 무응답 C: Supabase DB runtime 보류 | DB-001 Task 10, manifest, 후속 DB dependency |
+| A-023/Q-SEC-005 | Resolved by D-030, remediation insufficient | `local-only-port-binding`도 actual `127.0.0.1`+`::` | 승인 설정 유지, 완료 근거 아님 | A-024/Q-SEC-006으로 이관 |
+| A-024/Q-SEC-006 | A/Blocker Human | explicit HostIP patched CLI와 Go/source/diff/binary pin 공급망 | 무응답 C: Supabase DB runtime 보류 | DB-001 Task 10, manifest, 후속 DB dependency |
 | A-021/Q-SEC-003 | B/High Deferred | privileged function 21개 public hardening | default B: local/private만 | public/remote release 차단 |
 
 ## 5. 설계 결정과 대안
@@ -164,7 +165,7 @@ credential provisioning, SQL, seed, API, DeepSeek 호출은 0회다.
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - Q-SEC-004=A는 적용됐지만 exact local을 달성하지 못했다.
-- Q-SEC-005/A-023에서 더 강한 `local-only-port-binding` 전역 정책을 승인할지 결정해야 한다.
+- 후속 Q-SEC-005=A/D-030도 exact local을 달성하지 못했다. 현재는 Q-SEC-006/A-024의 explicit HostIP tooling 공급망을 결정해야 한다.
 - 이 정책은 앞으로 다른 container가 명시적으로 LAN 공개를 요청해도 loopback으로 제한할 수 있다.
 - 무응답 시 current setting을 유지하되 Supabase DB와 후속 DB 작업은 계속 차단한다.
 
@@ -191,16 +192,16 @@ repo rollback은 이 blocked docs commit을 revert한다. DB/data compensation�
 
 ### 다음 개발자 시작점
 
-먼저 Q-SEC-005/A-023 답변을 확인한다. 답변 전에는 Supabase DB를 시작하지 않는다. A 승인 시
-`local-only-port-binding` 단일 변경과 complete restart 뒤 disposable probe부터 실행한다.
+현재 재개 시에는 Q-SEC-006/A-024 답변을 확인한다. 답변 전에는 Supabase DB를 시작하지 않는다.
+A 승인 시 source/diff/Go toolchain/binary hash 계획과 테스트를 먼저 작성하고 explicit probe부터 실행한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- A-023/Q-SEC-005 local completion blocker.
+- A-024/Q-SEC-006 local completion blocker.
 - A-021/Q-SEC-003 public-release blocker와 privileged function 21개 hardening.
 - official seed/READY/chat/admin/backup/public deploy 미완료.
 - off-device backup 없음과 단일 PC 손실 위험.
-- 다음 단계: Q-SEC-005 인간 결정 → safe probe → full DB/root/static gate → independent review.
+- 현재 다음 단계: Q-SEC-006 인간 결정 → 조건부 explicit HostIP tooling 공급망 → safe probe → full DB/root/static gate → independent review.
 
 ## 15. 자체 리뷰
 
@@ -211,4 +212,4 @@ repo rollback은 이 blocked docs commit을 revert한다. DB/data compensation�
 - [x] 버전·DB·데이터·공개 계약 불변
 - [x] 구현 노트 INDEX 갱신
 - [x] package/JSON/secret/diff/Markdown/protected-scope 정적 검증
-- [ ] Q-SEC-005 답변 뒤 actual safe runtime/full gate
+- [ ] Q-SEC-006 답변 뒤 actual safe runtime/full gate
