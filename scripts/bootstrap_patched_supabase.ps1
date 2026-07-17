@@ -1377,6 +1377,7 @@ function New-VerifiedSupabaseCheckout {
 
     $null = Invoke-VerifiedGit @("-c", "core.autocrlf=false", "init", "--quiet", ".") $checkout 30000
     $null = Invoke-VerifiedGit @("config", "--local", "core.autocrlf", "false") $checkout 30000
+    $null = Invoke-VerifiedGit @("config", "--local", "core.longpaths", "true") $checkout 30000
     $null = Invoke-VerifiedGit @(
         "remote", "add", "origin", "https://github.com/supabase/cli.git"
     ) $checkout 30000

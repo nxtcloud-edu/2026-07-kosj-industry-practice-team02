@@ -587,6 +587,282 @@ if (
             finally:
                 os.rmdir(alias)
 
+    def test_checkout_sets_local_longpaths_before_fetch_and_checkout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong checkout argv ") as directory:
+            root = Path(directory)
+            harness = root / "checkout_argv_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap, [string]$Root)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$checkoutFunction = @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -ceq "New-VerifiedSupabaseCheckout"
+    },
+    $true
+))
+if ($checkoutFunction.Count -ne 1) {
+    [Console]::Error.WriteLine("missing-production-checkout-function")
+    exit 1
+}
+. ([ScriptBlock]::Create($checkoutFunction[0].Extent.Text))
+
+$script:ToolRoot = [System.IO.Path]::GetFullPath((Join-Path $Root ".tools"))
+$script:ExpectedDestination = "supabase-source-a"
+$script:ExpectedCheckout = [System.IO.Path]::GetFullPath(
+    (Join-Path $script:ToolRoot $script:ExpectedDestination)
+)
+$script:CurrentStep = "TEST-CHECKOUT-ARGV"
+$script:CapturedGitCalls = @()
+$script:RemovedOwnedPath = $false
+$null = [System.IO.Directory]::CreateDirectory($script:ToolRoot)
+
+function Resolve-SafeChildPath {
+    param([string]$Parent, [string]$Child)
+    if (
+        $Parent -cne $script:ToolRoot -or
+        $Child -cne $script:ExpectedDestination
+    ) {
+        throw "unexpected-checkout-path"
+    }
+    return $script:ExpectedCheckout
+}
+
+function Remove-OwnedPath {
+    param([string]$Parent, [string]$Target)
+    if (
+        $Parent -cne $script:ToolRoot -or
+        $Target -cne $script:ExpectedCheckout
+    ) {
+        throw "unexpected-owned-path-removal"
+    }
+    $script:RemovedOwnedPath = $true
+}
+
+function Throw-PatchedBootstrapFailure {
+    param([string]$Step, [string]$Reason, [int]$Code)
+    throw "unexpected-bootstrap-failure:${Step}:${Reason}:${Code}"
+}
+
+function Test-ExactArguments {
+    param([string[]]$Actual, [string[]]$Expected)
+    if ($Actual.Count -ne $Expected.Count) {
+        return $false
+    }
+    for ($index = 0; $index -lt $Expected.Count; $index += 1) {
+        if ($Actual[$index] -cne $Expected[$index]) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Invoke-VerifiedGit {
+    param(
+        [string[]]$Arguments,
+        [string]$WorkingDirectory,
+        [int]$TimeoutMilliseconds
+    )
+    $script:CapturedGitCalls += ,([pscustomobject]@{
+        Arguments = @($Arguments)
+        WorkingDirectory = $WorkingDirectory
+        TimeoutMilliseconds = $TimeoutMilliseconds
+    })
+    $stdout = ""
+    if (Test-ExactArguments $Arguments @("remote")) {
+        $stdout = "origin`n"
+    }
+    elseif (
+        Test-ExactArguments $Arguments @(
+            "remote", "get-url", "--all", "origin"
+        )
+    ) {
+        $stdout = "https://github.com/supabase/cli.git`n"
+    }
+    elseif (
+        Test-ExactArguments $Arguments @(
+            "cat-file", "-t", "refs/tags/v2.109.1"
+        )
+    ) {
+        $stdout = "tag`n"
+    }
+    elseif (
+        Test-ExactArguments $Arguments @(
+            "rev-parse", "--verify", "refs/tags/v2.109.1"
+        )
+    ) {
+        $stdout = "9d25ff8b5b0fba3c6f0ef000e7dd658c8d710c38`n"
+    }
+    elseif (
+        Test-ExactArguments $Arguments @(
+            "rev-parse", "--verify", "refs/tags/v2.109.1^{}"
+        )
+    ) {
+        $stdout = "6d4c19870ed213ba7f682f117d0345c8a40bfa94`n"
+    }
+    elseif (
+        Test-ExactArguments $Arguments @(
+            "rev-parse", "--verify", "HEAD"
+        )
+    ) {
+        $stdout = "6d4c19870ed213ba7f682f117d0345c8a40bfa94`n"
+    }
+    return [pscustomobject]@{
+        ExitCode = 0
+        Stdout = $stdout
+        Stderr = ""
+        TimedOut = $false
+    }
+}
+
+$actualCheckout = New-VerifiedSupabaseCheckout $script:ExpectedDestination
+$expectedCalls = @(
+    [pscustomobject]@{
+        Arguments = @("-c", "core.autocrlf=false", "init", "--quiet", ".")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("config", "--local", "core.autocrlf", "false")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("config", "--local", "core.longpaths", "true")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @(
+            "remote", "add", "origin", "https://github.com/supabase/cli.git"
+        )
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("remote")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("remote", "get-url", "--all", "origin")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @(
+            "fetch",
+            "--quiet",
+            "--depth=1",
+            "--filter=blob:none",
+            "origin",
+            "refs/tags/v2.109.1:refs/tags/v2.109.1"
+        )
+        TimeoutMilliseconds = 300000
+    },
+    [pscustomobject]@{
+        Arguments = @("cat-file", "-t", "refs/tags/v2.109.1")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("rev-parse", "--verify", "refs/tags/v2.109.1")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @("rev-parse", "--verify", "refs/tags/v2.109.1^{}")
+        TimeoutMilliseconds = 30000
+    },
+    [pscustomobject]@{
+        Arguments = @(
+            "checkout",
+            "--quiet",
+            "--detach",
+            "6d4c19870ed213ba7f682f117d0345c8a40bfa94"
+        )
+        TimeoutMilliseconds = 120000
+    },
+    [pscustomobject]@{
+        Arguments = @("rev-parse", "--verify", "HEAD")
+        TimeoutMilliseconds = 30000
+    }
+)
+$longPathCalls = @($script:CapturedGitCalls | Where-Object {
+    Test-ExactArguments $_.Arguments @(
+        "config", "--local", "core.longpaths", "true"
+    )
+})
+if ($longPathCalls.Count -ne 1) {
+    [Console]::Error.WriteLine(
+        "expected-one-local-core.longpaths-before-fetch-and-checkout"
+    )
+    exit 1
+}
+if ($script:CapturedGitCalls.Count -ne $expectedCalls.Count) {
+    [Console]::Error.WriteLine("unexpected-git-call-count")
+    exit 1
+}
+for ($index = 0; $index -lt $expectedCalls.Count; $index += 1) {
+    $actual = $script:CapturedGitCalls[$index]
+    $expected = $expectedCalls[$index]
+    if (
+        -not (Test-ExactArguments $actual.Arguments $expected.Arguments) -or
+        $actual.WorkingDirectory -cne $script:ExpectedCheckout -or
+        $actual.TimeoutMilliseconds -ne $expected.TimeoutMilliseconds
+    ) {
+        [Console]::Error.WriteLine("unexpected-git-call-order-or-argv")
+        exit 1
+    }
+    foreach ($argument in @($actual.Arguments)) {
+        if (
+            $argument -ceq "--global" -or
+            $argument -ceq "--system" -or
+            $argument -match "sparse-checkout|pathspec-from-file|:\(exclude\)"
+        ) {
+            [Console]::Error.WriteLine("forbidden-git-scope-or-path-exclusion")
+            exit 1
+        }
+    }
+}
+if (
+    -not $script:RemovedOwnedPath -or
+    $actualCheckout -cne $script:ExpectedCheckout -or
+    -not (Test-Path -LiteralPath $script:ExpectedCheckout -PathType Container)
+) {
+    [Console]::Error.WriteLine("unexpected-checkout-path-state")
+    exit 1
+}
+[Console]::Out.WriteLine("CHECKOUT-ARGV-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(root),
+                ],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip(), "CHECKOUT-ARGV-OK")
+            self.assertFalse(result.stderr)
+
     def test_build_uses_exact_official_main_go_argv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sejong build argv ") as directory:
             root = Path(directory)
