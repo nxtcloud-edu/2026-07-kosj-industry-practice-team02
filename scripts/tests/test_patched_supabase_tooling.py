@@ -2293,5 +2293,34 @@ exit 1
                     self.assertFalse((root / ".tools").exists())
 
 
+class PatchedRuntimeLockTests(unittest.TestCase):
+    def test_runtime_manifest_and_installed_binary_are_exact(self) -> None:
+        runtime = json.loads(RUNTIME_MANIFEST.read_text(encoding="utf-8"))
+        source_hash = hashlib.sha256(SOURCE_MANIFEST.read_bytes()).hexdigest()
+        self.assertEqual(
+            set(runtime),
+            {
+                "schema_version",
+                "source_manifest_sha256",
+                "version",
+                "platform",
+                "relative_path",
+                "sha256",
+            },
+        )
+        self.assertEqual(runtime["schema_version"], 1)
+        self.assertEqual(runtime["source_manifest_sha256"], source_hash)
+        self.assertEqual(runtime["version"], "2.109.1")
+        self.assertEqual(runtime["platform"], "windows-amd64")
+        self.assertEqual(
+            runtime["relative_path"],
+            ".tools/supabase/v2.109.1-sejong-loopback/supabase.exe",
+        )
+        self.assertRegex(runtime["sha256"], r"^[0-9a-f]{64}$")
+        binary = ROOT / Path(runtime["relative_path"])
+        self.assertTrue(binary.is_file())
+        self.assertEqual(hashlib.sha256(binary.read_bytes()).hexdigest(), runtime["sha256"])
+
+
 if __name__ == "__main__":
     unittest.main()
