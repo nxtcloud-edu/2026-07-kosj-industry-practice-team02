@@ -99,6 +99,25 @@ function Remove-OwnedPath {
     }
 }
 
+function Assert-PatchedCheckoutPathBudget {
+    param(
+        [string]$Destination,
+        [int]$MaxTrackedRelativeFilePathLength,
+        [int]$MaxAbsoluteFilePathLength
+    )
+
+    $checkout = Resolve-SafeChildPath $script:ToolRoot $Destination
+    $projectedMaximum = $checkout.Length + 1 + $MaxTrackedRelativeFilePathLength
+    if (
+        $MaxTrackedRelativeFilePathLength -ne 134 -or
+        $MaxAbsoluteFilePathLength -ne 248 -or
+        $projectedMaximum -gt $MaxAbsoluteFilePathLength
+    ) {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "invalid" 2
+    }
+    return $checkout
+}
+
 function ConvertTo-PatchedProcessArgument {
     param([string]$Value)
 
@@ -820,6 +839,11 @@ function Assert-ExactSourceManifest {
         "size_bytes",
         "sha256",
         "allowed_files",
+        "workspace",
+        "checkout_a",
+        "checkout_b",
+        "max_tracked_relative_file_path_length",
+        "max_absolute_file_path_length",
         "build",
         "working_directory",
         "version",
@@ -842,7 +866,7 @@ function Assert-ExactSourceManifest {
         "ldflags"
     ) $step "unapproved-source"
     Assert-ExactPropertyNames $Manifest @(
-        "schema_version", "upstream", "go", "patch", "build"
+        "schema_version", "upstream", "go", "patch", "workspace", "build"
     ) $step
     Assert-ExactPropertyNames $Manifest.upstream @(
         "repository", "tag", "tag_object_sha1", "commit_sha1"
@@ -852,6 +876,12 @@ function Assert-ExactSourceManifest {
     ) $step
     Assert-ExactPropertyNames $Manifest.patch @(
         "relative_path", "size_bytes", "sha256", "allowed_files"
+    ) $step
+    Assert-ExactPropertyNames $Manifest.workspace @(
+        "checkout_a",
+        "checkout_b",
+        "max_tracked_relative_file_path_length",
+        "max_absolute_file_path_length"
     ) $step
     Assert-ExactPropertyNames $Manifest.build @(
         "working_directory",
@@ -885,6 +915,8 @@ function Assert-ExactSourceManifest {
         $Manifest.go.sha256,
         $Manifest.patch.relative_path,
         $Manifest.patch.sha256,
+        $Manifest.workspace.checkout_a,
+        $Manifest.workspace.checkout_b,
         $Manifest.build.working_directory,
         $Manifest.build.version,
         $Manifest.build.goos,
@@ -926,6 +958,12 @@ function Assert-ExactSourceManifest {
         $Manifest.patch.size_bytes -is [int] -and
         $Manifest.patch.size_bytes -eq 1824 -and
         $Manifest.patch.sha256 -ceq "109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d" -and
+        $Manifest.workspace.checkout_a -ceq "s/a" -and
+        $Manifest.workspace.checkout_b -ceq "s/b" -and
+        $Manifest.workspace.max_tracked_relative_file_path_length -is [int] -and
+        $Manifest.workspace.max_tracked_relative_file_path_length -eq 134 -and
+        $Manifest.workspace.max_absolute_file_path_length -is [int] -and
+        $Manifest.workspace.max_absolute_file_path_length -eq 248 -and
         $Manifest.build.working_directory -ceq "apps/cli-go" -and
         $Manifest.build.version -ceq "2.109.1" -and
         $Manifest.build.goos -ceq "windows" -and
@@ -1217,6 +1255,7 @@ function Get-VerifiedGoToolchain {
         foreach ($mutableChild in @(
             "cache",
             "go",
+            "s",
             "supabase-source",
             "supabase-build",
             "supabase"
@@ -1369,9 +1408,15 @@ function Invoke-VerifiedGit {
 }
 
 function New-VerifiedSupabaseCheckout {
-    param([string]$Destination)
+    param(
+        [string]$Destination,
+        [int]$MaxTrackedRelativeFilePathLength,
+        [int]$MaxAbsoluteFilePathLength
+    )
 
-    $checkout = Resolve-SafeChildPath $script:ToolRoot $Destination
+    $checkout = Assert-PatchedCheckoutPathBudget (
+        $Destination
+    ) $MaxTrackedRelativeFilePathLength $MaxAbsoluteFilePathLength
     Remove-OwnedPath $script:ToolRoot $checkout
     $null = [System.IO.Directory]::CreateDirectory($checkout)
 
@@ -1796,6 +1841,23 @@ try {
     }
 
     $script:ToolRoot = Resolve-SafeChildPath $script:RepositoryRoot ".tools"
+    $script:CurrentStep = "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"
+    Write-PatchedStatus (
+        "[START] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"
+    )
+    $null = Assert-PatchedCheckoutPathBudget (
+        $sourceManifest.workspace.checkout_a
+    ) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+        $sourceManifest.workspace.max_absolute_file_path_length
+    )
+    $null = Assert-PatchedCheckoutPathBudget (
+        $sourceManifest.workspace.checkout_b
+    ) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+        $sourceManifest.workspace.max_absolute_file_path_length
+    )
+    Write-PatchedStatus (
+        "[PASS] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"
+    )
     $goEnvironmentNames = @(
         "GOOS",
         "GOARCH",
@@ -1851,14 +1913,18 @@ try {
         Write-PatchedStatus "[START] step=VERIFY-SUPABASE-SOURCE-A"
         $script:GitExecutable = Get-PatchedGitExecutable
         $checkoutA = New-VerifiedSupabaseCheckout (
-            "supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/a"
+            $sourceManifest.workspace.checkout_a
+        ) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+            $sourceManifest.workspace.max_absolute_file_path_length
         )
         Write-PatchedStatus "[PASS] step=VERIFY-SUPABASE-SOURCE-A"
 
         $script:CurrentStep = "VERIFY-SUPABASE-SOURCE-B"
         Write-PatchedStatus "[START] step=VERIFY-SUPABASE-SOURCE-B"
         $checkoutB = New-VerifiedSupabaseCheckout (
-            "supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/b"
+            $sourceManifest.workspace.checkout_b
+        ) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+            $sourceManifest.workspace.max_absolute_file_path_length
         )
         Write-PatchedStatus "[PASS] step=VERIFY-SUPABASE-SOURCE-B"
 

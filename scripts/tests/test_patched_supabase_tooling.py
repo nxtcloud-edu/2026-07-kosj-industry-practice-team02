@@ -43,6 +43,12 @@ EXPECTED_SOURCE = {
             "apps/cli-go/internal/db/start/start.go",
         ],
     },
+    "workspace": {
+        "checkout_a": "s/a",
+        "checkout_b": "s/b",
+        "max_tracked_relative_file_path_length": 134,
+        "max_absolute_file_path_length": 248,
+    },
     "build": {
         "working_directory": "apps/cli-go",
         "version": "2.109.1",
@@ -282,8 +288,9 @@ if (
             "GOFLAGS",
             "GOAMD64",
             "GOEXPERIMENT",
-            '"supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/a"',
-            '"supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/b"',
+            "$sourceManifest.workspace.checkout_a",
+            "$sourceManifest.workspace.checkout_b",
+            "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE",
             '"supabase-build/supabase-v2.109.1-sejong-loopback-a.exe"',
             '"supabase-build/supabase-v2.109.1-sejong-loopback-b.exe"',
         ):
@@ -299,6 +306,448 @@ if (
             "system prune",
         ):
             self.assertNotIn(forbidden, lowered)
+
+    def test_remove_owned_path_cleans_inclusive_248_character_tree(self) -> None:
+        """Existing PS5.1 cleanup must remove an owned non-reparse tree at the inclusive cap."""
+        with tempfile.TemporaryDirectory(prefix="sejong remove 248 ") as directory:
+            root = Path(directory)
+            tool_root = root / ".tools"
+            checkout = tool_root / "s" / "a"
+            checkout.mkdir(parents=True)
+            leaf_name_length = 248 - len(str(checkout)) - 1
+            self.assertGreater(leaf_name_length, 0)
+            leaf = checkout / ("x" * leaf_name_length)
+            leaf.write_bytes(b"inclusive-path-budget")
+            self.assertEqual(len(str(leaf)), 248)
+
+            harness = root / "remove_248_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap, [string]$ToolRoot, [string]$Checkout)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$wanted = @(
+    "Throw-PatchedBootstrapFailure",
+    "Resolve-SafeChildPath",
+    "Remove-OwnedPath"
+)
+foreach ($functionAst in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $wanted -contains $node.Name
+    },
+    $true
+))) {
+    . ([ScriptBlock]::Create($functionAst.Extent.Text))
+}
+Remove-OwnedPath $ToolRoot $Checkout
+if (Test-Path -LiteralPath $Checkout) {
+    [Console]::Error.WriteLine("inclusive-tree-remains")
+    exit 1
+}
+[Console]::Out.WriteLine("REMOVE-248-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(tool_root),
+                    str(checkout),
+                ],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip(), "REMOVE-248-OK")
+            self.assertFalse(result.stderr)
+            self.assertFalse(checkout.exists())
+
+    def test_short_checkout_reparse_is_rejected_and_external_sentinel_untouched(
+        self,
+    ) -> None:
+        """A `.tools/s` or `.tools/s/a` junction must fail controlled before external deletion."""
+        for junction_relative in (Path("s"), Path("s") / "a"):
+            with self.subTest(junction_relative=junction_relative.as_posix()), tempfile.TemporaryDirectory(
+                prefix="sejong short checkout reparse "
+            ) as directory:
+                root = Path(directory)
+                tool_root = root / ".tools"
+                junction = tool_root / junction_relative
+                junction.parent.mkdir(parents=True)
+                external = root / "external-checkout"
+                external.mkdir()
+                sentinel = external / "sentinel.txt"
+                payload = b"external-sentinel"
+                sentinel.write_bytes(payload)
+
+                junction_environment = os.environ.copy()
+                junction_environment["SEJONG_TEST_JUNCTION_ALIAS"] = str(junction)
+                junction_environment["SEJONG_TEST_JUNCTION_TARGET"] = str(external)
+                junction_result = subprocess.run(
+                    [
+                        powershell_executable(),
+                        "-NoProfile",
+                        "-Command",
+                        "New-Item -ItemType Junction "
+                        "-Path $env:SEJONG_TEST_JUNCTION_ALIAS "
+                        "-Target $env:SEJONG_TEST_JUNCTION_TARGET | Out-Null",
+                    ],
+                    capture_output=True,
+                    check=False,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=junction_environment,
+                    timeout=30,
+                )
+                self.assertEqual(junction_result.returncode, 0, junction_result.stderr)
+
+                harness = root / "short_checkout_reparse_harness.ps1"
+                harness.write_text(
+                    r"""
+param([string]$Bootstrap, [string]$ToolRoot)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$wanted = @(
+    "Throw-PatchedBootstrapFailure",
+    "Resolve-SafeChildPath",
+    "Remove-OwnedPath",
+    "Assert-PatchedCheckoutPathBudget",
+    "New-VerifiedSupabaseCheckout"
+)
+foreach ($functionAst in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $wanted -contains $node.Name
+    },
+    $true
+))) {
+    . ([ScriptBlock]::Create($functionAst.Extent.Text))
+}
+$script:ToolRoot = [System.IO.Path]::GetFullPath($ToolRoot)
+$script:CurrentStep = "TEST-SHORT-CHECKOUT-REPARSE"
+try {
+    $null = New-VerifiedSupabaseCheckout "s/a" 134 248
+    [Console]::Error.WriteLine("reparse-checkout-unexpectedly-succeeded")
+    exit 1
+}
+catch {
+    $failure = $_.Exception
+    if (
+        -not $failure.Data.Contains("PatchedBootstrapFailure") -or
+        -not [bool]$failure.Data["PatchedBootstrapFailure"] -or
+        [string]$failure.Data["Step"] -cne "VALIDATE-PATCHED-SUPABASE-PATH" -or
+        [string]$failure.Data["Reason"] -cne "invalid" -or
+        [int]$failure.Data["Code"] -ne 2
+    ) {
+        [Console]::Error.WriteLine("unexpected-reparse-failure")
+        exit 1
+    }
+}
+[Console]::Out.WriteLine("SHORT-CHECKOUT-REPARSE-OK")
+""".lstrip(),
+                    encoding="utf-8",
+                )
+                try:
+                    result = subprocess.run(
+                        [
+                            powershell_executable(),
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(harness),
+                            str(BOOTSTRAP_PATH),
+                            str(tool_root),
+                        ],
+                        cwd=root,
+                        capture_output=True,
+                        check=False,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=30,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        result.stdout + result.stderr,
+                    )
+                    self.assertEqual(
+                        result.stdout.strip(),
+                        "SHORT-CHECKOUT-REPARSE-OK",
+                    )
+                    self.assertFalse(result.stderr)
+                    self.assertTrue(junction.exists())
+                    self.assertEqual(sentinel.read_bytes(), payload)
+                finally:
+                    if junction.exists():
+                        os.rmdir(junction)
+
+    def test_checkout_workspace_preflight_validates_both_roots_before_toolchain_or_mutation(
+        self,
+    ) -> None:
+        """Both manifest-derived checkout budgets must fail closed before mutable work."""
+        script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+        main_start = script.index(
+            '$script:ToolRoot = Resolve-SafeChildPath $script:RepositoryRoot ".tools"'
+        )
+        environment_start = script.index("$goEnvironmentNames = @(", main_start)
+        preflight = script[main_start:environment_start]
+        self.assertIn(
+            '$script:CurrentStep = "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"',
+            preflight,
+        )
+        self.assertEqual(preflight.count("Assert-PatchedCheckoutPathBudget"), 2)
+        self.assertIn("$sourceManifest.workspace.checkout_a", preflight)
+        self.assertIn("$sourceManifest.workspace.checkout_b", preflight)
+        self.assertIn("$sourceManifest.workspace.max_tracked_relative_file_path_length", preflight)
+        self.assertIn("$sourceManifest.workspace.max_absolute_file_path_length", preflight)
+        pass_position = preflight.index(
+            '[PASS] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE'
+        )
+        main = script[main_start:]
+        for later_operation in (
+            "Get-VerifiedGoToolchain $goArchivePath",
+            "New-VerifiedSupabaseCheckout (",
+            "Apply-And-TestSupabasePatch",
+            "Invoke-PatchedChild $script:GoExecutable",
+        ):
+            self.assertGreater(main.index(later_operation), pass_position)
+        for forbidden_preflight_operation in (
+            "Get-VerifiedGoToolchain",
+            "New-VerifiedSupabaseCheckout",
+            "Download-ApprovedGoArchive",
+            "CreateDirectory",
+            "Remove-OwnedPath",
+            "Invoke-PatchedChild",
+        ):
+            self.assertNotIn(forbidden_preflight_operation, preflight)
+
+        with tempfile.TemporaryDirectory(prefix="sj-preflight-") as directory:
+            base = Path(directory)
+            root_length = 103
+            padding_length = root_length - len(str(base)) - 1
+            self.assertGreater(padding_length, 0)
+            fixture_root = base / ("r" * padding_length)
+            fixture_root.mkdir()
+            checkout = fixture_root / ".tools" / "s" / "a"
+            self.assertEqual(len(str(checkout)) + 1 + 134, 249)
+
+            @contextmanager
+            def fixed_directory(*_args: object, **_kwargs: object) -> Iterator[str]:
+                yield str(fixture_root)
+
+            with patch.object(tempfile, "TemporaryDirectory", fixed_directory):
+                with run_patched_fixture(
+                    "-BuildCandidate",
+                    include_runtime=False,
+                ) as (result, root):
+                    self.assertEqual(root, fixture_root)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertTrue(
+                        result.stdout.strip().endswith(
+                            "[START] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE\n"
+                            "[FAIL] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE "
+                            "reason=invalid code=2"
+                        ),
+                        result.stdout,
+                    )
+                    self.assertFalse(result.stderr)
+                    self.assertFalse((root / ".tools").exists())
+
+    def test_checkout_budget_accepts_244_and_248_rejects_249_before_cleanup(
+        self,
+    ) -> None:
+        """The inclusive budget accepts 248 and rejects 249 before cleanup."""
+        with tempfile.TemporaryDirectory(prefix="sj-budget-") as directory:
+            base = Path(directory)
+
+            def tool_root_for_projection(projected: int) -> Path:
+                checkout_length = projected - 1 - 134
+                tool_root_length = checkout_length - len(str(Path("s") / "a")) - 1
+                padding_length = tool_root_length - len(str(base)) - 1
+                self.assertGreater(padding_length, 0)
+                tool_root = base / (str(projected)[-1] * padding_length)
+                self.assertEqual(
+                    len(str(tool_root / "s" / "a")) + 1 + 134,
+                    projected,
+                )
+                return tool_root
+
+            tool_roots = {
+                projected: tool_root_for_projection(projected)
+                for projected in (244, 248, 249)
+            }
+            harness = base / "checkout_budget_harness.ps1"
+            harness.write_text(
+                r"""
+param(
+    [string]$Bootstrap,
+    [string]$ToolRoot244,
+    [string]$ToolRoot248,
+    [string]$ToolRoot249
+)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) { exit 1 }
+$wanted = @(
+    "Throw-PatchedBootstrapFailure",
+    "Resolve-SafeChildPath",
+    "Assert-PatchedCheckoutPathBudget",
+    "New-VerifiedSupabaseCheckout"
+)
+foreach ($functionAst in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $wanted -contains $node.Name
+    },
+    $true
+))) {
+    . ([ScriptBlock]::Create($functionAst.Extent.Text))
+}
+$script:CurrentStep = "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"
+foreach ($case in @(
+    [pscustomobject]@{ Root = $ToolRoot244; Projected = 244 },
+    [pscustomobject]@{ Root = $ToolRoot248; Projected = 248 }
+)) {
+    $script:ToolRoot = [System.IO.Path]::GetFullPath($case.Root)
+    $actual = Assert-PatchedCheckoutPathBudget "s/a" 134 248
+    $expected = [System.IO.Path]::GetFullPath((Join-Path $script:ToolRoot "s/a"))
+    if ($actual -cne $expected -or ($actual.Length + 1 + 134) -ne $case.Projected) {
+        [Console]::Error.WriteLine("unexpected-accepted-projection")
+        exit 1
+    }
+}
+$script:ToolRoot = [System.IO.Path]::GetFullPath($ToolRoot249)
+$script:RemoveCount = 0
+function Remove-OwnedPath {
+    param([string]$Root, [string]$Candidate)
+    $script:RemoveCount += 1
+}
+try {
+    $null = New-VerifiedSupabaseCheckout "s/a" 134 248
+    [Console]::Error.WriteLine("projection-249-unexpectedly-succeeded")
+    exit 1
+}
+catch {
+    $failure = $_.Exception
+    if (
+        -not $failure.Data.Contains("PatchedBootstrapFailure") -or
+        -not [bool]$failure.Data["PatchedBootstrapFailure"] -or
+        [string]$failure.Data["Step"] -cne
+            "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE" -or
+        [string]$failure.Data["Reason"] -cne "invalid" -or
+        [int]$failure.Data["Code"] -ne 2
+    ) {
+        [Console]::Error.WriteLine("unexpected-budget-failure")
+        exit 1
+    }
+}
+if ($script:RemoveCount -ne 0) {
+    [Console]::Error.WriteLine("cleanup-ran-before-budget-rejection")
+    exit 1
+}
+[Console]::Out.WriteLine(
+    "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE:invalid:2"
+)
+""".lstrip(),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(tool_roots[244]),
+                    str(tool_roots[248]),
+                    str(tool_roots[249]),
+                ],
+                cwd=base,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(
+                result.stdout.strip(),
+                "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE:invalid:2",
+            )
+            self.assertFalse(result.stderr)
+
+    def test_legacy_source_root_is_deny_only_never_checkout_build_or_delete(
+        self,
+    ) -> None:
+        """The quarantined long root remains one exact archive deny literal only."""
+        script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+        self.assertEqual(script.count('"supabase-source"'), 1)
+        self.assertNotIn("supabase-source/", script)
+        deny_list = re.search(
+            r'foreach \(\$mutableChild in @\((?P<body>.*?)\)\) \{\s*'
+            r'\$mutableRoot = Resolve-SafeChildPath',
+            script,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(deny_list)
+        assert deny_list is not None
+        self.assertEqual(deny_list.group("body").count('"supabase-source"'), 1)
+        checkout_body = script[
+            script.index("function New-VerifiedSupabaseCheckout") :
+            script.index("function Apply-And-TestSupabasePatch")
+        ]
+        build_body = script[
+            script.index("function Build-PatchedSupabase") :
+            script.index("function Install-PatchedSupabaseBinary")
+        ]
+        main_body = script[
+            script.index(
+                '$script:ToolRoot = Resolve-SafeChildPath $script:RepositoryRoot ".tools"'
+            ) :
+        ]
+        for active_flow in (checkout_body, build_body, main_body):
+            self.assertNotIn("supabase-source", active_flow)
 
     def test_verify_only_without_runtime_manifest_is_non_mutating(self) -> None:
         with run_patched_fixture("-VerifyOnly", include_runtime=False) as (result, root):
@@ -374,6 +823,10 @@ if (
             ("patch", "relative_path"),
             ("patch", "size_bytes"),
             ("patch", "sha256"),
+            ("workspace", "checkout_a"),
+            ("workspace", "checkout_b"),
+            ("workspace", "max_tracked_relative_file_path_length"),
+            ("workspace", "max_absolute_file_path_length"),
             ("build", "working_directory"),
             ("build", "version"),
             ("build", "goos"),
@@ -484,6 +937,7 @@ if (
         for mutable_child in (
             "cache",
             "go",
+            "s",
             "supabase-source",
             "supabase-build",
             "supabase",
@@ -515,6 +969,8 @@ if (
                         self.assertEqual(result.returncode, 2)
                         self.assertEqual(
                             result.stdout.strip(),
+                            "[START] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE\n"
+                            "[PASS] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE\n"
                             "[START] step=VERIFY-GO-ARCHIVE\n"
                             "[FAIL] step=VERIFY-GO-ARCHIVE reason=invalid code=2",
                         )
@@ -535,57 +991,62 @@ if (
                         )
 
     def test_reparse_override_targeting_owned_tree_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="sejong reparse go override ") as directory:
-            root = Path(directory)
-            owned = root / ".tools" / "go" / "owned"
-            owned.mkdir(parents=True)
-            target = owned / "override.zip"
-            payload = b"read-only-reparse-override"
-            target.write_bytes(payload)
-            alias = root / "external-override-alias"
-            junction_environment = os.environ.copy()
-            junction_environment["SEJONG_TEST_JUNCTION_ALIAS"] = str(alias)
-            junction_environment["SEJONG_TEST_JUNCTION_TARGET"] = str(owned)
-            junction = subprocess.run(
-                [
-                    powershell_executable(),
-                    "-NoProfile",
-                    "-Command",
-                    "New-Item -ItemType Junction "
-                    "-Path $env:SEJONG_TEST_JUNCTION_ALIAS "
-                    "-Target $env:SEJONG_TEST_JUNCTION_TARGET | Out-Null",
-                ],
-                capture_output=True,
-                check=False,
-                encoding="utf-8",
-                env=junction_environment,
-                errors="replace",
-                timeout=30,
-            )
-            self.assertEqual(junction.returncode, 0, junction.stderr)
+        for owned_child in ("go", "s"):
+            with self.subTest(owned_child=owned_child), tempfile.TemporaryDirectory(
+                prefix="sejong reparse go override "
+            ) as directory:
+                root = Path(directory)
+                owned = root / ".tools" / owned_child / "owned"
+                owned.mkdir(parents=True)
+                target = owned / "override.zip"
+                payload = b"read-only-reparse-override"
+                target.write_bytes(payload)
+                alias = root / "external-override-alias"
+                junction_environment = os.environ.copy()
+                junction_environment["SEJONG_TEST_JUNCTION_ALIAS"] = str(alias)
+                junction_environment["SEJONG_TEST_JUNCTION_TARGET"] = str(owned)
+                junction = subprocess.run(
+                    [
+                        powershell_executable(),
+                        "-NoProfile",
+                        "-Command",
+                        "New-Item -ItemType Junction "
+                        "-Path $env:SEJONG_TEST_JUNCTION_ALIAS "
+                        "-Target $env:SEJONG_TEST_JUNCTION_TARGET | Out-Null",
+                    ],
+                    capture_output=True,
+                    check=False,
+                    encoding="utf-8",
+                    env=junction_environment,
+                    errors="replace",
+                    timeout=30,
+                )
+                self.assertEqual(junction.returncode, 0, junction.stderr)
 
-            @contextmanager
-            def fixed_directory(*_args: object, **_kwargs: object) -> Iterator[str]:
-                yield str(root)
+                @contextmanager
+                def fixed_directory(*_args: object, **_kwargs: object) -> Iterator[str]:
+                    yield str(root)
 
-            try:
-                with patch.object(tempfile, "TemporaryDirectory", fixed_directory):
-                    with run_patched_fixture(
-                        "-BuildCandidate",
-                        "-GoArchivePath",
-                        str(alias / "override.zip"),
-                        include_runtime=False,
-                    ) as (result, _fixture_root):
-                        self.assertEqual(result.returncode, 2)
-                        self.assertEqual(
-                            result.stdout.strip(),
-                            "[START] step=VERIFY-GO-ARCHIVE\n"
-                            "[FAIL] step=VERIFY-GO-ARCHIVE reason=invalid code=2",
-                        )
-                        self.assertFalse(result.stderr)
-                        self.assertEqual(target.read_bytes(), payload)
-            finally:
-                os.rmdir(alias)
+                try:
+                    with patch.object(tempfile, "TemporaryDirectory", fixed_directory):
+                        with run_patched_fixture(
+                            "-BuildCandidate",
+                            "-GoArchivePath",
+                            str(alias / "override.zip"),
+                            include_runtime=False,
+                        ) as (result, _fixture_root):
+                            self.assertEqual(result.returncode, 2)
+                            self.assertEqual(
+                                result.stdout.strip(),
+                                "[START] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE\n"
+                                "[PASS] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE\n"
+                                "[START] step=VERIFY-GO-ARCHIVE\n"
+                                "[FAIL] step=VERIFY-GO-ARCHIVE reason=invalid code=2",
+                            )
+                            self.assertFalse(result.stderr)
+                            self.assertEqual(target.read_bytes(), payload)
+                finally:
+                    os.rmdir(alias)
 
     def test_checkout_sets_local_longpaths_before_fetch_and_checkout(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sejong checkout argv ") as directory:
@@ -617,16 +1078,30 @@ if ($checkoutFunction.Count -ne 1) {
     [Console]::Error.WriteLine("missing-production-checkout-function")
     exit 1
 }
+$parameterNames = @(
+    $checkoutFunction[0].Body.ParamBlock.Parameters |
+        ForEach-Object { $_.Name.VariablePath.UserPath }
+)
+if (
+    $parameterNames.Count -ne 3 -or
+    $parameterNames[0] -cne "Destination" -or
+    $parameterNames[1] -cne "MaxTrackedRelativeFilePathLength" -or
+    $parameterNames[2] -cne "MaxAbsoluteFilePathLength"
+) {
+    [Console]::Error.WriteLine("unexpected-production-checkout-signature")
+    exit 1
+}
 . ([ScriptBlock]::Create($checkoutFunction[0].Extent.Text))
 
 $script:ToolRoot = [System.IO.Path]::GetFullPath((Join-Path $Root ".tools"))
-$script:ExpectedDestination = "supabase-source-a"
+$script:ExpectedDestination = "s/a"
 $script:ExpectedCheckout = [System.IO.Path]::GetFullPath(
     (Join-Path $script:ToolRoot $script:ExpectedDestination)
 )
 $script:CurrentStep = "TEST-CHECKOUT-ARGV"
 $script:CapturedGitCalls = @()
 $script:RemovedOwnedPath = $false
+$script:BudgetCallCount = 0
 $null = [System.IO.Directory]::CreateDirectory($script:ToolRoot)
 
 function Resolve-SafeChildPath {
@@ -644,11 +1119,30 @@ function Remove-OwnedPath {
     param([string]$Parent, [string]$Target)
     if (
         $Parent -cne $script:ToolRoot -or
-        $Target -cne $script:ExpectedCheckout
+        $Target -cne $script:ExpectedCheckout -or
+        $script:BudgetCallCount -ne 1
     ) {
         throw "unexpected-owned-path-removal"
     }
     $script:RemovedOwnedPath = $true
+}
+
+function Assert-PatchedCheckoutPathBudget {
+    param(
+        [string]$Destination,
+        [int]$MaxTrackedRelativeFilePathLength,
+        [int]$MaxAbsoluteFilePathLength
+    )
+    if (
+        $script:RemovedOwnedPath -or
+        $Destination -cne $script:ExpectedDestination -or
+        $MaxTrackedRelativeFilePathLength -ne 134 -or
+        $MaxAbsoluteFilePathLength -ne 248
+    ) {
+        throw "unexpected-checkout-budget-call"
+    }
+    $script:BudgetCallCount += 1
+    return $script:ExpectedCheckout
 }
 
 function Throw-PatchedBootstrapFailure {
@@ -727,7 +1221,7 @@ function Invoke-VerifiedGit {
     }
 }
 
-$actualCheckout = New-VerifiedSupabaseCheckout $script:ExpectedDestination
+$actualCheckout = New-VerifiedSupabaseCheckout $script:ExpectedDestination 134 248
 $expectedCalls = @(
     [pscustomobject]@{
         Arguments = @("-c", "core.autocrlf=false", "init", "--quiet", ".")
@@ -831,6 +1325,7 @@ for ($index = 0; $index -lt $expectedCalls.Count; $index += 1) {
 }
 if (
     -not $script:RemovedOwnedPath -or
+    $script:BudgetCallCount -ne 1 -or
     $actualCheckout -cne $script:ExpectedCheckout -or
     -not (Test-Path -LiteralPath $script:ExpectedCheckout -PathType Container)
 ) {

@@ -21,6 +21,12 @@
       "apps/cli-go/internal/db/start/start.go"
     ]
   },
+  "workspace": {
+    "checkout_a": "s/a",
+    "checkout_b": "s/b",
+    "max_tracked_relative_file_path_length": 134,
+    "max_absolute_file_path_length": 248
+  },
   "build": {
     "working_directory": "apps/cli-go",
     "version": "2.109.1",
