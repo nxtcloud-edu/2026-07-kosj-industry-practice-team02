@@ -56,7 +56,7 @@ DB-001 Task 10은 host port security blocker로 완료되지 않았다. 현재 m
 repo_guidance: 1.4.0
 database_schema: 0.2.0-draft
 test_suite: 0.4.2-readiness-contract
-documentation: 2.3.16
+documentation: 2.3.17
 ```
 
 `0.3.0-local`은 6개 timestamp forward migration뿐 아니라 exact loopback runtime, full DB/root

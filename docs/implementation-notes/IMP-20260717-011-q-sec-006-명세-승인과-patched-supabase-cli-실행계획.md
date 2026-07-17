@@ -3,7 +3,8 @@
 - Date/Time (KST): 2026-07-17T12:33:49+09:00
 - Task ID: DB-001-T10-QSEC006-PLAN
 - Type: decision/planning/security
-- Status: Decision-only Done — plan review requested
+- Status: Decision-only Done — plan approved 2026-07-17, implementation started
+- Follow-up: 사용자가 2026-07-17 `계획 승인, 구현 시작`으로 실행계획을 승인했다.
 - Author/Agent: 사용자(명세 승인), Codex(계획·검증·기록)
 - Branch: codex/db-001-layered-enforcement
 - Base commit: c62ff19

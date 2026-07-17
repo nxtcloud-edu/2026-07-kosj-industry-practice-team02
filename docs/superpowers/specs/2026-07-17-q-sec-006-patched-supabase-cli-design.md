@@ -1,6 +1,6 @@
 # Q-SEC-006 project-local patched Supabase CLI 설계
 
-- Status: Approved by user on 2026-07-17; implementation plan review pending
+- Status: Approved by user on 2026-07-17; implementation plan approved and in progress
 - Date: 2026-07-17
 - Decision: Q-SEC-006=A / D-031 / ADR-0013
 - Scope: DB-001 Task 10의 local/private 개발 환경만

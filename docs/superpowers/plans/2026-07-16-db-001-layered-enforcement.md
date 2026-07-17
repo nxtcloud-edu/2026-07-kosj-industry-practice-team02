@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: Blocked — Tasks 0~9 complete; Q-SEC-006=A/D-031 spec approved, and Task 10 awaits approval of the child patched-CLI execution plan before tooling/build, version/dependency promotion, fresh DB verification, review, and completion commit
+- Status: In Progress — Tasks 0~9 complete; Q-SEC-006=A/D-031 child patched-CLI spec and execution plan approved, Task 10 implementation started; version/dependency promotion remains gated on fresh DB verification and review
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -21,7 +21,7 @@
 - Decisions: D-018, D-025, D-026, D-027, D-028, D-029, D-030, D-031
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012, ADR-0013
 - Task 9A remediation plan: `docs/superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md`
-- Task 10 patched CLI plan: `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` (review requested)
+- Task 10 patched CLI plan: `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` (approved; implementation in progress)
 - Logical projection target: `database/schema-v1.draft.sql` describes the non-active `0.3.0-local` candidate; executable authority remains timestamp migrations
 - Conditional implementation target after D-031 implementation and all gates: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
 - Execution gate: no task below starts until the user explicitly approves this plan.
@@ -1761,4 +1761,4 @@ Work stops and returns to the user before any of these changes:
 - DB-001 remains Blocked and `database_schema=0.2.0-draft` remains active.
 - `0.3.0-local` logical projection, report, and handoff are non-active candidate artifacts.
 - DATA-SEED-001, READY-001, LOG-001, and BACKUP-001 retain their `DB-001` dependencies.
-- Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 are recorded but neither met the actual IPv6 boundary. Q-SEC-006=A/D-031 selected the tooling path and its written spec is approved; child execution-plan approval still forbids further Supabase DB runtime work.
+- Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 are recorded but neither met the actual IPv6 boundary. Q-SEC-006=A/D-031 selected the tooling path and its written spec and child execution plan are approved; runtime manifest, runner and actual full gate still forbid DB-001 completion or promotion.

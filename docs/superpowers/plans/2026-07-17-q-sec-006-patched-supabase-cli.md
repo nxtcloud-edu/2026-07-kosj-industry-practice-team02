@@ -29,7 +29,8 @@
 ## Plan governance
 
 - Plan ID: `DB-001-T10-QSEC006-PLAN`
-- Status: Review requested
+- Status: Approved by user on 2026-07-17; implementation in progress
+- User approval: `계획 승인, 구현 시작` on 2026-07-17 KST
 - Date: 2026-07-17 KST
 - Branch: `codex/db-001-layered-enforcement`
 - Worktree: `.worktrees/db-001-layered-enforcement`
