@@ -517,41 +517,182 @@ catch {
         self,
     ) -> None:
         """Both manifest-derived checkout budgets must fail closed before mutable work."""
-        script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
-        main_start = script.index(
-            '$script:ToolRoot = Resolve-SafeChildPath $script:RepositoryRoot ".tools"'
-        )
-        environment_start = script.index("$goEnvironmentNames = @(", main_start)
-        preflight = script[main_start:environment_start]
-        self.assertIn(
-            '$script:CurrentStep = "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"',
-            preflight,
-        )
-        self.assertEqual(preflight.count("Assert-PatchedCheckoutPathBudget"), 2)
-        self.assertIn("$sourceManifest.workspace.checkout_a", preflight)
-        self.assertIn("$sourceManifest.workspace.checkout_b", preflight)
-        self.assertIn("$sourceManifest.workspace.max_tracked_relative_file_path_length", preflight)
-        self.assertIn("$sourceManifest.workspace.max_absolute_file_path_length", preflight)
-        pass_position = preflight.index(
-            '[PASS] step=VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE'
-        )
-        main = script[main_start:]
-        for later_operation in (
-            "Get-VerifiedGoToolchain $goArchivePath",
-            "New-VerifiedSupabaseCheckout (",
-            "Apply-And-TestSupabasePatch",
-            "Invoke-PatchedChild $script:GoExecutable",
-        ):
-            self.assertGreater(main.index(later_operation), pass_position)
-        for forbidden_preflight_operation in (
-            "Get-VerifiedGoToolchain",
-            "New-VerifiedSupabaseCheckout",
-            "Download-ApprovedGoArchive",
-            "CreateDirectory",
-            "Remove-OwnedPath",
-            "Invoke-PatchedChild",
-        ):
-            self.assertNotIn(forbidden_preflight_operation, preflight)
+        with tempfile.TemporaryDirectory(prefix="sj-preflight-ast-") as ast_directory:
+            ast_root = Path(ast_directory)
+            harness = ast_root / "preflight_ast_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    [Console]::Error.WriteLine("parse-failed")
+    exit 1
+}
+$mainTries = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [System.Management.Automation.Language.TryStatementAst]
+})
+if ($mainTries.Count -ne 1) {
+    [Console]::Error.WriteLine("expected-one-main-try")
+    exit 1
+}
+$main = $mainTries[0]
+$commands = @($main.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst]
+    },
+    $true
+))
+$budgetCommands = @($commands | Where-Object {
+    $_.GetCommandName() -ceq "Assert-PatchedCheckoutPathBudget"
+} | Sort-Object { $_.Extent.StartOffset })
+if ($budgetCommands.Count -ne 2) {
+    [Console]::Error.WriteLine("expected-two-budget-commands")
+    exit 1
+}
+$budgetA = @($budgetCommands | Where-Object {
+    $_.Extent.Text -cmatch '\$sourceManifest\.workspace\.checkout_a'
+})
+$budgetB = @($budgetCommands | Where-Object {
+    $_.Extent.Text -cmatch '\$sourceManifest\.workspace\.checkout_b'
+})
+foreach ($budget in $budgetCommands) {
+    if (
+        $budget.Extent.Text -cnotmatch
+            '\$sourceManifest\.workspace\.max_tracked_relative_file_path_length' -or
+        $budget.Extent.Text -cnotmatch
+            '\$sourceManifest\.workspace\.max_absolute_file_path_length'
+    ) {
+        [Console]::Error.WriteLine("budget-command-not-manifest-derived")
+        exit 1
+    }
+}
+if ($budgetA.Count -ne 1 -or $budgetB.Count -ne 1) {
+    [Console]::Error.WriteLine("checkout-budget-roots-not-exact")
+    exit 1
+}
+$preflightEnd = 0
+foreach ($budget in $budgetCommands) {
+    if ($budget.Extent.EndOffset -gt $preflightEnd) {
+        $preflightEnd = $budget.Extent.EndOffset
+    }
+}
+$dangerousCommands = @(
+    "Get-VerifiedGoToolchain",
+    "Get-PatchedGitExecutable",
+    "New-VerifiedSupabaseCheckout",
+    "Apply-And-TestSupabasePatch",
+    "Build-PatchedSupabase",
+    "Install-PatchedSupabaseBinary",
+    "Download-ApprovedGoArchive",
+    "Expand-Archive",
+    "Invoke-PatchedChild",
+    "Invoke-VerifiedGit",
+    "Invoke-WebRequest",
+    "Invoke-RestMethod",
+    "New-Item",
+    "Remove-Item",
+    "Remove-OwnedPath",
+    "Move-Item",
+    "Copy-Item",
+    "Start-Process"
+)
+foreach ($command in $commands) {
+    $name = $command.GetCommandName()
+    if (
+        $dangerousCommands -ccontains $name -and
+        $command.Extent.StartOffset -lt $preflightEnd
+    ) {
+        [Console]::Error.WriteLine("dangerous-operation-before-preflight")
+        exit 1
+    }
+}
+$dangerousMembers = @(
+    "CreateDirectory",
+    "Delete",
+    "DownloadFile",
+    "GetAsync",
+    "Move",
+    "Replace",
+    "SetEnvironmentVariable"
+)
+$memberCalls = @($main.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.InvokeMemberExpressionAst]
+    },
+    $true
+))
+foreach ($memberCall in $memberCalls) {
+    $memberName = [string]$memberCall.Member.Value
+    if (
+        $dangerousMembers -ccontains $memberName -and
+        $memberCall.Extent.StartOffset -lt $preflightEnd
+    ) {
+        [Console]::Error.WriteLine("dangerous-member-before-preflight")
+        exit 1
+    }
+}
+[Console]::Out.WriteLine("PREFLIGHT-AST-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+
+            def run_ast_audit(bootstrap: Path) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [
+                        powershell_executable(),
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(harness),
+                        str(bootstrap),
+                    ],
+                    cwd=ast_root,
+                    capture_output=True,
+                    check=False,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=30,
+                )
+
+            production_result = run_ast_audit(BOOTSTRAP_PATH)
+            self.assertEqual(
+                production_result.returncode,
+                0,
+                production_result.stdout + production_result.stderr,
+            )
+            self.assertEqual(production_result.stdout.strip(), "PREFLIGHT-AST-OK")
+            self.assertFalse(production_result.stderr)
+
+            script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+            marker = (
+                '$script:ToolRoot = Resolve-SafeChildPath '
+                '$script:RepositoryRoot ".tools"'
+            )
+            self.assertEqual(script.count(marker), 1)
+            mutated = script.replace(
+                marker,
+                '$null = Invoke-PatchedChild "bad.exe" @() '
+                '$script:RepositoryRoot 1000\n    ' + marker,
+                1,
+            )
+            mutated_path = ast_root / "preflight_regression.ps1"
+            mutated_path.write_text(mutated, encoding="utf-8")
+            mutation_result = run_ast_audit(mutated_path)
+            self.assertNotEqual(mutation_result.returncode, 0)
+            self.assertIn(
+                "dangerous-operation-before-preflight",
+                mutation_result.stderr,
+            )
 
         with tempfile.TemporaryDirectory(prefix="sj-preflight-") as directory:
             base = Path(directory)
@@ -721,33 +862,207 @@ if ($script:RemoveCount -ne 0) {
         self,
     ) -> None:
         """The quarantined long root remains one exact archive deny literal only."""
-        script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
-        self.assertEqual(script.count('"supabase-source"'), 1)
-        self.assertNotIn("supabase-source/", script)
-        deny_list = re.search(
-            r'foreach \(\$mutableChild in @\((?P<body>.*?)\)\) \{\s*'
-            r'\$mutableRoot = Resolve-SafeChildPath',
-            script,
-            re.DOTALL,
+        with tempfile.TemporaryDirectory(prefix="sj-legacy-ast-") as directory:
+            root = Path(directory)
+            harness = root / "legacy_ast_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    [Console]::Error.WriteLine("parse-failed")
+    exit 1
+}
+$legacyStrings = @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            $node.Value.StartsWith(
+                "supabase-source",
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+    },
+    $true
+))
+if (
+    $legacyStrings.Count -ne 1 -or
+    $legacyStrings[0].Value -cne "supabase-source"
+) {
+    [Console]::Error.WriteLine("legacy-string-boundary-not-exact")
+    exit 1
+}
+$legacy = $legacyStrings[0]
+$enclosingForEach = $legacy
+while (
+    $null -ne $enclosingForEach -and
+    $enclosingForEach -isnot [System.Management.Automation.Language.ForEachStatementAst]
+) {
+    $enclosingForEach = $enclosingForEach.Parent
+}
+$enclosingFunction = $legacy
+while (
+    $null -ne $enclosingFunction -and
+    $enclosingFunction -isnot [System.Management.Automation.Language.FunctionDefinitionAst]
+) {
+    $enclosingFunction = $enclosingFunction.Parent
+}
+if (
+    $null -eq $enclosingForEach -or
+    $enclosingForEach.Variable.VariablePath.UserPath -cne "mutableChild" -or
+    $null -eq $enclosingFunction -or
+    $enclosingFunction.Name -cne "Get-VerifiedGoToolchain"
+) {
+    [Console]::Error.WriteLine("legacy-string-not-in-archive-deny-context")
+    exit 1
+}
+$bodyCommands = @($enclosingForEach.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst]
+    },
+    $true
+))
+$actualCommands = @($bodyCommands | ForEach-Object {
+    $_.GetCommandName()
+} | Sort-Object)
+$expectedCommands = @(
+    "Resolve-PatchedCanonicalComparisonPath",
+    "Resolve-SafeChildPath",
+    "Test-PatchedPathWithin",
+    "Throw-PatchedBootstrapFailure"
+) | Sort-Object
+if (
+    $actualCommands.Count -ne $expectedCommands.Count -or
+    @(Compare-Object -ReferenceObject $expectedCommands `
+        -DifferenceObject $actualCommands -CaseSensitive).Count -ne 0
+) {
+    [Console]::Error.WriteLine("legacy-deny-body-has-active-operation")
+    exit 1
+}
+$memberCalls = @($enclosingForEach.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.InvokeMemberExpressionAst]
+    },
+    $true
+))
+if ($memberCalls.Count -ne 0) {
+    [Console]::Error.WriteLine("legacy-deny-body-has-active-member-operation")
+    exit 1
+}
+$trackedVariables = @("mutableChild", "mutableRoot", "canonicalMutableRoot")
+$functionVariables = @($enclosingFunction.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.VariableExpressionAst]
+    },
+    $true
+))
+foreach ($variable in $functionVariables) {
+    if (
+        $trackedVariables -ccontains $variable.VariablePath.UserPath -and
+        (
+            $variable.Extent.StartOffset -lt $enclosingForEach.Extent.StartOffset -or
+            $variable.Extent.EndOffset -gt $enclosingForEach.Extent.EndOffset
         )
-        self.assertIsNotNone(deny_list)
-        assert deny_list is not None
-        self.assertEqual(deny_list.group("body").count('"supabase-source"'), 1)
-        checkout_body = script[
-            script.index("function New-VerifiedSupabaseCheckout") :
-            script.index("function Apply-And-TestSupabasePatch")
-        ]
-        build_body = script[
-            script.index("function Build-PatchedSupabase") :
-            script.index("function Install-PatchedSupabaseBinary")
-        ]
-        main_body = script[
-            script.index(
-                '$script:ToolRoot = Resolve-SafeChildPath $script:RepositoryRoot ".tools"'
-            ) :
-        ]
-        for active_flow in (checkout_body, build_body, main_body):
-            self.assertNotIn("supabase-source", active_flow)
+    ) {
+        [Console]::Error.WriteLine("legacy-deny-variable-escapes-loop")
+        exit 1
+    }
+}
+$dangerousCommands = @(
+    "Build-PatchedSupabase",
+    "New-VerifiedSupabaseCheckout",
+    "Remove-OwnedPath",
+    "Remove-Item",
+    "New-Item",
+    "Move-Item",
+    "Copy-Item"
+)
+foreach ($command in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst]
+    },
+    $true
+))) {
+    if ($dangerousCommands -ccontains $command.GetCommandName()) {
+        $legacyArguments = @($command.FindAll(
+            {
+                param($node)
+                $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                    $node.Value.StartsWith(
+                        "supabase-source",
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    )
+            },
+            $true
+        ))
+        if ($legacyArguments.Count -ne 0) {
+            [Console]::Error.WriteLine("legacy-string-used-by-active-command")
+            exit 1
+        }
+    }
+}
+[Console]::Out.WriteLine("LEGACY-DENY-AST-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+
+            def run_ast_audit(bootstrap: Path) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [
+                        powershell_executable(),
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(harness),
+                        str(bootstrap),
+                    ],
+                    cwd=root,
+                    capture_output=True,
+                    check=False,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=30,
+                )
+
+            production_result = run_ast_audit(BOOTSTRAP_PATH)
+            self.assertEqual(
+                production_result.returncode,
+                0,
+                production_result.stdout + production_result.stderr,
+            )
+            self.assertEqual(production_result.stdout.strip(), "LEGACY-DENY-AST-OK")
+            self.assertFalse(production_result.stderr)
+
+            script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+            marker = (
+                "$canonicalMutableRoot = "
+                "Resolve-PatchedCanonicalComparisonPath $mutableRoot"
+            )
+            self.assertEqual(script.count(marker), 1)
+            mutated = script.replace(
+                marker,
+                "Remove-OwnedPath $script:ToolRoot $mutableRoot\n            " + marker,
+                1,
+            )
+            mutated_path = root / "legacy_delete_regression.ps1"
+            mutated_path.write_text(mutated, encoding="utf-8")
+            mutation_result = run_ast_audit(mutated_path)
+            self.assertNotEqual(mutation_result.returncode, 0)
+            self.assertIn(
+                "legacy-deny-body-has-active-operation",
+                mutation_result.stderr,
+            )
 
     def test_verify_only_without_runtime_manifest_is_non_mutating(self) -> None:
         with run_patched_fixture("-VerifyOnly", include_runtime=False) as (result, root):
