@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-16
 - Task ID: DB-001
 - Type: implementation
-- Status: Blocked — Task 10 Q-SEC-004/A-022 local port boundary; actual DB review, version promotion, and completion commit pending
+- Status: Blocked — Task 10 Q-SEC-005/A-023 IPv6 local port boundary; actual DB review, version promotion, and completion commit pending
 - Author/Agent: Codex `/root` coordinator with task-specific implementation/review agents
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `cf76b17`
@@ -156,7 +156,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 | 축 | Before | After | 변경 이유 |
 |---|---|---|---|
 | Product spec | 2.2.0 | 2.2.0 | 변경 없음 |
-| Repo guidance | 1.4.0 | 1.4.0 | Q-SEC-004 blocker로 후보 승격 보류 |
+| Repo guidance | 1.4.0 | 1.4.0 | Q-SEC-005 blocker로 후보 승격 보류 |
 | Application | 0.1.0 | 0.1.0 | 변경 없음 |
 | Web | 0.1.0 | 0.1.0 | 변경 없음 |
 | API | 2.0.1-draft | 2.0.1-draft | public contract 유지 |
@@ -305,7 +305,7 @@ reset]`으로 관찰돼 계약을 통과하지 못한다.
 - 질문 예시·ACTIVE 전환·lineage 관련 직접 write는 `READ COMMITTED` transaction 계약이다. FastAPI 기본 경로도 이 격리수준을 유지해야 하며 다른 격리수준은 안정된 `P0001`로 거부된다.
 - bare `supabase start`가 만든 Kong은 데이터 volume 삭제 없이 제거했다. Task 10 port finding 뒤
   stock CLI runtime도 fail-closed stop했고 project container count 0을 확인했다. 현재 사용자가
-  직접 결정할 항목은 Q-SEC-004다.
+  직접 결정할 항목은 Q-SEC-005다. Q-SEC-004=A/D-029의 1차 보정은 actual IPv6 wildcard를 남겼다.
 - remote Supabase, public deployment, official ACTIVE data, retention/권한 변경, 새 production dependency는 여전히 별도 승인 사항이다.
 - 최종 branch 통합 방식은 모든 검증 완료 후 finishing skill에서 사용자에게 선택받는다.
 
@@ -346,14 +346,14 @@ Task 8만 rollback할 때는 DB/schema/data compensation 없이 `git revert 3cae
 
 ### 다음 개발자 시작점
 
-D-026/D-027/D-028, ADR-0011/0012, [Task 9 closeout evidence](IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md)와 완료된 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 확인한다. 이 문단의 당시 다음 작업은 Task 10 authority/version/changelog/handoff 동기화였으며 현재는 역사적 지시다. 활성 다음 순서는 Q-SEC-004 인간 결정 → safe runtime/full gate → 독립 review이고, 그 뒤에만 DATA-001 PM 승인 → DATA-SEED-001로 진행한다. A-021/Q-SEC-003 caveat를 보존하고 `00700`은 인간 승인 전 구현하지 않는다.
+D-026~D-029, ADR-0011/0012, [Task 9 closeout evidence](IMP-20260717-004-db-001-task-9-deferred-trigger-permission-blocker.md)와 완료된 [Task 9A plan](../superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md)을 확인한다. 이 문단의 당시 다음 작업은 Task 10 authority/version/changelog/handoff 동기화였으며 현재는 역사적 지시다. 활성 다음 순서는 Q-SEC-005 인간 결정 → safe runtime/full gate → 독립 review이고, 그 뒤에만 DATA-001 PM 승인 → DATA-SEED-001로 진행한다. A-021/Q-SEC-003 caveat를 보존하고 `00700`은 인간 승인 전 구현하지 않는다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - 품질 review 비차단 개선: 다운로드 timeout/크기 상한, 합성 success extraction test, child output async drain.
 - Docker image pull 크기/시간 미측정.
 - Q-SEC-002/Q-WF-001/Q-DB-003은 A로 해결됐다. 현재 인간 A/Blocker는
-  A-022/Q-SEC-004 1개이고 A-021은 별도 B/High Open/Deferred다.
+  A-023/Q-SEC-005 1개이고 A-021은 별도 B/High Open/Deferred다.
 - migration/compensation은 6/6이고 full pgTAP은 282/282다. Task 9 runner는 exact six-stage rollback/absence/replay와 integration 8/8을 통과해 commit됐다.
 - 역사적 DB integration 6/8 blocker는 `00600`으로 해소됐다. retained diagnostic branch와 제거 뒤 각각 8/8이며 cleanup은 identifier-scoped 단일 admin transaction이다.
 - pinned Starlette/httpx TestClient deprecation warning 1건은 non-failing이며 새 production dependency 승인 없이 수정하지 않았다.
@@ -412,7 +412,7 @@ A-021은 local Task 9 blocker가 아니지만 public-release blocker다.
 ### 인수인계
 
 Task 9은 완료됐고 Task 10은 schema authority/changelog/report/handoff 후보를
-동기화했다. Q-SEC-004/A-022 해결과 safe runtime/full gate 전 DB-001은 Blocked다.
+동기화했다. Q-SEC-004=A/D-029의 보정은 IPv6 wildcard를 남겼고, Q-SEC-005/A-023 해결과 safe runtime/full gate 전 DB-001은 Blocked다.
 A-021/Q-SEC-003 기본값 B는 public-release blocker로 계속 보존한다.
 
 ## 17. Task 10 local baseline closeout — 2026-07-17 KST
@@ -433,7 +433,7 @@ Conditional acceptance는 7 enum·8 table·5 index 논리 projection, timestamp 
 compensation, exact 6+6 SHA-256, pgTAP 282, integration 8/8, no-URL 8 skips, two resets/replay,
 synthetic 8-table zero, root/API/Web/contract/secret/package/diff PASS, `/ready=503`, A-021 default B
 public block, 공식/mock seed 0을 문서와 fresh actual loopback gate에서 함께 증명하는 것이다.
-현재는 과거 DB 증거와 후보 문서만 있으며 Q-SEC-004/A-022 때문에 완료되지 않았다.
+현재는 과거 DB 증거와 후보 문서만 있으며 Q-SEC-005/A-023 때문에 완료되지 않았다.
 
 ### 조사한 상태와 선택/대안
 
@@ -489,19 +489,19 @@ Task 10 pre-security-review historical verification(최종 완료 증거 아님)
 | projection/version/hash/control/link/scope checks | 7 enum, 8 table, 5 index, provenance 3; manifest unchanged; 12 hashes; changed 33 paths/Markdown 30의 final non-DB rerun PASS |
 
 Task 10 initial review에서 spec `0/1/1`, quality `1/4/0`이 나왔고 actual port critical은
-fail-closed runner로 재현했다. Q-SEC-004/A-022 해결 전 fresh DB review/commit을 완료로 기록하지 않는다.
+fail-closed runner로 재현했다. Q-SEC-005/A-023 해결 전 fresh DB review/commit을 완료로 기록하지 않는다.
 
 두 custom verifier 초안은 제품 실패 전에 각각 projection 주석의 `GRANT/REVOKE` 단어까지
 statement로 오인한 과도한 regex와 PowerShell `Join-Path` 공백 오타로 중단됐다. statement
 anchor와 올바른 cmdlet syntax로 고친 재실행은 당시 projection/protected scope와 31-path
 control/link를 통과했다. 이후 independent quality review가 Docker wildcard port를 발견했고,
 보안 runner/test까지 현재 33-path로 확장한 뒤 fresh non-DB root/tooling/static gate는 PASS했다.
-actual loopback/full DB gate와 independent completion review는 Q-SEC-004/A-022 해결 뒤 pending이다.
+actual loopback/full DB gate와 independent completion review는 Q-SEC-005/A-023 해결 뒤 pending이다.
 
 ### 인간이 반드시 알아야 하는 내용
 
 - `0.3.0-local`은 exact loopback/full gate 뒤에만 사용할 후보이며 현재 manifest는
-  `0.2.0-draft`다. Q-SEC-004/A-022는 인간 A/Blocker다.
+  `0.2.0-draft`다. Q-SEC-005/A-023은 인간 A/Blocker다.
 - A-021/Q-SEC-003은 답변되지 않았다. 기본값 B로 public/remote, public admin/API, public
   backend DB credential과 `00700`을 차단한다.
 - 공개 배포, CORS/domain, credential, backup, data deletion, official seed는 별도 승인 사항이다.
@@ -521,7 +521,7 @@ actual loopback/full DB gate와 independent completion review는 Q-SEC-004/A-022
 - [x] report/handoff/implementation note/INDEX 및 active local links
 - [x] A-021/Q-SEC-003 default B, `/ready=503`, official/mock 0 보존
 - [x] 보안 runner 보정 뒤 31/31 tooling과 fresh non-DB root/static gate
-- [ ] Q-SEC-004 해결 뒤 fresh DB/root/static verification
+- [ ] Q-SEC-005 해결 뒤 fresh DB/root/static verification
 - [ ] independent specification review
 - [ ] independent quality/security review
 - [ ] final completion docs/version commit

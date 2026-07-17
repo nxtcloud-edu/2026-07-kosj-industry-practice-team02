@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-17T06:32:44+09:00
 - Task ID: DB-001-T10
 - Type: implementation/security/documentation/handoff
-- Status: Blocked — Q-SEC-004/A-022 human decision, safe runtime, fresh DB gate, and independent completion review pending
+- Status: Blocked — Q-SEC-005/A-023 human decision, safe runtime, fresh DB gate, and independent completion review pending
 - Author/Agent: Codex `/root/task10_implementation`, coordinated by `/root`
 - Branch: `codex/db-001-layered-enforcement`
 - Base commit: `85067d04c3f498303d13426bf275e4196e8d5bdf`
@@ -26,7 +26,7 @@
 - `schema-v1.draft.sql`은 non-active 0.3.0-local 후보의 7 enum·8 table·3 provenance column·generated
   `is_official`·5 index를 보여주는 비실행 projection으로만 만든다.
 - official/mock seed 0, DATA-001 PM 승인 목표 2026-07-20, `/ready=503`을 유지한다.
-- Q-SEC-004 해결과 safe runtime/fresh full gate/review가 통과한 뒤에만 exact 4개 manifest 축과
+- Q-SEC-005 해결과 safe runtime/fresh full gate/review가 통과한 뒤에만 exact 4개 manifest 축과
   TASK 의존성을 갱신한다. 그 전에는 HEAD 값을 그대로 유지한다.
 - exact 환경/12개 lineage hash/test 결과 report와 setup/test/migrate/seed/rollback/recovery
   handoff를 작성한다.
@@ -69,14 +69,15 @@
 
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
-| A-021 / Q-SEC-003 | B/High Human, unanswered | privileged graph 22개 중 21개 public hardening 미완료 | default B: A-022 해결 뒤에도 local/private만, `00700` 없음 | remote/public/admin/API/backend credential 차단 |
-| A-022 / Q-SEC-004 | A/Blocker Human, unanswered | actual Docker port가 wildcard로 해석됨 | default C: DB runtime·manifest promotion·후속 DB dependency 차단 | DB-001 Task 10, DATA-SEED/READY/LOG/BACKUP |
+| A-021 / Q-SEC-003 | B/High Human, unanswered | privileged graph 22개 중 21개 public hardening 미완료 | default B: A-023 해결 뒤에도 local/private만, `00700` 없음 | remote/public/admin/API/backend credential 차단 |
+| A-022 / Q-SEC-004 | Resolved by D-029, remediation insufficient | `default-local-port-binding` actual `127.0.0.1`+`::` | 승인 설정 유지, 완료 근거 아님 | A-023/Q-SEC-005로 이관 |
+| A-023 / Q-SEC-005 | A/Blocker Human, unanswered | IPv6 wildcard를 없앨 강한 전역 정책 또는 patched CLI | default C: DB runtime·manifest promotion·후속 DB dependency 차단 | DB-001 Task 10, DATA-SEED/READY/LOG/BACKUP |
 | DATA-001 | Human/PM | 공식 KB/기관/매핑 승인 미완료 | persistent seed 0, 2026-07-20 목표 | DATA-SEED/READY blocked, 503 |
 | public/remote | Human deferred | 계정·리전·CORS·비밀·로그·backup | 이번 task에서 미승인 | 배포 변경 0 |
 | projection detail | D/Internal | helper/trigger/RLS/GRANT 복제 여부 | 복제하지 않고 실행 lineage/tests를 권위로 유지 | 문서 중복·drift 축소 |
 
-인간 A/Blocker는 A-022/Q-SEC-004 1개다. Q-SEC-003은 B/High라 답변을 가장하지 않고
-문서화된 기본값 B를 적용하며, Q-SEC-004는 무응답 기본값 C로 runtime/후속 작업을 차단한다.
+인간 A/Blocker는 A-023/Q-SEC-005 1개다. Q-SEC-003은 B/High라 답변을 가장하지 않고
+문서화된 기본값 B를 적용하며, Q-SEC-005는 무응답 기본값 C로 runtime/후속 작업을 차단한다.
 
 ## 5. 설계 결정과 대안
 
@@ -114,7 +115,7 @@ DATA-SEED 의존성을 이해할 수 있어야 한다.
 | root/API/scripts README, SECURITY, CODEX index | current local DB boundary와 명령·경로 | pre-DB stale claim 제거 |
 | `scripts/verify_database.ps1`, `scripts/tests/test_supabase_tooling.py` | Engine 28+·network identity/option·container identity/state·requested/resolved binding fail-closed TDD | 실제 wildcard publish critical finding 재발 방지 |
 | TEAM_DECISIONS, D-018/D-025 status, ADR-0011, ambiguity/discovery append | local 구현 결과와 default B public block | 권위/status 정합; 새 인간 결정은 만들지 않음 |
-| parent plan/spec, TASKS | Task 10 blocked state, dependency retention, A-021/A-022 gates | 실행/백로그 정합 |
+| parent plan/spec, TASKS | Task 10 blocked state, dependency retention, A-021/A-023 gates | 실행/백로그 정합 |
 | `versions/manifest.json`, CHANGELOG | blocker 발견 뒤 4축 후보 승격 철회와 summary | 현재 manifest 유지 |
 | test report/handoff | exact env/hash/test/commands/rollback/recovery/risks | 재현 가능한 milestone handoff |
 | IMP-006, IMP-007, INDEX | cumulative lineage와 Task 10 전용 6W1H | per-task note 의무 충족 |
@@ -124,7 +125,7 @@ DATA-SEED 의존성을 이해할 수 있어야 한다.
 DB schema/row/public route는 바뀌지 않았다. local container start boundary는 안전 검증으로
 강화했고 불일치 시 reset 전 중단한다. persistent official/mock row는 0이며
 `supabase/seed.sql`은 data-free다. 후보 closeout에서 시도한 TASK dependency reduction은
-Q-SEC-004/A-022 blocker 발견 뒤 철회해 DATA-SEED/READY/LOG/BACKUP의 DB-001 의존성을 유지한다.
+Q-SEC-005/A-023 blocker로 DATA-SEED/READY/LOG/BACKUP의 DB-001 의존성을 유지한다.
 
 ### 오류·빈 상태·롤백
 
@@ -140,7 +141,7 @@ Q-SEC-004/A-022 blocker 발견 뒤 철회해 DATA-SEED/READY/LOG/BACKUP의 DB-00
 | 축 | Before | After | 변경 이유 |
 |---|---|---|---|
 | Product spec | 2.2.0 | 2.2.0 | 범위 변경 없음 |
-| Repo guidance | 1.4.0 | 1.4.0 | Q-SEC-004 blocker로 후보 승격 보류 |
+| Repo guidance | 1.4.0 | 1.4.0 | Q-SEC-005 blocker로 후보 승격 보류 |
 | Application | 0.1.0 | 0.1.0 | 제품 코드/public route 변경 없음 |
 | Web | 0.1.0 | 0.1.0 | 변경 없음 |
 | API | 2.0.1-draft | 2.0.1-draft | wire contract 불변 |
@@ -209,7 +210,7 @@ Q-SEC-004/A-022 blocker 발견 뒤 철회해 DATA-SEED/READY/LOG/BACKUP의 DB-00
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
 - `0.3.0-local`은 exact loopback/fresh full gate 뒤에만 사용할 후보이며 현재 manifest는
-  `0.2.0-draft`다. Q-SEC-004/A-022가 local 완료 blocker다.
+  `0.2.0-draft`다. Q-SEC-005/A-023이 local 완료 blocker다.
 - official seed는 없고 `/ready=503`이 정상이다. 다음은 DATA-001 PM 승인이다.
 - Q-SEC-003은 미응답이다. default B로 public/remote, public admin/API, public backend DB
   credential과 `00700`을 차단한다.
@@ -231,7 +232,7 @@ Q-SEC-004/A-022 blocker 발견 뒤 철회해 DATA-SEED/READY/LOG/BACKUP의 DB-00
 ### 재현
 
 1. [handoff](../handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md)의 요구 버전과 env 이름을 확인한다.
-2. Q-SEC-004에서 인간이 선택한 경계를 적용하고 Docker restart/recreate를 완료한다.
+2. Q-SEC-005에서 인간이 선택한 경계를 적용하고 Docker restart/recreate를 완료한다.
 3. 그 뒤에만 `scripts/verify_database.ps1`로 runner-owned loopback start와 full local DB gate를 실행한다.
    runtime binding 검증이 실패하면 reset/status/env 작업으로 우회하지 말고 stack을 중지한다.
 4. `scripts/verify.ps1`, package/secret/diff gate를 실행한다.
@@ -245,7 +246,7 @@ handoff의 6개 file list와 absence proof를 disposable local 환경에서만 �
 
 ### 다음 개발자 시작점
 
-먼저 Q-SEC-004/A-022의 인간 결정을 받고 safe runtime/full gate/review를 완료한다. 그 전에는
+먼저 Q-SEC-005/A-023의 인간 결정을 받고 safe runtime/full gate/review를 완료한다. 그 전에는
 DB를 실행하거나 DB-001 의존성을 해제하지 않는다. 이후 DATA-001의 PM 승인 진행을 확인하고
 승인 전에는 seed를 만들지 않으며 DATA-SEED-001, READY-001 순으로 진행한다. public 작업
 전에는 반드시 A-021/Q-SEC-003을 인간에게 다시 제시한다.
@@ -257,14 +258,14 @@ DB를 실행하거나 DB-001 의존성을 해제하지 않는다. 이후 DATA-00
 - off-device backup 없음과 단일 PC 손실 위험.
 - parent KB/child question 동시 delete lock path는 삭제 API가 없는 현재 P2 위험.
 - non-failing Starlette/httpx TestClient deprecation warning 1건.
-- 즉시 다음 단계: Q-SEC-004/A-022의 인간 결정을 받고 safe runtime 증거 뒤 full DB/root/static
+- 즉시 다음 단계: Q-SEC-005/A-023의 인간 결정을 받고 safe runtime 증거 뒤 full DB/root/static
   gate와 independent review를 재실행한다. 그 다음 DATA-001 PM 승인 → DATA-SEED-001 순서다.
 
 ## 15. 자체 리뷰
 
 - [x] 요청/Task 10 acceptance와 6W1H
 - [x] security remediation 뒤 fresh non-DB root/API/tooling/package/JSON/secret/diff 검증
-- [ ] Q-SEC-004 해결 뒤 actual loopback/full DB gate
+- [ ] Q-SEC-005 해결 뒤 actual loopback/full DB gate
 - [x] source-of-truth/status/계약 경계/버전/의존성 동기화
 - [x] 개인정보 원문·secret/env value 노출 없음
 - [x] official/mock 0과 `/ready=503`

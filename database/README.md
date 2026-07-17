@@ -22,8 +22,9 @@ Forward migration과 matching compensation은 각각 6개다. 적용·commit된 
 
 ## 로컬 실행과 검증 — 현재 DB 명령 차단
 
-현재는 Q-SEC-004/A-022가 해결되지 않았으므로 `verify_database.ps1`과 direct DB start/reset을
-실행하지 않는다. 아래는 인간 결정과 Docker restart/recreate 뒤 재개할 때만 쓰는 명령이다.
+현재는 Q-SEC-004=A 보정 뒤에도 IPv6 wildcard가 남아 Q-SEC-005/A-023이 해결되지 않았으므로
+`verify_database.ps1`과 direct DB start/reset을 실행하지 않는다. 아래는 인간 결정과 Docker
+restart/recreate 뒤 재개할 때만 쓰는 명령이다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1
@@ -37,7 +38,7 @@ single `127.0.0.1:54322`를 검증한다. 이후에만 reset, login rotation, pg
 pgTAP, 실제 backend integration을 순서대로 수행한다. `-SkipStart`는 이미 실행 중인 local
 DB를 재사용할 때만 쓴다. `-SkipRollbackReplay`는 진단 옵션이며 완료 증거가 아니다.
 
-현재 host는 wildcard runtime으로 판정돼 Q-SEC-004/A-022 해결 전 fail-closed 상태다. bare/direct
+현재 host는 `default-local-port-binding`에서도 `127.0.0.1`+`::`로 판정돼 Q-SEC-005/A-023 해결 전 fail-closed 상태다. bare/direct
 `db start`로 우회하지 않는다.
 
 필요할 때 local login만 별도로 회전하려면 관리자 DSN을 값이 노출되지 않는 process

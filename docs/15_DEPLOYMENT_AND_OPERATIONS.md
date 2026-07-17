@@ -67,11 +67,12 @@ local/private 합성 MVP의 기본 복구 목표는 RPO 24시간, RTO 60분이�
 
 local stack에는 개발용 기본 credential이 있고 production TLS/rate limit/admin protection이
 없다. 따라서 runner가 Engine 28+와 actual single `127.0.0.1:54322`를 증명하지 못하면 reset
-전에 중단한다. 현재 Docker Desktop 4.62.0/Engine 29.2.1에서는 wildcard로 판정돼
-Q-SEC-004/A-022 해결 전 DB-001이 Blocked다. A-021/Q-SEC-003 기본값 B에 따라 기존 privileged
+전에 중단한다. Q-SEC-004=A로 `default-local-port-binding`을 적용했지만 actual probe는
+`127.0.0.1`과 IPv6 wildcard `::`를 함께 생성해 Q-SEC-005/A-023 해결 전 DB-001이 Blocked다.
+A-021/Q-SEC-003 기본값 B에 따라 기존 privileged
 function 21개가 보정되기 전에는 remote/public deployment, public admin/API, public backend DB
 credential 사용이 금지되며 local baseline을 production-ready라고 부르지 않는다.
 
-Q-SEC-004 추천안 A는 Docker Desktop `Port binding behavior=default-local-port-binding`을
-사용자가 전역 영향까지 승인한 뒤 restart/recreate/full gate하는 것이다. 무응답 시 runtime을
-더 시작하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)
+Q-SEC-004=A/D-029는 적용됐으나 exact local을 달성하지 못했다. Q-SEC-005는 더 강한
+`local-only-port-binding`의 모든 새 publish 전역 영향을 인간이 승인할지 결정하며, 무응답 시
+runtime을 더 시작하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)

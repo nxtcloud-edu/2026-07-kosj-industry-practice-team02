@@ -60,7 +60,7 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   host-port blocker 때문에 `database_schema=0.2.0-draft`를 유지한다.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
-- A-021/Q-SEC-003의 기본값 B가 활성이다. A-022가 해결돼 DB 후보가 local baseline으로
+- A-021/Q-SEC-003의 기본값 B가 활성이다. A-023이 해결돼 DB 후보가 local baseline으로
   승격되더라도 local/private 전용이며 privileged function 21개의 public hardening 전에는
   remote/public 배포, public admin/API, public backend DB credential 사용과 `00700` 생성을
   금지한다.
@@ -102,9 +102,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 이 gate의 reset/compensation은 disposable local DB 전용이다. remote project, 실제 데이터,
 Docker volume에는 실행하지 않는다.
 
-현재 Docker Desktop 4.62.0/Engine 29.2.1에서는 stock CLI가 생성한 actual binding이 wildcard로
-해석돼 runner가 reset 전에 fail-closed한다. Q-SEC-004/A-022 해결 전에는 DB gate를 우회하거나
-DB-001을 완료로 표시하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
+Q-SEC-004=A로 `default-local-port-binding`을 적용했지만 HostIP 미지정 actual probe는
+`127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었다. explicit `127.0.0.1` probe만 단일 loopback이었다.
+두 probe는 제거됐고 runner는 계속 reset 전에 fail-closed한다. Q-SEC-005/A-023 해결 전에는 DB
+gate를 우회하거나 DB-001을 완료로 표시하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
 
 다른 현재 디렉터리에서 실행할 때는 `-File`에 이 저장소의 `scripts/verify.ps1` 절대 경로를 전달한다. 러너는 호출된 파일 위치를 기준으로 저장소 루트를 찾는다.
 

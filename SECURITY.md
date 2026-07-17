@@ -77,8 +77,9 @@ JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` ru
 - A-021/Q-SEC-003 기본값 B가 활성이다. public-release 전 privileged function 21개
   search-path hardening이 남아 있으므로 remote/public 배포, public admin/API, public backend
   DB credential을 차단하며 인간 승인 전 `00700` migration을 만들지 않는다.
-- Q-SEC-004/A-022 해결 전 local DB runtime과 후속 DB 작업도 차단한다. 추천안은 사용자가
-  Docker Desktop `Port binding behavior=default-local-port-binding`의 향후 새 container 전역
-  영향을 승인한 뒤 restart/recreate/full gate를 수행하는 것이다. 공식 근거:
+- Q-SEC-004=A/D-029의 `default-local-port-binding`은 적용됐지만 actual HostIP 미지정 probe가
+  `127.0.0.1`과 IPv6 wildcard `::`를 함께 생성해 exact local 기준에 실패했다. explicit
+  `127.0.0.1` probe만 단일 loopback이었다. Q-SEC-005/A-023 해결 전 local DB runtime과 후속
+  DB 작업을 계속 차단한다. 공식 근거:
   [Docker published ports](https://docs.docker.com/engine/network/port-publishing/),
   [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/).

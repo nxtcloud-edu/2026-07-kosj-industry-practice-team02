@@ -62,6 +62,10 @@
 - Prepared the `repo_guidance=1.5.0`, `database_schema=0.3.0-local`,
   `test_suite=0.5.0-db-baseline`, and documentation `2.4.0` candidate closeout, then kept the
   committed manifest axes unchanged after the local port security blocker was reproduced
+- Applied the approved Q-SEC-004 Docker Desktop `default-local-port-binding` policy and fully
+  restarted the engine; an actual HostIP-omitted probe resolved to IPv4 `127.0.0.1` plus IPv6
+  wildcard `::`, while an explicit `127.0.0.1` control resolved to one loopback binding. Both
+  disposable probes were removed and no Supabase DB mutation was run
 
 ### Pending
 
@@ -70,4 +74,5 @@
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;
   default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked
-- Q-SEC-004/A-022 decision and an actual single loopback Docker binding before DB-001 local completion
+- Q-SEC-005/A-023 decision and an actual single loopback Docker binding before DB-001 local completion;
+  the unanswered default keeps all Supabase DB runtime and manifest promotion blocked

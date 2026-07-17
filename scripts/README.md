@@ -67,8 +67,9 @@ exact six-stage rollback/absence/reset/replay와 backend integration 8/8의 fres
 wildcard binding으로 해석했다. runner는 reset 전에 fail-closed했고 stack은 중지돼 project
 container count 0이다. runner가 새 runtime을 시작한 경우에는 `db start`가 일부 생성 뒤 실패하거나
 post-start binding 검증이 실패해도 해당 project stack을 중지하고 container 부재를 확인한다. 기존
-runtime이나 `-SkipStart` 경로는 자동 중지하지 않는다. Q-SEC-004/A-022 해결 전 실제 DB gate를
-반복하거나 우회하지 않는다.
+runtime이나 `-SkipStart` 경로는 자동 중지하지 않는다. Q-SEC-004=A의
+`default-local-port-binding` 적용 뒤에도 HostIP 미지정 probe가 `127.0.0.1`+`::`를 만들었으므로
+Q-SEC-005/A-023 해결 전 실제 DB gate를 반복하거나 우회하지 않는다.
 [Docker published ports](https://docs.docker.com/engine/network/port-publishing/)와
 [Supabase local development](https://supabase.com/docs/guides/local-development/)를 따른다.
 

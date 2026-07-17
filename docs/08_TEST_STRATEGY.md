@@ -48,7 +48,7 @@ DB-001 local baseline 후보는 다음 영구 gate를 요구한다.
 - no-seed `/health=200`, `/ready=503`
 
 과거 DB 증거만으로는 현재 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
-Q-SEC-004/A-022의 exact loopback과 fresh full gate가 모두 통과해야 하며, 공개 운영의 보안·용량·
+Q-SEC-005/A-023의 exact loopback과 fresh full gate가 모두 통과해야 하며, 공개 운영의 보안·용량·
 백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로 사용하지 않는다.
 
 ### E2E
