@@ -562,9 +562,9 @@ try {
 
     $scriptDirectory = [System.IO.Path]::GetFullPath($PSScriptRoot)
     $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptDirectory ".."))
-    $supabaseBinary = Join-Path $repositoryRoot ".tools\supabase\v2.109.1\supabase.exe"
+    $supabaseBinary = Join-Path $repositoryRoot ".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"
     $pythonBinary = Join-Path $repositoryRoot "apps\api\.venv\Scripts\python.exe"
-    $bootstrapScript = Join-Path $scriptDirectory "bootstrap_supabase.ps1"
+    $bootstrapScript = Join-Path $scriptDirectory "bootstrap_patched_supabase.ps1"
     $provisionScript = Join-Path $scriptDirectory (
         "provision_local_database_" + "lo" + "gin.py"
     )

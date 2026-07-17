@@ -19,6 +19,10 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[2]
 PIN_PATH = ROOT / "scripts" / "supabase-cli.version.json"
 BOOTSTRAP_PATH = ROOT / "scripts" / "bootstrap_supabase.ps1"
+PATCHED_BOOTSTRAP_PATH = ROOT / "scripts" / "bootstrap_patched_supabase.ps1"
+PATCHED_RUNTIME_RELATIVE = Path(
+    ".tools/supabase/v2.109.1-sejong-loopback/supabase.exe"
+)
 CONFIG_PATH = ROOT / "supabase" / "config.toml"
 SEED_PATH = ROOT / "supabase" / "seed.sql"
 PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
@@ -110,7 +114,13 @@ def run_database_runner_with_supabase_capture(
     stop_failure: bool = False,
     stop_leaves_runtime: bool = False,
     runner_arguments: tuple[str, ...] = (),
+    capture_patched_bootstrap: bool = False,
+    patched_bootstrap_exit_code: int = 0,
+    include_patched_runtime: bool = True,
+    include_fallback_decoys: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+    if patched_bootstrap_exit_code not in {0, 1, 2}:
+        raise AssertionError("patched bootstrap exit code must be 0, 1, or 2")
     runtime_executable = ROOT / "apps" / "api" / ".venv" / "Scripts" / "python.exe"
     if not runtime_executable.is_file():
         raise AssertionError("API venv Python is required for the synthetic runner fixture")
@@ -119,7 +129,7 @@ def run_database_runner_with_supabase_capture(
         root = Path(directory)
         scripts = root / "scripts"
         fake_bin = root / "fake-bin"
-        supabase_dir = root / ".tools" / "supabase" / "v2.109.1"
+        supabase_dir = root / PATCHED_RUNTIME_RELATIVE.parent
         python_dir = root / "apps" / "api" / ".venv" / "Scripts"
         for path in (scripts, fake_bin, supabase_dir, python_dir):
             path.mkdir(parents=True, exist_ok=True)
@@ -161,14 +171,27 @@ def run_database_runner_with_supabase_capture(
 
         runner = scripts / DATABASE_RUNNER_PATH.name
         runner.write_text(source, encoding="utf-8")
-        bootstrap_source = "exit 0\n"
+        bootstrap_capture_source = r'''
+$bootstrapEvent = @(
+    "bootstrap",
+    [System.IO.Path]::GetFileName($MyInvocation.MyCommand.Path)
+) + @($args)
+$bootstrapLine = ConvertTo-Json -InputObject $bootstrapEvent -Compress
+[System.IO.File]::AppendAllText(
+    $env:SEJONG_SYNTHETIC_SUPABASE_CAPTURE,
+    $bootstrapLine + [Environment]::NewLine,
+    [System.Text.Encoding]::UTF8
+)
+'''
+        bootstrap_source = ""
+        if capture_patched_bootstrap:
+            bootstrap_source += bootstrap_capture_source
         provision_source = "# synthetic fixture\n"
         sql_runner_source = "# synthetic fixture\n"
         if full_path:
-            bootstrap_source = (
+            bootstrap_source += (
                 f'[Console]::Out.WriteLine("{CHILD_OUTPUT_SENTINEL}")\n'
                 f'[Console]::Error.WriteLine("{CHILD_OUTPUT_SENTINEL}")\n'
-                "exit 0\n"
             )
             provision_source = f'''
 import json
@@ -201,15 +224,30 @@ print({CHILD_OUTPUT_SENTINEL!r})
 print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
 raise SystemExit(0)
 '''
-        (scripts / BOOTSTRAP_PATH.name).write_text(bootstrap_source, encoding="utf-8")
+        bootstrap_source += f"exit {patched_bootstrap_exit_code}\n"
+        (scripts / PATCHED_BOOTSTRAP_PATH.name).write_text(
+            bootstrap_source,
+            encoding="utf-8",
+        )
+        if include_fallback_decoys:
+            (scripts / BOOTSTRAP_PATH.name).write_text(
+                bootstrap_capture_source + "exit 0\n",
+                encoding="utf-8",
+            )
         (scripts / PROVISION_PATH.name).write_text(provision_source, encoding="utf-8")
         (scripts / SQL_RUNNER_PATH.name).write_text(sql_runner_source, encoding="utf-8")
 
-        for destination in (
+        runtime_destinations = [
             fake_bin / "docker.exe",
-            supabase_dir / "supabase.exe",
             python_dir / "python.exe",
-        ):
+        ]
+        if include_patched_runtime:
+            runtime_destinations.append(root / PATCHED_RUNTIME_RELATIVE)
+        if include_fallback_decoys:
+            stock_decoy = root / ".tools" / "supabase" / "v2.109.1" / "supabase.exe"
+            stock_decoy.parent.mkdir(parents=True, exist_ok=True)
+            runtime_destinations.extend((stock_decoy, fake_bin / "supabase.exe"))
+        for destination in runtime_destinations:
             shutil.copy2(runtime_executable, destination)
 
         version_source = "raise SystemExit(0)\n"
@@ -491,7 +529,7 @@ raise SystemExit(0)
         if capture_path.is_file():
             invocations = [
                 json.loads(line)
-                for line in capture_path.read_text(encoding="utf-8").splitlines()
+                for line in capture_path.read_text(encoding="utf-8-sig").splitlines()
             ]
         if not include_docker_invocations:
             invocations = [
@@ -500,6 +538,149 @@ raise SystemExit(0)
                 if not invocation or invocation[0] != "docker"
             ]
         return result, invocations
+
+
+class PatchedDatabaseRunnerSelectionTests(unittest.TestCase):
+    def test_runner_uses_only_runtime_pinned_patched_cli(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            r'".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"',
+            script,
+        )
+        self.assertIn('"bootstrap_patched_supabase.ps1"', script)
+        self.assertNotIn(r'".tools\supabase\v2.109.1\supabase.exe"', script)
+        self.assertNotIn('"bootstrap_supabase.ps1"', script)
+        self.assertIn('"-VerifyOnly"', script)
+
+    def test_runner_still_checks_actual_binding_before_reset(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        start = script.index('-Step "START-LOCAL-DATABASE"')
+        inspect = script.index("Assert-LocalDatabaseRuntime", start)
+        reset = script.index('-Step "RESET-DATABASE-ONE"', inspect)
+
+        self.assertLess(start, inspect)
+        self.assertLess(inspect, reset)
+
+    def test_patched_verify_occurs_after_docker_version_and_before_every_db_phase(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            full_path=True,
+            include_docker_invocations=True,
+            capture_patched_bootstrap=True,
+        )
+
+        bootstrap_event = [
+            "bootstrap",
+            "bootstrap_patched_supabase.ps1",
+            "-VerifyOnly",
+        ]
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.stderr)
+        self.assertEqual(invocations.count(bootstrap_event), 1)
+        bootstrap_index = invocations.index(bootstrap_event)
+        self.assertLess(invocations.index(["docker", "version"]), bootstrap_index)
+
+        later_phases = {
+            "network": lambda event: event[:2] == ["docker", "network"],
+            "container-list": lambda event: event[:2] == ["docker", "ps"],
+            "actual-binding": lambda event: event[:2] == ["docker", "inspect"],
+            "start": lambda event: event
+            == ["db", "start", "--network-id", "sejong-ai-local-loopback"],
+            "reset": lambda event: event == ["db", "reset", "--local"],
+            "status": lambda event: event == ["status", "-o", "env"],
+            "credentials": lambda event: event == ["provision"],
+            "sql": lambda event: bool(event) and event[0] == "sql",
+            "pgtap": lambda event: event == ["test", "db"],
+            "integration": lambda event: bool(event) and event[0] == "pytest",
+        }
+        for phase, predicate in later_phases.items():
+            with self.subTest(phase=phase):
+                indexes = [
+                    index
+                    for index, invocation in enumerate(invocations)
+                    if predicate(invocation)
+                ]
+                self.assertTrue(indexes, f"missing synthetic phase: {phase}")
+                self.assertLess(bootstrap_index, min(indexes))
+
+    def test_patched_verify_failure_stops_before_network_and_database_work(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            capture_patched_bootstrap=True,
+            patched_bootstrap_exit_code=1,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse(result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "[START] step=PREFLIGHT-DOCKER",
+                "[PASS] step=PREFLIGHT-DOCKER",
+                "[START] step=VERIFY-SUPABASE-VERSION",
+                "[FAIL] step=VERIFY-SUPABASE-VERSION reason=child code=1",
+            ],
+        )
+        self.assertEqual(
+            invocations,
+            [
+                ["docker", "version"],
+                ["bootstrap", "bootstrap_patched_supabase.ps1", "-VerifyOnly"],
+            ],
+        )
+
+    def test_missing_patched_runtime_never_uses_stock_or_path_decoys(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+
+        result, invocations = run_database_runner_with_supabase_capture(
+            script,
+            include_docker_invocations=True,
+            include_patched_runtime=False,
+            include_fallback_decoys=True,
+            capture_patched_bootstrap=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "[FAIL] step=PREFLIGHT-LOCAL-FILES reason=missing code=2",
+        )
+        self.assertEqual(invocations, [])
+
+    def test_runner_has_unique_patched_assignments_and_no_supabase_discovery(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        lowered = script.lower()
+        binary_assignment = (
+            r'$supabaseBinary = Join-Path $repositoryRoot '
+            r'".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"'
+        )
+        bootstrap_assignment = (
+            '$bootstrapScript = Join-Path $scriptDirectory '
+            '"bootstrap_patched_supabase.ps1"'
+        )
+
+        self.assertEqual(script.count(binary_assignment), 1)
+        self.assertEqual(script.count(bootstrap_assignment), 1)
+        self.assertEqual(script.count('"-VerifyOnly"'), 1)
+        self.assertIsNone(
+            re.search(r'(?im)\bget-command\s+["\']?supabase(?:\.exe)?\b', script)
+        )
+        self.assertIsNone(
+            re.search(r'(?im)\bwhere(?:\.exe)?\s+["\']?supabase(?:\.exe)?\b', script)
+        )
+        self.assertNotIn("$env:path", lowered)
 
 
 def run_python_tool(path: Path, *arguments: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:

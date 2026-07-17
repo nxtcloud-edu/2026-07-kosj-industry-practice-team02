@@ -23,17 +23,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offl
 ## 프로젝트 로컬 Supabase CLI
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1
+# Stock reference only
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1 -VerifyOnly
+
+# Patched build/runtime authority
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -BuildCandidate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -Install
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -VerifyOnly
 ```
 
-첫 명령은 고정된 공식 Windows amd64 release archive의 byte count와 SHA-256을 확인한 뒤
-`.tools/supabase/v2.109.1/`에 프로젝트 로컬 CLI만 설치한다. 두 번째 명령은 다운로드 없이
-설치된 실행 파일과 정확한 버전만 확인한다. 별도 archive를 검증하려면 첫 명령에
-`-ArchivePath <zip>`을 추가한다.
+stock `-VerifyOnly`는 기존 공식 Windows amd64 release 설치물을 참조용으로만 확인한다.
+데이터베이스 runner의 실행 권위는 official v2.109.1 exact source의 local DB start
+HostIP만 보정한 `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`다. patched
+bootstrap은 고정 source/tag/commit·Go archive·patch·runtime manifest를 검증하고, 두 독립
+build의 SHA-256 일치를 거쳐 설치한다.
 
 이 CLI는 로컬 개발 도구이며 production dependency가 아니다. 스크립트는 Supabase `login`,
 `link`, `db push` 또는 다른 remote project operation을 수행하지 않는다.
+stock CLI의 직접 `db start`, PATH fallback과 `db diff` shadow DB는 승인된 안전 경로 밖이다.
 
 ## 로컬 PostgreSQL gate
 
@@ -49,9 +56,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
 ```
 
-기본 경로는 Docker Engine 28+와 고정 `sejong-ai-local-loopback` network를 확인한 뒤 pinned
+기본 경로는 Docker Engine 28+와 고정 `sejong-ai-local-loopback` network를 확인한 뒤 pinned patched
 CLI의 `db start --network-id sejong-ai-local-loopback`을 runner 내부에서 호출한다. bare/direct
-Supabase start는 runner의 actual binding 검증을 우회하므로 사용하지 않는다. runner는 고정
+stock Supabase start나 PATH에서 발견한 CLI는 runner의 provenance와 actual binding 검증을
+우회할 수 있으므로 사용하지 않는다. runner는 고정
 project/container identity와 HostConfig 요청, actual `NetworkSettings.Ports`의 exact single
 `127.0.0.1:54322`를 reset/status/env 전에 검증한다. `supabase test db`가 pgTAP 실행 중 일회성 `pg_prove` container를
 사용할 수 있지만, 이는 persistent project runtime의 PostgreSQL-only 경계를 넓히지 않는다.
@@ -63,14 +71,15 @@ project/container identity와 HostConfig 요청, actual `NetworkSettings.Ports`�
 Docker volume은 변경하지 않는다. 완료 조건은 exact loopback 뒤 pgTAP 6 files/282 assertions,
 exact six-stage rollback/absence/reset/replay와 backend integration 8/8의 fresh 재검증이다.
 
-현재 Docker Desktop 4.62.0/Engine 29.2.1은 optioned network에서도 stock CLI의 HostIP 생략을
-wildcard binding으로 해석했다. runner는 reset 전에 fail-closed했고 stack은 중지돼 project
-container count 0이다. runner가 새 runtime을 시작한 경우에는 `db start`가 일부 생성 뒤 실패하거나
-post-start binding 검증이 실패해도 해당 project stack을 중지하고 container 부재를 확인한다. 기존
-runtime이나 `-SkipStart` 경로는 자동 중지하지 않는다. Q-SEC-004=A의
-`default-local-port-binding`과 Q-SEC-005=A의 `local-only-port-binding` 적용 뒤에도 HostIP
-미지정 probe가 `127.0.0.1`+`::`를 만들었으므로 Q-SEC-006/A-024 해결 전 실제 DB gate를
-반복하거나 우회하지 않는다.
+역사적으로 Docker Desktop 4.62.0/Engine 29.2.1은 optioned network에서도 stock CLI의
+HostIP 생략을 `127.0.0.1`+`::` wildcard binding으로 해석했다. Q-SEC-006/A-024의
+Task 4는 이 원인을 보정한 고정 artifact만 runner가 선택하게 한다. 실제 single
+`127.0.0.1:54322`, full pgTAP·compensation/replay·backend integration 증명은 Task 5에
+남아 있으므로 현재 DB-001은 아직 완료가 아니다. runner가 새 runtime을 시작한
+경우에는 `db start`가 일부 생성 뒤 실패하거나 post-start binding 검증이 실패해도
+해당 project stack을 중지하고 container 부재를 확인한다. 기존 runtime이나
+`-SkipStart` 경로는 자동 중지하지 않는다. 이 선택은 공개 API, DB schema/data,
+dependency와 readiness 상태를 바꾸지 않는다.
 [Docker published ports](https://docs.docker.com/engine/network/port-publishing/)와
 [Supabase local development](https://supabase.com/docs/guides/local-development/)를 따른다.
 
@@ -84,7 +93,7 @@ ordered SQL helper는 resolve 결과가 `database/` 안에 남는 명시적인 �
 disposable local DB-001 compensation과 absence proof에만 사용하며 remote나 실제 데이터 DB에
 파괴적 SQL을 실행하라는 승인이 아니다.
 
-선택적 local stop은 `.\.tools\supabase\v2.109.1\supabase.exe stop`을 사용한다. volume
+선택적 local stop은 `.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe stop`을 사용한다. volume
 삭제·prune은 하지 않는다. local stack은 기본 개발 credential과 TLS/rate-limit 부재를
 전제로 하므로 공개하지 않는다. A-021/Q-SEC-003 default B에 따라 `00700`은 만들지 않고
 remote/public 배포·public admin/API·public backend DB credential을 차단한다.
