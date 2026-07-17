@@ -27,7 +27,8 @@ project-local 도구로 build한다.
   SHA-256은 별도 tracked runtime manifest로 고정한다. 빈/TBD hash는 허용하지 않는다.
 - stock CLI와 patched CLI를 별도 `.tools/` 경로에 두고 stock을 덮어쓰지 않는다.
 - 공식 CI에서도 직접 실행하는 `apps/cli-go`만 build하며 Bun shell wrapper와 그 dependency는
-  추가하지 않는다. official Go proxy/sumdb와 빈 private bypass를 강제하고 TDD,
+  추가하지 않는다. official Go proxy/sumdb, 비활성 workspace/toolchain auto-switch, 빈 private
+  bypass·insecure/experimental/build flags와 `GOAMD64=v1`을 강제하고 TDD,
   `go mod verify`, 두 independent checkout build의 hash 일치, exact version, actual Docker
   loopback 검증을 요구한다.
 - 어떤 검증 실패도 reset, credential, SQL, schema version 승격 전에 fail closed한다.

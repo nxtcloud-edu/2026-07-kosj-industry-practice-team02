@@ -16,8 +16,12 @@
 - The source patch is exactly two upstream files: `apps/cli-go/internal/db/start/start_test.go` and `apps/cli-go/internal/db/start/start.go`.
 - Repository `.gitattributes` keeps tracked text LF; every upstream checkout command also forces `core.autocrlf=false` before patching/building.
 - Do not patch `internal/db/diff`, build the Bun wrapper, add a production dependency, change Docker Desktop settings, or weaken the exact single-loopback gate.
-- Use `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org`, empty `GOPRIVATE` and empty `GONOSUMDB`; require `go mod verify`.
-- Build with `GOOS=windows`, `GOARCH=amd64`, `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, and `-ldflags=-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1`; do not embed telemetry credentials.
+- Use `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org`, empty `GOPRIVATE`, `GONOPROXY`,
+  `GONOSUMDB`, and `GOINSECURE`; require `go mod verify`.
+- Build with `GOOS=windows`, `GOARCH=amd64`, `GOAMD64=v1`, `CGO_ENABLED=0`, `GOENV=off`,
+  `GOWORK=off`, `GOTOOLCHAIN=local`, empty `GOFLAGS` and `GOEXPERIMENT`, `-trimpath`,
+  `-buildvcs=false`, and `-ldflags=-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1`;
+  save and restore every pinned variable and do not embed telemetry credentials.
 - Preserve `.tools/supabase/v2.109.1/`; install the patched executable only at `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`.
 - Never run `supabase login`, `link`, `db push`, a remote project command, volume deletion, prune, or public deployment.
 - Before the patched runtime manifest and runner gate pass, do not start/reset the DB or read credentials. If any actual binding is wildcard, null, multiple, unpublished, or on the wrong port/network, stop only a runner-owned runtime and return to container zero.
@@ -169,7 +173,15 @@ EXPECTED_SOURCE = {
         "goproxy": "https://proxy.golang.org",
         "gosumdb": "sum.golang.org",
         "goprivate": "",
+        "gonoproxy": "",
         "gonosumdb": "",
+        "goinsecure": "",
+        "goenv": "off",
+        "gowork": "off",
+        "gotoolchain": "local",
+        "goflags": "",
+        "goamd64": "v1",
+        "goexperiment": "",
         "flags": ["-trimpath", "-buildvcs=false"],
         "ldflags": "-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1",
     },
@@ -404,7 +416,15 @@ class PatchedBootstrapContractTests(unittest.TestCase):
             "GOPROXY",
             "GOSUMDB",
             "GOPRIVATE",
+            "GONOPROXY",
             "GONOSUMDB",
+            "GOINSECURE",
+            "GOENV",
+            "GOWORK",
+            "GOTOOLCHAIN",
+            "GOFLAGS",
+            "GOAMD64",
+            "GOEXPERIMENT",
         ):
             self.assertIn(token, script)
         for forbidden in (
@@ -460,6 +480,34 @@ class PatchedBootstrapContractTests(unittest.TestCase):
             )
             self.assertFalse(result.stderr)
             self.assertFalse((root / ".tools").exists())
+
+    def test_unapproved_go_build_environment_fails_before_network(self) -> None:
+        poisoned = {
+            "gonoproxy": "example.invalid",
+            "goinsecure": "example.invalid",
+            "goenv": "C:/unapproved/go.env",
+            "gowork": "C:/unapproved/go.work",
+            "gotoolchain": "auto",
+            "goflags": "-mod=mod",
+            "goamd64": "v3",
+            "goexperiment": "arenas",
+        }
+        for key, value in poisoned.items():
+            with self.subTest(key=key):
+                with run_patched_fixture(
+                    "-BuildCandidate",
+                    mutate_source=lambda source, key=key, value=value: source[
+                        "build"
+                    ].update({key: value}),
+                    include_runtime=False,
+                ) as (result, root):
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(
+                        result.stdout.strip(),
+                        "[FAIL] step=VALIDATE-PATCHED-SUPABASE-SOURCE-MANIFEST reason=unapproved-source code=2",
+                    )
+                    self.assertFalse(result.stderr)
+                    self.assertFalse((root / ".tools").exists())
 ```
 
 - [ ] **Step 2: Run bootstrap tests and verify RED**
@@ -502,8 +550,11 @@ Implement the following exact control flow:
 4. For candidate/install, verify or download the Go ZIP to an owned `.tools/cache/` child, hash before
    extraction, extract to `.tools/go/1.25.11/windows-amd64`, and require `go version` to contain
    `go1.25.11 windows/amd64`. An override archive is read-only and is never deleted.
-5. Set and finally restore `GOOS`, `GOARCH`, `CGO_ENABLED`, `GOPROXY`, `GOSUMDB`, `GOPRIVATE`,
-   `GONOSUMDB`. Do not read or print unrelated environment values.
+5. Before any Git or Go child process, save and pin `GOOS=windows`, `GOARCH=amd64`, `GOAMD64=v1`,
+   `CGO_ENABLED=0`, `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org`, empty `GOPRIVATE`,
+   `GONOPROXY`, `GONOSUMDB`, `GOINSECURE`, `GOFLAGS`, and `GOEXPERIMENT`, plus `GOENV=off`,
+   `GOWORK=off`, and `GOTOOLCHAIN=local`. Restore every variable in `finally`, including removing ones
+   that were originally absent. Do not read or print unrelated environment values.
 6. Recreate two owned checkout directories. For each, force `core.autocrlf=false`, `git init`, add only the approved origin, fetch
    `refs/tags/v2.109.1:refs/tags/v2.109.1` with `--depth=1 --filter=blob:none`, verify the tag object and
    peeled commit, and checkout detached exact commit.
@@ -894,7 +945,7 @@ fresh verification.
 
 - [ ] **Step 7: Perform separate specification and quality reviews**
 
-Specification review checks every approved design section against Tasks 1–6, including source/runtime
+Specification review checks every approved design section against Tasks 1–5, including source/runtime
 manifest separation, direct Go CLI, two independent hashes, test-first patch, actual runner order, stock
 preservation, `db diff` exclusion, no public/schema/data/dependency change, and rollback.
 

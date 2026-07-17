@@ -5,6 +5,8 @@
 - Type: decision/planning/security
 - Status: Decision-only Done — plan approved 2026-07-17, implementation started
 - Follow-up: 사용자가 2026-07-17 `계획 승인, 구현 시작`으로 실행계획을 승인했다.
+- Historical-state note: 아래의 review pending/requested 문구는 이 계획을 처음 작성한 시점의
+  상태를 설명한다. 현재 권위는 위 Follow-up이며 구현이 승인됐다.
 - Author/Agent: 사용자(명세 승인), Codex(계획·검증·기록)
 - Branch: codex/db-001-layered-enforcement
 - Base commit: c62ff19
@@ -80,20 +82,20 @@ binary를 독립 검증해야 한다. 실제 DB 실행은 모든 정적/tooling 
 | 파일/영역 | 변경 내용 | 이유 |
 |---|---|---|
 | 새 Q-SEC-006 plan | 5 task, exact files/interfaces/tests/commands/commits/rollback | 실행 가능성 |
-| approved spec/parent plan/TASKS | spec approved, child plan review pending | gate 정직성 |
+| approved spec/parent plan/TASKS | 작성 당시 spec approved, child plan review pending; 이후 승인 완료 | gate 정직성 |
 | decision/ambiguity/team/index | D-031 계획 상태 동기화 | source-of-truth 일치 |
 | version manifest | docs 2.3.15→2.3.16 | 계획 문서 lineage |
 | note/INDEX | 이 요청의 6W1H·검증·인수인계 | 요청별 기록 의무 |
 
 ### 데이터 흐름/상태 변화
 
-명세 review state만 Approved로 바뀌고 실행계획은 Review requested다. runtime, DB, migration,
-data, readiness는 변하지 않는다.
+이 노트 작성 당시 명세 review state만 Approved로 바뀌고 실행계획은 Review requested였다.
+후속 승인 뒤에도 runtime, DB, migration, data, readiness는 아직 변하지 않았다.
 
 ### 오류·빈 상태·롤백
 
-계획이 승인되지 않으면 이 planning commit만 revert한다. 이미 승인된 D-031/명세는 유지하되
-DB runtime Blocked 상태를 계속 유지한다.
+작성 당시 계획이 승인되지 않으면 이 planning commit만 revert하도록 정했다. 이후 계획은
+승인됐지만 구현 gate 실패 시 이미 승인된 D-031/명세를 유지하고 DB runtime Blocked로 복원한다.
 
 ## 7. 버전 전후
 
@@ -128,7 +130,7 @@ DB runtime Blocked 상태를 계속 유지한다.
 ### 미실행 검증과 이유
 
 새 tooling unit tests, Go download, patch RED/GREEN, candidate/install, binary hash/version, runner tests,
-actual Docker/full DB/root gate는 실행계획 승인 전이라 실행하지 않았다.
+actual Docker/full DB/root gate는 이 노트 작성 당시 실행계획 승인 전이라 실행하지 않았다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
@@ -146,8 +148,8 @@ actual Docker/full DB/root gate는 실행계획 승인 전이라 실행하지 �
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
-- 다음 인간 gate는 이 실행계획 승인이다.
-- 승인 전에는 Go 설치·build·DB start/reset을 하지 않는다.
+- 이 노트의 다음 인간 gate였던 실행계획 승인은 2026-07-17 충족됐다.
+- 당시 승인 전에는 Go 설치·build·DB start/reset을 하지 않았으며, 현재는 승인된 계획 gate를 따른다.
 - 승인 뒤에도 actual gate 전에는 DB-001/versions를 승격하지 않는다.
 - local 완료는 public/production 승인이 아니며 Q-SEC-003은 여전히 미해결이다.
 
@@ -170,7 +172,7 @@ planning commit을 revert하고 docs version을 2.3.15로 되돌린다. artifact
 
 ### 다음 개발자 시작점
 
-사용자가 `계획 승인` 또는 동등한 구현 승인을 하면 plan Task 1부터 시작한다. fresh worker가
+사용자가 `계획 승인, 구현 시작`으로 승인했으므로 plan Task 1부터 시작한다. fresh worker가
 가능하면 task별로 사용하고, 불가능하면 inline TDD와 별도 specification/quality review를 유지한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
@@ -178,7 +180,7 @@ planning commit을 revert하고 docs version을 2.3.15로 되돌린다. artifact
 - Go module/network availability는 구현 시 operational failure가 될 수 있으나 policy 변경은 아니다.
 - 실제 binary SHA는 build evidence 전까지 존재하지 않는다.
 - source tag/commit, patch, module, independent binary hash 중 하나라도 다르면 DB를 시작하지 않는다.
-- 다음 단계는 실행계획 사용자 검토다.
+- 다음 단계는 승인된 실행계획의 Task 1 구현이다.
 
 ## 15. 자체 리뷰
 

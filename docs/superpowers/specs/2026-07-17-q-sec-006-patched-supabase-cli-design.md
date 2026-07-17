@@ -100,12 +100,14 @@ bootstrap은 임의 branch나 PATH를 신뢰하지 않는다.
    추출한다. 시스템 Go나 자동 설치 package manager는 사용하지 않는다.
 4. exact checkout의 `go.sum`과 Go checksum database 검증을 유지한다. bootstrap은 inherited
    module proxy/private 설정 대신 `GOPROXY=https://proxy.golang.org`,
-   `GOSUMDB=sum.golang.org`, 빈 `GOPRIVATE`/`GONOSUMDB`를 사용하고 `go mod verify`를
-   통과시킨다. dependency version을 수정하거나 vendor tree를 생성하지 않는다.
-5. 상류 build와 동일한 핵심 조건 `GOOS=windows`, `GOARCH=amd64`, `CGO_ENABLED=0`,
-   `-trimpath`, `-ldflags="-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1"`을
-   사용한다. local reproducibility를 위해 `-buildvcs=false`를 추가하며 telemetry secret
-   ldflag는 모두 비운다.
+   `GOSUMDB=sum.golang.org`, 빈 `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE`를 사용하고
+   `go mod verify`를 통과시킨다. dependency version을 수정하거나 vendor tree를 생성하지 않는다.
+5. 상류 build와 동일한 핵심 조건 `GOOS=windows`, `GOARCH=amd64`, `GOAMD64=v1`,
+   `CGO_ENABLED=0`, `GOENV=off`, `GOWORK=off`, `GOTOOLCHAIN=local`, 빈 `GOFLAGS`와
+   `GOEXPERIMENT`, `-trimpath`,
+   `-ldflags="-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1"`을 사용한다.
+   local reproducibility를 위해 `-buildvcs=false`를 추가하며 telemetry secret ldflag는 모두
+   비우고, 모든 pinned Go 환경변수를 `finally`에서 원상 복구한다.
 6. 두 independent exact checkout에 같은 verified patch를 적용해 두 번 build하고 SHA-256
    일치를 요구한다. 최초 승인된
    build의 hash를 runtime manifest에 기록한 뒤 bootstrap verify-only와 runner가 그 hash를
