@@ -540,6 +540,47 @@ raise SystemExit(0)
         return result, invocations
 
 
+def assert_database_runner_discovery_surface_is_locked(script: str) -> None:
+    binary_assignment = (
+        r'$supabaseBinary = Join-Path $repositoryRoot '
+        r'".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"'
+    )
+    bootstrap_assignment = (
+        '$bootstrapScript = Join-Path $scriptDirectory '
+        '"bootstrap_patched_supabase.ps1"'
+    )
+
+    if script.count(binary_assignment) != 1:
+        raise AssertionError("patched Supabase binary assignment must be unique")
+    if script.count(bootstrap_assignment) != 1:
+        raise AssertionError("patched Supabase bootstrap assignment must be unique")
+    if script.count('"-VerifyOnly"') != 1:
+        raise AssertionError("patched Supabase verify literal must be unique")
+    expected_get_command_lines = [
+        '    $dockerCommand = Get-Command "docker.exe" '
+        "-CommandType Application -ErrorAction SilentlyContinue",
+        '        $dockerCommand = Get-Command "docker" '
+        "-CommandType Application -ErrorAction SilentlyContinue",
+    ]
+    get_command_lines = [
+        line
+        for line in script.splitlines()
+        if re.search(r"(?i)(?<![\w-])Get-Command(?![\w-])", line)
+    ]
+    if get_command_lines != expected_get_command_lines:
+        raise AssertionError("only the exact Docker Get-Command lookups are allowed")
+    where_command_token = re.compile(
+        r"(?im)(?:^|[;|{}()])\s*"
+        r"(?:\$[A-Za-z_][\w:]*\s*=\s*)?"
+        r"(?:where(?:\.exe)?|&\s*[\"']?where(?:\.exe)?[\"']?)"
+        r"(?=\s|$)"
+    )
+    if where_command_token.search(script):
+        raise AssertionError("PowerShell where command discovery is forbidden")
+    if "$env:path" in script.lower():
+        raise AssertionError("PATH-based Supabase discovery is forbidden")
+
+
 class PatchedDatabaseRunnerSelectionTests(unittest.TestCase):
     def test_runner_uses_only_runtime_pinned_patched_cli(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
@@ -661,26 +702,29 @@ class PatchedDatabaseRunnerSelectionTests(unittest.TestCase):
         self,
     ) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
-        lowered = script.lower()
-        binary_assignment = (
-            r'$supabaseBinary = Join-Path $repositoryRoot '
-            r'".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"'
-        )
-        bootstrap_assignment = (
-            '$bootstrapScript = Join-Path $scriptDirectory '
-            '"bootstrap_patched_supabase.ps1"'
-        )
 
-        self.assertEqual(script.count(binary_assignment), 1)
-        self.assertEqual(script.count(bootstrap_assignment), 1)
-        self.assertEqual(script.count('"-VerifyOnly"'), 1)
-        self.assertIsNone(
-            re.search(r'(?im)\bget-command\s+["\']?supabase(?:\.exe)?\b', script)
-        )
-        self.assertIsNone(
-            re.search(r'(?im)\bwhere(?:\.exe)?\s+["\']?supabase(?:\.exe)?\b', script)
-        )
-        self.assertNotIn("$env:path", lowered)
+        assert_database_runner_discovery_surface_is_locked(script)
+
+    def test_discovery_guard_rejects_get_command_name_option_mutation(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        mutant = script + '\nGet-Command -Name "supabase.exe"\n'
+
+        with self.assertRaises(AssertionError):
+            assert_database_runner_discovery_surface_is_locked(mutant)
+
+    def test_discovery_guard_rejects_get_command_parenthesized_mutation(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        mutant = script + '\nGet-Command ("supabase.exe")\n'
+
+        with self.assertRaises(AssertionError):
+            assert_database_runner_discovery_surface_is_locked(mutant)
+
+    def test_discovery_guard_rejects_where_option_mutation(self) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        mutant = script + "\nwhere.exe /Q supabase.exe\n"
+
+        with self.assertRaises(AssertionError):
+            assert_database_runner_discovery_surface_is_locked(mutant)
 
 
 def run_python_tool(path: Path, *arguments: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
