@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import importlib.util
 import json
@@ -8,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import tomllib
 import unittest
 from pathlib import Path
@@ -48,6 +50,72 @@ def powershell_executable() -> str:
     if executable is None:
         raise AssertionError("Windows PowerShell 5.1+ is required")
     return executable
+
+
+def windows_process_is_alive(process_id: int) -> bool:
+    if process_id <= 0:
+        raise AssertionError("synthetic process id must be positive")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [ctypes.c_uint, ctypes.c_bool, ctypes.c_uint]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint),
+    ]
+    kernel32.GetExitCodeProcess.restype = ctypes.c_bool
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_bool
+    handle = kernel32.OpenProcess(0x1000, False, process_id)
+    if not handle:
+        return False
+    try:
+        exit_code = ctypes.c_uint()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            raise AssertionError("cannot inspect synthetic descendant process")
+        return exit_code.value == 259
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def terminate_synthetic_process_tree(process_id: int) -> None:
+    taskkill = shutil.which("taskkill.exe") or shutil.which("taskkill")
+    if taskkill is None:
+        raise AssertionError("taskkill is required for synthetic process cleanup")
+    subprocess.run(
+        [taskkill, "/PID", str(process_id), "/T", "/F"],
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if not windows_process_is_alive(process_id):
+            return
+        time.sleep(0.05)
+    raise AssertionError("synthetic descendant cleanup did not terminate the process tree")
+
+
+def observe_and_cleanup_synthetic_descendant(pid_path: Path) -> list[str]:
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and not pid_path.is_file():
+        time.sleep(0.05)
+    if not pid_path.is_file():
+        return ["descendant", "pid-missing"]
+    process_id = int(pid_path.read_text(encoding="utf-8").strip())
+    was_alive = windows_process_is_alive(process_id)
+    observation = [
+        "descendant",
+        (
+            "alive-before-harness-cleanup"
+            if was_alive
+            else "dead-before-harness-cleanup"
+        ),
+    ]
+    if was_alive:
+        terminate_synthetic_process_tree(process_id)
+    if windows_process_is_alive(process_id):
+        raise AssertionError("synthetic descendant survived harness cleanup")
+    return observation
 
 
 def copy_tooling_fixture(root: Path, *, url: str | None = None) -> Path:
@@ -118,6 +186,7 @@ def run_database_runner_with_supabase_capture(
     patched_bootstrap_exit_code: int = 0,
     include_patched_runtime: bool = True,
     include_fallback_decoys: bool = False,
+    bootstrap_spawns_inheriting_descendant: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     if patched_bootstrap_exit_code not in {0, 1, 2}:
         raise AssertionError("patched bootstrap exit code must be 0, 1, or 2")
@@ -136,6 +205,7 @@ def run_database_runner_with_supabase_capture(
 
         capture_path = root / "supabase-invocations.jsonl"
         runtime_path = root / "synthetic-docker-runtime.json"
+        descendant_pid_path = root / "synthetic-descendant.pid"
         runtime_path.write_text(
             json.dumps(
                 {
@@ -223,6 +293,21 @@ with open(os.environ["SEJONG_SYNTHETIC_SUPABASE_CAPTURE"], "a", encoding="utf-8"
 print({CHILD_OUTPUT_SENTINEL!r})
 print({CHILD_OUTPUT_SENTINEL!r}, file=sys.stderr)
 raise SystemExit(0)
+'''
+        if bootstrap_spawns_inheriting_descendant:
+            bootstrap_source += r'''
+$descendantStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+$descendantStartInfo.FileName = Join-Path $env:SystemRoot "System32\PING.EXE"
+$descendantStartInfo.Arguments = "-n 31 127.0.0.1"
+$descendantStartInfo.UseShellExecute = $false
+$descendantStartInfo.CreateNoWindow = $true
+$descendant = [System.Diagnostics.Process]::Start($descendantStartInfo)
+[System.IO.File]::WriteAllText(
+    $env:SEJONG_SYNTHETIC_DESCENDANT_PID,
+    [string]$descendant.Id,
+    (New-Object System.Text.UTF8Encoding($false))
+)
+Start-Sleep -Seconds 30
 '''
         bootstrap_source += f"exit {patched_bootstrap_exit_code}\n"
         (scripts / PATCHED_BOOTSTRAP_PATH.name).write_text(
@@ -496,6 +581,10 @@ raise SystemExit(0)
         environment["SEJONG_SYNTHETIC_STOP_LEAVES_RUNTIME"] = (
             "1" if stop_leaves_runtime else "0"
         )
+        if bootstrap_spawns_inheriting_descendant:
+            environment["SEJONG_SYNTHETIC_DESCENDANT_PID"] = str(
+                descendant_pid_path
+            )
         if full_path:
             environment["SEJONG_SYNTHETIC_FULL_PATH"] = "1"
             environment["SEJONG_SYNTHETIC_FAILURE_PHASE"] = failure_phase or ""
@@ -507,24 +596,59 @@ raise SystemExit(0)
             environment["SEJONG_DB_TEST_URL"] = environment[
                 "SEJONG_SYNTHETIC_INITIAL_BACKEND"
             ]
-        result = subprocess.run(
-            [
-                powershell_executable(),
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(runner),
-                *runner_arguments,
-            ],
-            cwd=root,
-            capture_output=True,
-            check=False,
-            encoding="utf-8",
-            errors="replace",
-            env=environment,
-            timeout=30,
-        )
+        runner_command = [
+            powershell_executable(),
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(runner),
+            *runner_arguments,
+        ]
+        descendant_observation: list[str] | None = None
+        harness_timed_out = False
+        if bootstrap_spawns_inheriting_descendant:
+            process = subprocess.Popen(
+                runner_command,
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=25)
+            except subprocess.TimeoutExpired:
+                harness_timed_out = True
+                descendant_observation = observe_and_cleanup_synthetic_descendant(
+                    descendant_pid_path
+                )
+                if process.poll() is None:
+                    process.kill()
+                stdout, stderr = process.communicate(timeout=5)
+            finally:
+                if descendant_observation is None:
+                    descendant_observation = observe_and_cleanup_synthetic_descendant(
+                        descendant_pid_path
+                    )
+            result = subprocess.CompletedProcess(
+                runner_command,
+                process.returncode,
+                stdout,
+                stderr,
+            )
+        else:
+            result = subprocess.run(
+                runner_command,
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+                timeout=30,
+            )
         invocations = []
         if capture_path.is_file():
             invocations = [
@@ -537,6 +661,10 @@ raise SystemExit(0)
                 for invocation in invocations
                 if not invocation or invocation[0] != "docker"
             ]
+        if descendant_observation is not None:
+            invocations.append(descendant_observation)
+        if harness_timed_out:
+            invocations.append(["runner", "test-harness-timeout"])
         return result, invocations
 
 
@@ -678,6 +806,54 @@ class PatchedDatabaseRunnerSelectionTests(unittest.TestCase):
                 ["bootstrap", "bootstrap_patched_supabase.ps1", "-VerifyOnly"],
             ],
         )
+
+    def test_database_child_timeout_terminates_inheriting_descendant_and_restores_environment(
+        self,
+    ) -> None:
+        script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")
+        verify_timeout_boundary = '''        -TimeoutMilliseconds 30000
+
+    Ensure-LocalDatabaseNetwork `'''
+        self.assertEqual(script.count(verify_timeout_boundary), 1)
+        short_timeout_source = script.replace(
+            verify_timeout_boundary,
+            '''        -TimeoutMilliseconds 10000
+
+    Ensure-LocalDatabaseNetwork `''',
+        )
+
+        started = time.monotonic()
+        result, invocations = run_database_runner_with_supabase_capture(
+            short_timeout_source,
+            full_path=True,
+            include_docker_invocations=True,
+            capture_patched_bootstrap=True,
+            bootstrap_spawns_inheriting_descendant=True,
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(result.stderr)
+        self.assertNotIn(CHILD_OUTPUT_SENTINEL, result.stdout)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "[START] step=PREFLIGHT-DOCKER",
+                "[PASS] step=PREFLIGHT-DOCKER",
+                "[START] step=VERIFY-SUPABASE-VERSION",
+                "[FAIL] step=DATABASE-CHILD reason=timeout code=2",
+            ],
+        )
+        self.assertEqual(
+            invocations,
+            [
+                ["docker", "version"],
+                ["bootstrap", "bootstrap_patched_supabase.ps1", "-VerifyOnly"],
+                ["environment", "restored", "restored"],
+                ["descendant", "dead-before-harness-cleanup"],
+            ],
+        )
+        self.assertLess(elapsed, 25)
 
     def test_missing_patched_runtime_never_uses_stock_or_path_decoys(self) -> None:
         script = DATABASE_RUNNER_PATH.read_text(encoding="utf-8")

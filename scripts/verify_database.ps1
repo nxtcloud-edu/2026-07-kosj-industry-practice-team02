@@ -50,6 +50,424 @@ function ConvertTo-NativeArgument {
     return $builder.ToString()
 }
 
+function Initialize-DatabaseJobSupport {
+    if ($null -ne ("SejongDatabaseRunner.NativeJob" -as [type])) {
+        return
+    }
+
+    $jobSource = @"
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
+
+namespace SejongDatabaseRunner
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SECURITY_ATTRIBUTES
+    {
+        public int Length;
+        public IntPtr SecurityDescriptor;
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool InheritHandle;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct STARTUPINFO
+    {
+        public int Cb;
+        public string Reserved;
+        public string Desktop;
+        public string Title;
+        public uint X;
+        public uint Y;
+        public uint XSize;
+        public uint YSize;
+        public uint XCountChars;
+        public uint YCountChars;
+        public uint FillAttribute;
+        public uint Flags;
+        public ushort ShowWindow;
+        public ushort Reserved2Length;
+        public IntPtr Reserved2;
+        public IntPtr StdInput;
+        public IntPtr StdOutput;
+        public IntPtr StdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_INFORMATION
+    {
+        public IntPtr Process;
+        public IntPtr Thread;
+        public uint ProcessId;
+        public uint ThreadId;
+    }
+
+    public sealed class ChildResult
+    {
+        public int ExitCode { get; set; }
+        public string Stdout { get; set; }
+        public string Stderr { get; set; }
+        public bool TimedOut { get; set; }
+    }
+
+    public static class NativeJob
+    {
+        public const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+        private const int JobObjectExtendedLimitInformation = 9;
+        private const uint CREATE_SUSPENDED = 0x00000004;
+        private const uint CREATE_NO_WINDOW = 0x08000000;
+        private const uint STARTF_USESTDHANDLES = 0x00000100;
+        private const uint HANDLE_FLAG_INHERIT = 0x00000001;
+        private const uint WAIT_TIMEOUT = 0x00000102;
+        private const uint WAIT_FAILED = 0xFFFFFFFF;
+        private const int STD_INPUT_HANDLE = -10;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateJobObject(IntPtr securityAttributes, string name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetInformationJobObject(
+            IntPtr job,
+            int informationClass,
+            ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION information,
+            uint informationLength
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CreatePipe(
+            out IntPtr readPipe,
+            out IntPtr writePipe,
+            ref SECURITY_ATTRIBUTES pipeAttributes,
+            uint size
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetHandleInformation(
+            IntPtr handle,
+            uint mask,
+            uint flags
+        );
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CreateProcess(
+            string applicationName,
+            StringBuilder commandLine,
+            IntPtr processAttributes,
+            IntPtr threadAttributes,
+            [MarshalAs(UnmanagedType.Bool)] bool inheritHandles,
+            uint creationFlags,
+            IntPtr environment,
+            string currentDirectory,
+            ref STARTUPINFO startupInfo,
+            out PROCESS_INFORMATION processInformation
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint ResumeThread(IntPtr thread);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GetStdHandle(int standardHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        private static IntPtr CreateKillOnCloseJob()
+        {
+            IntPtr job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION information =
+                new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+            information.BasicLimitInformation.LimitFlags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            uint length = (uint)Marshal.SizeOf(
+                typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)
+            );
+            if (!SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                ref information,
+                length
+            ))
+            {
+                int error = Marshal.GetLastWin32Error();
+                CloseHandle(job);
+                throw new Win32Exception(error);
+            }
+            return job;
+        }
+
+        private static bool WaitForOutput(Task[] tasks, int milliseconds)
+        {
+            try
+            {
+                return Task.WaitAll(tasks, milliseconds);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static ChildResult Run(
+            string applicationName,
+            string commandLine,
+            string workingDirectory,
+            int timeoutMilliseconds
+        )
+        {
+            IntPtr job = IntPtr.Zero;
+            IntPtr stdoutRead = IntPtr.Zero;
+            IntPtr stdoutWrite = IntPtr.Zero;
+            IntPtr stderrRead = IntPtr.Zero;
+            IntPtr stderrWrite = IntPtr.Zero;
+            PROCESS_INFORMATION processInformation = new PROCESS_INFORMATION();
+            StreamReader stdoutReader = null;
+            StreamReader stderrReader = null;
+            try
+            {
+                job = CreateKillOnCloseJob();
+                SECURITY_ATTRIBUTES pipeAttributes = new SECURITY_ATTRIBUTES();
+                pipeAttributes.Length = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+                pipeAttributes.InheritHandle = true;
+                if (!CreatePipe(
+                    out stdoutRead,
+                    out stdoutWrite,
+                    ref pipeAttributes,
+                    0
+                ) || !SetHandleInformation(stdoutRead, HANDLE_FLAG_INHERIT, 0))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                if (!CreatePipe(
+                    out stderrRead,
+                    out stderrWrite,
+                    ref pipeAttributes,
+                    0
+                ) || !SetHandleInformation(stderrRead, HANDLE_FLAG_INHERIT, 0))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                STARTUPINFO startupInfo = new STARTUPINFO();
+                startupInfo.Cb = Marshal.SizeOf(typeof(STARTUPINFO));
+                startupInfo.Flags = STARTF_USESTDHANDLES;
+                startupInfo.StdInput = GetStdHandle(STD_INPUT_HANDLE);
+                startupInfo.StdOutput = stdoutWrite;
+                startupInfo.StdError = stderrWrite;
+                StringBuilder mutableCommandLine = new StringBuilder(commandLine);
+                if (!CreateProcess(
+                    applicationName,
+                    mutableCommandLine,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    true,
+                    CREATE_SUSPENDED | CREATE_NO_WINDOW,
+                    IntPtr.Zero,
+                    workingDirectory,
+                    ref startupInfo,
+                    out processInformation
+                ))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                if (!AssignProcessToJobObject(job, processInformation.Process))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    TerminateProcess(processInformation.Process, 1);
+                    throw new Win32Exception(error);
+                }
+                if (ResumeThread(processInformation.Thread) == WAIT_FAILED)
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    TerminateJobObject(job, 1);
+                    throw new Win32Exception(error);
+                }
+                CloseHandle(processInformation.Thread);
+                processInformation.Thread = IntPtr.Zero;
+                CloseHandle(stdoutWrite);
+                stdoutWrite = IntPtr.Zero;
+                CloseHandle(stderrWrite);
+                stderrWrite = IntPtr.Zero;
+
+                SafeFileHandle stdoutHandle = new SafeFileHandle(stdoutRead, true);
+                stdoutRead = IntPtr.Zero;
+                SafeFileHandle stderrHandle = new SafeFileHandle(stderrRead, true);
+                stderrRead = IntPtr.Zero;
+                FileStream stdoutStream = new FileStream(
+                    stdoutHandle,
+                    FileAccess.Read,
+                    4096,
+                    false
+                );
+                FileStream stderrStream = new FileStream(
+                    stderrHandle,
+                    FileAccess.Read,
+                    4096,
+                    false
+                );
+                stdoutReader = new StreamReader(
+                    stdoutStream,
+                    new UTF8Encoding(false, false),
+                    true,
+                    4096
+                );
+                stderrReader = new StreamReader(
+                    stderrStream,
+                    new UTF8Encoding(false, false),
+                    true,
+                    4096
+                );
+                Task<string> stdoutTask = stdoutReader.ReadToEndAsync();
+                Task<string> stderrTask = stderrReader.ReadToEndAsync();
+                Task[] outputTasks = new Task[] { stdoutTask, stderrTask };
+
+                uint waitResult = WaitForSingleObject(
+                    processInformation.Process,
+                    (uint)timeoutMilliseconds
+                );
+                bool timedOut = waitResult == WAIT_TIMEOUT;
+                if (waitResult == WAIT_FAILED)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                if (timedOut)
+                {
+                    if (!TerminateJobObject(job, 1))
+                    {
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+                    }
+                    WaitForSingleObject(processInformation.Process, 5000);
+                }
+
+                bool outputDrained = WaitForOutput(outputTasks, 5000);
+                if (!outputDrained)
+                {
+                    TerminateJobObject(job, 1);
+                    WaitForSingleObject(processInformation.Process, 5000);
+                    outputDrained = WaitForOutput(outputTasks, 5000);
+                    timedOut = true;
+                }
+                if (!outputDrained)
+                {
+                    return new ChildResult {
+                        ExitCode = -1,
+                        Stdout = "",
+                        Stderr = "",
+                        TimedOut = true
+                    };
+                }
+
+                if (timedOut)
+                {
+                    return new ChildResult {
+                        ExitCode = -1,
+                        Stdout = stdoutTask.Result,
+                        Stderr = stderrTask.Result,
+                        TimedOut = true
+                    };
+                }
+                uint exitCode;
+                if (!GetExitCodeProcess(processInformation.Process, out exitCode))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                return new ChildResult {
+                    ExitCode = unchecked((int)exitCode),
+                    Stdout = stdoutTask.Result,
+                    Stderr = stderrTask.Result,
+                    TimedOut = false
+                };
+            }
+            finally
+            {
+                if (stdoutReader != null) stdoutReader.Dispose();
+                if (stderrReader != null) stderrReader.Dispose();
+                if (stdoutRead != IntPtr.Zero) CloseHandle(stdoutRead);
+                if (stdoutWrite != IntPtr.Zero) CloseHandle(stdoutWrite);
+                if (stderrRead != IntPtr.Zero) CloseHandle(stderrRead);
+                if (stderrWrite != IntPtr.Zero) CloseHandle(stderrWrite);
+                if (processInformation.Thread != IntPtr.Zero)
+                    CloseHandle(processInformation.Thread);
+                if (processInformation.Process != IntPtr.Zero)
+                    CloseHandle(processInformation.Process);
+                if (job != IntPtr.Zero) CloseHandle(job);
+            }
+        }
+    }
+}
+"@
+    $null = Add-Type -TypeDefinition $jobSource -Language CSharp -PassThru
+}
+
 function Invoke-DatabaseChild {
     param(
         [string]$FilePath,
@@ -58,47 +476,31 @@ function Invoke-DatabaseChild {
         [int]$TimeoutMilliseconds = 900000
     )
 
-    $process = $null
-    try {
-        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $startInfo.FileName = $FilePath
-        $startInfo.Arguments = (($Arguments | ForEach-Object {
-                    ConvertTo-NativeArgument -Value ([string]$_)
-                }) -join " ")
-        $startInfo.WorkingDirectory = $WorkingDirectory
-        $startInfo.UseShellExecute = $false
-        $startInfo.CreateNoWindow = $true
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $startInfo
-        if (-not $process.Start()) {
-            throw New-Object System.InvalidOperationException("child did not start")
-        }
-        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit($TimeoutMilliseconds)) {
-            try {
-                $process.Kill()
-                $process.WaitForExit()
-            }
-            catch {
-                # The parent reports only the stable timeout classification.
-            }
-            Throw-DatabaseGateFailure -Step "DATABASE-CHILD" -Reason "timeout" -Code 2
-        }
-        $standardOutput = $stdoutTask.GetAwaiter().GetResult()
-        $null = $stderrTask.GetAwaiter().GetResult()
-        return [pscustomobject]@{
-            ExitCode = [int]$process.ExitCode
-            Output = [string]$standardOutput
-        }
+    if ($TimeoutMilliseconds -le 0) {
+        Throw-DatabaseGateFailure -Step "DATABASE-CHILD" -Reason "operational" -Code 2
     }
-    finally {
-        if ($null -ne $process) {
-            $process.Dispose()
-        }
+
+    Initialize-DatabaseJobSupport
+    $quotedArguments = New-Object System.Collections.Generic.List[string]
+    foreach ($argument in @($Arguments)) {
+        $quotedArguments.Add((ConvertTo-NativeArgument -Value ([string]$argument)))
+    }
+    $commandLine = ConvertTo-NativeArgument -Value $FilePath
+    if ($quotedArguments.Count -gt 0) {
+        $commandLine += " " + ($quotedArguments -join " ")
+    }
+    $result = [SejongDatabaseRunner.NativeJob]::Run(
+        $FilePath,
+        $commandLine,
+        $WorkingDirectory,
+        $TimeoutMilliseconds
+    )
+    if ($result.TimedOut) {
+        Throw-DatabaseGateFailure -Step "DATABASE-CHILD" -Reason "timeout" -Code 2
+    }
+    return [pscustomobject]@{
+        ExitCode = [int]$result.ExitCode
+        Output = [string]$result.Stdout
     }
 }
 
