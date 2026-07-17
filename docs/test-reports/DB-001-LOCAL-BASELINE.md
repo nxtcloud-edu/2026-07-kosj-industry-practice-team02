@@ -5,7 +5,7 @@
 - Evidence baseline HEAD: `85067d04c3f498303d13426bf275e4196e8d5bdf`
 - Current semantic version: `database_schema=0.2.0-draft`; `0.3.0-local`은 미승격 후보
 - Scope: disposable local/private Supabase PostgreSQL candidate only
-- Verdict: BLOCKED — Q-SEC-006/A-024 explicit HostIP tooling and supply-chain boundary
+- Verdict: BLOCKED — Q-SEC-006=A/D-031 approved; patched tooling specification, plan, build, and actual full gate pending
 
 ## 결론
 
@@ -120,7 +120,7 @@ forward migration을 replay한 뒤 pgTAP과 backend integration을 다시 실행
 - initial Task 10 quality review: Critical/Important/Minor `1/4/0`; actual port finding reproduced,
   fail-closed runner implemented, Q-SEC-004/A-022 opened
 - runner remediation 뒤 fresh non-DB root/tooling/static gate: PASS; actual safe runtime/full DB gate와
-  independent completion review는 Q-SEC-006 해결 뒤 pending
+  independent completion review는 D-031 구현·검증 뒤 pending
 - Q-SEC-004=A/D-029 실제 재검증: `default-local-port-binding` 적용·완전 재시작 뒤 HostIP 미지정
   probe는 `127.0.0.1`+`::`, explicit `127.0.0.1` probe는 단일 loopback. 두 probe 제거, DB mutation 0.
 - Q-SEC-005=A/D-030 실제 재검증: `local-only-port-binding` 적용·재시작 뒤 HostIP 미지정 probe는
@@ -136,12 +136,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_pat
 git diff --check
 ```
 
-Q-SEC-006 해결 전 `verify_database.ps1`이나 direct Supabase start를 실행하지 않는다.
+Q-SEC-006=A 결정만으로 `verify_database.ps1`이나 direct Supabase start를 실행하지 않는다.
+서면 patched CLI 명세와 별도 실행계획 승인 뒤 exact pinned binary가 준비돼야 한다.
 
 ## 해석 제한과 다음 gate
 
 - 공식 KB/기관 seed는 PM 승인 목표 2026-07-20 전까지 0이다.
-- Q-SEC-006/A-024 해결, explicit HostIP 공급망 검증, exact single loopback binding과 fresh full DB gate 전
+- Q-SEC-006=A/D-031의 explicit HostIP 공급망 검증, exact single loopback binding과 fresh full DB gate 전
   manifest를 `0.3.0-local`로 승격하지 않는다.
 - 이 보고서의 282/282·8/8·rollback/replay는 port finding 전 역사적 기능 증거이며 현재 active
   local baseline이나 후속 dependency 해제 근거가 아니다.

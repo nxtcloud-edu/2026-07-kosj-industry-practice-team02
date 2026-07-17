@@ -1,6 +1,6 @@
 # DB-001 Layered Database Enforcement Design
 
-- Status: Approved; Tasks 0~9 complete, Q-SEC-004/005 remediations insufficient, Task 10 blocked by Q-SEC-006/A-024 before tooling supply-chain change and local-baseline promotion
+- Status: Approved; Tasks 0~9 complete, Q-SEC-006=A/D-031 approved, Task 10 blocked pending patched CLI spec/plan/build/full gate and local-baseline promotion
 - Date: 2026-07-16 (KST)
 - Approved approach: Q-DB-002=A, Q-SEC-002=A, Q-WF-001=A on 2026-07-16; Q-DB-003=A on 2026-07-17
 - Related: D-025/D-026/D-027/D-028, ADR-0003/0004/0007/0008/0011/0012, TASK DB-001
@@ -244,7 +244,7 @@ The implementation plan will use these responsibilities:
 
 Migration filenames use Supabase timestamp order. Timestamp lineage is not a semantic version. The logical
 projection describes a `0.3.0-local` candidate, but the active manifest remains `0.2.0-draft`. Only after
-Q-SEC-006/A-024 is resolved and the exact loopback/full gate and independent reviews pass may
+D-031's patched CLI is implemented and the exact loopback/full gate and independent reviews pass may
 `database_schema` move to `0.3.0-local`.
 
 Applied and committed migrations `20260716000100` through `20260716000500` are immutable. Candidate workflow/audit refinement is `20260716000400_candidate_workflow.sql`; citizen indexes/read interfaces are `20260716000500_indexes_and_read_interfaces.sql`. Q-DB-003=A adds `20260717000600_deferred_active_question_trigger_security.sql`, which changes only `app_private.validate_active_kb_question()` to SECURITY DEFINER, reasserts owner `sejong_schema_owner`, pins exact `search_path=pg_catalog, pg_temp`, and revokes direct EXECUTE from PUBLIC, browser roles, and backend. It does not rewrite the function body, grant private access, or change public API, tables, data, seed, dependencies, retention, or readiness.
@@ -313,7 +313,7 @@ The bootstrap script rechecks official release metadata during implementation. I
 
 The Q-SEC-002/Q-WF-001 refinement changes documentation from `2.3.13` to `2.3.14`. Application, API, shared contract, DB, data, prompt, and test versions stay unchanged.
 
-The later approved implementation is expected to change these axes only after Q-SEC-006/A-024 and every
+The later approved implementation is expected to change these axes only after D-031 implementation and every
 fresh completion gate pass. Until then every manifest value remains unchanged:
 
 - `repo_guidance`: `1.4.0` → `1.5.0` for pinned DB tooling and verification
@@ -325,4 +325,4 @@ It does not change the OpenAPI wire contract or add a production dependency.
 
 ## 13. Acceptance and next gate
 
-The user approved this written specification and execution plan on 2026-07-16. Tasks 0~9 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9A's historical evidence is focused 8/8, full pgTAP `Files=6, Tests=282`, six-stage compensation/replay, and real integration 8/8. Task 10 created candidate authority/report/handoff documentation, but quality review found actual wildcard Docker publishing. Q-SEC-004=A/D-029 applied `default-local-port-binding` and Q-SEC-005=A/D-030 applied `local-only-port-binding`; both actual HostIP-omitted probes still resolved to `127.0.0.1` plus IPv6 wildcard `::`, while explicit `127.0.0.1` controls were single-loopback. Q-SEC-006/A-024 therefore blocks a new local CLI/toolchain supply-chain change, further Supabase DB runtime, manifest/dependency promotion, final review, and completion commit; `database_schema=0.2.0-draft` remains active. A-021/Q-SEC-003 default B separately prohibits remote/public deployment, public admin/API, public backend DB credentials, and an unapproved `00700`.
+The user approved this written specification and execution plan on 2026-07-16. Tasks 0~9 are complete. Q-SEC-002=A accepted the fail-closed role model, Q-WF-001=A selected the separate reason-confirmation capability, and Q-DB-003=A resolved the Task 9 approval blocker. Task 9A's historical evidence is focused 8/8, full pgTAP `Files=6, Tests=282`, six-stage compensation/replay, and real integration 8/8. Task 10 created candidate authority/report/handoff documentation, but quality review found actual wildcard Docker publishing. Q-SEC-004=A/D-029 applied `default-local-port-binding` and Q-SEC-005=A/D-030 applied `local-only-port-binding`; both actual HostIP-omitted probes still resolved to `127.0.0.1` plus IPv6 wildcard `::`, while explicit `127.0.0.1` controls were single-loopback. Q-SEC-006=A/D-031 selected the exact-source project-local patched CLI. Its written spec review, separate execution plan approval, build/hash and actual full gate now block further Supabase DB runtime, manifest/dependency promotion, final review, and completion commit; `database_schema=0.2.0-draft` remains active. A-021/Q-SEC-003 default B separately prohibits remote/public deployment, public admin/API, public backend DB credentials, and an unapproved `00700`.

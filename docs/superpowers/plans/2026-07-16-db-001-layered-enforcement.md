@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: Blocked — Tasks 0~9 complete; Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 applied but insufficient, and Task 10 is stopped at Q-SEC-006/A-024 before tooling supply-chain change, version/dependency promotion, fresh DB verification, review, and completion commit
+- Status: Blocked — Tasks 0~9 complete; Q-SEC-006=A/D-031 approved, and Task 10 awaits patched CLI spec review plus a separate approved execution plan before tooling/build, version/dependency promotion, fresh DB verification, review, and completion commit
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -22,7 +22,7 @@
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012
 - Task 9A remediation plan: `docs/superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md`
 - Logical projection target: `database/schema-v1.draft.sql` describes the non-active `0.3.0-local` candidate; executable authority remains timestamp migrations
-- Conditional implementation target after Q-SEC-006/A-024 and all gates: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
+- Conditional implementation target after D-031 implementation and all gates: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
 - Execution gate: no task below starts until the user explicitly approves this plan.
 - Execution mode: the user's recorded preference makes subagent-driven development the default. A fresh implementation agent handles one task, then specification and code-quality review occur before the next task.
 - Scope guard: no official seed, DeepSeek call, public route, readiness 200 transition, remote link/push, cloud resource, production auth, or new production dependency is authorized.
@@ -1596,7 +1596,7 @@ git commit -m "test(db): verify rollback replay and concurrent approval"
 - Modify: `CODEX_FILE_INDEX.md`
 - Modify: `README.md`
 - Modify: `TASKS.md`
-- Inspect and preserve unchanged while A-024 is open: `versions/manifest.json`
+- Inspect and preserve DB/repo/test axes unchanged until D-031 exact runtime/full gate passes: `versions/manifest.json`
 - Modify: `CHANGELOG.md`
 - Create: `docs/test-reports/DB-001-LOCAL-BASELINE.md`
 - Modify: `docs/test-reports/README.md`
@@ -1624,7 +1624,7 @@ Official seed authority: not populated; DATA-SEED-001 remains blocked on PM-appr
 
 Document exact bootstrap, runner-owned loopback start, full DB verify, optional stop, local credential rotation, rollback/replay, and no-seed readiness behavior. The runner must reject Docker Engine below 28 and any network/container/runtime binding drift before reset or credential handling. Explicitly warn that the local stack has default development credentials, no TLS/rate limits, and must not be publicly exposed. Preserve separate approval gates for remote DB, public admin, data deletion, production backup, and CORS/domain changes.
 
-- [ ] **Step 3: Update task state, dependencies, and versions only after fresh safe-runtime evidence passes — BLOCKED by Q-SEC-006/A-024**
+- [ ] **Step 3: Update task state, dependencies, and versions only after fresh safe-runtime evidence passes — BLOCKED pending D-031 implementation/full gate**
 
 Set DB-001 to Done only after Task 9 evidence plus the Task 10 exact-loopback/full-gate/review evidence.
 Unblock dependencies only by replacing `DB-001` with their remaining real dependencies; do not mark
@@ -1633,7 +1633,7 @@ DATA-001, DATA-SEED-001, READY-001, AI-001, LOG-001, or BACKUP-001 done.
 Task 9 evidence alone is insufficient after the Task 10 port finding. Q-SEC-004=A/D-029 applied
 `default-local-port-binding` and Q-SEC-005=A/D-030 applied `local-only-port-binding`, but both actual
 HostIP-omitted probes resolved to `127.0.0.1` plus IPv6 wildcard `::`. Explicit `127.0.0.1` controls were
-single-loopback. While A-024 is open, keep DB-001
+single-loopback. Until D-031 implementation and the exact gate pass, keep DB-001
 Blocked, preserve every downstream `DB-001` dependency, and keep every manifest axis at its current HEAD
 value. Apply the following promotion only after exact single-loopback runtime, fresh full DB/root/static
 verification, and independent reviews all pass.
@@ -1671,11 +1671,11 @@ git diff --exit-code -- PACKAGE_MANIFEST.json
 rg --files -g '!legacy/**' -g '!.tools/**' -g '!supabase/.temp/**' -g '!supabase/.branches/**'
 ```
 
-Expected: the original package snapshot and `versions/manifest.json` are unchanged while the blocker is
-open. The active file inventory contains all DB-001 tracked files while ignored `.tools/`, `.env`, Supabase
-temporary directories, Docker state, and backups are absent.
+Expected: the original package snapshot is unchanged. The manifest's DB/repo/test axes stay unpromoted;
+documentation may advance for D-031 design lineage. The active file inventory contains all DB-001 tracked
+files while ignored `.tools/`, `.env`, Supabase temporary directories, Docker state, and backups are absent.
 
-- [ ] **Step 6: Run final verification-before-completion — BLOCKED; do not run Supabase DB before Q-SEC-006 is resolved**
+- [ ] **Step 6: Run final verification-before-completion — BLOCKED; do not run Supabase DB before D-031's separate implementation plan is approved and exact binary is ready**
 
 Invoke `superpowers:verification-before-completion`, then run:
 
@@ -1746,7 +1746,7 @@ Work stops and returns to the user before any of these changes:
 - `apps/api/.env` is ignored and preserved. If local credential provisioning fails, rerun it after reset; do not copy credentials into tracked files.
 - Official data has no row in this plan, so rollback cannot delete PM-approved official records.
 
-## Conditional completion state after Q-SEC-006/A-024 is resolved
+## Conditional completion state after D-031 is implemented and verified
 
 - DB-001 is Done with reproducible local evidence.
 - PostgreSQL and FastAPI both enforce the approved structural safety rules.
@@ -1760,4 +1760,4 @@ Work stops and returns to the user before any of these changes:
 - DB-001 remains Blocked and `database_schema=0.2.0-draft` remains active.
 - `0.3.0-local` logical projection, report, and handoff are non-active candidate artifacts.
 - DATA-SEED-001, READY-001, LOG-001, and BACKUP-001 retain their `DB-001` dependencies.
-- Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 are recorded but neither met the actual IPv6 boundary. Q-SEC-006/A-024 default C forbids further Supabase DB runtime work until the human chooses a tooling path.
+- Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 are recorded but neither met the actual IPv6 boundary. Q-SEC-006=A/D-031 selected the tooling path; its written spec review and separate execution-plan approval still forbid further Supabase DB runtime work.

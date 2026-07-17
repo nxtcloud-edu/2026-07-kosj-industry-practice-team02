@@ -56,13 +56,13 @@ DB-001 Task 10은 host port security blocker로 완료되지 않았다. 현재 m
 repo_guidance: 1.4.0
 database_schema: 0.2.0-draft
 test_suite: 0.4.2-readiness-contract
-documentation: 2.3.14
+documentation: 2.3.15
 ```
 
 `0.3.0-local`은 6개 timestamp forward migration뿐 아니라 exact loopback runtime, full DB/root
 gate와 independent review가 모두 통과한 뒤에만 사용할 후보다. Q-SEC-004=A의
 `default-local-port-binding`과 Q-SEC-005=A의 `local-only-port-binding`도 actual IPv6 wildcard
-`::`를 남겼으므로 Q-SEC-006/A-024 해결 전
+`::`를 남겼다. Q-SEC-006=A/D-031의 patched CLI source/toolchain/binary와 actual full gate 전에는
 승격하지 않는다. 공식
 데이터·mock 데이터는 모두 `0.0.0-not-populated`이고 A-021/Q-SEC-003은 별도 public blocker다.
 

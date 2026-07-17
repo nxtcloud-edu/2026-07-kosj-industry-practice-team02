@@ -20,3 +20,4 @@
 - 0010: 서버 세션 없는 서명형 client-carried 대화 문맥
 - 0011: DB와 백엔드의 계층형 안전 규칙 강제
 - 0012: deferred ACTIVE-question trigger의 제한된 SECURITY DEFINER 실행
+- 0013: project-local patched Supabase CLI 공급망

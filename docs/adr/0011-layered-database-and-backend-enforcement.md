@@ -1,6 +1,6 @@
 # ADR-0011: DB와 백엔드의 계층형 안전 규칙 강제
 
-- Status: Accepted design; implementation candidate blocked by A-024/Q-SEC-006 before `0.3.0-local`
+- Status: Accepted design; Q-SEC-006=A/D-031 approved, patched CLI/full gate pending before `0.3.0-local`
 - Date: 2026-07-16
 - Deciders: 사용자, Codex
 - Related: Q-DB-002, Q-SEC-002, Q-WF-001, D-025/D-026/D-027, ADR-0003/0004/0007/0008, DB-001
@@ -92,6 +92,6 @@ compensation/absence/reset/replay의 역사적 기능 증거가 있다. 그러�
 port가 wildcard로 해석됐으므로 runner는 reset 전에 fail-closed했고 manifest는
 `0.2.0-draft`를 유지한다. Q-SEC-004=A/D-029의 `default-local-port-binding`과
 Q-SEC-005=A/D-030의 `local-only-port-binding`도 actual `127.0.0.1`+`::`를 남겼다.
-Q-SEC-006/A-024 해결, exact single `127.0.0.1:54322`, full
+Q-SEC-006=A/D-031의 patched CLI 구현, exact single `127.0.0.1:54322`, full
 DB/root/static gate와 independent review 뒤에만 `0.3.0-local`로 기록한다. A-021/Q-SEC-003은
 별도 public-release blocker이며 `00700`을 인간 결정 없이 추가하지 않는다.
