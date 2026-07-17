@@ -81,7 +81,8 @@
   loopback이었다. 현재 `local-only-port-binding`을 유지하되 완료 근거로 사용하지 않는다.
   Q-SEC-006=A/D-031에 따라 official v2.109.1 exact source의 local DB start HostIP만
   `127.0.0.1`로 지정하는 project-local CLI를 tag/commit·patch·Go 1.25.11·binary SHA-256으로
-  pin한다. stock CLI는 보존하며 서면 설계·실행계획·검증 전 runtime/DB 후속 작업을 차단한다.
+  pin한다. stock CLI는 보존한다. 서면 설계는 2026-07-17 승인됐고 실행계획 승인·검증 전
+  runtime/DB 후속 작업을 차단한다.
 - DB public release 경계: Q-SEC-003은 미응답이며 기본값 B를 적용한다. privileged function
   graph 22개 중 `00600` validator 외 21개의 search path hardening이 남아 있으므로 remote/public
   배포, public admin/API, public backend DB credential 사용을 차단한다. 인간 결정 전 `00700`을

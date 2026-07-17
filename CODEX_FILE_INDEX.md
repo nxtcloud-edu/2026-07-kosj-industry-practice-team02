@@ -31,6 +31,8 @@
 | `docs/superpowers/plans/` | 승인된 명세를 TDD 실행 단위·명령·검증·commit으로 분해한 구현계획 |
 | `docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md` | 승인된 전체 실행계획과 단계별 gate |
 | `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~9 완료, Q-SEC-004/005 보정은 불충분했고 Task 10은 Q-SEC-006/A-024로 차단 |
+| `docs/superpowers/specs/2026-07-17-q-sec-006-patched-supabase-cli-design.md` | 승인된 exact source·Go·patch·binary hash·actual loopback 공급망 명세 |
+| `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` | 검토 중인 5-task TDD/build/runtime/full-gate 실행계획; 승인 전 구현 금지 |
 
 ## 모든 작업 후 갱신할 파일
 

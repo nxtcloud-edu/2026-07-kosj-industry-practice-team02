@@ -1,6 +1,6 @@
 # Q-SEC-006 project-local patched Supabase CLI 설계
 
-- Status: Review requested
+- Status: Approved by user on 2026-07-17; implementation plan review pending
 - Date: 2026-07-17
 - Decision: Q-SEC-006=A / D-031 / ADR-0013
 - Scope: DB-001 Task 10의 local/private 개발 환경만
@@ -186,5 +186,5 @@ artifact를 제거하고 기존 fail-closed DB 차단 상태로 복원한다. `.
 binary는 재생성 가능하므로 안전 경로 확인 후 삭제할 수 있으며 tracked patch·manifest·script는
 commit revert로 철회한다. DB migration/data 삭제는 없다.
 
-이 문서 승인 뒤 `PLANS.md` 형식의 exact 실행계획을 별도 작성한다. 그 계획이 승인되기 전에는
+사용자가 이 문서를 승인해 `PLANS.md` 형식의 exact 실행계획을 별도 작성했다. 그 계획이 승인되기 전에는
 Go 설치, source patch/build, actual DB start/reset 또는 제품 코드 변경을 시작하지 않는다.

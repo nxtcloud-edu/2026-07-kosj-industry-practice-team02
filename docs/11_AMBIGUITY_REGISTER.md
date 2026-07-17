@@ -27,7 +27,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-021 | B | 기존 DB function 보안 | Open / Deferred — local Task 9 blocker 아님, public release blocker | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. data-type shadow DoS는 high-confidence plausible, privilege escalation은 conservative medium-confidence inference이며 exploit은 재현하지 않았다. | Q-SEC-003 A 추천: exact 22 signatures에 새 `00700` property-only migration. B/default: local-only 완료는 허용하되 remote/public 배포·public admin/API·public backend DB credential은 해결 전 차단 |
 | A-022 | A | local Docker port 보안 1차 결정 | Resolved decision / remediation insufficient | Q-SEC-004=A로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용·재시작했다. 빈 HostIP probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었고 explicit `127.0.0.1` probe만 단일 loopback이었다. | D-029; 승인 결정은 기록하되 exact local 완료 근거로 사용하지 않음 |
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
-| A-024 | A | local Supabase CLI port 공급망 | Resolved decision / implementation gated | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin한다. | D-031 / ADR-0013; 서면 설계·실행계획·검증 전 DB runtime/manifest 승격 차단 |
+| A-024 | A | local Supabase CLI port 공급망 | Resolved decision / plan approval gated | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin한다. 서면 명세는 승인됐다. | D-031 / ADR-0013; 실행계획 승인·구현·검증 전 DB runtime/manifest 승격 차단 |
 
 ## 우선도 정의
 
@@ -41,8 +41,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
 publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 남겼으므로 DB-001은
-`0.3.0-local` 후보를 아직 승격하지 않는다. A-024는 D-031/ADR-0013으로 결정됐지만 서면
-설계 검토·실행계획·실제 검증 gate가 남아 local 완료는 계속 차단된다. A-021은 B/High
+`0.3.0-local` 후보를 아직 승격하지 않는다. A-024는 D-031/ADR-0013으로 결정되고 서면
+명세도 승인됐지만 실행계획 승인·구현·실제 검증 gate가 남아 local 완료는 계속 차단된다. A-021은 B/High
 public-release blocker다.
 
 ## 열린 인터뷰 질문
@@ -60,7 +60,7 @@ Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전
 Q-SEC-006. stock Supabase CLI의 DB publish 요청을 project-scoped explicit IPv4 loopback으로 바꿀 것인가
 - 결정: A / D-031 / ADR-0013. 사용자가 2026-07-17 `Q-SEC-006: A`라고 명시했다.
 - 선택: official v2.109.1 exact source에서 local DB start HostIP만 `127.0.0.1`로 지정하고 source/tag/commit, patch, Go 1.25.11 archive, clean-build binary SHA-256을 project-local manifest로 pin한다.
-- 영향: exact port gate와 stock CLI를 유지한다. 서면 설계와 별도 실행계획 승인, TDD/build/actual full gate 전에는 DB runtime·schema version 승격을 시작하거나 완료로 부르지 않는다. 공개 API·migration·data·production dependency는 변하지 않는다.
+- 영향: exact port gate와 stock CLI를 유지한다. 서면 설계는 승인됐으며 별도 실행계획 승인, TDD/build/actual full gate 전에는 DB runtime·schema version 승격을 시작하거나 완료로 부르지 않는다. 공개 API·migration·data·production dependency는 변하지 않는다.
 
 Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하는 더 강한 전역 정책을 승인할 것인가
 - 결정: A / D-030. 사용자가 2026-07-17 `Q-SEC-005: A`라고 명시했다.

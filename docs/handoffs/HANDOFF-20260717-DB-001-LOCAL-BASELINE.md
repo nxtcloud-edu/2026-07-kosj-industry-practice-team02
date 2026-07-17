@@ -4,7 +4,7 @@
 - Branch/commit: `codex/db-001-layered-enforcement` / functional evidence baseline `85067d0`,
   blocked-security checkpoint `8a2abe4`; Q-SEC-006=A/D-031 design sync pending commit
 - Current manifest: repo guidance `1.4.0`, database `0.2.0-draft`, tests
-  `0.4.2-readiness-contract`, docs `2.3.15`; `0.3.0-local`은 미승격 후보
+  `0.4.2-readiness-contract`, docs `2.3.16`; `0.3.0-local`은 미승격 후보
 - Scope: local PostgreSQL candidate; D-031 patched CLI spec/plan/build/actual gate 전 runtime 사용 금지
 
 ## 구현된 후보 범위

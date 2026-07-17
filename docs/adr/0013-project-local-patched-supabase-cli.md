@@ -1,6 +1,6 @@
 # ADR-0013: project-local patched Supabase CLI 공급망
 
-- Status: Accepted; implementation pending written spec and plan approval
+- Status: Accepted; written spec approved, implementation plan review pending
 - Date: 2026-07-17
 - Deciders: 사용자, Codex
 - Related: Q-SEC-006, D-031, A-024, ADR-0002/0007/0008/0011, DB-001 Task 10
