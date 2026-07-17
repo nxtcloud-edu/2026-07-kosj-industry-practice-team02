@@ -946,6 +946,23 @@ if (
     [Console]::Error.WriteLine("legacy-deny-body-has-active-operation")
     exit 1
 }
+$bodyStatements = @($enclosingForEach.Body.Statements)
+if (
+    $bodyStatements.Count -ne 3 -or
+    $bodyStatements[0] -isnot
+        [System.Management.Automation.Language.AssignmentStatementAst] -or
+    $bodyStatements[1] -isnot
+        [System.Management.Automation.Language.AssignmentStatementAst] -or
+    $bodyStatements[2] -isnot
+        [System.Management.Automation.Language.IfStatementAst] -or
+    $bodyStatements[0].Left.VariablePath.UserPath -cne "mutableRoot" -or
+    $bodyStatements[1].Left.VariablePath.UserPath -cne "canonicalMutableRoot" -or
+    $bodyStatements[2].Clauses.Count -ne 1 -or
+    $null -ne $bodyStatements[2].ElseClause
+) {
+    [Console]::Error.WriteLine("legacy-deny-body-shape-changed")
+    exit 1
+}
 $memberCalls = @($enclosingForEach.Body.FindAll(
     {
         param($node)
@@ -1062,6 +1079,42 @@ foreach ($command in @($ast.FindAll(
             self.assertIn(
                 "legacy-deny-body-has-active-operation",
                 mutation_result.stderr,
+            )
+
+            alias_marker = (
+                "$canonicalMutableRoot = "
+                "Resolve-PatchedCanonicalComparisonPath $mutableRoot"
+            )
+            loop_end_marker = (
+                "        }\n"
+                "    }\n"
+                "    else {\n"
+                '        $cacheDirectory = Resolve-SafeChildPath '
+                '$script:ToolRoot "cache"'
+            )
+            self.assertEqual(script.count(alias_marker), 1)
+            self.assertEqual(script.count(loop_end_marker), 1)
+            alias_mutated = script.replace(
+                alias_marker,
+                "$escapedLegacyRoot = $mutableRoot\n            " + alias_marker,
+                1,
+            ).replace(
+                loop_end_marker,
+                "        }\n"
+                "        Remove-OwnedPath $script:ToolRoot $escapedLegacyRoot\n"
+                "    }\n"
+                "    else {\n"
+                '        $cacheDirectory = Resolve-SafeChildPath '
+                '$script:ToolRoot "cache"',
+                1,
+            )
+            alias_mutated_path = root / "legacy_alias_delete_regression.ps1"
+            alias_mutated_path.write_text(alias_mutated, encoding="utf-8")
+            alias_mutation_result = run_ast_audit(alias_mutated_path)
+            self.assertNotEqual(alias_mutation_result.returncode, 0)
+            self.assertIn(
+                "legacy-deny-body-shape-changed",
+                alias_mutation_result.stderr,
             )
 
     def test_verify_only_without_runtime_manifest_is_non_mutating(self) -> None:
