@@ -1537,7 +1537,7 @@ function Build-PatchedSupabase {
         "-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1",
         "-o",
         $outputPath,
-        "."
+        "main.go"
     ) $goWorkingDirectory 900000
     Assert-PatchedChildSuccess $buildResult $script:CurrentStep
     Test-PatchedSupabaseVersion $outputPath
@@ -1556,6 +1556,25 @@ function Assert-InstalledPatchedBinary {
         Throw-PatchedBootstrapFailure $script:CurrentStep "integrity" 1
     }
     Test-PatchedSupabaseVersion $binaryPath
+}
+
+function Replace-PatchedFileWithBackup {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [string]$Backup
+    )
+
+    [System.IO.File]::Replace($Source, $Destination, $Backup, $true)
+}
+
+function Restore-PatchedFileFromBackup {
+    param(
+        [string]$Backup,
+        [string]$Destination
+    )
+
+    [System.IO.File]::Replace($Backup, $Destination, $null, $true)
 }
 
 function Install-PatchedSupabaseBinary {
@@ -1588,7 +1607,7 @@ function Install-PatchedSupabaseBinary {
     $preserveBackup = $false
     try {
         if ($hadExisting) {
-            [System.IO.File]::Replace($Candidate, $finalPath, $backupPath, $true)
+            Replace-PatchedFileWithBackup $Candidate $finalPath $backupPath
         }
         else {
             [System.IO.File]::Move($Candidate, $finalPath)
@@ -1609,7 +1628,7 @@ function Install-PatchedSupabaseBinary {
         if ($hadExisting) {
             if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
                 try {
-                    [System.IO.File]::Replace($backupPath, $finalPath, $null, $true)
+                    Restore-PatchedFileFromBackup $backupPath $finalPath
                     $rollbackRestored = $true
                 }
                 catch {

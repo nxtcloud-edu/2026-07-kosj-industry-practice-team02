@@ -480,16 +480,290 @@ class PatchedBootstrapContractTests(unittest.TestCase):
             finally:
                 os.rmdir(alias)
 
+    def test_build_uses_exact_official_main_go_argv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong build argv ") as directory:
+            root = Path(directory)
+            harness = root / "build_argv_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap, [string]$Root)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$wanted = @(
+    "Throw-PatchedBootstrapFailure",
+    "Resolve-SafeChildPath",
+    "Remove-OwnedPath",
+    "Build-PatchedSupabase"
+)
+foreach ($functionAst in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $wanted -contains $node.Name
+    },
+    $true
+))) {
+    . ([ScriptBlock]::Create($functionAst.Extent.Text))
+}
+$script:ToolRoot = Join-Path $Root ".tools"
+$script:GoExecutable = "approved-go.exe"
+$script:CurrentStep = "TEST-BUILD-ARGV"
+$checkout = Join-Path $Root "checkout"
+$workingDirectory = Join-Path $checkout "apps/cli-go"
+$null = New-Item -ItemType Directory -Path $workingDirectory -Force
+$null = New-Item -ItemType Directory -Path $script:ToolRoot -Force
+$script:CapturedFilePath = $null
+$script:CapturedArguments = $null
+$script:CapturedWorkingDirectory = $null
+$script:CapturedTimeout = $null
+function Invoke-PatchedChild {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$WorkingDirectory,
+        [int]$TimeoutMilliseconds
+    )
+    $script:CapturedFilePath = $FilePath
+    $script:CapturedArguments = @($Arguments)
+    $script:CapturedWorkingDirectory = $WorkingDirectory
+    $script:CapturedTimeout = $TimeoutMilliseconds
+    return [pscustomobject]@{
+        ExitCode = 0
+        Stdout = ""
+        Stderr = ""
+        TimedOut = $false
+    }
+}
+function Assert-PatchedChildSuccess {
+    param([object]$Result, [string]$Step)
+}
+function Test-PatchedSupabaseVersion {
+    param([string]$BinaryPath)
+}
+$relativeOutput = "supabase-build/candidate.exe"
+$expectedOutput = [System.IO.Path]::GetFullPath(
+    (Join-Path $script:ToolRoot $relativeOutput)
+)
+$null = Build-PatchedSupabase $checkout $relativeOutput
+$expectedArguments = @(
+    "build",
+    "-trimpath",
+    "-buildvcs=false",
+    "-ldflags",
+    "-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1",
+    "-o",
+    $expectedOutput,
+    "main.go"
+)
+$matches = $script:CapturedArguments.Count -eq $expectedArguments.Count
+if ($matches) {
+    for ($index = 0; $index -lt $expectedArguments.Count; $index += 1) {
+        if ($script:CapturedArguments[$index] -cne $expectedArguments[$index]) {
+            $matches = $false
+            break
+        }
+    }
+}
+if (
+    -not $matches -or
+    $script:CapturedFilePath -cne "approved-go.exe" -or
+    $script:CapturedWorkingDirectory -cne $workingDirectory -or
+    $script:CapturedTimeout -ne 900000
+) {
+    [Console]::Error.WriteLine(
+        "unexpected-build-argv=" +
+        ($script:CapturedArguments | ConvertTo-Json -Compress)
+    )
+    exit 1
+}
+[Console]::Out.WriteLine("BUILD-ARGV-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(root),
+                ],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip(), "BUILD-ARGV-OK")
+            self.assertFalse(result.stderr)
+
     def test_install_rollback_preserves_backup_on_restore_failure(self) -> None:
-        script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
-        for token in (
-            "$replacementCompleted = $false",
-            "$rollbackRestored = $false",
-            "$preserveBackup = $true",
-            "if (-not $preserveBackup",
-            '"INSTALL-PATCHED-SUPABASE" "operational" 2',
-        ):
-            self.assertIn(token, script)
+        with tempfile.TemporaryDirectory(prefix="sejong rollback recovery ") as directory:
+            root = Path(directory)
+            harness = root / "rollback_recovery_harness.ps1"
+            harness.write_text(
+                r"""
+param([string]$Bootstrap, [string]$Root)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$wanted = @(
+    "Throw-PatchedBootstrapFailure",
+    "Resolve-SafeChildPath",
+    "Remove-OwnedPath",
+    "Get-PatchedSha256",
+    "Install-PatchedSupabaseBinary"
+)
+foreach ($functionAst in @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $wanted -contains $node.Name
+    },
+    $true
+))) {
+    . ([ScriptBlock]::Create($functionAst.Extent.Text))
+}
+$script:RepositoryRoot = [System.IO.Path]::GetFullPath($Root)
+$script:ToolRoot = Join-Path $script:RepositoryRoot ".tools"
+$script:CurrentStep = "INSTALL-PATCHED-SUPABASE"
+$candidate = Join-Path $script:ToolRoot "supabase-build/candidate.exe"
+$relativeFinal = ".tools/supabase/v2.109.1-sejong-loopback/supabase.exe"
+$final = Join-Path $script:RepositoryRoot $relativeFinal
+$null = New-Item -ItemType Directory -Path (Split-Path -Parent $candidate) -Force
+$null = New-Item -ItemType Directory -Path (Split-Path -Parent $final) -Force
+$knownGood = [System.Text.Encoding]::UTF8.GetBytes("known-good-stock-binary")
+$candidateBytes = [System.Text.Encoding]::UTF8.GetBytes("invalid-new-candidate")
+[System.IO.File]::WriteAllBytes($final, $knownGood)
+[System.IO.File]::WriteAllBytes($candidate, $candidateBytes)
+$runtimeManifest = [pscustomobject]@{
+    relative_path = $relativeFinal
+    sha256 = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+$script:ReplaceCalls = 0
+$script:RestoreCalls = 0
+function Replace-PatchedFileWithBackup {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [string]$Backup
+    )
+    $script:ReplaceCalls += 1
+    [System.IO.File]::Replace($Source, $Destination, $Backup, $true)
+}
+function Restore-PatchedFileFromBackup {
+    param([string]$Backup, [string]$Destination)
+    $script:RestoreCalls += 1
+    throw (New-Object System.InvalidOperationException("forced restore failure"))
+}
+function Assert-InstalledPatchedBinary {
+    param([object]$RuntimeManifest)
+    Throw-PatchedBootstrapFailure "VERIFY-POST-REPLACEMENT" "integrity" 1
+}
+$failureLine = $null
+try {
+    Install-PatchedSupabaseBinary $candidate $runtimeManifest
+    [Console]::Error.WriteLine("install-unexpectedly-succeeded")
+    exit 1
+}
+catch {
+    $failure = $_.Exception
+    if (
+        -not $failure.Data.Contains("PatchedBootstrapFailure") -or
+        -not [bool]$failure.Data["PatchedBootstrapFailure"]
+    ) {
+        [Console]::Error.WriteLine("uncontrolled-install-failure")
+        exit 1
+    }
+    $failureLine = "[FAIL] step=$($failure.Data['Step']) " +
+        "reason=$($failure.Data['Reason']) code=$($failure.Data['Code'])"
+}
+$backup = Join-Path $script:ToolRoot (
+    "supabase/.v2.109.1-sejong-loopback-$PID.backup"
+)
+if ($failureLine -cne "[FAIL] step=INSTALL-PATCHED-SUPABASE reason=operational code=2") {
+    [Console]::Error.WriteLine("unexpected-failure-line=$failureLine")
+    exit 1
+}
+if ($script:ReplaceCalls -ne 1 -or $script:RestoreCalls -ne 1) {
+    [Console]::Error.WriteLine(
+        "unexpected-call-count replace=$($script:ReplaceCalls) " +
+        "restore=$($script:RestoreCalls)"
+    )
+    exit 1
+}
+if (-not (Test-Path -LiteralPath $backup -PathType Leaf)) {
+    [Console]::Error.WriteLine("known-good-backup-missing")
+    exit 1
+}
+if (
+    [System.Text.Encoding]::UTF8.GetString(
+        [System.IO.File]::ReadAllBytes($backup)
+    ) -cne "known-good-stock-binary"
+) {
+    [Console]::Error.WriteLine("known-good-backup-corrupt")
+    exit 1
+}
+if (
+    [System.Text.Encoding]::UTF8.GetString(
+        [System.IO.File]::ReadAllBytes($final)
+    ) -cne "invalid-new-candidate"
+) {
+    [Console]::Error.WriteLine("post-replacement-state-not-observed")
+    exit 1
+}
+[Console]::Out.WriteLine($failureLine)
+[Console]::Out.WriteLine("KNOWN-GOOD-BACKUP-RETAINED")
+""".lstrip(),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(root),
+                ],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(
+                result.stdout.strip(),
+                "[FAIL] step=INSTALL-PATCHED-SUPABASE reason=operational code=2\n"
+                "KNOWN-GOOD-BACKUP-RETAINED",
+            )
+            self.assertFalse(result.stderr)
 
     def test_child_timeout_starts_suspended_before_job_assignment(self) -> None:
         script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
@@ -520,11 +794,12 @@ class PatchedBootstrapContractTests(unittest.TestCase):
                 r"""
 param([string]$PidFile)
 $ErrorActionPreference = "Stop"
-$child = Start-Process -FilePath powershell.exe -ArgumentList @(
-    "-NoProfile",
-    "-Command",
-    "Start-Sleep -Seconds 30"
-) -PassThru
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $env:ComSpec
+$startInfo.Arguments = "/d /c ping -n 31 127.0.0.1 >NUL"
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+$child = [System.Diagnostics.Process]::Start($startInfo)
 $child.Id | Set-Content -LiteralPath $PidFile
 Start-Sleep -Seconds 30
 """.lstrip(),
@@ -589,7 +864,7 @@ $result = Invoke-PatchedChild $PowerShell @(
     "-File",
     $ParentScript,
     $PidFile
-) (Get-Location).Path 5000
+) (Get-Location).Path 10000
 if (-not $result.TimedOut -or $result.ExitCode -ne -1) {
     [Console]::Error.WriteLine(
         "unexpected-result timed_out=$($result.TimedOut) exit_code=$($result.ExitCode)"
@@ -633,7 +908,7 @@ exit 1
                 check=False,
                 encoding="utf-8",
                 errors="replace",
-                timeout=30,
+                timeout=45,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(result.stdout.strip(), "DESCENDANT-TIMEOUT-OK")
