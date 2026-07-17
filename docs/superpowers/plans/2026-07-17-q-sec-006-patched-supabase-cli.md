@@ -14,7 +14,8 @@
 - Upstream repository is exactly `https://github.com/supabase/cli.git`; annotated tag object is `9d25ff8b5b0fba3c6f0ef000e7dd658c8d710c38`; peeled commit is `6d4c19870ed213ba7f682f117d0345c8a40bfa94`.
 - Go is exactly 1.25.11 from `https://dl.google.com/go/go1.25.11.windows-amd64.zip` with SHA-256 `b7401f1b41517428e537493316256fb7cf03c66a130a0103ab07f3a2152e2112`.
 - The source patch is exactly two upstream files: `apps/cli-go/internal/db/start/start_test.go` and `apps/cli-go/internal/db/start/start.go`.
-- Repository `.gitattributes` keeps tracked text LF; every upstream checkout command also forces `core.autocrlf=false` before patching/building.
+- Repository `.gitattributes` keeps tracked text LF; every upstream checkout forces local
+  `core.autocrlf=false` and local `core.longpaths=true` before patching/building. Never mutate global Git config.
 - Do not patch `internal/db/diff`, build the Bun wrapper, add a production dependency, change Docker Desktop settings, or weaken the exact single-loopback gate.
 - Use `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org`, empty `GOPRIVATE`, `GONOPROXY`,
   `GONOSUMDB`, and `GOINSECURE`; require `go mod verify`.
@@ -658,6 +659,51 @@ is required for this correction.
 Review the two-file unstaged diff, stage exactly the bootstrap and its test, verify the cached path set and
 cached diff/check, then commit `fix(tooling): select one Git application path`. Obtain a fresh Task 2A
 specification/quality review before restarting Task 3.
+
+## Task 2B: Enable exact upstream checkout on Windows long paths
+
+**Files:**
+
+- Modify: `scripts/tests/test_patched_supabase_tooling.py`
+- Modify: `scripts/bootstrap_patched_supabase.ps1`
+
+**Observed root cause:** After Task 2A, source A successfully initialized Git and verified the exact origin,
+tag object and peeled commit, then detached checkout failed with `Filename too long`. The isolated repository
+had no local `core.longpaths` value and no `HEAD`. Do not shorten the workspace, change global Git config, or
+skip files as a workaround.
+
+- [ ] **Step 1: Add the focused checkout-configuration RED**
+
+Add `test_checkout_sets_local_longpaths_before_fetch_and_checkout`. Extract the production
+`New-VerifiedSupabaseCheckout` function into a temporary PowerShell harness with controlled stubs for path
+ownership and `Invoke-VerifiedGit`. Simulate the approved origin/tag/commit/HEAD outputs, capture every exact
+Git argument array, and require exactly one `config --local core.longpaths true` call after init/local
+autocrlf and before remote/fetch/checkout. Also assert that no `--global`, `--system`, sparse checkout, path
+exclusion or changed upstream command exists. Run the new test and confirm RED specifically because the local
+longpaths call is absent.
+
+- [ ] **Step 2: Implement the single repository-local fix**
+
+Immediately after local `core.autocrlf=false`, add only:
+
+```powershell
+$null = Invoke-VerifiedGit @("config", "--local", "core.longpaths", "true") $checkout 30000
+```
+
+Preserve exact Git selection, init, origin, fetch, tag/commit verification, detached checkout, timeouts,
+network allowlist, stable failures and every build/install behavior.
+
+- [ ] **Step 3: Verify the regression and full Task 2 boundary**
+
+Run the focused RED/GREEN, the full patched tooling suite, stock bootstrap behavior suite, secret scanner,
+PowerShell 5.1 parser and diff check. No `-BuildCandidate`, network, Docker, DB or remote operation belongs in
+Task 2B.
+
+- [ ] **Step 4: Review exact scope and commit Task 2B**
+
+Review the exact two-file diff, stage only the bootstrap and its test, assert the cached path set is exactly
+those two files, review cached diff/check, and commit `fix(tooling): enable local Git long paths`. Obtain a
+fresh specification/quality review before the next Task 3 retry.
 
 ## Task 3: Produce and pin the reproducible runtime artifact
 
