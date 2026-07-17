@@ -612,6 +612,53 @@ git add scripts/bootstrap_patched_supabase.ps1 scripts/tests/test_patched_supaba
 git commit -m "feat(tooling): build verified patched Supabase CLI"
 ```
 
+## Task 2A: Correct deterministic Git discovery after the first real build attempt
+
+**Files:**
+
+- Modify: `scripts/tests/test_patched_supabase_tooling.py`
+- Modify: `scripts/bootstrap_patched_supabase.ps1`
+
+**Observed root cause:** On the approved Windows host, `Get-Command git.exe -CommandType Application`
+returns two PATH applications. Reading `.Source` from the unbounded result produces an object array, which
+PowerShell coerces into one space-joined scalar application path. `CreateProcess` therefore fails before
+the first `git init` with stable `operational code=2`. Do not work around this by changing PATH.
+
+- [ ] **Step 1: Add the focused multiple-Git RED**
+
+Add `test_multiple_git_applications_select_first_path_without_array_coercion`. The test must extract and
+execute the production Git-discovery function in a temporary harness whose PATH contains two real
+`git.exe` decoys. Assert that `Get-Command` observes exactly two applications and the production function
+returns exactly the first application's absolute path, never an array or space-joined path.
+
+Run only the new test and confirm RED against the current unbounded `.Source` assignment.
+
+- [ ] **Step 2: Implement the single root-cause fix**
+
+Extract Git discovery into `Get-PatchedGitExecutable`. Collect the command results as an array, require at
+least one result, select index zero (normal PATH precedence), require a non-empty absolute existing leaf,
+and return one scalar full path. Replace only the current lines 1819–1821 discovery assignment with the
+helper call. Preserve Git arguments, network allowlist, checkout verification, stable failures, and all
+other build behavior.
+
+- [ ] **Step 3: Verify the regression and full Task 2 boundary**
+
+```powershell
+apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling -v
+apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_tooling.SupabaseBootstrapBehaviorTests -v
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1
+git diff --check
+```
+
+Expected: the multiple-Git test and full patched/stock tooling suites pass; no network build or DB action
+is required for this correction.
+
+- [ ] **Step 4: Review exact scope and commit Task 2A**
+
+Review the two-file unstaged diff, stage exactly the bootstrap and its test, verify the cached path set and
+cached diff/check, then commit `fix(tooling): select one Git application path`. Obtain a fresh Task 2A
+specification/quality review before restarting Task 3.
+
 ## Task 3: Produce and pin the reproducible runtime artifact
 
 **Files:**
@@ -759,6 +806,18 @@ full two-file diff are reviewed; exactly the runtime manifest and runtime test a
 - Consumes: Task 3 runtime manifest and binary.
 - Produces: no stock/PATH fallback; existing actual Docker inspection remains the authority before reset.
 
+- [ ] **Step 0: Require a clean tracked/untracked start**
+
+```powershell
+if (
+    @(git diff --name-only).Count -ne 0 -or
+    @(git diff --cached --name-only).Count -ne 0 -or
+    @(git ls-files --others --exclude-standard).Count -ne 0
+) { throw "Task 4 requires a clean tracked/untracked start" }
+```
+
+Ignored Task 3 `.tools/` artifacts are allowed; tracked and ordinary untracked state must be clean.
+
 - [ ] **Step 1: Write failing runner-selection tests**
 
 Add `PATCHED_BOOTSTRAP_PATH` and exact assertions that the runner source contains:
@@ -796,6 +855,22 @@ Update the synthetic fixture only as follows:
 - write the synthetic success bootstrap under `bootstrap_patched_supabase.ps1`;
 - leave the stock bootstrap fixture and its tests unchanged;
 - preserve all Docker unsafe/multiple/null/wrong-network and cleanup simulations.
+- extend the runner fixture with keyword-only `capture_patched_bootstrap`,
+  `patched_bootstrap_exit_code`, `include_patched_runtime`, and `include_fallback_decoys` controls;
+- add an opt-in patched-bootstrap JSONL capture that records exactly
+  `["bootstrap","bootstrap_patched_supabase.ps1","-VerifyOnly"]` and permits controlled exit codes 0/1/2;
+- add opt-in stock-path and PATH `supabase.exe` decoys without changing the stock-bootstrap fixture tests.
+
+Add behavior tests that prove:
+
+- the exact patched `-VerifyOnly` event occurs once after Docker version preflight and before network
+  create/inspect, `db start`, actual binding inspection, reset, status, credentials, SQL, pgTAP or pytest;
+- patched bootstrap exit 1 yields only the stable preflight/verify failure output and exactly the Docker
+  version plus bootstrap events, with every network mutation and DB/application phase at zero calls;
+- when the patched runtime is absent but stock and PATH decoys exist, preflight fails missing with zero
+  child events and never falls back;
+- source contains no `Get-Command`/`where`/`$env:PATH` Supabase discovery and each exact patched assignment
+  and `-VerifyOnly` literal occurs once.
 
 - [ ] **Step 2: Run focused runner tests and verify RED**
 
@@ -803,7 +878,8 @@ Update the synthetic fixture only as follows:
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_tooling.PatchedDatabaseRunnerSelectionTests -v
 ```
 
-Expected: selection test fails because the runner still names stock tooling; ordering test passes.
+Expected: failures are specifically the current stock path/bootstrap selection and missing patched behavior;
+the actual-binding-before-reset ordering test continues to pass. Do not accept a fixture/setup-only RED.
 
 - [ ] **Step 3: Change exactly the runner binary and bootstrap paths**
 
@@ -832,6 +908,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patche
 ```
 
 State that direct stock `db start`, PATH fallback and `db diff` are outside the approved safe path.
+Replace the optional stop command with the patched binary path. Rewrite the current stock-failure/Q-SEC-006
+paragraph as historical rationale: Task 4 pins/selects the artifact, but actual single-loopback/full DB proof
+remains Task 5 and DB-001 must not be called complete yet. Preserve the remote/public blocker and state that
+API, schema, data, dependencies and readiness are unchanged.
 
 - [ ] **Step 5: Run runner and bootstrap regressions**
 
@@ -849,9 +929,40 @@ verify-only passes without network; secret/diff checks pass.
 - [ ] **Step 6: Commit Task 4**
 
 ```powershell
+git diff -- scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py scripts/README.md
+if ($LASTEXITCODE -ne 0) { throw "Task 4 diff review failed" }
+git diff --check
+if ($LASTEXITCODE -ne 0) { throw "Task 4 diff check failed" }
+git diff --exit-code -- contracts apps/api/src apps/web data prompts supabase/migrations database/rollbacks database/schema-v1.draft.sql package.json pnpm-lock.yaml apps/api/uv.lock PACKAGE_MANIFEST.json
+if ($LASTEXITCODE -ne 0) { throw "protected worktree path changed" }
 git add scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py scripts/README.md
+if ($LASTEXITCODE -ne 0) { throw "Task 4 staging failed" }
+$staged = @(git -c core.quotepath=false diff --cached --name-only | Sort-Object)
+$expected = @(
+    "scripts/README.md",
+    "scripts/tests/test_supabase_tooling.py",
+    "scripts/verify_database.ps1"
+) | Sort-Object
+if (@(Compare-Object -ReferenceObject $expected -DifferenceObject $staged).Count -ne 0) {
+    throw "unexpected staged scope"
+}
+$unstaged = @(git -c core.quotepath=false diff --name-only)
+$ordinaryUntracked = @(git -c core.quotepath=false ls-files --others --exclude-standard)
+if ($unstaged.Count -ne 0 -or $ordinaryUntracked.Count -ne 0) {
+    throw "unexpected unstaged or untracked scope"
+}
+git diff --cached -- scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py scripts/README.md
+if ($LASTEXITCODE -ne 0) { throw "Task 4 cached diff review failed" }
+git diff --cached --check
+if ($LASTEXITCODE -ne 0) { throw "Task 4 cached diff check failed" }
+git diff --cached --exit-code -- contracts apps/api/src apps/web data prompts supabase/migrations database/rollbacks database/schema-v1.draft.sql package.json pnpm-lock.yaml apps/api/uv.lock PACKAGE_MANIFEST.json
+if ($LASTEXITCODE -ne 0) { throw "protected cached path changed" }
+git status --short
 git commit -m "fix(db): require loopback-patched Supabase CLI"
 ```
+
+Expected: staged set is exactly the three Task 4 files, protected worktree/cached paths have no diff, and
+there is no other state except approved ignored `.tools/` artifacts.
 
 ## Task 5: Prove the actual runtime, close DB-001, and hand off
 
