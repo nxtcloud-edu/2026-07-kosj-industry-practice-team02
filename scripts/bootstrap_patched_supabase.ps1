@@ -1323,6 +1323,39 @@ function Get-VerifiedGoToolchain {
     return $goExecutable
 }
 
+function Get-PatchedGitExecutable {
+    try {
+        $gitApplications = @(
+            Get-Command git.exe -CommandType Application -ErrorAction Stop
+        )
+    }
+    catch {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
+    }
+    if ($gitApplications.Count -lt 1) {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
+    }
+
+    $gitSource = $gitApplications[0].Source
+    if (
+        -not ($gitSource -is [string]) -or
+        [string]::IsNullOrWhiteSpace($gitSource) -or
+        -not [System.IO.Path]::IsPathRooted($gitSource)
+    ) {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
+    }
+    try {
+        $gitPath = [System.IO.Path]::GetFullPath($gitSource)
+    }
+    catch {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
+    }
+    if (-not (Test-Path -LiteralPath $gitPath -PathType Leaf)) {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
+    }
+    return [string]$gitPath
+}
+
 function Invoke-VerifiedGit {
     param(
         [string[]]$Arguments,
@@ -1815,14 +1848,7 @@ try {
         $script:GoExecutable = Get-VerifiedGoToolchain $goArchivePath
         $script:CurrentStep = "VERIFY-SUPABASE-SOURCE-A"
         Write-PatchedStatus "[START] step=VERIFY-SUPABASE-SOURCE-A"
-        try {
-            $script:GitExecutable = (
-                Get-Command git.exe -CommandType Application -ErrorAction Stop
-            ).Source
-        }
-        catch {
-            Throw-PatchedBootstrapFailure $script:CurrentStep "operational" 2
-        }
+        $script:GitExecutable = Get-PatchedGitExecutable
         $checkoutA = New-VerifiedSupabaseCheckout (
             "supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/a"
         )

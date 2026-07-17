@@ -149,6 +149,113 @@ class PatchedSourceLockTests(unittest.TestCase):
 
 
 class PatchedBootstrapContractTests(unittest.TestCase):
+    def test_multiple_git_applications_select_first_path_without_array_coercion(
+        self,
+    ) -> None:
+        source_git = shutil.which("git.exe")
+        self.assertIsNotNone(source_git, "git.exe is required for this regression test")
+        with tempfile.TemporaryDirectory(prefix="sejong multiple git ") as directory:
+            root = Path(directory)
+            first_directory = root / "first"
+            second_directory = root / "second"
+            first_directory.mkdir()
+            second_directory.mkdir()
+            first_git = first_directory / "git.exe"
+            second_git = second_directory / "git.exe"
+            shutil.copy2(source_git, first_git)
+            shutil.copy2(source_git, second_git)
+            harness = root / "git_discovery_harness.ps1"
+            harness.write_text(
+                r"""
+param(
+    [string]$Bootstrap,
+    [string]$ExpectedFirst,
+    [string]$UnexpectedSecond
+)
+$ErrorActionPreference = "Stop"
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $Bootstrap,
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) {
+    exit 1
+}
+$functionAsts = @($ast.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -ceq "Get-PatchedGitExecutable"
+    },
+    $true
+))
+if ($functionAsts.Count -ne 1) {
+    [Console]::Error.WriteLine(
+        "expected-one-production-git-discovery-function actual=" +
+        $functionAsts.Count
+    )
+    exit 1
+}
+. ([ScriptBlock]::Create($functionAsts[0].Extent.Text))
+$applications = @(Get-Command git.exe -CommandType Application -ErrorAction Stop)
+if ($applications.Count -ne 2) {
+    [Console]::Error.WriteLine(
+        "expected-two-git-applications actual=" + $applications.Count
+    )
+    exit 1
+}
+$result = @(Get-PatchedGitExecutable)
+$expected = [System.IO.Path]::GetFullPath($ExpectedFirst)
+$unexpected = [System.IO.Path]::GetFullPath($UnexpectedSecond)
+if (
+    $result.Count -ne 1 -or
+    $result[0] -is [array] -or
+    -not ($result[0] -is [string]) -or
+    [string]::IsNullOrWhiteSpace([string]$result[0]) -or
+    -not [System.IO.Path]::IsPathRooted([string]$result[0]) -or
+    -not (Test-Path -LiteralPath ([string]$result[0]) -PathType Leaf) -or
+    ([string]$result[0]) -cne $expected -or
+    ([string]$result[0]).Contains($unexpected)
+) {
+    [Console]::Error.WriteLine(
+        "unexpected-git-selection=" + ($result | ConvertTo-Json -Compress)
+    )
+    exit 1
+}
+[Console]::Out.WriteLine("GIT-DISCOVERY-OK")
+""".lstrip(),
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join(
+                (str(first_directory), str(second_directory))
+            )
+            result = subprocess.run(
+                [
+                    powershell_executable(),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(BOOTSTRAP_PATH),
+                    str(first_git),
+                    str(second_git),
+                ],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip(), "GIT-DISCOVERY-OK")
+            self.assertFalse(result.stderr)
+
     def test_script_has_only_approved_modes_sources_and_operations(self) -> None:
         script = BOOTSTRAP_PATH.read_text(encoding="utf-8")
         lowered = script.lower()
