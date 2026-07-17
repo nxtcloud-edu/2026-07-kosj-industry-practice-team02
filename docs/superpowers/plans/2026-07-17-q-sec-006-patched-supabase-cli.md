@@ -8,6 +8,11 @@
 
 **Tech Stack:** Windows PowerShell 5.1, Git, official Go 1.25.11 Windows AMD64, Supabase CLI Go source v2.109.1, Python 3.12 standard-library unittest, Docker Desktop 4.62.0/Engine 29.2.1, PostgreSQL 17.6, pgTAP.
 
+**Implementation status (2026-07-18):** Tasks 1/2/2A/2B are implemented and independently reviewed.
+Task 3 is paused at A-025/Q-TOOL-001 because PowerShell 5.1 recursively deleting the approved long
+checkout path partially fails on a tracked tree with an observed 299-character maximum file path. Do not resume or amend checkout paths,
+native deletion, or container/WSL build until the human selects an option and this plan/ADR are revised.
+
 ## Global Constraints
 
 - Decision authority is Q-SEC-006=A, D-031, ADR-0013 and the approved written specification dated 2026-07-17.

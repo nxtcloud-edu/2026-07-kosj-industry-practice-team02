@@ -141,3 +141,26 @@ Q-SEC-005=A/D-030의 두 Docker Desktop 보정은 actual IPv6 wildcard를 남겨
 차단한다. A-021/Q-SEC-003은 별도 public-release blocker다.
 미응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB credential을
 차단하며 `00700`은 인간 결정 전 구현하지 않는다.
+
+## 12. Q-SEC-006 구현 중 Windows build workspace blocker — 2026-07-18 KST
+
+Task 1은 exact source/patch contract, Task 2는 PS5.1 bootstrap, Task 2A는 다중 `git.exe`
+결과의 단일 PATH application 선택, Task 2B는 checkout-local `core.longpaths=true`를 구현했고
+각 task가 focused/full regression과 독립 review를 통과했다. 실제 Task 3은 official Go 1.25.11,
+exact origin/tag object/peeled commit, 두 checkout, local longpaths, exact 2-file patch와 module
+boundary까지 전진했다. 별도 exact pinned diagnostic `go build`도 exit 0과 약 103 MB executable을
+만들어 source/patch/compiler 계약 자체가 유효함을 확인했다. 이 diagnostic output은 runtime pin이
+아니며 사용하지 않는다.
+
+이후 bounded full retry는 `VERIFY-SUPABASE-SOURCE-A operational code=2`로 중단됐다. 실제 상태는
+source A의 `.git`만 제거되고 extended-length 열거 기준 3,035 files와 관측 최대 299자 tracked file이
+남았으며 source B는 exact HEAD와 local
+longpaths를 유지했다. production `Remove-OwnedPath`는 safe-child/reparse validation 뒤 PowerShell
+5.1 `Remove-Item -Recurse -Force`를 사용한다. 따라서 재실행의 기존 checkout cleanup이 장경로에서
+부분 실패한 것이 확정 원인이다. tracked Git은 clean, final/candidate/runtime manifest는 없고
+containers all/project 0/0, DB mutation 0이다.
+
+세 번째 별도 tooling boundary이므로 임의 native delete나 build-root 변경을 구현하지 않았다.
+A-025/Q-TOOL-001에서 short project-local checkout root(추천), native long-path deletion, container/WSL
+build를 비교한다. 인간 결정·계획/ADR 갱신·TDD/review 뒤에만 Task 3을 재개한다. DB schema 0.2.0-draft,
+official/mock data 0, `/ready=503`, public-release blocker A-021은 그대로다.

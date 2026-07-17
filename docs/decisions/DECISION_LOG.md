@@ -35,4 +35,4 @@
 | D-031 | 2026-07-17 | Q-SEC-006=A: official Supabase CLI v2.109.1 exact source에서 local DB start HostIP만 `127.0.0.1`로 명시하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin | Confirmed architecture decision, written specification and five-task execution plan approved; implementation started after the user's `계획 승인, 구현 시작`. stock CLI 보존, exact gate 유지, public/API/schema/data/dependency 변화 없음 | Q-SEC-006, A-024, ADR-0013, IMP-20260717-010/011 | 사용자 |
 
 새 결정은 기존 값을 덮어쓰지 않고 새 행과 ADR/노트 링크를 추가한다.
-Q-SEC-004/A-022와 Q-SEC-005/A-023은 각각 D-029/D-030으로 결정됐지만 실제 보정이 불충분했다. A-024/Q-SEC-006은 D-031/ADR-0013으로 결정되고 서면 설계가 승인됐으며, 실행계획 승인·구현·검증 gate 전에는 DB-001 local 완료를 선언하지 않는다.
+Q-SEC-004/A-022와 Q-SEC-005/A-023은 각각 D-029/D-030으로 결정됐지만 실제 보정이 불충분했다. A-024/Q-SEC-006은 D-031/ADR-0013으로 결정되고 서면 설계가 승인됐다. Task 1/2/2A/2B 뒤 A-025/Q-TOOL-001이 새 implementation blocker로 열렸다. 답을 받기 전에는 새 decision ID를 만들지 않으며 실제 runtime/full gate 전에는 DB-001 local 완료를 선언하지 않는다.
