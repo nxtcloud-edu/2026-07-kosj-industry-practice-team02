@@ -963,6 +963,73 @@ if (
     [Console]::Error.WriteLine("legacy-deny-body-shape-changed")
     exit 1
 }
+$allAssignments = @($enclosingForEach.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+    },
+    $true
+) | Sort-Object { $_.Extent.StartOffset })
+$allIfStatements = @($enclosingForEach.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.IfStatementAst]
+    },
+    $true
+))
+$controlFlowEscapes = @($enclosingForEach.Body.FindAll(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.ReturnStatementAst] -or
+            $node -is [System.Management.Automation.Language.BreakStatementAst] -or
+            $node -is [System.Management.Automation.Language.ContinueStatementAst] -or
+            $node -is [System.Management.Automation.Language.ExitStatementAst] -or
+            $node -is [System.Management.Automation.Language.TrapStatementAst]
+    },
+    $true
+))
+$conditionText = [System.Text.RegularExpressions.Regex]::Replace(
+    $bodyStatements[2].Clauses[0].Item1.Extent.Text,
+    '\s+',
+    ' '
+).Trim()
+$ifBodyStatements = @($bodyStatements[2].Clauses[0].Item2.Statements)
+$firstRightText = [System.Text.RegularExpressions.Regex]::Replace(
+    $allAssignments[0].Right.Extent.Text,
+    '\s+',
+    ' '
+).Trim()
+$secondRightText = [System.Text.RegularExpressions.Regex]::Replace(
+    $allAssignments[1].Right.Extent.Text,
+    '\s+',
+    ' '
+).Trim()
+if (
+    $allAssignments.Count -ne 2 -or
+    $allIfStatements.Count -ne 1 -or
+    $controlFlowEscapes.Count -ne 0 -or
+    $allAssignments[0].Operator -ne
+        [System.Management.Automation.Language.TokenKind]::Equals -or
+    $allAssignments[1].Operator -ne
+        [System.Management.Automation.Language.TokenKind]::Equals -or
+    $firstRightText -cne
+        'Resolve-SafeChildPath $script:ToolRoot $mutableChild' -or
+    $secondRightText -cne
+        'Resolve-PatchedCanonicalComparisonPath $mutableRoot' -or
+    $conditionText -cne
+        'Test-PatchedPathWithin $canonicalMutableRoot $canonicalArchivePath' -or
+    $ifBodyStatements.Count -ne 1 -or
+    $ifBodyStatements[0] -isnot [System.Management.Automation.Language.PipelineAst] -or
+    ([System.Text.RegularExpressions.Regex]::Replace(
+        $ifBodyStatements[0].Extent.Text,
+        '\s+',
+        ' '
+    ).Trim()) -cne
+        'Throw-PatchedBootstrapFailure $script:CurrentStep "invalid" 2'
+) {
+    [Console]::Error.WriteLine("legacy-deny-descendant-shape-changed")
+    exit 1
+}
 $memberCalls = @($enclosingForEach.Body.FindAll(
     {
         param($node)
@@ -1115,6 +1182,43 @@ foreach ($command in @($ast.FindAll(
             self.assertIn(
                 "legacy-deny-body-shape-changed",
                 alias_mutation_result.stderr,
+            )
+
+            nested_if_marker = (
+                "if (Test-PatchedPathWithin $canonicalMutableRoot "
+                "$canonicalArchivePath) {\n"
+                "                Throw-PatchedBootstrapFailure "
+                '$script:CurrentStep "invalid" 2\n'
+                "            }"
+            )
+            self.assertEqual(script.count(nested_if_marker), 1)
+            nested_alias_mutated = script.replace(
+                nested_if_marker,
+                "if (Test-PatchedPathWithin $canonicalMutableRoot "
+                "$canonicalArchivePath) {\n"
+                "                $escapedLegacyRoot = $mutableRoot\n"
+                "                continue\n"
+                "                Throw-PatchedBootstrapFailure "
+                '$script:CurrentStep "invalid" 2\n'
+                "            }",
+                1,
+            ).replace(
+                loop_end_marker,
+                "        }\n"
+                "        Remove-OwnedPath $script:ToolRoot $escapedLegacyRoot\n"
+                "    }\n"
+                "    else {\n"
+                '        $cacheDirectory = Resolve-SafeChildPath '
+                '$script:ToolRoot "cache"',
+                1,
+            )
+            nested_alias_path = root / "legacy_nested_alias_regression.ps1"
+            nested_alias_path.write_text(nested_alias_mutated, encoding="utf-8")
+            nested_alias_result = run_ast_audit(nested_alias_path)
+            self.assertNotEqual(nested_alias_result.returncode, 0)
+            self.assertIn(
+                "legacy-deny-descendant-shape-changed",
+                nested_alias_result.stderr,
             )
 
     def test_verify_only_without_runtime_manifest_is_non_mutating(self) -> None:
