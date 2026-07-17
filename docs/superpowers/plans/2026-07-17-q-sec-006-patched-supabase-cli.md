@@ -633,10 +633,12 @@ docker desktop status
 docker version --format '{{.Server.Version}}'
 docker ps -aq
 docker ps -aq --filter 'label=com.supabase.cli.project=sejong-ai-local'
+$finalPatchedBinary = Join-Path $PWD ".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"
+if (Test-Path -LiteralPath $finalPatchedBinary) { throw "unexpected pre-existing final binary" }
 ```
 
 Expected: Git clean; Desktop running; Engine `29.2.1`; both container queries empty. Stop if any container
-exists or the Engine is below 28.
+exists, the Engine is below 28, or the final patched binary already exists.
 
 - [ ] **Step 2: Build the candidate twice and capture the agreed hash**
 
@@ -694,7 +696,19 @@ held in `$candidateSha256`, not an expression, and the exact source-manifest has
 (Get-FileHash -Algorithm SHA256 scripts/supabase-cli.local-patch.source.json).Hash.ToLowerInvariant()
 ```
 
-The runtime test is expected to fail at this moment because the final binary has not been installed.
+Run and prove the exact installation-boundary RED before installation:
+
+```powershell
+$runtimeRedOutput = & apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling.PatchedRuntimeLockTests -v 2>&1
+$runtimeRedCode = $LASTEXITCODE
+$runtimeRedText = $runtimeRedOutput -join [Environment]::NewLine
+if ($runtimeRedCode -ne 1 -or $runtimeRedText -notmatch "AssertionError: False is not true") {
+    throw "runtime RED was not the expected missing final binary"
+}
+$runtimeRedOutput
+```
+
+Expected: the runtime contract fails with exit code `1` specifically because the final binary is absent.
 
 - [ ] **Step 4: Install only the pinned build and verify GREEN**
 
@@ -714,12 +728,23 @@ git status --short --ignored
 git diff --exit-code -- scripts/bootstrap_supabase.ps1 scripts/supabase-cli.version.json
 git check-ignore .tools/supabase/v2.109.1-sejong-loopback/supabase.exe
 git diff --check
+git diff -- scripts/supabase-cli.local-patch.runtime.json scripts/tests/test_patched_supabase_tooling.py
 git add scripts/supabase-cli.local-patch.runtime.json scripts/tests/test_patched_supabase_tooling.py
+$staged = @(git -c core.quotepath=false diff --cached --name-only)
+$expected = @(
+    "scripts/supabase-cli.local-patch.runtime.json",
+    "scripts/tests/test_patched_supabase_tooling.py"
+)
+if (@(Compare-Object -ReferenceObject $expected -DifferenceObject $staged).Count -ne 0) {
+    throw "unexpected staged scope"
+}
+git diff --cached -- scripts/supabase-cli.local-patch.runtime.json scripts/tests/test_patched_supabase_tooling.py
+git diff --cached --check
 git commit -m "build(tooling): pin patched Supabase runtime"
 ```
 
-Expected: all `.tools/` outputs are ignored; stock tooling has no diff; only runtime manifest/test changes
-are committed.
+Expected: all `.tools/` outputs are ignored; stock tooling has no diff; the literal runtime/source hashes and
+full two-file diff are reviewed; exactly the runtime manifest and runtime test are staged and committed.
 
 ## Task 4: Make the DB runner require the patched runtime
 
