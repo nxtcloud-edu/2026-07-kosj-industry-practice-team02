@@ -21,3 +21,4 @@
 - 0011: DB와 백엔드의 계층형 안전 규칙 강제
 - 0012: deferred ACTIVE-question trigger의 제한된 SECURITY DEFINER 실행
 - 0013: project-local patched Supabase CLI 공급망
+- 0014: Windows patched CLI short checkout roots와 path budget

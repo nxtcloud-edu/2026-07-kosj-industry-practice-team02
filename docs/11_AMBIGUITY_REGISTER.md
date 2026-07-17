@@ -28,7 +28,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-022 | A | local Docker port 보안 1차 결정 | Resolved decision / remediation insufficient | Q-SEC-004=A로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용·재시작했다. 빈 HostIP probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었고 explicit `127.0.0.1` probe만 단일 loopback이었다. | D-029; 승인 결정은 기록하되 exact local 완료 근거로 사용하지 않음 |
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
 | A-024 | A | local Supabase CLI port 공급망 | Resolved decision / implementation in progress | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin한다. 서면 명세와 실행계획은 승인됐다. | D-031 / ADR-0013; 구현·검증 전 DB runtime/manifest 승격 차단 |
-| A-025 | A | Windows patched CLI build workspace | Open / implementation blocker | Q-TOOL-001. 승인된 장경로 checkout은 성공하지만 PowerShell 5.1 `Remove-Item -Recurse`가 재실행 시 관측 최대 299자 tracked file tree를 부분 삭제 후 실패한다. 짧은 project-local checkout root, native 장경로 삭제, container/WSL build 중 인간 선택이 필요하다. | A 추천: `.tools/s/{a,b}` short root(동일 tree 투영 max 244자, MAX_PATH 대비 약 16자 여유), 기존 실패 artifact 자동 삭제 없음; 답 전 Task 3/DB-001 중단 |
+| A-025 | A | Windows patched CLI build workspace | Resolved decision / revised plan awaiting approval | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout만 `.tools/s/{a,b}`로 줄이고 pinned relative max 134자·absolute cap 248자를 pre-checkout gate로 강제한다. 기존 장경로 partial artifact는 자동 삭제하지 않는다. | D-032 / ADR-0014; Task 2C TDD·독립 review와 수정 계획 승인 전 Task 3/DB-001 중단 |
 
 ## 우선도 정의
 
@@ -37,27 +37,18 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 A-025/Q-TOOL-001 하나다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+현재 인간 결정형 A/Blocker는 없다. Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
 publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 남겼으므로 DB-001은
 `0.3.0-local` 후보를 아직 승격하지 않는다. A-024는 D-031/ADR-0013으로 결정되고 서면
 명세도 승인됐지만 Task 1/2/2A/2B 뒤 실제 Task 3 재실행에서 PowerShell 5.1 장경로 cleanup이
-부분 실패해 A-025가 열렸다. 이 결정과 수정·재검토·실제 검증 gate가 남아 local 완료는 계속 차단된다. A-021은 B/High
+부분 실패했다. A-025는 Q-TOOL-001=A/D-032/ADR-0014로 해결됐고 수정 계획 승인과 Task 2C
+TDD·독립 review·실제 검증 gate가 남아 local 완료는 계속 차단된다. A-021은 B/High
 public-release blocker다.
 
 ## 열린 인터뷰 질문
-
-Q-TOOL-001. Windows에서 patched CLI의 재현 build checkout을 어떤 방식으로 안전하게 관리할 것인가
-- 왜 지금 필요한가: 승인된 두 checkout은 exact source/tag/commit·local longpaths·2-file patch·module boundary까지 통과했고 exact 진단 build도 성공했다. 그러나 재실행 시 기존 checkout을 지우는 PowerShell 5.1 `Remove-Item -Recurse`가 관측 최대 299자 file tree에서 `.git`만 지운 뒤 실패한다. 서로 다른 세 번째 tooling 경계이므로 다음 수정 전에 인간이 build workspace 아키텍처를 선택해야 한다.
-- 선택지 A / 장점 / 단점: checkout만 `.tools/s/{a,b}`의 짧은 project-local root로 옮긴다 / 현재 exact tree의 투영 최대 경로가 299자에서 244자로 줄고 새 삭제 primitive·dependency·global 설정이 필요 없으며 기존 공급망 모델을 유지한다 / MAX_PATH 대비 여유가 약 16자뿐이라 future upstream path growth를 길이 gate로 막아야 하고, 내부 artifact 경로와 plan/test를 갱신하며 기존 실패한 ignored long-path tree는 자동 삭제하지 않은 채 남겨야 한다.
-- 선택지 B / 장점 / 단점: 현재 긴 경로를 유지하고 Win32 extended-length recursive delete를 구현한다 / 기존 layout과 실패 artifact 정리가 가능하다 / reparse·readonly·부분 실패를 다루는 파괴적 native helper와 광범위한 보안 테스트가 필요해 위험과 코드량이 가장 크다.
-- 선택지 C / 장점 / 단점: Docker/WSL의 짧은 Linux build root로 전환한다 / Windows 장경로 문제를 구조적으로 피한다 / 새 build 공급망·image/digest·mount·출력 권한 계약과 추가 다운로드가 필요하고 local-first 0원 demo의 복잡도가 커진다.
-- 당신의 추천안: A. 기존 PS5.1·공식 Go·source/patch/hash 계약은 유지하고 checkout relative path만 짧게 한다. 기존 실패 artifact는 자동 삭제하지 않고 handoff에 격리 상태를 기록한다.
-- 답을 받지 못할 때 사용할 기본값: 구현 중단. 파괴적 cleanup을 추정 승인하지 않고 DB-001과 version manifest를 현재 상태로 유지한다.
-- 영향을 받는 파일·계약·데이터·배포: patched CLI plan/spec/ADR, bootstrap·test·source path assertions, handoff/report/implementation note가 영향받는다. 공개 API·DB schema/migration/data·privacy·DeepSeek·production dependency·remote deployment는 변하지 않는다.
-- 답변 예시: `Q-TOOL-001: A`
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.
@@ -68,6 +59,15 @@ Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전
 - 영향을 받는 파일·계약·데이터·배포: 새 `00700`/compensation/pgTAP·통합 회귀와 DB 보안 문서가 영향받는다. 공개 API/table/data/retention/dependency/cost는 변하지 않지만 remote/public release gate가 직접 영향받는다.
 
 ## 해결된 인터뷰 질문
+
+Q-TOOL-001. Windows에서 patched CLI의 재현 build checkout을 어떤 방식으로 안전하게 관리할 것인가
+- 결정: A / D-032 / ADR-0014. 사용자가 2026-07-18 `Q-TOOL-001: A`라고 명시했다.
+- 선택: checkout만 `.tools/s/a`, `.tools/s/b`로 줄인다. source manifest에 `s/a`, `s/b`, pinned
+  relative max 134자, absolute cap 248자를 고정하고 checkout cleanup·생성·Go archive
+  download/extraction·network 전에 projected path를 검증한다. 현재 exact worktree 투영값은 244자다.
+- 영향: 기존 PowerShell 5.1 safe-child/reparse cleanup과 exact source/toolchain/patch/hash 공급망을
+  유지한다. 기존 ignored `.tools/supabase-source/...` partial tree는 자동 삭제하지 않는다. 수정
+  계획 승인·Task 2C TDD/review 전 Task 3은 재개하지 않으며 API·DB schema/data·privacy·dependency·deployment는 변하지 않는다.
 
 Q-SEC-006. stock Supabase CLI의 DB publish 요청을 project-scoped explicit IPv4 loopback으로 바꿀 것인가
 - 결정: A / D-031 / ADR-0013. 사용자가 2026-07-17 `Q-SEC-006: A`라고 명시했다.

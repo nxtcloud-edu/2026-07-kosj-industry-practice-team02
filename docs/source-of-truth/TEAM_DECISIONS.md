@@ -83,8 +83,11 @@
   `127.0.0.1`로 지정하는 project-local CLI를 tag/commit·patch·Go 1.25.11·binary SHA-256으로
   pin한다. stock CLI는 보존한다. 서면 설계와 실행계획은 2026-07-17 승인돼 구현 중이며,
   Task 1/2/2A/2B는 구현·독립 리뷰를 통과했다. 실제 Task 3 재실행에서 PowerShell 5.1의 기존
-  장경로 checkout cleanup이 부분 실패해 A-025/Q-TOOL-001이 열렸다. 인간이 build workspace
-  방식을 결정하고 runtime manifest·runner·actual full gate를 검증하기 전 DB 완료·버전 승격을 차단한다.
+  장경로 checkout cleanup이 부분 실패했다. 사용자는 2026-07-18 Q-TOOL-001=A/D-032를 선택해
+  checkout만 `.tools/s/a`, `.tools/s/b`로 줄이고 cleanup·생성·Go archive download/extraction·network
+  전 absolute path budget을 강제하며 기존
+  `.tools/supabase-source/...` partial tree는 자동 삭제하지 않기로 했다. 수정 계획 승인과 Task 2C
+  TDD·독립 review, runtime manifest·runner·actual full gate 전 DB 완료·버전 승격을 차단한다.
 - DB public release 경계: Q-SEC-003은 미응답이며 기본값 B를 적용한다. privileged function
   graph 22개 중 `00600` validator 외 21개의 search path hardening이 남아 있으므로 remote/public
   배포, public admin/API, public backend DB credential 사용을 차단한다. 인간 결정 전 `00700`을

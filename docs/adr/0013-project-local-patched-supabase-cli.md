@@ -1,9 +1,9 @@
 # ADR-0013: project-local patched Supabase CLI 공급망
 
-- Status: Accepted; written spec and implementation plan approved, implementation in progress
+- Status: Accepted; amended by ADR-0014, revised implementation plan awaiting approval
 - Date: 2026-07-17
 - Deciders: 사용자, Codex
-- Related: Q-SEC-006, D-031, A-024, ADR-0002/0007/0008/0011, DB-001 Task 10
+- Related: Q-SEC-006, D-031, A-024, ADR-0002/0007/0008/0011/0014, DB-001 Task 10
 
 ## Context
 
@@ -52,6 +52,8 @@ project-local 도구로 build한다.
 - exact pinned binary를 사용해야 하므로 runner/tooling tests가 늘어난다.
 - 공개 계약, schema/data, privacy, 비용 0원 원칙과 local/private 범위는 유지된다.
 - A-021/Q-SEC-003 public-release blocker는 해결되지 않는다.
+- Windows generated source checkout workspace는 Q-TOOL-001=A/D-032/ADR-0014에 따라
+  `.tools/s/{a,b}`와 pre-checkout path budget으로 보정한다.
 
 ## Rollback
 

@@ -164,3 +164,18 @@ containers all/project 0/0, DB mutation 0이다.
 A-025/Q-TOOL-001에서 short project-local checkout root(추천), native long-path deletion, container/WSL
 build를 비교한다. 인간 결정·계획/ADR 갱신·TDD/review 뒤에만 Task 3을 재개한다. DB schema 0.2.0-draft,
 official/mock data 0, `/ready=503`, public-release blocker A-021은 그대로다.
+
+## 13. Q-TOOL-001=A 결정과 수정 계획 — 2026-07-18 KST
+
+사용자는 `Q-TOOL-001: A`를 명시했다. D-032/ADR-0014에 따라 두 generated checkout만
+`.tools/s/a`, `.tools/s/b`로 줄이고 source manifest가 tool-root-relative `s/a`, `s/b`, pinned
+maximum relative file path 134자, maximum absolute file path 248자를 고정한다. 현재 exact worktree에서
+longest upstream file의 투영 absolute path는 244자다. bootstrap은 cleanup·directory 생성·Go archive
+download/extraction·network fetch 전에 두 destination의 projected maximum을 검증하고 초과 시
+fail closed해야 한다.
+
+Win32 extended-length delete, Docker/WSL build, global Git setting, sparse checkout/path exclusion은
+도입하지 않는다. 기존 `.tools/supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/`
+partial tree는 runtime authority가 아니며 새 bootstrap이 checkout/build input으로 사용하거나 자동 삭제하지 않는다. 수정 계획 승인,
+Task 2C TDD와 독립 review 뒤에만 Task 3을 재개한다. API/DB schema/migration/data/privacy/dependency,
+containers 0/0, `/ready=503`, A-021 public blocker는 변하지 않는다.

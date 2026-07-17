@@ -4,23 +4,27 @@
 
 **Goal:** Build and pin a project-local Supabase CLI v2.109.1 whose local database publish request explicitly binds to `127.0.0.1`, then use it to complete the fail-closed DB-001 local baseline.
 
-**Architecture:** Keep the official stock CLI as a rollback reference and build only the official directly runnable `apps/cli-go` command from an exact annotated tag/commit. A tracked source manifest pins upstream, Go, patch, dependency-verification and build inputs; a second tracked runtime manifest is created only after two independent clean builds produce the same binary SHA-256. The existing DB runner accepts only that runtime-pinned binary and still inspects the actual Docker binding before reset, credentials, or SQL.
+**Architecture:** Keep the official stock CLI as a rollback reference and build only the official directly runnable `apps/cli-go` command from an exact annotated tag/commit. A tracked source manifest pins upstream, Go, patch, dependency-verification, short Windows checkout roots and path budget; a second tracked runtime manifest is created only after two independent clean builds produce the same binary SHA-256. The existing DB runner accepts only that runtime-pinned binary and still inspects the actual Docker binding before reset, credentials, or SQL.
 
 **Tech Stack:** Windows PowerShell 5.1, Git, official Go 1.25.11 Windows AMD64, Supabase CLI Go source v2.109.1, Python 3.12 standard-library unittest, Docker Desktop 4.62.0/Engine 29.2.1, PostgreSQL 17.6, pgTAP.
 
 **Implementation status (2026-07-18):** Tasks 1/2/2A/2B are implemented and independently reviewed.
-Task 3 is paused at A-025/Q-TOOL-001 because PowerShell 5.1 recursively deleting the approved long
-checkout path partially fails on a tracked tree with an observed 299-character maximum file path. Do not resume or amend checkout paths,
-native deletion, or container/WSL build until the human selects an option and this plan/ADR are revised.
+Q-TOOL-001=A/D-032/ADR-0014 resolves A-025 by selecting `.tools/s/a`, `.tools/s/b` and a pre-checkout
+path-budget gate. The revised Task 2C plan awaits user approval. Do not edit tooling or resume Task 3 until
+that approval; the old `.tools/supabase-source/...` partial tree remains quarantined and must not be deleted.
 
 ## Global Constraints
 
-- Decision authority is Q-SEC-006=A, D-031, ADR-0013 and the approved written specification dated 2026-07-17.
+- Decision authority is Q-SEC-006=A/D-031/ADR-0013 plus Q-TOOL-001=A/D-032/ADR-0014 and the amended written specification.
 - Upstream repository is exactly `https://github.com/supabase/cli.git`; annotated tag object is `9d25ff8b5b0fba3c6f0ef000e7dd658c8d710c38`; peeled commit is `6d4c19870ed213ba7f682f117d0345c8a40bfa94`.
 - Go is exactly 1.25.11 from `https://dl.google.com/go/go1.25.11.windows-amd64.zip` with SHA-256 `b7401f1b41517428e537493316256fb7cf03c66a130a0103ab07f3a2152e2112`.
 - The source patch is exactly two upstream files: `apps/cli-go/internal/db/start/start_test.go` and `apps/cli-go/internal/db/start/start.go`.
 - Repository `.gitattributes` keeps tracked text LF; every upstream checkout forces local
   `core.autocrlf=false` and local `core.longpaths=true` before patching/building. Never mutate global Git config.
+- Source checkouts are exactly `.tools/s/a` and `.tools/s/b`. The source manifest pins tool-root-relative
+  `s/a`, `s/b`, maximum tracked relative file path 134 and maximum absolute file path 248. Validate both
+  projected paths before cleanup, directory creation, Go archive download/extraction or network fetch.
+- Never read, reuse, migrate or automatically delete the failed ignored `.tools/supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/` tree.
 - Do not patch `internal/db/diff`, build the Bun wrapper, add a production dependency, change Docker Desktop settings, or weaken the exact single-loopback gate.
 - Use `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org`, empty `GOPRIVATE`, `GONOPROXY`,
   `GONOSUMDB`, and `GOINSECURE`; require `go mod verify`.
@@ -39,8 +43,9 @@ native deletion, or container/WSL build until the human selects an option and th
 ## Plan governance
 
 - Plan ID: `DB-001-T10-QSEC006-PLAN`
-- Status: Approved by user on 2026-07-17; implementation in progress
+- Status: Revised after Q-TOOL-001=A; awaiting user approval before Task 2C
 - User approval: `계획 승인, 구현 시작` on 2026-07-17 KST
+- Amendment decision: `Q-TOOL-001: A` on 2026-07-18 KST; implementation approval for this revision not yet received
 - Date: 2026-07-17 KST
 - Branch: `codex/db-001-layered-enforcement`
 - Worktree: `.worktrees/db-001-layered-enforcement`
@@ -710,17 +715,284 @@ Review the exact two-file diff, stage only the bootstrap and its test, assert th
 those two files, review cached diff/check, and commit `fix(tooling): enable local Git long paths`. Obtain a
 fresh specification/quality review before the next Task 3 retry.
 
+## Task 2C: Shorten Windows checkout roots and enforce the path budget
+
+**Files:**
+
+- Modify: `scripts/supabase-cli.local-patch.source.json`
+- Modify: `scripts/tests/test_patched_supabase_tooling.py`
+- Modify: `scripts/bootstrap_patched_supabase.ps1`
+
+**Interfaces:**
+
+- Consumes: Q-TOOL-001=A/D-032/ADR-0014, Task 2B local `core.longpaths=true`, existing
+  `Resolve-SafeChildPath` and `Remove-OwnedPath`.
+- Produces: exact source-manifest `workspace` contract, `.tools/s/a` and `.tools/s/b`, fail-closed
+  projected path validation before any checkout mutation, and no legacy checkout/build/delete path.
+
+- [ ] **Step 1: Add source-workspace and production-path RED tests**
+
+Extend `EXPECTED_SOURCE` in `scripts/tests/test_patched_supabase_tooling.py` with this exact peer of
+`patch` and `build`:
+
+```python
+"workspace": {
+    "checkout_a": "s/a",
+    "checkout_b": "s/b",
+    "max_tracked_relative_file_path_length": 134,
+    "max_absolute_file_path_length": 248,
+},
+```
+
+In `test_script_has_only_approved_modes_sources_and_operations`, require exact production literals
+`$sourceManifest.workspace.checkout_a`, `$sourceManifest.workspace.checkout_b`, and
+`VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE`; remove the two old long checkout destination literals.
+
+Update existing `test_checkout_sets_local_longpaths_before_fetch_and_checkout` before production changes:
+require the extracted `New-VerifiedSupabaseCheckout` AST parameter names to be exactly `Destination`,
+`MaxTrackedRelativeFilePathLength`, `MaxAbsoluteFilePathLength`; this explicit signature assertion makes the
+current one-parameter production function RED instead of allowing extra positional values through `$args`.
+Set the expected destination to `s/a`, derive the expected checkout under the fixture `.tools`, and invoke
+`New-VerifiedSupabaseCheckout $script:ExpectedDestination 134 248`. Define a controlled
+`Assert-PatchedCheckoutPathBudget` stub that accepts only those exact three values, returns the expected
+checkout, records one call, and fails if `Remove-OwnedPath` occurs first. Preserve the exact init/local
+autocrlf/local longpaths/origin/fetch/tag/commit/checkout/HEAD argv, timeout and call-order assertions and
+require exactly one budget-stub call before the one owned-path removal.
+
+Add these five tests to `PatchedBootstrapContractTests` before any production change:
+
+```python
+def test_checkout_workspace_preflight_validates_both_roots_before_toolchain_or_mutation(self) -> None:
+    """Main-flow AST order plus exact long-root fixture: both checks precede Go/tool/network/mutation."""
+
+def test_checkout_budget_accepts_244_and_248_rejects_249_before_cleanup(self) -> None:
+    """Synthetic roots prove current projection, inclusive cap, and fail-before-remove at cap+1."""
+
+def test_remove_owned_path_cleans_inclusive_248_character_tree(self) -> None:
+    """Existing PS5.1 cleanup must remove an owned non-reparse tree at the inclusive cap."""
+
+def test_short_checkout_reparse_is_rejected_and_external_sentinel_untouched(self) -> None:
+    """A `.tools/s` or `.tools/s/a` junction must fail controlled before external deletion."""
+
+def test_legacy_source_root_is_deny_only_never_checkout_build_or_delete(self) -> None:
+    """AST permits one exact deny-list string and zero data-flow uses as checkout/build/delete input."""
+```
+
+The main-flow test must inspect the script end block and require both manifest-derived A/B budget calls
+before `Get-VerifiedGoToolchain`, `New-VerifiedSupabaseCheckout`, download/extraction helpers, directory
+creation, `Remove-OwnedPath`, and child/network invocation. It must also run an exact source-manifest fixture
+whose projected A path is 249, require the stable workspace failure, and prove `.tools` was never created.
+
+The budget test uses synthetic roots to assert projected 244 and 248 both return the exact safe child, then
+invokes `New-VerifiedSupabaseCheckout` at projected 249 with a stubbed `Remove-OwnedPath` counter and requires
+`VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE:invalid:2` with counter zero. The legacy test walks PowerShell
+AST string constants and command arguments: `supabase-source` must appear exactly once inside the
+`-GoArchivePath` mutable-child deny list, and never flow to checkout destination, build working directory,
+`Resolve-SafeChildPath`, `Remove-OwnedPath`, or directory creation.
+
+The short-checkout reparse test creates a temporary external directory with a sentinel, creates only a
+junction at the temporary fixture's `.tools/s` (and a subtest at `.tools/s/a`), calls the extracted production
+checkout/path functions, requires controlled `VALIDATE-PATCHED-SUPABASE-PATH:invalid:2`, and proves the
+sentinel and junction target are unchanged. It must remove only the junction during test teardown.
+
+Extend existing `test_override_inside_owned_cleanup_tree_is_rejected_without_mutation` so
+`mutable_child` includes `"s"`. Extend `test_reparse_override_targeting_owned_tree_is_rejected` with
+`owned_child in ("go", "s")`. The `.tools/s` direct and junction archive overrides must both retain their
+payload and fail at `VERIFY-GO-ARCHIVE reason=invalid` before hash, extraction, or checkout work.
+
+First run the two unchanged-production characterizations:
+
+```powershell
+apps/api/.venv/Scripts/python.exe -B -m unittest `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_remove_owned_path_cleans_inclusive_248_character_tree `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_short_checkout_reparse_is_rejected_and_external_sentinel_untouched -v
+```
+
+Expected: 2/2 PASS against unchanged `Resolve-SafeChildPath`/`Remove-OwnedPath`: the 248 tree is removed,
+both junction cases are rejected, and the external sentinel is untouched. If either fails or leaves a partial
+tree, stop and reopen Q-TOOL-001; do not implement the 248 cap.
+
+Then run the remaining eight focused RED methods:
+
+```powershell
+apps/api/.venv/Scripts/python.exe -B -m unittest `
+  scripts.tests.test_patched_supabase_tooling.PatchedSourceLockTests.test_source_manifest_is_exact `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_script_has_only_approved_modes_sources_and_operations `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_sets_local_longpaths_before_fetch_and_checkout `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_workspace_preflight_validates_both_roots_before_toolchain_or_mutation `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_budget_accepts_244_and_248_rejects_249_before_cleanup `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_legacy_source_root_is_deny_only_never_checkout_build_or_delete `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_override_inside_owned_cleanup_tree_is_rejected_without_mutation `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_reparse_override_targeting_owned_tree_is_rejected -v
+```
+
+Expected: 8 methods are RED only for the absent manifest workspace, short-root/signature/main-order/budget helper,
+deny-only contract, and missing new `s` archive-override boundary. No repository `.tools` mutation, Go
+download/extraction, network, Docker or DB action.
+
+- [ ] **Step 2: Pin the exact workspace contract in the source manifest and validator**
+
+Add this exact object to `scripts/supabase-cli.local-patch.source.json` between `patch` and `build`:
+
+```json
+"workspace": {
+  "checkout_a": "s/a",
+  "checkout_b": "s/b",
+  "max_tracked_relative_file_path_length": 134,
+  "max_absolute_file_path_length": 248
+},
+```
+
+Update `Assert-ExactSourceManifest` so raw/parsed property allowlists include `workspace` and its four exact
+properties. Require both checkout values to be non-empty strings; require both length values to be integers;
+approve only the four literal values above. Do not increment schema version 1 because this manifest has no
+published consumer and the validator changes atomically with it.
+
+Run the exact manifest test again.
+
+Expected: `test_source_manifest_is_exact` passes; the other production signature/behavior/archive-boundary tests remain RED.
+
+- [ ] **Step 3: Add the fail-closed path-budget helper before any checkout mutation**
+
+Add this helper after `Remove-OwnedPath`:
+
+```powershell
+function Assert-PatchedCheckoutPathBudget {
+    param(
+        [string]$Destination,
+        [int]$MaxTrackedRelativeFilePathLength,
+        [int]$MaxAbsoluteFilePathLength
+    )
+
+    $checkout = Resolve-SafeChildPath $script:ToolRoot $Destination
+    $projectedMaximum = $checkout.Length + 1 + $MaxTrackedRelativeFilePathLength
+    if (
+        $MaxTrackedRelativeFilePathLength -ne 134 -or
+        $MaxAbsoluteFilePathLength -ne 248 -or
+        $projectedMaximum -gt $MaxAbsoluteFilePathLength
+    ) {
+        Throw-PatchedBootstrapFailure $script:CurrentStep "invalid" 2
+    }
+    return $checkout
+}
+```
+
+Immediately after `$script:ToolRoot` is resolved and before Go archive/toolchain work, set
+`$script:CurrentStep = "VALIDATE-PATCHED-SUPABASE-CHECKOUT-WORKSPACE"`, validate checkout A and B with
+the four pinned manifest values, and emit one stable START/PASS pair. Then change
+`New-VerifiedSupabaseCheckout` to accept the two length values and make the same helper its first operation,
+before `Remove-OwnedPath`:
+
+```powershell
+$checkout = Assert-PatchedCheckoutPathBudget (
+    $Destination
+) $MaxTrackedRelativeFilePathLength $MaxAbsoluteFilePathLength
+Remove-OwnedPath $script:ToolRoot $checkout
+```
+
+Replace the main calls with manifest-derived destinations:
+
+```powershell
+$checkoutA = New-VerifiedSupabaseCheckout (
+    $sourceManifest.workspace.checkout_a
+) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+    $sourceManifest.workspace.max_absolute_file_path_length
+)
+$checkoutB = New-VerifiedSupabaseCheckout (
+    $sourceManifest.workspace.checkout_b
+) $sourceManifest.workspace.max_tracked_relative_file_path_length (
+    $sourceManifest.workspace.max_absolute_file_path_length
+)
+```
+
+Add `"s"` to the existing mutable-child rejection list used by `-GoArchivePath`; retain the existing
+`"supabase-source"` entry only as a deny boundary so the quarantined tree can never become an archive input.
+
+Do not change `Remove-OwnedPath`, add Win32 deletion, touch the legacy long root, or alter Git/source/build
+arguments. The approved current-worktree projections must be exactly 244 for both roots.
+
+- [ ] **Step 4: Prove the pre-written workspace tests GREEN and run full boundaries**
+
+Before the focused tests, remeasure the exact approved worktree projections without touching `.tools`:
+
+```powershell
+$root = (Resolve-Path -LiteralPath '.').Path
+$relative = 'apps\cli-e2e\fixtures\scenarios\db-advisors-security-exits-zero-when-fail-on-error-and-no-error-level-advisors-found\interactions.json'
+$projectedA = (Join-Path $root '.tools\s\a').Length + 1 + $relative.Length
+$projectedB = (Join-Path $root '.tools\s\b').Length + 1 + $relative.Length
+if ($relative.Length -ne 134 -or $projectedA -ne 244 -or $projectedB -ne 244) {
+    throw "approved checkout projection changed"
+}
+```
+
+Run all five new workspace tests plus the updated Git-argv harness and two expanded archive-override methods,
+then full boundaries and the PowerShell parser:
+
+```powershell
+apps/api/.venv/Scripts/python.exe -B -m unittest `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_workspace_preflight_validates_both_roots_before_toolchain_or_mutation `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_sets_local_longpaths_before_fetch_and_checkout `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_checkout_budget_accepts_244_and_248_rejects_249_before_cleanup `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_remove_owned_path_cleans_inclusive_248_character_tree `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_short_checkout_reparse_is_rejected_and_external_sentinel_untouched `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_legacy_source_root_is_deny_only_never_checkout_build_or_delete `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_override_inside_owned_cleanup_tree_is_rejected_without_mutation `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_reparse_override_targeting_owned_tree_is_rejected -v
+apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling -v
+apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_tooling.SupabaseBootstrapBehaviorTests -v
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1
+$tokens = $null
+$errors = $null
+$null = [System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path scripts/bootstrap_patched_supabase.ps1),
+    [ref]$tokens,
+    [ref]$errors
+)
+if ($errors.Count -ne 0) { throw "PowerShell parse failed" }
+git diff --check
+```
+
+Expected: focused 8/8 methods, patched 23/23 and stock 7/7 pass; projected A/B are 244; 248 cleanup leaves no
+partial tree; 249 calls cleanup zero times; short-root junction targets stay untouched; direct/reparse
+`.tools/s` archive overrides fail invalid; secret scan/diff check exit 0 and parser errors 0. Do not run
+`-BuildCandidate`, Docker or DB in Task 2C.
+
+- [ ] **Step 5: Review exact three-file scope and commit Task 2C**
+
+Review the literal workspace contract and every legacy-root use, then stage and verify exactly three files:
+
+```powershell
+$expected = @(
+    'scripts/bootstrap_patched_supabase.ps1',
+    'scripts/supabase-cli.local-patch.source.json',
+    'scripts/tests/test_patched_supabase_tooling.py'
+)
+git add -- $expected
+$staged = @(git -c core.quotepath=false diff --cached --name-only)
+if (@(Compare-Object -ReferenceObject $expected -DifferenceObject $staged).Count -ne 0) {
+    throw "unexpected staged scope"
+}
+git diff --cached -- scripts/bootstrap_patched_supabase.ps1 `
+    scripts/supabase-cli.local-patch.source.json `
+    scripts/tests/test_patched_supabase_tooling.py
+git diff --cached --check
+git commit -m "fix(tooling): shorten patched CLI checkout roots"
+```
+
+Obtain fresh independent specification and quality reviews with Critical/Important findings zero. Only then
+may Task 3 preflight begin.
+
 ## Task 3: Produce and pin the reproducible runtime artifact
 
 **Files:**
 
 - Modify: `scripts/tests/test_patched_supabase_tooling.py`
 - Create: `scripts/supabase-cli.local-patch.runtime.json`
-- Generated/ignored: `.tools/go/1.25.11/windows-amd64/`, two source checkouts, two candidate binaries, final patched binary.
+- Generated/ignored: `.tools/go/1.25.11/windows-amd64/`, `.tools/s/a`, `.tools/s/b`, two candidate binaries, final patched binary. The legacy `.tools/supabase-source/...` partial tree is quarantined evidence, not an input.
 
 **Interfaces:**
 
-- Consumes: Task 2 candidate builder.
+- Consumes: Task 2 candidate builder plus Task 2C short-root/path-budget contract and its independent approval.
 - Produces: a reviewed literal binary SHA-256 and installed exact runtime accepted by Task 4.
 
 - [ ] **Step 1: Preflight clean external state**
@@ -733,10 +1005,21 @@ docker ps -aq
 docker ps -aq --filter 'label=com.supabase.cli.project=sejong-ai-local'
 $finalPatchedBinary = Join-Path $PWD ".tools\supabase\v2.109.1-sejong-loopback\supabase.exe"
 if (Test-Path -LiteralPath $finalPatchedBinary) { throw "unexpected pre-existing final binary" }
+$shortA = Join-Path $PWD ".tools\s\a"
+$shortB = Join-Path $PWD ".tools\s\b"
+if (Test-Path -LiteralPath $shortA) { throw "unexpected pre-existing short checkout A" }
+if (Test-Path -LiteralPath $shortB) { throw "unexpected pre-existing short checkout B" }
+$bootstrapText = Get-Content -Raw -LiteralPath scripts/bootstrap_patched_supabase.ps1
+$legacyDenyCount = [regex]::Matches($bootstrapText, '"supabase-source"').Count
+if ($legacyDenyCount -ne 1) { throw "legacy deny boundary count changed" }
+apps/api/.venv/Scripts/python.exe -B -m unittest `
+  scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_legacy_source_root_is_deny_only_never_checkout_build_or_delete -v
+if ($LASTEXITCODE -ne 0) { throw "legacy source root usage gate failed" }
 ```
 
 Expected: Git clean; Desktop running; Engine `29.2.1`; both container queries empty. Stop if any container
-exists, the Engine is below 28, or the final patched binary already exists.
+exists, the Engine is below 28, the final patched binary/short checkout already exists, or the exact
+deny-only legacy-root test fails. The legacy ignored tree may remain on disk and must not be deleted.
 
 - [ ] **Step 2: Build the candidate twice and capture the agreed hash**
 

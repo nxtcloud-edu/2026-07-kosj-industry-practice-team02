@@ -1,8 +1,8 @@
 # Q-SEC-006 project-local patched Supabase CLI 설계
 
-- Status: Approved by user on 2026-07-17; implementation plan approved and in progress
+- Status: Approved by user on 2026-07-17; amended by Q-TOOL-001=A on 2026-07-18; revised implementation plan awaiting approval
 - Date: 2026-07-17
-- Decision: Q-SEC-006=A / D-031 / ADR-0013
+- Decision: Q-SEC-006=A / D-031 / ADR-0013; Q-TOOL-001=A / D-032 / ADR-0014
 - Scope: DB-001 Task 10의 local/private 개발 환경만
 
 ## 1. 문제와 목표
@@ -70,11 +70,16 @@ Windows archive checksum은 해당 commit의 `go.mod`, `mise.toml`, `mise.lock`�
 
 생성물은 ignored `.tools/` 아래에 분리한다.
 
-- source checkout: `.tools/supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/`
+- source checkouts: `.tools/s/a`, `.tools/s/b`
 - Go toolchain: `.tools/go/1.25.11/windows-amd64/`
 - binary: `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`
 
 stock `.tools/supabase/v2.109.1/`은 비교·롤백 기준으로 그대로 보존한다.
+
+이전 실패에서 남은 ignored
+`.tools/supabase-source/6d4c19870ed213ba7f682f117d0345c8a40bfa94/` tree는 runtime
+authority가 아니며 새 bootstrap이 checkout/build input으로 사용하거나 자동 삭제하지 않는다. 별도 human-approved cleanup
+전까지 격리된 재생성 artifact로만 기록한다.
 
 ### 4.2 최소 patch
 
@@ -93,26 +98,31 @@ patch 적용 후 `git diff --name-only`는 위 두 파일만 허용하고 `git d
 
 bootstrap은 임의 branch나 PATH를 신뢰하지 않는다.
 
-1. exact HTTPS repository만 허용하고 서로 독립된 두 fresh checkout에서 Git tag object와 peeled
+1. source manifest는 tool-root-relative checkout `s/a`, `s/b`, pinned upstream tree의 최대
+   relative file path 134자와 허용 absolute file path 상한 248자를 고정한다. bootstrap은
+   `.tools/s/a`, `.tools/s/b`의 projected maximum absolute file path를 cleanup·directory 생성·Go
+   archive download/extraction·network fetch 전에 계산하고 상한을 넘으면 fail closed한다. 현재 exact
+   worktree 투영값은 244자다.
+2. exact HTTPS repository만 허용하고 서로 독립된 두 fresh checkout에서 Git tag object와 peeled
    commit을 각각 검증한다.
-2. detached exact commit에서만 patch SHA-256과 `git apply --check`를 검증해 적용한다.
-3. official Go ZIP을 exact URL에서 받아 SHA-256을 먼저 확인한 뒤 `.tools/`에
+3. detached exact commit에서만 patch SHA-256과 `git apply --check`를 검증해 적용한다.
+4. official Go ZIP을 exact URL에서 받아 SHA-256을 먼저 확인한 뒤 `.tools/`에
    추출한다. 시스템 Go나 자동 설치 package manager는 사용하지 않는다.
-4. exact checkout의 `go.sum`과 Go checksum database 검증을 유지한다. bootstrap은 inherited
+5. exact checkout의 `go.sum`과 Go checksum database 검증을 유지한다. bootstrap은 inherited
    module proxy/private 설정 대신 `GOPROXY=https://proxy.golang.org`,
    `GOSUMDB=sum.golang.org`, 빈 `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`/`GOINSECURE`를 사용하고
    `go mod verify`를 통과시킨다. dependency version을 수정하거나 vendor tree를 생성하지 않는다.
-5. 상류 build와 동일한 핵심 조건 `GOOS=windows`, `GOARCH=amd64`, `GOAMD64=v1`,
+6. 상류 build와 동일한 핵심 조건 `GOOS=windows`, `GOARCH=amd64`, `GOAMD64=v1`,
    `CGO_ENABLED=0`, `GOENV=off`, `GOWORK=off`, `GOTOOLCHAIN=local`, 빈 `GOFLAGS`와
    `GOEXPERIMENT`, `-trimpath`,
    `-ldflags="-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1"`을 사용한다.
    local reproducibility를 위해 `-buildvcs=false`를 추가하며 telemetry secret ldflag는 모두
    비우고, 모든 pinned Go 환경변수를 `finally`에서 원상 복구한다.
-6. 두 independent exact checkout에 같은 verified patch를 적용해 두 번 build하고 SHA-256
+7. 두 independent exact checkout에 같은 verified patch를 적용해 두 번 build하고 SHA-256
    일치를 요구한다. 최초 승인된
    build의 hash를 runtime manifest에 기록한 뒤 bootstrap verify-only와 runner가 그 hash를
    강제한다.
-7. binary `--version`은 정확히 `2.109.1`이어야 한다.
+8. binary `--version`은 정확히 `2.109.1`이어야 한다.
 
 `apps/cli-go`는 공식 CI에서도 `go build main.go` 뒤 직접 `init`/`start`에 사용되는 실행 가능한
 CLI다. DB-001 runner는 Go DB 명령만 필요하므로 stock release의 Bun shell wrapper를 새로
@@ -143,6 +153,8 @@ container 0을 재검증한다. 이 gate 뒤에만 reset, credential, pgTAP, int
 - source/tag/commit/toolchain/patch/binary/version 중 하나라도 다르면 operational/invalid로
   fail closed한다.
 - download 중간 파일과 실패한 build output은 소유한 `.tools/` child 경로만 안전하게 지운다.
+- source checkout cleanup은 path budget을 먼저 통과한 `.tools/s/{a,b}`에만 수행한다. 이전
+  `.tools/supabase-source/...` partial tree는 자동 cleanup 대상이 아니다.
 - 질문 원문, 응답, API key, DSN, 실제 개인정보는 이 흐름에 들어오지 않는다.
 
 ## 6. 테스트와 인수 기준
@@ -150,6 +162,9 @@ container 0을 재검증한다. 이 gate 뒤에만 reset, credential, pgTAP, int
 구현 승인 후 최소 다음 증거가 필요하다.
 
 - repository tooling test의 source/runtime manifest schema/allowlisted-host/path/hash/verify-only RED→GREEN
+- short checkout exact path, 두 root의 pre-toolchain/pre-mutation ordering, synthetic 244/248 accept와
+  249 reject, exact 248-character tree cleanup, short-root junction sentinel 보존, direct/reparse
+  `.tools/s` archive override 거부, legacy-root deny-only 사용처 RED→GREEN
 - upstream focused Go test RED→GREEN, `go test ./internal/db/start -count=1` GREEN
 - clean build 2회의 동일 SHA-256과 exact `--version=2.109.1`
 - patched binary를 사용하는 runner unit/mutation tests GREEN
@@ -188,5 +203,9 @@ artifact를 제거하고 기존 fail-closed DB 차단 상태로 복원한다. `.
 binary는 재생성 가능하므로 안전 경로 확인 후 삭제할 수 있으며 tracked patch·manifest·script는
 commit revert로 철회한다. DB migration/data 삭제는 없다.
 
-사용자가 이 문서를 승인해 `PLANS.md` 형식의 exact 실행계획을 별도 작성했다. 그 계획이 승인되기 전에는
-Go 설치, source patch/build, actual DB start/reset 또는 제품 코드 변경을 시작하지 않는다.
+기존 failed `.tools/supabase-source/...` tree는 short-root rollback이나 bootstrap cleanup에 포함하지
+않는다. 별도 삭제가 필요하면 absolute target과 reparse 경계를 다시 확인하고 인간 승인을 받는다.
+
+사용자가 원 설계와 실행계획을 승인한 뒤 구현을 시작했고, 2026-07-18 Q-TOOL-001=A로 workspace
+amendment를 승인했다. 수정된 `PLANS.md` 형식 실행계획이 다시 승인되기 전에는 Task 2C, source
+build, actual DB start/reset 또는 제품 코드 변경을 재개하지 않는다.
