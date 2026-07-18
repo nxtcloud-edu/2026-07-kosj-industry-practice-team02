@@ -198,12 +198,24 @@ def validate_staging(
     normalized_issues = sorted(issues, key=lambda issue: (
         issue.artifact, issue.record_id or "", issue.field or "", issue.code,
     ))
+    manifest = artifacts.get("approval_manifest.json")
+    state = manifest.get("state") if isinstance(manifest, dict) else None
+    valid = not normalized_issues
     return {
         "schema_version": 1,
         "draft_version": "0.1.0-draft.1",
-        "valid": not normalized_issues,
+        "valid": valid,
         "counts": counts,
-        "approval_projection": _approval_projection(artifacts.get("approval_manifest.json")),
+        "approval_projection": (
+            _approval_projection(manifest)
+            if valid and state == "APPROVED_FOR_INITIAL_RELEASE"
+            else None
+        ),
+        "recommendation_projection": (
+            _recommendation_projection(manifest)
+            if valid and state == "PENDING_PM_REVIEW"
+            else None
+        ),
         "artifact_hashes": artifact_hashes,
         "issues": [
             {
@@ -216,7 +228,7 @@ def validate_staging(
         ],
         "warnings": (
             ["PM_REVIEW_REQUIRED"]
-            if artifacts.get("approval_manifest.json", {}).get("state") == "PENDING_PM_REVIEW"
+            if state == "PENDING_PM_REVIEW"
             else []
         ),
     }
@@ -589,7 +601,7 @@ def _validate_manifest(
             for decision in decisions
         ):
             _issue(issues, "PENDING_DECISION_EVIDENCE", artifact, None, "decisions")
-        if _approval_projection(manifest) != {
+        if _recommendation_projection(manifest) != {
             "initial_kb": 19,
             "initial_office": 3,
             "initial_mapping": 10,
@@ -650,10 +662,22 @@ def _expected_decisions(
     return sorted(expected, key=lambda entry: (entry[0], entry[1]))
 
 
-def _approval_projection(manifest: object | None) -> dict[str, int]:
-    decisions = manifest.get("decisions") if isinstance(manifest, dict) else []
+def _recommendation_projection(manifest: object | None) -> dict[str, int] | None:
+    return _manifest_projection(manifest, "PENDING_PM_REVIEW", "recommended_decision")
+
+
+def _approval_projection(manifest: object | None) -> dict[str, int] | None:
+    return _manifest_projection(manifest, "APPROVED_FOR_INITIAL_RELEASE", "decision")
+
+
+def _manifest_projection(
+    manifest: object | None, expected_state: str, field: str,
+) -> dict[str, int] | None:
+    if not isinstance(manifest, dict) or manifest.get("state") != expected_state:
+        return None
+    decisions = manifest.get("decisions")
     if not isinstance(decisions, list):
-        decisions = []
+        return None
     specs = _static_decision_specs()
     expected_pairs = [(record_type, record_id) for record_type, record_id, _ in specs]
     pairs = [
@@ -661,22 +685,20 @@ def _approval_projection(manifest: object | None) -> dict[str, int]:
         for entry in decisions if isinstance(entry, dict)
     ]
     if pairs != expected_pairs:
-        return _empty_projection()
-    state = manifest.get("state") if isinstance(manifest, dict) else None
+        return None
     if any(
         entry.get("recommended_decision") != recommendation
         for entry, (_, _, recommendation) in zip(decisions, specs, strict=True)
         if isinstance(entry, dict)
     ):
-        return _empty_projection()
-    field = "recommended_decision" if state == "PENDING_PM_REVIEW" else "decision"
-    if state == "PENDING_PM_REVIEW" and any(
+        return None
+    if expected_state == "PENDING_PM_REVIEW" and any(
         isinstance(entry, dict)
         and (entry.get("decision") is not None or entry.get("comment") is not None)
         for entry in decisions
     ):
-        return _empty_projection()
-    if state in {"APPROVED_FOR_INITIAL_RELEASE", "REJECTED"} and any(
+        return None
+    if expected_state == "APPROVED_FOR_INITIAL_RELEASE" and any(
         not isinstance(entry, dict)
         or entry.get("decision") not in {"APPROVE_INITIAL_RELEASE", "WITHHOLD_FOR_REGRESSION", "REJECT"}
         or (
@@ -685,16 +707,14 @@ def _approval_projection(manifest: object | None) -> dict[str, int]:
         )
         for entry in decisions
     ):
-        return _empty_projection()
-    if state == "APPROVED_FOR_INITIAL_RELEASE":
+        return None
+    if expected_state == "APPROVED_FOR_INITIAL_RELEASE":
         reviewed_by_pair = {
             (entry.get("record_type"), entry.get("record_id")): entry.get("decision")
             for entry in decisions if isinstance(entry, dict)
         }
         if not all(_approved_policy_flags(reviewed_by_pair)):
-            return _empty_projection()
-    if state not in {"PENDING_PM_REVIEW", "APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
-        return _empty_projection()
+            return None
     approved = {"KB": 0, "OFFICE": 0, "MAPPING": 0}
     withheld_kb = 0
     rejected_mapping = 0
@@ -730,10 +750,6 @@ def _static_decision_specs() -> list[tuple[str, str, str]]:
     } else "APPROVE_INITIAL_RELEASE") for record_id in mappings)
     specs.extend(("OFFICE", record_id, "APPROVE_INITIAL_RELEASE") for record_id in office_ids)
     return specs
-
-
-def _empty_projection() -> dict[str, int]:
-    return {"initial_kb": 0, "initial_office": 0, "initial_mapping": 0, "withheld_kb": 0, "rejected_mapping": 0}
 
 
 def _manifest_record_id(decision: Mapping[str, object]) -> str | None:

@@ -436,6 +436,15 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             entry["comment"] = "PM record 검수 완료"
         return manifest
 
+    def legacy_pending_manifest(self, directory: Path) -> dict[str, object]:
+        manifest = build_pending_manifest(directory, "2026-07-18T19:32:04+09:00")
+        decisions = manifest["decisions"]
+        assert isinstance(decisions, list)
+        for entry in decisions:
+            assert isinstance(entry, dict)
+            entry["decision"] = entry.pop("recommended_decision")
+        return manifest
+
     def test_exact_counts_ids_and_record_order_are_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = self.complete_draft(Path(temporary_directory) / "draft")
@@ -785,6 +794,15 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertTrue(report["valid"])
             self.assertEqual(["PM_REVIEW_REQUIRED"], report["warnings"])
 
+            self.assertIsNone(report["approval_projection"])
+            self.assertEqual({
+                "initial_kb": 19,
+                "initial_office": 3,
+                "initial_mapping": 10,
+                "withheld_kb": 1,
+                "rejected_mapping": 2,
+            }, report["recommendation_projection"])
+
     def test_reviewed_approved_and_rejected_states_validate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = self.complete_draft(Path(temporary_directory) / "draft")
@@ -799,6 +817,43 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
                     report = self.validate(directory, registry)
                     self.assertTrue(report["valid"], report["issues"])
                     self.assertEqual([], report["warnings"])
+                    self.assertIsNone(report["recommendation_projection"])
+                    if state == "REJECTED":
+                        self.assertIsNone(report["approval_projection"])
+                    else:
+                        self.assertEqual(10, report["approval_projection"]["initial_mapping"])
+
+    def test_invalid_approval_or_recommendation_evidence_has_no_trusted_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest_path = directory / "approval_manifest.json"
+
+            pending = load_json_object(manifest_path)
+            pending["decisions"][0]["recommended_decision"] = "REJECT"
+            write_json(manifest_path, pending)
+            report = self.validate(directory, registry)
+            self.assertFalse(report["valid"])
+            self.assertIsNone(report["approval_projection"])
+            self.assertIsNone(report["recommendation_projection"])
+
+            decision_invalid = self.reviewed_manifest(directory)
+            decision_invalid["decisions"][0]["decision"] = None
+            write_json(manifest_path, decision_invalid)
+            report = self.validate(directory, registry)
+            self.assertFalse(report["valid"])
+            self.assertIsNone(report["approval_projection"])
+            self.assertIsNone(report["recommendation_projection"])
+
+            approved = self.reviewed_manifest(directory)
+            write_json(manifest_path, approved)
+            kb_path = directory / "kb_records.json"
+            kb_path.write_bytes(kb_path.read_bytes() + b" ")
+            report = self.validate(directory, registry)
+            self.assertFalse(report["valid"])
+            self.assertIn("MANIFEST_HASH_MISMATCH", self.codes(report))
+            self.assertIsNone(report["approval_projection"])
+            self.assertIsNone(report["recommendation_projection"])
 
     def test_approved_state_allows_ten_to_twelve_mapping_approvals(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -883,9 +938,7 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             directory = self.complete_draft(Path(temporary_directory) / "draft")
             registry = self.source_registry(Path(temporary_directory))
             manifest_path = directory / "approval_manifest.json"
-            legacy = load_json_object(manifest_path)
-            for entry in legacy["decisions"]:
-                entry["decision"] = entry.pop("recommended_decision")
+            legacy = self.legacy_pending_manifest(directory)
             write_json(manifest_path, legacy)
             self.assertEqual(0, data_staging_cli([
                 "migrate-pending", "--draft-dir", str(directory),
@@ -896,6 +949,72 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertEqual("2026-07-18T21:15:00+09:00", migrated["submitted_at"])
             self.assertTrue(all(entry["decision"] is None for entry in migrated["decisions"]))
             self.assertTrue(all("recommended_decision" in entry for entry in migrated["decisions"]))
+
+    def test_migrate_pending_refuses_every_altered_legacy_boundary_without_writes(self) -> None:
+        def set_artifact(manifest: dict[str, object], field: str, value: object) -> None:
+            artifacts = manifest["artifacts"]
+            assert isinstance(artifacts, list) and isinstance(artifacts[0], dict)
+            artifacts[0][field] = value
+
+        def set_decision(manifest: dict[str, object], field: str, value: object) -> None:
+            decisions = manifest["decisions"]
+            assert isinstance(decisions, list) and isinstance(decisions[0], dict)
+            decisions[0][field] = value
+
+        def reorder_decisions(manifest: dict[str, object]) -> None:
+            decisions = manifest["decisions"]
+            assert isinstance(decisions, list)
+            decisions[0], decisions[1] = decisions[1], decisions[0]
+
+        mutations = (
+            ("schema_version", lambda value: value.__setitem__("schema_version", 99)),
+            ("dataset_id", lambda value: value.__setitem__("dataset_id", "other-data")),
+            ("draft_version", lambda value: value.__setitem__("draft_version", "0.1.0-draft.2")),
+            ("state", lambda value: value.__setitem__("state", "REJECTED")),
+            ("created_by", lambda value: value.__setitem__("created_by", "OTHER")),
+            ("submitted_at", lambda value: value.__setitem__("submitted_at", "2026-07-18 20:45:00")),
+            ("submitted_at_altered", lambda value: value.__setitem__("submitted_at", "2026-07-18T19:32:05+09:00")),
+            ("reviewed_by", lambda value: value.__setitem__("reviewed_by", "PM-REVIEWER")),
+            ("reviewed_at", lambda value: value.__setitem__("reviewed_at", "2026-07-18T21:00:00+09:00")),
+            ("review_comment", lambda value: value.__setitem__("review_comment", "검수 흔적")),
+            ("top_level_unknown", lambda value: value.__setitem__("unexpected", True)),
+            ("artifact_path", lambda value: set_artifact(value, "path", "other.json")),
+            ("artifact_count", lambda value: set_artifact(value, "record_count", 99)),
+            ("artifact_hash", lambda value: set_artifact(value, "sha256", "0" * 64)),
+            ("artifact_unknown", lambda value: set_artifact(value, "unexpected", True)),
+            ("decision_type", lambda value: set_decision(value, "record_type", "OFFICE")),
+            ("decision_id", lambda value: set_decision(value, "record_id", "KB-MOVE-01")),
+            ("decision_value", lambda value: set_decision(value, "decision", "REJECT")),
+            ("decision_comment", lambda value: set_decision(value, "comment", "altered")),
+            ("decision_unknown", lambda value: set_decision(value, "unexpected", True)),
+            ("decision_order", reorder_decisions),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary_directory:
+                directory = self.complete_draft(Path(temporary_directory) / "draft")
+                registry = self.source_registry(Path(temporary_directory))
+                manifest_path = directory / "approval_manifest.json"
+                legacy = self.legacy_pending_manifest(directory)
+                mutate(legacy)
+                write_json(manifest_path, legacy)
+                before = manifest_path.read_bytes()
+                self.assertEqual(1, data_staging_cli([
+                    "migrate-pending", "--draft-dir", str(directory),
+                    "--submitted-at", "2026-07-18T21:15:00+09:00",
+                    "--source-registry", str(registry),
+                ]))
+                self.assertEqual(before, manifest_path.read_bytes())
+
+    def test_migrate_pending_refuses_current_new_shape_without_writes(self) -> None:
+        directory = Path("data/staging/data-001/0.1.0-draft.1")
+        manifest_path = directory / "approval_manifest.json"
+        before = manifest_path.read_bytes()
+        self.assertEqual(1, data_staging_cli([
+            "migrate-pending", "--draft-dir", str(directory),
+            "--submitted-at", "2026-07-18T21:15:00+09:00",
+            "--source-registry", "data/official/kb_source_registry.csv",
+        ]))
+        self.assertEqual(before, manifest_path.read_bytes())
 
 
 if __name__ == "__main__":

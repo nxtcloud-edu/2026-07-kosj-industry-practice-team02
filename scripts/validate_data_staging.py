@@ -24,6 +24,7 @@ from scripts.data_staging_validation import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = REPOSITORY_ROOT / "data" / "schemas" / "data-001" / "v1"
 DEFAULT_SOURCE_REGISTRY = REPOSITORY_ROOT / "data" / "official" / "kb_source_registry.csv"
+LEGACY_PENDING_SUBMITTED_AT = "2026-07-18T19:32:04+09:00"
 
 
 class _SafeArgumentParser(argparse.ArgumentParser):
@@ -156,31 +157,23 @@ def _has_review_evidence(manifest: dict[str, object]) -> bool:
 def _is_legacy_pending_manifest(
     existing: dict[str, object], candidate: dict[str, object]
 ) -> bool:
-    if existing.get("state") != "PENDING_PM_REVIEW":
-        return False
-    if any(existing.get(field) is not None for field in ("reviewed_by", "reviewed_at", "review_comment")):
-        return False
-    if existing.get("artifacts") != candidate.get("artifacts"):
-        return False
-    old_decisions = existing.get("decisions")
     new_decisions = candidate.get("decisions")
-    if not isinstance(old_decisions, list) or not isinstance(new_decisions, list):
+    if not isinstance(new_decisions, list):
         return False
-    if len(old_decisions) != len(new_decisions):
-        return False
-    for old, new in zip(old_decisions, new_decisions, strict=True):
-        if not isinstance(old, dict) or not isinstance(new, dict):
+    legacy_decisions: list[dict[str, object]] = []
+    for entry in new_decisions:
+        if not isinstance(entry, dict):
             return False
-        if set(old) != {"record_type", "record_id", "decision", "comment"}:
-            return False
-        if (
-            old.get("record_type") != new.get("record_type")
-            or old.get("record_id") != new.get("record_id")
-            or old.get("decision") != new.get("recommended_decision")
-            or old.get("comment") is not None
-        ):
-            return False
-    return True
+        legacy_decisions.append({
+            "record_type": entry.get("record_type"),
+            "record_id": entry.get("record_id"),
+            "decision": entry.get("recommended_decision"),
+            "comment": None,
+        })
+    expected = dict(candidate)
+    expected["submitted_at"] = LEGACY_PENDING_SUBMITTED_AT
+    expected["decisions"] = legacy_decisions
+    return existing == expected
 
 
 def _print_issue_failure(step: str, report: dict[str, object]) -> None:
