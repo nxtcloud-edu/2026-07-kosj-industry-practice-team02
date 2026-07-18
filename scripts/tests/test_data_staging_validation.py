@@ -5,13 +5,17 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from scripts.data_staging_validation import (
     ValidationIssue,
+    build_pending_manifest,
     load_json_object,
     sha256_file,
+    validate_staging,
     validate_schema,
     write_json,
 )
@@ -288,6 +292,258 @@ class DataStagingSchemaValidationTests(unittest.TestCase):
         self.assertLess(first, second)
         with self.assertRaises(AttributeError):
             first.code = "C"  # type: ignore[misc]
+
+
+class DataStagingBusinessValidationTests(unittest.TestCase):
+    def valid_kb(self, number: int) -> dict[str, object]:
+        category = ("MOVE", "CERT", "WASTE", "TAX")[(number - 1) // 5]
+        return {
+            "id": f"KB-{category}-{((number - 1) % 5) + 1:02d}",
+            "data_origin": "OFFICIAL",
+            "category": {
+                "MOVE": "MOVE_IN_RESIDENT_REGISTRATION",
+                "CERT": "CERTIFICATE_ISSUANCE",
+                "WASTE": "BULKY_WASTE",
+                "TAX": "LOCAL_TAX_GENERAL",
+            }[category],
+            "service_name": "공식 민원 안내",
+            "question_examples": ["어떻게 하나요", "어디서 하나요", "무엇이 필요한가요"],
+            "answer_summary": "공식 안내를 확인합니다.",
+            "procedure_steps": ["공식 경로를 확인합니다."],
+            "required_documents": [],
+            "processing_time": None,
+            "fee": None,
+            "department": "민원행정과",
+            "provider": "정부24",
+            "source_title": "공식 민원 안내",
+            "source_url": f"https://plus.gov.kr/service/{number}",
+            "source_service_id": None,
+            "last_verified_at": "2026-07-18",
+            "caution": None,
+            "status": "DRAFT",
+            "created_by": "AI-DATA-BACKEND",
+            "approved_by": None,
+            "approved_at": None,
+        }
+
+    def valid_office(self, public_id: str, region: str) -> dict[str, object]:
+        return {
+            "public_id": public_id,
+            "data_origin": "OFFICIAL",
+            "region": region,
+            "office_name": "행정복지센터",
+            "address": "세종특별자치시 공공기관로 1",
+            "phone": "044-301-6000",
+            "opening_hours": "평일 09:00~18:00",
+            "map_url": "https://place.map.kakao.com/1",
+            "provider": "세종특별자치시",
+            "source_title": "공식 기관 안내",
+            "source_url": "https://www.sejong.go.kr/office",
+            "last_verified_at": "2026-07-18",
+            "created_by": "AI-DATA-BACKEND",
+        }
+
+    def complete_draft(self, directory: Path) -> Path:
+        kb_records = sorted(
+            (self.valid_kb(number) for number in range(1, 21)),
+            key=lambda record: str(record["id"]),
+        )
+        offices = [
+            self.valid_office("OFFICE-AREUM", "아름동"),
+            self.valid_office("OFFICE-DODAM", "도담동"),
+            self.valid_office("OFFICE-JOCHIWON", "조치원읍"),
+        ]
+        intents = [
+            "BULKY_WASTE",
+            "CERTIFICATE_ISSUANCE",
+            "LOCAL_TAX_GENERAL",
+            "MOVE_IN_RESIDENT_REGISTRATION",
+        ]
+        mappings = [
+            {
+                "office_public_id": office["public_id"],
+                "intent": intent,
+                "department_label": "민원행정",
+                "evidence_source_url": "https://www.sejong.go.kr/services",
+                "last_verified_at": "2026-07-18",
+                "created_by": "AI-DATA-BACKEND",
+            }
+            for office in offices
+            for intent in intents
+        ]
+        write_json(directory / "kb_records.json", {
+            "schema_version": 1, "draft_version": "0.1.0-draft.1", "records": kb_records,
+        })
+        write_json(directory / "offices.json", {
+            "schema_version": 1, "draft_version": "0.1.0-draft.1", "records": offices,
+        })
+        write_json(directory / "office_service_mappings.json", {
+            "schema_version": 1, "draft_version": "0.1.0-draft.1", "records": mappings,
+        })
+        write_json(directory / "approval_manifest.json", build_pending_manifest(
+            directory, "2026-07-18T18:00:00+09:00"
+        ))
+        return directory
+
+    def source_registry(self, directory: Path) -> Path:
+        registry = directory / "kb_source_registry.csv"
+        rows = ["kb_id,공식 출처명,제공기관,URL,확인일"]
+        for number in range(1, 21):
+            category = ("MOVE", "CERT", "WASTE", "TAX")[(number - 1) // 5]
+            record_id = f"KB-{category}-{((number - 1) % 5) + 1:02d}"
+            rows.append(
+                f"{record_id},공식 민원 안내,정부24,https://plus.gov.kr/service/{number},2026-07-18"
+            )
+        registry.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
+        return registry
+
+    def validate(self, draft_dir: Path, registry: Path) -> dict[str, object]:
+        return validate_staging(draft_dir, SCHEMA_DIR, registry)
+
+    def codes(self, report: dict[str, object]) -> set[str]:
+        return {issue["code"] for issue in report["issues"]}  # type: ignore[index]
+
+    def test_exact_counts_ids_and_record_order_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            kb = load_json_object(directory / "kb_records.json")
+            records = kb["records"]
+            assert isinstance(records, list)
+            kb["records"] = records[1:] + [records[0], records[0]]
+            write_json(directory / "kb_records.json", kb)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"COUNT_KB", "DUPLICATE_RECORD_ID", "RECORD_ORDER"} <= codes)
+
+    def test_source_registry_domain_and_metadata_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            kb = load_json_object(directory / "kb_records.json")
+            records = kb["records"]
+            assert isinstance(records, list) and isinstance(records[0], dict)
+            records[0]["source_url"] = "https://example.test/private"
+            write_json(directory / "kb_records.json", kb)
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace("KB-TAX-05", "KB-TAX-06"),
+                encoding="utf-8", newline="\n",
+            )
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"SOURCE_REGISTRY_ID_SET", "SOURCE_DOMAIN_NOT_ALLOWED", "SOURCE_METADATA_MISMATCH"} <= codes)
+
+    def test_mapping_references_keys_and_intents_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            mappings = load_json_object(directory / "office_service_mappings.json")
+            records = mappings["records"]
+            assert isinstance(records, list) and isinstance(records[0], dict)
+            records[0]["office_public_id"] = "OFFICE-UNKNOWN"
+            records[1] = dict(records[2])
+            records[3]["intent"] = "UNSUPPORTED"
+            write_json(directory / "office_service_mappings.json", mappings)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"ORPHAN_OFFICE_MAPPING", "DUPLICATE_MAPPING_KEY", "UNSUPPORTED_INTENT"} <= codes)
+
+    def test_pii_secret_and_mock_references_are_rejected_but_public_office_contact_is_allowed(self) -> None:
+        cases = [
+            ("answer_summary", "900101-1234567"),
+            ("answer_summary", "010-1234-5678"),
+            ("answer_summary", "person@example.com"),
+            ("answer_summary", "12가3456"),
+            ("answer_summary", "세종시 보듬로 1 101동 1001호"),
+            ("answer_summary", "api_" + "key=" + "s" + "k-test-token"),
+            ("answer_summary", "시연용 샘플 mock record"),
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            kb = load_json_object(directory / "kb_records.json")
+            records = kb["records"]
+            assert isinstance(records, list)
+            for index, (field, value) in enumerate(cases):
+                assert isinstance(records[index], dict)
+                records[index][field] = value
+            write_json(directory / "kb_records.json", kb)
+            report = self.validate(directory, registry)
+            self.assertTrue({"PII_DETECTED", "SECRET_DETECTED", "MOCK_REFERENCE"} <= self.codes(report))
+            office_issues = [
+                issue for issue in report["issues"]
+                if issue["artifact"] == "offices.json" and issue["field"] in {"records.0.phone", "records.0.address"}
+            ]
+            self.assertEqual([], office_issues)
+
+    def test_draft_metadata_and_pending_manifest_review_fields_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            kb = load_json_object(directory / "kb_records.json")
+            records = kb["records"]
+            assert isinstance(records, list) and isinstance(records[0], dict)
+            records[0]["status"] = "ACTIVE"
+            records[0]["approved_by"] = "PM"
+            write_json(directory / "kb_records.json", kb)
+            manifest = load_json_object(directory / "approval_manifest.json")
+            manifest["reviewed_by"] = "AI-DATA-BACKEND"
+            manifest["reviewed_at"] = "2026-07-18T18:00:00+09:00"
+            write_json(directory / "approval_manifest.json", manifest)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"KB_NOT_DRAFT", "APPROVAL_METADATA_IN_DRAFT", "SELF_APPROVAL"} <= codes)
+
+    def test_manifest_paths_hashes_counts_and_fixed_recommendations_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = load_json_object(directory / "approval_manifest.json")
+            artifacts = manifest["artifacts"]
+            assert isinstance(artifacts, list) and isinstance(artifacts[0], dict)
+            artifacts[0]["path"] = "approval_manifest.json"
+            artifacts[1]["record_count"] = 99
+            artifacts[2]["sha256"] = "0" * 64
+            decisions = manifest["decisions"]
+            assert isinstance(decisions, list) and isinstance(decisions[0], dict)
+            decisions[:] = [decision for decision in decisions if decision["record_id"] != "KB-WASTE-03"]
+            write_json(directory / "approval_manifest.json", manifest)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({
+                "MANIFEST_CONTENT_PATH_SET", "MANIFEST_HASH_MISMATCH", "MANIFEST_COUNT_MISMATCH",
+                "WASTE_03_DECISION", "INITIAL_PROJECTION_MISMATCH",
+            } <= codes)
+
+    def test_runtime_staging_reference_is_rejected_and_cli_has_stable_exit_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            runtime_reference = Path("apps") / "data_staging_boundary_test.py"
+            runtime_reference.write_text('path = "data/staging/data-001"\n', encoding="utf-8")
+            try:
+                self.assertIn("RUNTIME_STAGING_REFERENCE", self.codes(self.validate(directory, registry)))
+            finally:
+                runtime_reference.unlink(missing_ok=True)
+            cli = Path("scripts/validate_data_staging.py")
+            failed = subprocess.run(
+                [sys.executable, "-B", str(cli), "validate", "--draft-dir", str(directory), "--source-registry", str(registry)],
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(0, failed.returncode)
+            self.assertEqual("[PASS] step=VALIDATE-DATA-001\n", failed.stdout)
+            invalid = load_json_object(directory / "kb_records.json")
+            invalid["records"] = []
+            write_json(directory / "kb_records.json", invalid)
+            failed = subprocess.run(
+                [sys.executable, "-B", str(cli), "validate", "--draft-dir", str(directory), "--source-registry", str(registry)],
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(1, failed.returncode)
+            self.assertRegex(failed.stdout, r"^\[FAIL\] step=VALIDATE-DATA-001 issues=.+\n$")
+            self.assertNotIn("공식", failed.stdout)
+            usage = subprocess.run(
+                [sys.executable, "-B", str(cli), "validate"],
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(2, usage.returncode)
+            self.assertEqual("[FAIL] step=VALIDATE-DATA-001 reason=usage\n", usage.stdout)
+            self.assertEqual("", usage.stderr)
 
 
 if __name__ == "__main__":

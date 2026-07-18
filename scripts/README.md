@@ -5,6 +5,8 @@ python scripts/new_implementation_note.py --title "제목" --task-id TASK-001 --
 python scripts/capture_repo_state.py
 python scripts/check_scope_drift.py
 python scripts/validate_codex_package.py
+python -B scripts/validate_data_staging.py prepare --draft-dir data/staging/data-001/0.1.0-draft.1 --submitted-at 2026-07-18T18:00:00+09:00
+python -B scripts/validate_data_staging.py validate --draft-dir data/staging/data-001/0.1.0-draft.1 --report data/processed/data-001/0.1.0-draft.1/validation-report.json
 ```
 
 위 Python 유틸리티와 `scripts/tests/`의 저장소 경계 검사는 Python 표준 라이브러리만 사용한다.
@@ -16,7 +18,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offline
 ```
 
-러너는 Windows PowerShell 5.1+, Node 24.12.0, pnpm 11.13.0, uv 0.11.28과 API venv Python 3.12.13을 먼저 확인한다. 이어 frozen pnpm/uv sync, root tests, Web lint/typecheck/test/synthetic-secret build, API format/lint/mypy/pytest, 계약 생성·diff·test, 두 secret scanner, package validator와 `git diff --check`를 fail-fast로 실행한다.
+러너는 Windows PowerShell 5.1+, Node 24.12.0, pnpm 11.13.0, uv 0.11.28과 API venv Python 3.12.13을 먼저 확인한다. 이어 frozen pnpm/uv sync, root tests, 존재할 때만 DATA-001 staging validator, Web lint/typecheck/test/synthetic-secret build, API format/lint/mypy/pytest, 계약 생성·diff·test, 두 secret scanner, package validator와 `git diff --check`를 fail-fast로 실행한다. canonical staging directory가 아직 없으면 `VALIDATE-DATA-001`은 `staging-absent`로 skip하며, staging을 만들거나 활성화하지 않는다.
+
+## DATA-001 staging validation
+
+`prepare`는 세 content JSON의 count와 SHA-256만 묶은 `PENDING_PM_REVIEW` manifest를 원자적으로 쓴다. `validate`는 staging을 변경하지 않으며, 원문·출처 값·PII/비밀값을 report나 CLI 출력에 복사하지 않는다. 성공 출력은 `[PASS] step=VALIDATE-DATA-001`이고, validation failure는 stable issue-code count만 출력하며 1로 종료한다. 사용법 오류는 2로 종료한다.
 
 공개 옵션은 `-Offline` 하나뿐이다. 오프라인 모드는 warm cache를 요구하며 pnpm/uv offline을 강제한다. 성공·실패 하위 명령의 원문 출력은 비밀·경로 유출을 막기 위해 전달하지 않고 stable step ID만 표시한다. child 실패는 해당 종료코드를 보존하고, 버전·실행·복원 같은 운영 오류는 2를 반환한다. 러너 자체는 삭제와 서버 실행을 하지 않는다.
 

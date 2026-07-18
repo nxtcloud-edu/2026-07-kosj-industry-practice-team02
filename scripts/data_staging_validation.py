@@ -4,12 +4,48 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import csv
 import hashlib
 import json
 from pathlib import Path
 import re
 from typing import Mapping, Sequence
 from urllib.parse import urlparse
+
+
+CONTENT_ARTIFACTS = (
+    "kb_records.json",
+    "offices.json",
+    "office_service_mappings.json",
+)
+ALLOWED_SOURCE_HOSTS = frozenset({
+    "plus.gov.kr",
+    "www.law.go.kr",
+    "law.go.kr",
+    "www.sjwaste.kr",
+    "www.wetax.go.kr",
+    "www.gov.kr",
+    "www.sejong.go.kr",
+})
+SUPPORTED_INTENTS = frozenset({
+    "MOVE_IN_RESIDENT_REGISTRATION",
+    "CERTIFICATE_ISSUANCE",
+    "BULKY_WASTE",
+    "LOCAL_TAX_GENERAL",
+})
+_PII_PATTERNS = (
+    re.compile(r"\b\d{6}-?[1-4]\d{6}\b"),
+    re.compile(r"\b01[016789]-?\d{3,4}-?\d{4}\b"),
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    re.compile(r"\b\d{2,3}[가-힣]\d{4}\b"),
+    re.compile(r"\b\d{1,4}동\s*\d{1,4}호\b"),
+)
+_SECRET_PATTERN = re.compile(
+    r"(?i)(?:\b(?:api[_-]?key|secret|token|password)\s*[:=]|\bsk-[A-Za-z0-9_-]+)"
+)
+_MOCK_PATTERN = re.compile(r"(?i)(?:\bmock\b|시연용\s*샘플)")
+_KB_ID_PATTERN = r"KB-(?:MOVE|CERT|WASTE|TAX)-[0-9]{2}"
+_OFFICE_ID_PATTERN = r"OFFICE-(?:AREUM|DODAM|JOCHIWON)"
 
 
 @dataclass(frozen=True, order=True)
@@ -44,6 +80,526 @@ def write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
     path.write_text(f"{serialized}\n", encoding="utf-8", newline="\n")
+
+
+def build_pending_manifest(draft_dir: Path, submitted_at: str) -> dict[str, object]:
+    """Build an unapproved manifest bound only to the three content artifacts."""
+    if not _is_iso_datetime(submitted_at):
+        raise ValueError("SUBMITTED_AT_INVALID")
+    counts = _content_counts(draft_dir)
+    decisions = _recommended_decisions(draft_dir)
+    return {
+        "schema_version": 1,
+        "dataset_id": "sejong-data-001",
+        "draft_version": "0.1.0-draft.1",
+        "state": "PENDING_PM_REVIEW",
+        "created_by": "AI-DATA-BACKEND",
+        "submitted_at": submitted_at,
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "review_comment": None,
+        "artifacts": [
+            {
+                "path": artifact,
+                "record_count": counts[artifact],
+                "sha256": sha256_file(draft_dir / artifact),
+            }
+            for artifact in CONTENT_ARTIFACTS
+        ],
+        "decisions": decisions,
+    }
+
+
+def validate_staging(
+    draft_dir: Path, schema_dir: Path, source_registry: Path
+) -> dict[str, object]:
+    """Return a value-free deterministic validation report for one DATA-001 draft."""
+    issues: list[ValidationIssue] = []
+    artifacts: dict[str, dict[str, object]] = {}
+    schemas = {
+        "kb_records.json": "kb-records.schema.json",
+        "offices.json": "offices.schema.json",
+        "office_service_mappings.json": "office-service-mappings.schema.json",
+        "approval_manifest.json": "approval-manifest.schema.json",
+    }
+    for artifact, schema_name in schemas.items():
+        try:
+            artifacts[artifact] = load_json_object(draft_dir / artifact)
+        except (OSError, ValueError, json.JSONDecodeError):
+            _issue(issues, "ARTIFACT_MISSING", artifact, None, None)
+            continue
+        try:
+            schema = load_json_object(schema_dir / schema_name)
+        except (OSError, ValueError, json.JSONDecodeError):
+            _issue(issues, "SCHEMA_LOAD_ERROR", artifact, None, None)
+            continue
+        issues.extend(validate_schema(artifacts[artifact], schema, artifact))
+
+    kb_records = _records(artifacts.get("kb_records.json"))
+    office_records = _records(artifacts.get("offices.json"))
+    mapping_records = _records(artifacts.get("office_service_mappings.json"))
+    counts = {"kb": len(kb_records), "office": len(office_records), "mapping": len(mapping_records)}
+    for key, expected, artifact in (
+        ("kb", 20, "kb_records.json"),
+        ("office", 3, "offices.json"),
+        ("mapping", 12, "office_service_mappings.json"),
+    ):
+        if counts[key] != expected:
+            _issue(issues, f"COUNT_{key.upper()}", artifact, None, "records")
+
+    _validate_records(kb_records, "kb_records.json", "id", issues)
+    _validate_records(office_records, "offices.json", "public_id", issues)
+    _validate_mappings(mapping_records, office_records, issues)
+    _validate_kb_draft_metadata(kb_records, issues)
+    _validate_sources(kb_records, office_records, mapping_records, source_registry, issues)
+    _validate_text_safety(kb_records, "kb_records.json", issues)
+    _validate_text_safety(office_records, "offices.json", issues, {"phone", "address"})
+    _validate_text_safety(mapping_records, "office_service_mappings.json", issues)
+    _validate_manifest(
+        artifacts.get("approval_manifest.json"), draft_dir, kb_records, office_records,
+        mapping_records, issues,
+    )
+    _validate_runtime_staging_references(issues)
+
+    artifact_hashes = {
+        artifact: sha256_file(draft_dir / artifact)
+        for artifact in CONTENT_ARTIFACTS
+        if (draft_dir / artifact).is_file()
+    }
+    normalized_issues = sorted(issues, key=lambda issue: (
+        issue.artifact, issue.record_id or "", issue.field or "", issue.code,
+    ))
+    return {
+        "schema_version": 1,
+        "draft_version": "0.1.0-draft.1",
+        "valid": not normalized_issues,
+        "counts": counts,
+        "approval_projection": _approval_projection(artifacts.get("approval_manifest.json")),
+        "artifact_hashes": artifact_hashes,
+        "issues": [
+            {
+                "code": issue.code,
+                "artifact": issue.artifact,
+                "record_id": issue.record_id,
+                "field": issue.field,
+            }
+            for issue in normalized_issues
+        ],
+        "warnings": ["PM_REVIEW_REQUIRED"],
+    }
+
+
+def _content_counts(draft_dir: Path) -> dict[str, int]:
+    return {
+        artifact: len(_records(load_json_object(draft_dir / artifact)))
+        for artifact in CONTENT_ARTIFACTS
+    }
+
+
+def _records(root: object | None) -> list[dict[str, object]]:
+    if not isinstance(root, dict):
+        return []
+    records = root.get("records")
+    if not isinstance(records, list):
+        return []
+    return [record for record in records if isinstance(record, dict)]
+
+
+def _recommended_decisions(draft_dir: Path) -> list[dict[str, object]]:
+    decisions: list[dict[str, object]] = []
+    for record in _records(load_json_object(draft_dir / "kb_records.json")):
+        record_id = record.get("id")
+        if isinstance(record_id, str):
+            decisions.append({
+                "record_type": "KB",
+                "record_id": record_id,
+                "decision": (
+                    "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03"
+                    else "APPROVE_INITIAL_RELEASE"
+                ),
+                "comment": None,
+            })
+    for record in _records(load_json_object(draft_dir / "offices.json")):
+        record_id = record.get("public_id")
+        if isinstance(record_id, str):
+            decisions.append({
+                "record_type": "OFFICE",
+                "record_id": record_id,
+                "decision": "APPROVE_INITIAL_RELEASE",
+                "comment": None,
+            })
+    for record in _records(load_json_object(draft_dir / "office_service_mappings.json")):
+        office_id = record.get("office_public_id")
+        intent = record.get("intent")
+        if isinstance(office_id, str) and isinstance(intent, str):
+            record_id = f"{office_id}:{intent}"
+            decisions.append({
+                "record_type": "MAPPING",
+                "record_id": record_id,
+                "decision": (
+                    "REJECT" if record_id in {
+                        "OFFICE-AREUM:LOCAL_TAX_GENERAL",
+                        "OFFICE-DODAM:BULKY_WASTE",
+                    } else "APPROVE_INITIAL_RELEASE"
+                ),
+                "comment": None,
+            })
+    return sorted(decisions, key=lambda decision: (
+        str(decision["record_type"]), str(decision["record_id"])
+    ))
+
+
+def _safe_id(value: object, pattern: str) -> str | None:
+    return value if isinstance(value, str) and re.fullmatch(pattern, value) else None
+
+
+def _validate_records(
+    records: list[dict[str, object]], artifact: str, id_field: str,
+    issues: list[ValidationIssue],
+) -> None:
+    identifiers = [record.get(id_field) for record in records]
+    pattern = _KB_ID_PATTERN if id_field == "id" else _OFFICE_ID_PATTERN
+    safe_ids = [
+        identifier for identifier in identifiers
+        if _safe_id(identifier, pattern) is not None
+    ]
+    for identifier in sorted(set(safe_ids)):
+        if safe_ids.count(identifier) > 1:
+            _issue(issues, "DUPLICATE_RECORD_ID", artifact, identifier, id_field)
+    if safe_ids != sorted(safe_ids):
+        _issue(issues, "RECORD_ORDER", artifact, None, "records")
+
+
+def _validate_mappings(
+    mappings: list[dict[str, object]], offices: list[dict[str, object]],
+    issues: list[ValidationIssue],
+) -> None:
+    artifact = "office_service_mappings.json"
+    office_ids = {
+        public_id for record in offices
+        if isinstance((public_id := record.get("public_id")), str)
+    }
+    keys: list[str] = []
+    for record in mappings:
+        office_id = record.get("office_public_id")
+        intent = record.get("intent")
+        mapping_key = (
+            f"{office_id}:{intent}"
+            if isinstance(office_id, str) and isinstance(intent, str) else None
+        )
+        record_id = _safe_mapping_key(mapping_key)
+        if isinstance(office_id, str) and office_id not in office_ids:
+            _issue(issues, "ORPHAN_OFFICE_MAPPING", artifact, record_id, "office_public_id")
+        if not isinstance(intent, str) or intent not in SUPPORTED_INTENTS:
+            _issue(issues, "UNSUPPORTED_INTENT", artifact, record_id, "intent")
+        if mapping_key is not None:
+            keys.append(mapping_key)
+    for key in sorted(set(keys)):
+        if keys.count(key) > 1:
+            _issue(issues, "DUPLICATE_MAPPING_KEY", artifact, _safe_mapping_key(key), None)
+    if keys != sorted(keys):
+        _issue(issues, "RECORD_ORDER", artifact, None, "records")
+
+
+def _validate_kb_draft_metadata(
+    records: list[dict[str, object]], issues: list[ValidationIssue]
+) -> None:
+    for record in records:
+        record_id = _safe_id(record.get("id"), _KB_ID_PATTERN)
+        if record.get("status") != "DRAFT":
+            _issue(issues, "KB_NOT_DRAFT", "kb_records.json", record_id, "status")
+        if record.get("approved_by") is not None or record.get("approved_at") is not None:
+            _issue(
+                issues, "APPROVAL_METADATA_IN_DRAFT", "kb_records.json", record_id,
+                "approved_by" if record.get("approved_by") is not None else "approved_at",
+            )
+
+
+def _validate_sources(
+    kb_records: list[dict[str, object]], offices: list[dict[str, object]],
+    mappings: list[dict[str, object]], source_registry: Path,
+    issues: list[ValidationIssue],
+) -> None:
+    for artifact, records, id_field, url_field in (
+        ("kb_records.json", kb_records, "id", "source_url"),
+        ("offices.json", offices, "public_id", "source_url"),
+        ("office_service_mappings.json", mappings, "office_public_id", "evidence_source_url"),
+    ):
+        for record in records:
+            value = record.get(url_field)
+            record_id = _record_identifier(record)
+            if not _has_allowed_source_host(value):
+                _issue(issues, "SOURCE_DOMAIN_NOT_ALLOWED", artifact, record_id, url_field)
+            map_url = record.get("map_url")
+            if map_url is not None and not _has_allowed_map_host(map_url):
+                _issue(issues, "SOURCE_DOMAIN_NOT_ALLOWED", artifact, record_id, "map_url")
+    registry = _load_source_registry(source_registry, issues)
+    expected_ids = {
+        value
+        for record in kb_records
+        if isinstance((value := record.get("id")), str)
+    }
+    if set(registry) != expected_ids:
+        _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
+    for record in kb_records:
+        record_id = record.get("id")
+        if not isinstance(record_id, str) or record_id not in registry:
+            continue
+        source = registry[record_id]
+        matches = (
+            record.get("source_title") == source.get("공식 출처명")
+            and record.get("provider") == source.get("제공기관")
+            and record.get("source_url") == source.get("URL")
+            and record.get("last_verified_at") == source.get("확인일")
+        )
+        if not matches:
+            _issue(issues, "SOURCE_METADATA_MISMATCH", "kb_records.json", record_id, "source_url")
+
+
+def _load_source_registry(
+    path: Path, issues: list[ValidationIssue]
+) -> dict[str, dict[str, str]]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as source:
+            rows = list(csv.DictReader(source))
+    except OSError:
+        _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
+        return {}
+    registry: dict[str, dict[str, str]] = {}
+    for row in rows:
+        record_id = row.get("kb_id")
+        if isinstance(record_id, str) and record_id:
+            registry[record_id] = row
+    return registry
+
+
+def _has_allowed_source_host(value: object) -> bool:
+    return isinstance(value, str) and urlparse(value).hostname in ALLOWED_SOURCE_HOSTS
+
+
+def _has_allowed_map_host(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    return urlparse(value).hostname in (ALLOWED_SOURCE_HOSTS | {"place.map.kakao.com"})
+
+
+def _validate_text_safety(
+    records: list[dict[str, object]], artifact: str, issues: list[ValidationIssue],
+    allowed_fields: set[str] | None = None,
+) -> None:
+    allowed_fields = allowed_fields or set()
+    for record in records:
+        record_id = _record_identifier(record)
+        for field, value in _text_fields(record):
+            top_level = field.split(".", 1)[0]
+            if top_level in allowed_fields:
+                continue
+            if _SECRET_PATTERN.search(value):
+                _issue(issues, "SECRET_DETECTED", artifact, record_id, field)
+            if _MOCK_PATTERN.search(value):
+                _issue(issues, "MOCK_REFERENCE", artifact, record_id, field)
+            if any(pattern.search(value) for pattern in _PII_PATTERNS):
+                _issue(issues, "PII_DETECTED", artifact, record_id, field)
+
+
+def _text_fields(value: object, prefix: str | None = None) -> Sequence[tuple[str, str]]:
+    if isinstance(value, str):
+        return [(prefix or "", value)]
+    if isinstance(value, list):
+        return [
+            pair for index, item in enumerate(value)
+            for pair in _text_fields(item, _join(prefix, str(index)))
+        ]
+    if isinstance(value, dict):
+        return [
+            pair for key, item in value.items() if isinstance(key, str)
+            for pair in _text_fields(item, _join(prefix, key))
+        ]
+    return []
+
+
+def _record_identifier(record: Mapping[str, object]) -> str | None:
+    record_id = _safe_id(record.get("id"), _KB_ID_PATTERN)
+    if record_id is not None:
+        return record_id
+    office_id = _safe_id(record.get("public_id"), _OFFICE_ID_PATTERN)
+    if office_id is not None:
+        return office_id
+    mapping_key = record.get("office_public_id")
+    intent = record.get("intent")
+    if isinstance(mapping_key, str) and isinstance(intent, str):
+        return _safe_mapping_key(f"{mapping_key}:{intent}")
+    return None
+
+
+def _safe_mapping_key(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _safe_id(value, rf"{_OFFICE_ID_PATTERN}:(?:{'|'.join(sorted(SUPPORTED_INTENTS))})")
+
+
+def _validate_manifest(
+    manifest: object | None, draft_dir: Path, kb_records: list[dict[str, object]],
+    office_records: list[dict[str, object]], mapping_records: list[dict[str, object]],
+    issues: list[ValidationIssue],
+) -> None:
+    artifact = "approval_manifest.json"
+    if not isinstance(manifest, dict):
+        return
+    if manifest.get("state") != "PENDING_PM_REVIEW":
+        _issue(issues, "PENDING_REVIEW_STATE", artifact, None, "state")
+    reviewed_by = manifest.get("reviewed_by")
+    if any(manifest.get(field) is not None for field in (
+        "reviewed_by", "reviewed_at", "review_comment"
+    )):
+        _issue(issues, "PENDING_REVIEW_METADATA", artifact, None, "reviewed_by")
+    if reviewed_by == manifest.get("created_by") and reviewed_by is not None:
+        _issue(issues, "SELF_APPROVAL", artifact, None, "reviewed_by")
+
+    entries = manifest.get("artifacts")
+    if not isinstance(entries, list):
+        entries = []
+    by_path = {
+        entry.get("path"): entry for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+    if set(by_path) != set(CONTENT_ARTIFACTS) or len(entries) != len(CONTENT_ARTIFACTS):
+        _issue(issues, "MANIFEST_CONTENT_PATH_SET", artifact, None, "artifacts")
+    for path in CONTENT_ARTIFACTS:
+        entry = by_path.get(path)
+        if not isinstance(entry, dict):
+            continue
+        actual_count = len(_records(_load_artifact_or_empty(draft_dir / path)))
+        if entry.get("record_count") != actual_count:
+            _issue(issues, "MANIFEST_COUNT_MISMATCH", artifact, None, f"artifacts.{path}.record_count")
+        if (draft_dir / path).is_file() and entry.get("sha256") != sha256_file(draft_dir / path):
+            _issue(issues, "MANIFEST_HASH_MISMATCH", artifact, None, f"artifacts.{path}.sha256")
+
+    expected = _expected_decisions(kb_records, office_records, mapping_records)
+    decisions = manifest.get("decisions")
+    if not isinstance(decisions, list):
+        decisions = []
+    actual = {
+        decision.get("record_id"): decision.get("decision")
+        for decision in decisions
+        if isinstance(decision, dict) and isinstance(decision.get("record_id"), str)
+    }
+    if set(actual) != set(expected):
+        _issue(issues, "DECISION_COVERAGE", artifact, None, "decisions")
+    if actual.get("KB-WASTE-03") != "WITHHOLD_FOR_REGRESSION":
+        _issue(issues, "WASTE_03_DECISION", artifact, "KB-WASTE-03", "decisions")
+    for record_id, decision in expected.items():
+        if actual.get(record_id) != decision and record_id != "KB-WASTE-03":
+            _issue(issues, "DECISION_POLICY_MISMATCH", artifact, record_id, "decisions")
+    projection = _approval_projection(manifest)
+    if projection != {
+        "initial_kb": 19,
+        "initial_office": 3,
+        "initial_mapping": 10,
+        "withheld_kb": 1,
+        "rejected_mapping": 2,
+    }:
+        _issue(issues, "INITIAL_PROJECTION_MISMATCH", artifact, None, "decisions")
+
+
+def _load_artifact_or_empty(path: Path) -> dict[str, object]:
+    try:
+        return load_json_object(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _expected_decisions(
+    kb_records: list[dict[str, object]], offices: list[dict[str, object]],
+    mappings: list[dict[str, object]],
+) -> dict[str, str]:
+    expected: dict[str, str] = {}
+    for record in kb_records:
+        record_id = _safe_id(record.get("id"), _KB_ID_PATTERN)
+        if record_id is not None:
+            expected[record_id] = (
+                "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03"
+                else "APPROVE_INITIAL_RELEASE"
+            )
+    for record in offices:
+        record_id = _safe_id(record.get("public_id"), _OFFICE_ID_PATTERN)
+        if record_id is not None:
+            expected[record_id] = "APPROVE_INITIAL_RELEASE"
+    for record in mappings:
+        office_id = record.get("office_public_id")
+        intent = record.get("intent")
+        if isinstance(office_id, str) and isinstance(intent, str):
+            record_id = _safe_mapping_key(f"{office_id}:{intent}")
+            if record_id is None:
+                continue
+            expected[record_id] = (
+                "REJECT" if record_id in {
+                    "OFFICE-AREUM:LOCAL_TAX_GENERAL",
+                    "OFFICE-DODAM:BULKY_WASTE",
+                } else "APPROVE_INITIAL_RELEASE"
+            )
+    return expected
+
+
+def _approval_projection(manifest: object | None) -> dict[str, int]:
+    decisions = manifest.get("decisions") if isinstance(manifest, dict) else []
+    if not isinstance(decisions, list):
+        decisions = []
+    approved = {"KB": 0, "OFFICE": 0, "MAPPING": 0}
+    withheld_kb = 0
+    rejected_mapping = 0
+    for decision in decisions:
+        if not isinstance(decision, dict):
+            continue
+        record_type = decision.get("record_type")
+        disposition = decision.get("decision")
+        if record_type in approved and disposition == "APPROVE_INITIAL_RELEASE":
+            approved[record_type] += 1
+        elif record_type == "KB" and disposition == "WITHHOLD_FOR_REGRESSION":
+            withheld_kb += 1
+        elif record_type == "MAPPING" and disposition == "REJECT":
+            rejected_mapping += 1
+    return {
+        "initial_kb": approved["KB"],
+        "initial_office": approved["OFFICE"],
+        "initial_mapping": approved["MAPPING"],
+        "withheld_kb": withheld_kb,
+        "rejected_mapping": rejected_mapping,
+    }
+
+
+def _validate_runtime_staging_references(issues: list[ValidationIssue]) -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    paths = [
+        repository_root / "apps",
+        repository_root / "packages",
+        repository_root / "database",
+        repository_root / "supabase" / "seed.sql",
+        repository_root / "supabase" / "migrations",
+    ]
+    for path in paths:
+        candidates = path.rglob("*") if path.is_dir() else (path,)
+        for candidate in candidates:
+            if {".next", "node_modules", ".venv", "__pycache__"} & set(candidate.parts):
+                continue
+            if not candidate.is_file() or candidate.suffix.lower() not in {
+                ".py", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".sql", ".json", ".toml",
+            }:
+                continue
+            try:
+                lines = candidate.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if any(_is_runtime_staging_reference(line) for line in lines):
+                relative = candidate.relative_to(repository_root).as_posix()
+                _issue(issues, "RUNTIME_STAGING_REFERENCE", relative, None, None)
+
+
+def _is_runtime_staging_reference(line: str) -> bool:
+    stripped = line.lstrip()
+    if stripped.startswith(("#", "//", "--", "/*", "*")):
+        return False
+    return "data/staging/" in line.replace("\\", "/")
 
 
 def validate_schema(

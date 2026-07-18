@@ -312,6 +312,15 @@ try {
     Invoke-NativeStep -StepId "TEST-ROOT" -Executable $apiPython -Arguments @(
         "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"
     )
+    $data001DraftDirectory = Join-Path $repoRoot "data\staging\data-001\0.1.0-draft.1"
+    if (Test-Path -LiteralPath $data001DraftDirectory -PathType Container) {
+        Invoke-NativeStep -StepId "VALIDATE-DATA-001" -Executable $apiPython -Arguments @(
+            "-B", "scripts/validate_data_staging.py", "validate", "--draft-dir", $data001DraftDirectory
+        )
+    }
+    else {
+        Write-Output "[SKIP] step=VALIDATE-DATA-001 reason=staging-absent"
+    }
     Invoke-NativeStep -StepId "LINT-WEB" -Executable "corepack.cmd" -Arguments @(
         "pnpm", "--filter", "@sejong-ai/web", "lint"
     )
