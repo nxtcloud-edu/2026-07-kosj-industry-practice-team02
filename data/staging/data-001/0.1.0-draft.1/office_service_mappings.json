@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "draft_version": "0.1.0-draft.1",
+  "records": [
+    {"office_public_id":"OFFICE-AREUM","intent":"BULKY_WASTE","department_label":"안전도시과 환경경제","evidence_source_url":"https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-AREUM","intent":"CERTIFICATE_ISSUANCE","department_label":"민원행정과 일반민원","evidence_source_url":"https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-AREUM","intent":"LOCAL_TAX_GENERAL","department_label":"민원행정과 세무부동산","evidence_source_url":"https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-AREUM","intent":"MOVE_IN_RESIDENT_REGISTRATION","department_label":"민원행정과 일반민원","evidence_source_url":"https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-DODAM","intent":"BULKY_WASTE","department_label":"주민생활","evidence_source_url":"https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-DODAM","intent":"CERTIFICATE_ISSUANCE","department_label":"민원행정","evidence_source_url":"https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-DODAM","intent":"LOCAL_TAX_GENERAL","department_label":"민원행정","evidence_source_url":"https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-DODAM","intent":"MOVE_IN_RESIDENT_REGISTRATION","department_label":"민원행정","evidence_source_url":"https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-JOCHIWON","intent":"BULKY_WASTE","department_label":"안전도시과 청소환경","evidence_source_url":"https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-JOCHIWON","intent":"CERTIFICATE_ISSUANCE","department_label":"민원행정과 일반민원","evidence_source_url":"https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-JOCHIWON","intent":"LOCAL_TAX_GENERAL","department_label":"민원행정과 세무부동산","evidence_source_url":"https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"},
+    {"office_public_id":"OFFICE-JOCHIWON","intent":"MOVE_IN_RESIDENT_REGISTRATION","department_label":"민원행정과 일반민원","evidence_source_url":"https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424","last_verified_at":"2026-07-18","created_by":"AI-DATA-BACKEND"}
+  ]
+}

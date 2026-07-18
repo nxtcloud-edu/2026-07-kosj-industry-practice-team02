@@ -1,0 +1,240 @@
+{
+  "artifacts": [
+    {
+      "path": "kb_records.json",
+      "record_count": 20,
+      "sha256": "fbaa92741aea241c446a5d0b0b5cb0ea23276278b4cb1ff545a2cac10a0f3050"
+    },
+    {
+      "path": "offices.json",
+      "record_count": 3,
+      "sha256": "ac9a36f34b10044fb3ac1893775b052f10eca2aa3d67756f48ca6dc747271259"
+    },
+    {
+      "path": "office_service_mappings.json",
+      "record_count": 12,
+      "sha256": "3fd35c0cdf069e83e487d94463602bb049b2e1e4862d3dfba69093205521c9d5"
+    }
+  ],
+  "created_by": "AI-DATA-BACKEND",
+  "dataset_id": "sejong-data-001",
+  "decisions": [
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-CERT-01",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-CERT-02",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-CERT-03",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-CERT-04",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-CERT-05",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-MOVE-01",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-MOVE-02",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-MOVE-03",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-MOVE-04",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-MOVE-05",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-TAX-01",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-TAX-02",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-TAX-03",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-TAX-04",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-TAX-05",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-WASTE-01",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-WASTE-02",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "WITHHOLD_FOR_REGRESSION",
+      "record_id": "KB-WASTE-03",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-WASTE-04",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "KB-WASTE-05",
+      "record_type": "KB"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-AREUM:BULKY_WASTE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-AREUM:CERTIFICATE_ISSUANCE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "REJECT",
+      "record_id": "OFFICE-AREUM:LOCAL_TAX_GENERAL",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-AREUM:MOVE_IN_RESIDENT_REGISTRATION",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "REJECT",
+      "record_id": "OFFICE-DODAM:BULKY_WASTE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-DODAM:CERTIFICATE_ISSUANCE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-DODAM:LOCAL_TAX_GENERAL",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-DODAM:MOVE_IN_RESIDENT_REGISTRATION",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-JOCHIWON:BULKY_WASTE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-JOCHIWON:CERTIFICATE_ISSUANCE",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-JOCHIWON:LOCAL_TAX_GENERAL",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-JOCHIWON:MOVE_IN_RESIDENT_REGISTRATION",
+      "record_type": "MAPPING"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-AREUM",
+      "record_type": "OFFICE"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-DODAM",
+      "record_type": "OFFICE"
+    },
+    {
+      "comment": null,
+      "decision": "APPROVE_INITIAL_RELEASE",
+      "record_id": "OFFICE-JOCHIWON",
+      "record_type": "OFFICE"
+    }
+  ],
+  "draft_version": "0.1.0-draft.1",
+  "review_comment": null,
+  "reviewed_at": null,
+  "reviewed_by": null,
+  "schema_version": 1,
+  "state": "PENDING_PM_REVIEW",
+  "submitted_at": "2026-07-18T00:00:00+09:00"
+}
