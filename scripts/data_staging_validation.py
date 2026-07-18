@@ -68,8 +68,8 @@ def _validate(
     field: str | None,
     issues: list[ValidationIssue],
 ) -> None:
-    current_record_id = _record_id(value, record_id)
-    if "const" in schema and value != schema["const"]:
+    current_record_id = _record_id(value, schema, record_id)
+    if "const" in schema and not _json_equal(value, schema["const"]):
         _issue(issues, "SCHEMA_CONST", artifact, current_record_id, field)
 
     allowed_types = schema.get("type")
@@ -77,8 +77,13 @@ def _validate(
         _issue(issues, "SCHEMA_TYPE", artifact, current_record_id, field)
         return
 
-    if "enum" in schema and value not in schema["enum"]:
+    enum = schema.get("enum")
+    if isinstance(enum, list) and not any(_json_equal(value, item) for item in enum):
         _issue(issues, "SCHEMA_ENUM", artifact, current_record_id, field)
+
+    minimum = schema.get("minimum")
+    if _is_json_number(value) and _is_json_number(minimum) and value < minimum:
+        _issue(issues, "SCHEMA_MINIMUM", artifact, current_record_id, field)
 
     if isinstance(value, dict):
         _validate_object(value, schema, artifact, current_record_id, field, issues)
@@ -219,14 +224,49 @@ def _is_https_url(value: str) -> bool:
     return parsed.scheme == "https" and bool(parsed.netloc)
 
 
-def _record_id(value: object, previous: str | None) -> str | None:
+def _record_id(
+    value: object, schema: Mapping[str, object], previous: str | None
+) -> str | None:
     if not isinstance(value, dict):
+        return previous
+    properties = schema.get("properties")
+    if not isinstance(properties, Mapping):
         return previous
     for key in ("id", "public_id", "record_id", "office_public_id"):
         candidate = value.get(key)
-        if isinstance(candidate, str):
+        candidate_schema = properties.get(key)
+        pattern = (
+            candidate_schema.get("pattern")
+            if isinstance(candidate_schema, Mapping)
+            else None
+        )
+        if (
+            isinstance(candidate, str)
+            and isinstance(pattern, str)
+            and re.fullmatch(pattern, candidate) is not None
+        ):
             return candidate
     return previous
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict) and isinstance(right, dict):
+        return (
+            left.keys() == right.keys()
+            and all(_json_equal(left[key], right[key]) for key in left)
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _json_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right, strict=True)
+        )
+    return left == right
+
+
+def _is_json_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _canonical(value: object) -> str:

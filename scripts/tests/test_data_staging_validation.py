@@ -140,6 +140,112 @@ class DataStagingSchemaValidationTests(unittest.TestCase):
         issues = validate_schema(root, self.kb_schema, "kb_records.json")
         self.assertIn("SCHEMA_CONST", {issue.code for issue in issues})
 
+    def test_malformed_identifiers_are_not_retained_in_issues(self) -> None:
+        sentinel = "DO-NOT-SERIALIZE-MALFORMED-ID"
+        office_schema = json.loads(
+            (SCHEMA_DIR / "offices.schema.json").read_text(encoding="utf-8")
+        )
+        mapping_schema = json.loads(
+            (SCHEMA_DIR / "office-service-mappings.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        manifest_schema = json.loads(
+            (SCHEMA_DIR / "approval-manifest.schema.json").read_text(encoding="utf-8")
+        )
+        cases = [
+            (
+                self.valid_kb() | {"id": sentinel},
+                self.kb_record_schema,
+                "kb_records.json",
+            ),
+            (
+                {
+                    "public_id": sentinel,
+                    "data_origin": "OFFICIAL",
+                    "region": "아름동",
+                    "office_name": "기관",
+                    "address": "공개 주소",
+                    "phone": "044-301-0000",
+                    "opening_hours": None,
+                    "map_url": None,
+                    "provider": "세종시",
+                    "source_title": "공식 기관",
+                    "source_url": "https://example.test/office",
+                    "last_verified_at": "2026-07-18",
+                    "created_by": "AI-DATA-BACKEND",
+                },
+                office_schema["properties"]["records"]["items"],
+                "offices.json",
+            ),
+            (
+                {
+                    "office_public_id": sentinel,
+                    "intent": "MOVE_IN_RESIDENT_REGISTRATION",
+                    "department_label": None,
+                    "evidence_source_url": "https://example.test/mapping",
+                    "last_verified_at": "2026-07-18",
+                    "created_by": "AI-DATA-BACKEND",
+                },
+                mapping_schema["properties"]["records"]["items"],
+                "office_service_mappings.json",
+            ),
+            (
+                {
+                    "record_type": "KB",
+                    "record_id": sentinel,
+                    "decision": "REJECT",
+                    "comment": None,
+                },
+                manifest_schema["properties"]["decisions"]["items"],
+                "approval_manifest.json",
+            ),
+        ]
+        for instance, schema, artifact in cases:
+            with self.subTest(artifact=artifact):
+                issues = validate_schema(instance, schema, artifact)
+                serialized = json.dumps([asdict(issue) for issue in issues])
+                self.assertTrue(issues)
+                self.assertTrue(all(issue.record_id is None for issue in issues))
+                self.assertNotIn(sentinel, serialized)
+
+    def test_const_and_enum_distinguish_boolean_and_integer_values(self) -> None:
+        const_issues = validate_schema(True, {"const": 1}, "test.json")
+        enum_issues = validate_schema(True, {"enum": [1]}, "test.json")
+        self.assertIn("SCHEMA_CONST", {issue.code for issue in const_issues})
+        self.assertIn("SCHEMA_ENUM", {issue.code for issue in enum_issues})
+
+    def test_every_schema_version_rejects_booleans_as_non_integers(self) -> None:
+        schema_names = [
+            "kb-records.schema.json",
+            "offices.schema.json",
+            "office-service-mappings.schema.json",
+            "approval-manifest.schema.json",
+        ]
+        for schema_name in schema_names:
+            with self.subTest(schema_name=schema_name):
+                schema = json.loads((SCHEMA_DIR / schema_name).read_text(encoding="utf-8"))
+                version_schema = schema["properties"]["schema_version"]
+                for value in (True, False):
+                    issues = validate_schema(value, version_schema, schema_name)
+                    self.assertIn("SCHEMA_TYPE", {issue.code for issue in issues})
+
+    def test_negative_manifest_record_count_is_rejected(self) -> None:
+        manifest_schema = json.loads(
+            (SCHEMA_DIR / "approval-manifest.schema.json").read_text(encoding="utf-8")
+        )
+        artifact_schema = manifest_schema["properties"]["artifacts"]["items"]
+        issues = validate_schema(
+            {
+                "path": "kb_records.json",
+                "record_count": -1,
+                "sha256": "a" * 64,
+            },
+            artifact_schema,
+            "approval_manifest.json",
+        )
+        self.assertIn("SCHEMA_MINIMUM", {issue.code for issue in issues})
+
     def test_issues_are_sorted_by_public_fields(self) -> None:
         first = self.valid_kb() | {"id": "KB-MOVE-02", "source_url": "http://x.test"}
         second = self.valid_kb() | {"id": "KB-MOVE-01", "category": "NOT_A_CATEGORY"}
