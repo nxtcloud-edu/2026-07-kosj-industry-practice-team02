@@ -33,6 +33,8 @@
 | `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~10와 bounded child-tree remediation·final-code DB gate 완료, final docs reviews 진행 중 |
 | `docs/superpowers/specs/2026-07-17-q-sec-006-patched-supabase-cli-design.md` | local에서 구현·검증된 exact source·Go·patch·binary hash·actual loopback 공급망 명세 |
 | `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` | 수정 계획 승인 뒤 Tasks 1~5 local gate와 code remediation까지 수행한 계획; final docs reviews 진행 중 |
+| `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md` | DATA-001 staging JSON·hash-bound PM 검수 경계; AI scope complete, PM review KEEP |
+| `docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md` | DATA-001 DRAFT 20/3/12·validator·PM handoff 실행 기록; official release/seed는 별도 DATA-SEED-001 |
 
 ## 모든 작업 후 갱신할 파일
 

@@ -1,6 +1,6 @@
 # DATA-001 staged official data design
 
-- Status: Approved — user `명세 승인` on 2026-07-18; AI-executable DATA-001 plan in progress, PM review remains KEEP
+- Status: Approved — user `명세 승인` on 2026-07-18; AI-executable DATA-001 scope complete with DRAFT 20/3/12 and validator PASS, PM review remains KEEP
 - Date: 2026-07-18 KST
 - Decision: D-033 / ADR-0015
 - Scope: DATA-001 authoring, validation, submission, PM approval artifact boundary
@@ -246,7 +246,7 @@ the implementation plan must select one exact validator path and test it TDD-fir
   review evidence is needed. Approved manifests are not rewritten.
 - Official release/DB rollback is explicitly outside this spec and belongs to DATA-SEED-001.
 
-## 15. Version impact
+## 15. Version impact at specification approval (historical)
 
 - documentation: `2.4.1 → 2.4.2`
 - product/application/web/API/shared contracts/DB schema/official data/mock data/prompt/test: unchanged

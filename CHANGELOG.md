@@ -4,6 +4,7 @@
 
 ### Added
 
+- DATA-001 internal staging schemas, dependency-free fail-closed validator, canonical DRAFT KB 20·office 3·mapping 12, hash-bound `PENDING_PM_REVIEW` manifest, deterministic validation report, lineage, and PM review packet; all remain non-ACTIVE and outside citizen reads, seed, and readiness
 - Codex repository guidance, first-run interview prompt, source-of-truth hierarchy
 - ADR, implementation-note, handoff, ambiguity-audit workflows
 - Draft API contracts and DB schema aligned with final scope
@@ -38,6 +39,7 @@
 
 ### Changed
 
+- Marked DATA-001 AI-executable scope complete and handed it to PM review KEEP; `official_data` remains `0.0.0-not-populated`, while test-suite and documentation evidence advance to `0.6.0-data-staging` and `2.5.0`
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
 - Clarified local-first/zero-infrastructure-budget as the active target and managed hosting as separately approved future work
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain

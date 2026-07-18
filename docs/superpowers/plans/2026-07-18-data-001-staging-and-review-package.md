@@ -29,7 +29,7 @@
 ## 계획 거버넌스
 
 - Plan ID: `DATA-001-STAGING-PLAN`
-- 상태: Approved for AI-executable scope / In Progress
+- 상태: AI-executable scope complete / Human Review KEEP
 - 사용자 승인 근거: 2026-07-18 `명세 승인`과 “사람 작업은 KEEP하고 나머지는 계속 진행, 데이터는 AI가 초안 후 사용자 검토” 지시
 - 승인된 명세: `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md`
 - 결정: D-033 / A-026 / ADR-0015
@@ -339,21 +339,25 @@ Run focused/root tests, validator, secret scan, `git diff --check`; commit `data
 - Modify: `versions/manifest.json`
 - Complete: implementation note and INDEX
 
-- [ ] **Step 1: Set truthful task/version state**
+- [x] **Step 1: Set truthful task/version state**
 
 DATA-001 becomes `Human Review KEEP` with DRAFT 20/office 3/mapping 12 and validator PASS. `official_data` remains `0.0.0-not-populated`; `test_suite` becomes `0.6.0-data-staging`; `documentation` becomes `2.5.0`; application/web/API/shared contracts/DB/mock/prompt stay unchanged.
 
-- [ ] **Step 2: Run final verification**
+- [x] **Step 2: Run final verification evidence**
 
-Invoke `superpowers:verification-before-completion`, then run focused unit, explicit staging validator, full `scripts/verify.ps1`, JSON parse, package validation, secret scan, `git diff --check`, and exact runtime staging-reference scan.
+Invoke `superpowers:verification-before-completion`, then run focused unit, explicit staging validator, full `scripts/verify.ps1`, JSON parse, package validation, secret scan, `git diff --check`, and exact runtime staging-reference scan. Scoped checks PASS; one fresh non-offline full run reached `TEST-ROOT` and was stopped after a >7-minute idle runner with no descendant, so it is inconclusive and not PASS.
 
-- [ ] **Step 3: Independent review and remediation**
+- [x] **Step 3: Independent review and remediation**
 
 Invoke `superpowers:requesting-code-review`. Review against this plan, ADR-0015, privacy/source boundaries, validator bypasses, data scope and all 35 records. Resolve every Critical/Important finding and rerun Step 2.
 
-- [ ] **Step 4: Closeout commit**
+Task 4 review found no Critical finding. Its one Important handoff finding (abbreviated command evidence in
+IMP-20260718-007) was corrected to literal commands and full report hash; the historical spec version section was
+labeled to avoid implying a current-manifest contradiction.
 
-Complete 6W1H note, actual commands/results, versions, security/data/rollback/handoff, PM KEEP items. Commit `docs(data): hand off DATA-001 for PM review`.
+- [x] **Step 4: Closeout commit**
+
+Completed 6W1H note, actual commands/results, versions, security/data/rollback/handoff, PM KEEP items. Committed with `docs(data): hand off DATA-001 for PM review`.
 
 ## 테스트 계획
 
@@ -399,6 +403,6 @@ Complete 6W1H note, actual commands/results, versions, security/data/rollback/ha
 
 ## 결과와 회고
 
-- 실제 결과: In Progress.
-- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했고 Task 3에서 실제 제출 시각과 canonical JSON 바이트를 바로잡았다. 기존 root child-timeout test의 환경 hang은 최종 검증에서 재확인한다.
-- 다음 단계: Task 4 governance/version/final evidence and PM handoff.
+- 실제 결과: AI-executable scope complete / Human Review KEEP. DRAFT 20 KB·3 office·12 mapping과 PENDING manifest는 validator PASS이며 official release/seed/ACTIVE는 0이다.
+- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했고 Task 3에서 실제 제출 시각과 canonical JSON 바이트를 바로잡았다. Task 4의 exact child-timeout test는 PASS했지만 fresh full root runner는 `TEST-ROOT`에서 >7분 idle이라 scoped tree만 종료했고 full verify PASS를 주장하지 않는다.
+- 다음 단계: PM의 35-record 검수·decision/comment, 그 뒤 별도 DATA-SEED-001.
