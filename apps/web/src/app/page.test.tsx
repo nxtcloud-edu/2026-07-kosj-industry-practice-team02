@@ -18,18 +18,22 @@ describe("home page shell", () => {
     );
   });
 
-  it("provides skip and in-page supported-service links without a dead chat route", () => {
-    const { container } = render(<Home />);
+  it("provides skip and chat-entry links without removing the supported-services link", () => {
+    render(<Home />);
 
     expect(screen.getByRole("link", { name: "본문 바로가기" })).toHaveAttribute(
       "href",
       "#main-content",
     );
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
-    expect(
-      screen.getByRole("link", { name: "지원 분야 확인하기" }),
-    ).toHaveAttribute("href", "#supported-services");
-    expect(container.querySelector('a[href="/chat"]')).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "민원 안내 시작하기" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
+    expect(screen.getByRole("link", { name: "지원 분야 확인하기" })).toHaveAttribute(
+      "href",
+      "#supported-services",
+    );
   });
 
   it("lists the four approved service areas in a semantic section", () => {

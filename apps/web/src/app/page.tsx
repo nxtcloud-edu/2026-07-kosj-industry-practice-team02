@@ -31,7 +31,10 @@ export default function Home() {
               시민의 일상어를 행정 안내와 연결하는 서비스를 준비하고 있습니다.
               근거가 확인되지 않으면 추정해서 답하지 않습니다.
             </p>
-            <a className="primary-link" href="#supported-services">
+            <a className="primary-link" href="/chat">
+              민원 안내 시작하기
+            </a>
+            <a className="text-link" href="#supported-services">
               지원 분야 확인하기
             </a>
 
