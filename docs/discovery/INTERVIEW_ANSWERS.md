@@ -70,6 +70,20 @@ Q-LLM-004: A
 Q-CHAT-001: A
 ```
 
+## Batch 4 — 2026-07-18 KST
+
+- Scope: `Q-DATA-002` 공식 데이터 staging·approval artifact
+
+| Q-ID | Question summary | User answer | Interpretation | Decision/ADR | Status |
+|---|---|---|---|---|---|
+| Q-DATA-002 | 승인 전 공식 데이터 artifact 저장 방식 | `A` | `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound PM approval manifest를 canonical 경계로 사용한다. 승인 record의 immutable official release와 seed는 별도 DATA-SEED-001에서만 생성하고, 초기 19 KB+WASTE-03 보류 뒤 REG-001에서 최종 20 ACTIVE를 만든다. | D-033 / ADR-0015 | Resolved — written spec review pending |
+
+## Batch 4 답변 원문
+
+```text
+Q-DATA-002: A
+```
+
 ## 남은 구현 차단 조건
 
 - 인간 결정형 A/Blocker: 없음

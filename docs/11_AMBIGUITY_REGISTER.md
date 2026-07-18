@@ -29,6 +29,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
 | A-024 | A | local Supabase CLI port 공급망 | Resolved / implemented and verified locally | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin했고 actual gate를 통과했다. | D-031 / ADR-0013; local/private DB authority, public readiness 아님 |
 | A-025 | A | Windows patched CLI build workspace | Resolved / implemented and verified locally | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout `.tools/s/{a,b}`, pinned relative max 134자·absolute cap 248자 pre-checkout gate와 legacy deny-only 경계를 구현·검증했다. | D-032 / ADR-0014; 기존 장경로 partial artifact 자동 삭제 없음 |
+| A-026 | B | 공식 데이터 staging·승인 artifact | Resolved decision / spec review pending | Q-DATA-002=A: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound approval manifest를 canonical authoring/approval evidence로 사용하고, 승인 record만 후속 immutable official release로 승격 | D-033 / ADR-0015; DATA-001 spec user review 뒤 plan 작성, official data/seed 0 유지 |
 
 ## 우선도 정의
 
@@ -47,6 +48,9 @@ publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 
 fresh exact loopback/full DB/root/static gate를 통해 local에서 구현·검증됐다. DB-001은
 disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High public-release blocker다.
 
+Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 이는 승인 전 staging
+artifact 경계만 확정하며 실제 DRAFT 작성·PM 승인·official release·seed를 승인한 것은 아니다.
+
 ## 열린 인터뷰 질문
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
@@ -58,6 +62,17 @@ Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전
 - 영향을 받는 파일·계약·데이터·배포: 새 `00700`/compensation/pgTAP·통합 회귀와 DB 보안 문서가 영향받는다. 공개 API/table/data/retention/dependency/cost는 변하지 않지만 remote/public release gate가 직접 영향받는다.
 
 ## 해결된 인터뷰 질문
+
+Q-DATA-002. 승인 전 공식 데이터 artifact를 어떤 방식으로 저장하고 승인할 것인가
+- 결정: A / D-033 / ADR-0015. 사용자가 2026-07-18 `Q-DATA-002: A`라고 명시했다.
+- 선택: `data/staging/data-001/<draft-version>/`의 `kb_records.json`, `offices.json`,
+  `office_service_mappings.json`, `approval_manifest.json`을 canonical authoring/approval artifact로
+  사용한다. manifest는 artifact SHA-256·count·record decision·별도 PM reviewer/comment를 묶는다.
+- 결과 경계: DATA-001은 staging/validation/PM approval evidence까지만 소유한다. 승인 record의
+  immutable official release와 seed/import는 별도 DATA-SEED-001 계획이 소유한다. 초기 release는
+  KB 19+office 3+mapping 10~12이며 KB-WASTE-03은 REG-001 뒤 최종 20번째 ACTIVE가 된다.
+- 영향: documentation/ADR/TASK traceability만 변경한다. official/mock data, DB, public API,
+  readiness, dependency, deployment와 비용은 아직 변하지 않는다.
 
 Q-TOOL-001. Windows에서 patched CLI의 재현 build checkout을 어떤 방식으로 안전하게 관리할 것인가
 - 결정: A / D-032 / ADR-0014. 사용자가 2026-07-18 `Q-TOOL-001: A`라고 명시했다.

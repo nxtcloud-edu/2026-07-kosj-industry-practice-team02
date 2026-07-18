@@ -3,8 +3,8 @@
 - 조사 기준일: 2026-07-18 KST
 - 조사 주체: Codex(Architecture·AI/Data·Backend·Security·Docs)
 - 기준 브랜치/커밋: `main` / `204cd969cc8104fdca430691960c794932d060c0`
-- 상태: Discovery complete — staging artifact 설계 승인 대기
-- 관련 결정: Q-DATA-001 / D-011 / A-005
+- 상태: Discovery complete — Q-DATA-002=A/D-033/ADR-0015, written spec user review pending
+- 관련 결정: Q-DATA-001/D-011/A-005, Q-DATA-002/D-033/A-026/ADR-0015
 
 ## 1. 결론 요약
 
@@ -56,7 +56,7 @@ Q-DATA-001로 작성 책임(AI/Data·Backend), 승인 책임(PM), 목표일(2026
 | G-DATA-002 | 모든 공식 record에 provider/source/date/author/reviewer/status | `kb_source_registry.csv`의 작성자·검수자 값은 전부 공란이고 approval date 열이 없음 | 승인 책임·최신성 추적 불가 | source registry/approval manifest에서 필수화 |
 | G-DATA-003 | KB 20건을 schema로 검증 | `contracts/kb-record.schema.json`은 있지만 실제 record·data validator 0 | 필드 누락과 enum drift를 자동 차단하지 못함 | 기존 schema를 재사용하는 stdlib validator와 fixture gate 계획 |
 | G-DATA-004 | 기관 3+와 매핑 10~12를 전수 검수 | 기관/매핑 artifact schema와 입력 파일 0 | seed importer의 입력 계약이 없음 | office·mapping 별도 schema/artifact 정의 |
-| G-DATA-005 | source registry lineage | KB 가이드·제안서는 미존재 `07_KB_출처대장.csv`를 참조하지만 실제 활성 파일명은 `kb_source_registry.csv`이고 별도 approval artifact는 없음 | 최초 개발자가 canonical 파일과 승인 evidence를 추측해야 함 | canonical 명칭을 하나로 고치고 approval manifest 형식을 설계 승인 |
+| G-DATA-005 | source registry lineage | D-033에서 KB 가이드·제안서 참조를 canonical `kb_source_registry.csv`로 고쳤고 approval artifact는 written spec 단계 | 파일명 drift 해결; manifest 구현은 아직 없음 | spec user review 뒤 hash-bound approval manifest 구현 계획 작성 |
 | G-DATA-006 | ACTIVE만 시민 검색 | DB는 이를 강제하지만 ACTIVE seed 0 | 기능 개발과 정상 SUCCESS가 차단됨 | DRAFT 작성→PM 승인→versioned seed 순서 유지 |
 | G-DATA-007 | KB-WASTE-03은 초기 ACTIVE 제외 | 출처대장 상태가 `회귀 테스트 후 승인 예정` | `DATA-001(20 승인) → DATA-SEED → chat/admin → REG-001 → WASTE-03 승인`으로 현재 TASK 의존성이 순환함 | 20건 모두 작성·출처검증, 초기 19 ACTIVE+WASTE-03 보류 1, REG-001 승인 뒤 최종 20 ACTIVE로 단계화 |
 
@@ -152,7 +152,7 @@ B/High 안정성 조치가 필요하다.
 
 | ID | 등급 | 내용 | 현재 처리 |
 |---|---|---|---|
-| Q-DATA-002 | B/High, 설계 승인 필요 | staging artifact와 PM approval manifest 형식 | 발견 결과와 2개 대안을 제시하고 사용자 승인 후 계획 작성 |
+| Q-DATA-002 | B/High, Resolved | staging artifact와 PM approval manifest 형식 | A/D-033/ADR-0015: staging JSON 3종+hash-bound approval manifest; written spec review 뒤 계획 작성 |
 | A-DATA-002 | C/Defaultable | author/reviewer의 저장소용 stable ID 표기 | `AI-DATA-BACKEND` / `PM` 같은 비개인 식별자를 추천하되 설계에 명시 |
 | A-DATA-003 | C/Defaultable | 날짜·URL 정규화·CSV 정렬 방식 | ISO 8601 date, HTTPS canonical URL, public ID lexical sort 추천 |
 | A-DATA-004 | D/Internal | JSON/CSV validator의 helper/file 분리 | 기존 Python 3.12 stdlib 중심으로 계획 |
@@ -176,10 +176,9 @@ KB-WASTE-03을 개선 전 폴백→관리자 후보 작성→별도 승인→동
 
 ## 9. 지금 안전하게 가능한 작업
 
-1. 20개 후보와 3개 기관의 공식 1차 출처를 2026-07-18 기준으로 재검증한다.
-2. 오래되거나 redirect/동적 페이지인 URL, 출처로 확인할 수 없는 구체 수치, 지역별 예외를 표시한다.
-3. staging/approval artifact의 설계 대안을 제시한다.
-4. 승인된 설계로 DATA-001 실행계획을 작성한다.
+1. 사용자가 written specification을 검토한다.
+2. spec 승인 뒤 DATA-001 실행계획을 TDD 단위로 작성한다.
+3. 계획 승인 뒤에만 staging directory·schema·validator·DRAFT artifact를 구현한다.
 
 ## 10. 현재 차단된 작업
 

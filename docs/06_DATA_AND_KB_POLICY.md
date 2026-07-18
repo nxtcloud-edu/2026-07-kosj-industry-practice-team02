@@ -3,11 +3,16 @@
 ## 데이터 영역
 
 ```text
+data/staging/      승인 전 공식 출처 기반 DRAFT와 hash-bound approval manifest
 data/official/     공식 출처를 사람이 확인한 원본/정제본
 data/evaluation/   표본 20개와 회귀 케이스
 data/mock/         관리자 화면 시연용, 공식 근거로 사용 금지
 data/processed/    재현 가능한 스크립트가 만든 산출물
 ```
+
+staging은 시민 근거가 아니다. PM이 artifact hash와 record decision을 전수 검수한 뒤에도
+DATA-SEED-001의 immutable release promotion을 통과하기 전에는 `data/official/releases/`나 DB
+seed로 승격할 수 없다.
 
 ## 공식 데이터 규칙
 

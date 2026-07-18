@@ -138,6 +138,13 @@
 
 완료 목표는 2026-07-20이다. PM 승인 전 레코드는 staging이며 시민 답변 검색 대상이 아니다.
 
+Q-DATA-002=A에 따라 staging의 canonical 경로는
+`data/staging/data-001/<draft-version>/`이며 KB·기관·매핑 JSON과 artifact hash에 묶인 PM
+approval manifest를 분리한다. DATA-001은 authoring·validation·approval evidence까지만
+소유하며, 승인 record의 immutable official release와 DB seed/import는 DATA-SEED-001에서만
+수행한다. 초기 release는 KB 19건·기관 3건·매핑 10~12건이고 `KB-WASTE-03`은 개선 전후
+회귀에서 별도 승인된 뒤 최종 20번째 ACTIVE가 된다.
+
 ## 7. 시스템 설계
 
 ![시스템 아키텍처](assets/architecture.png)

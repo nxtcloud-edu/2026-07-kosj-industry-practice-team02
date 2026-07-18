@@ -37,8 +37,8 @@
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 10~12건 작성·전수 승인 | Blocked | PLAN-001 Approved | 2026-07-20까지 출처·확인일·작성자·별도 승인자·매핑 검수 누락 0, 승인 전 staging |
-| DATA-SEED-001 | P0 | Backend·Data | 승인 공식 데이터의 버전 seed·lineage | Blocked | DATA-001 | ACTIVE seed 20·office 3+·mapping 10~12, mock 혼입 0, 재현 import/rollback |
+| DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 12건 staging 작성·전수 검수 | Review — Q-DATA-002=A, written spec user review pending | [DATA discovery](docs/discovery/DATA_001_DISCOVERY_REPORT.md), D-033/ADR-0015 | 2026-07-20까지 20/3/12 schema·source·PII 검증, hash-bound PM manifest; 초기 승인 KB 19+WASTE-03 보류, mapping 승인 10~12, official release/seed 0 |
+| DATA-SEED-001 | P0 | Backend·Data | 승인 record의 immutable official release·버전 seed·lineage | Blocked | DATA-001 approved manifest, 별도 plan approval | 초기 ACTIVE seed 19·office 3·mapping 10~12, WASTE-03 0·mock 0, reproducible promotion/import/rollback; REG-001 뒤 최종 KB 20 release |
 | READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DATA-SEED-001, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |
 | LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |

@@ -22,6 +22,10 @@
 - 공식 KB·기관 데이터 작성: AI/Data·Backend
 - 공식 KB·기관 데이터 승인: PM 전수 검수
 - 공식 데이터 완료 목표: 2026-07-20
+- 승인 전 canonical authoring: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON 3종
+- PM 승인 증거: artifact SHA-256·count·레코드별 결정·comment를 가진 별도 approval manifest
+- 승인 record 승격: DATA-SEED-001에서만 immutable `data/official/releases/<data-version>/` 생성
+- 초기 release: ACTIVE KB 19건·기관 3건·매핑 10~12건; `KB-WASTE-03`은 회귀 뒤 최종 20번째 ACTIVE
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
