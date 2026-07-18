@@ -335,6 +335,16 @@ try {
     Invoke-NativeStep -StepId "TEST-WEB" -Executable "corepack.cmd" -Arguments @(
         "pnpm", "--filter", "@sejong-ai/web", "test"
     )
+    $webE2eInstallArguments = @(
+        "pnpm", "--dir", "tools/web-e2e", "install", "--frozen-lockfile", "--ignore-scripts"
+    )
+    if ($Offline) {
+        $webE2eInstallArguments += "--offline"
+    }
+    Invoke-NativeStep -StepId "INSTALL-WEB-E2E" -Executable "corepack.cmd" -Arguments $webE2eInstallArguments
+    Invoke-NativeStep -StepId "CHECK-WEB-PROD-DEPENDENCY-BOUNDARY" -Executable "node" -Arguments @(
+        "scripts/check_web_prod_dependency_boundary.mjs"
+    )
 
     $syntheticSentinel = "sejong-web-build-boundary-sentinel-v1"
     Invoke-SentinelWebBuild -Sentinel $syntheticSentinel -StepId "BUILD-WEB-SENTINEL"

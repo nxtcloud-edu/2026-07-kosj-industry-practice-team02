@@ -42,9 +42,15 @@ test("chat shell has the static privacy boundary and approved visible scope", as
     })),
   ).toEqual({ indexedDbCount: 0, localStorageCount: 0, sessionStorageCount: 0 });
 
-  const requestOrigins = requests.map((requestUrl) => new URL(requestUrl).origin);
-  expect(requestOrigins.every((origin) => origin === "http://127.0.0.1:3001")).toBe(true);
-  expect(requests.filter((requestUrl) => new URL(requestUrl).pathname.startsWith("/api/"))).toEqual([]);
+  const isAllowedCitizenShellRequest = (requestUrl: string) => {
+    const { origin, pathname } = new URL(requestUrl);
+    return (
+      origin === "http://127.0.0.1:3001" &&
+      (pathname === "/" || pathname === "/chat" || pathname.startsWith("/_next/static/"))
+    );
+  };
+  expect(isAllowedCitizenShellRequest("http://127.0.0.1:3001/track")).toBe(false);
+  expect(requests.every(isAllowedCitizenShellRequest)).toBe(true);
 });
 
 test("chat shell fits the viewport and retains focus and readable contrast", async ({ page }) => {
