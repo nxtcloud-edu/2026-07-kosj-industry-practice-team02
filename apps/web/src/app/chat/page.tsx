@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
+
 const supportedServices = [
   "전입·주민등록",
   "증명서 발급",
