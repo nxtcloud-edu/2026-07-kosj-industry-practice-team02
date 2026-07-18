@@ -200,7 +200,7 @@ their pinned sources. Focused root 85 tests and patched runtime 24 tests passed,
 
 **Interfaces:** Produces `ValidationIssue`, `load_json_object`, `validate_schema`, `sha256_file`, `write_json` for Task 2.
 
-- [ ] **Step 1: Write RED schema tests**
+- [x] **Step 1: Write RED schema tests**
 
 Tests must construct temporary JSON and assert these exact rule codes without inspecting secret values:
 
@@ -222,7 +222,7 @@ def test_invalid_date_and_non_https_url_are_rejected(self) -> None:
 
 Also add separate tests for missing required, wrong type, enum, ID pattern, null allowance, root version mismatch, sorted issue order, and issue serialization with no offending value.
 
-- [ ] **Step 2: Run focused RED**
+- [x] **Step 2: Run focused RED**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging_validation -v
@@ -230,15 +230,15 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging
 
 Expected: import or missing-schema failure caused by the absent implementation.
 
-- [ ] **Step 3: Add exact internal schemas**
+- [x] **Step 3: Add exact internal schemas**
 
 Each root is an object with `schema_version=1`, `draft_version` pattern `^0\.1\.0-draft\.1$`, and `records`. Set `additionalProperties=false` at every object level. Use spec fields exactly. KB `question_examples` is 3..5 unique strings; all arrays use strings; category/region/intent/data origin/status use exact allowlists. Manifest `artifacts` has exactly 3 unique path records and `decisions` allows APPROVE/WITHHOLD/REJECT.
 
-- [ ] **Step 4: Implement only the tested JSON Schema subset**
+- [x] **Step 4: Implement only the tested JSON Schema subset**
 
 Support object/array/string/integer/boolean/null, required, additionalProperties, const, enum, pattern, min/max length, min/max/unique items, ISO date/datetime and HTTPS URL. Sort returned issues by `(artifact, record_id or "", field or "", code)` and never attach the offending value.
 
-- [ ] **Step 5: Verify GREEN and commit**
+- [x] **Step 5: Verify GREEN and commit**
 
 Run focused unittest, root unittest discovery, secret scan, `git diff --check`; commit `feat(data): add DATA-001 staging contracts`.
 
@@ -393,9 +393,10 @@ Complete 6W1H note, actual commands/results, versions, security/data/rollback/ha
 - 2026-07-18: 사용자가 written spec을 승인하고 사람 작업 KEEP, 나머지 연속 진행, AI data draft 후 사용자 검토를 지시.
 - 2026-07-18: 네 독립 source audit에서 신규 A/Blocker 0, mapping 10 APPROVE 권고/2 REJECT 권고 확인.
 - 2026-07-18: `codex/data-001-staging-review` worktree baseline full gate PASS; Task 0 complete.
+- 2026-07-18: Task 1 schemas/validator TDD complete; independent review found and fixed malformed-ID value exposure, boolean/integer equality, and unenforced numeric minimum. Re-review Spec PASS / Quality PASS at `a21f4fe`.
 
 ## 결과와 회고
 
 - 실제 결과: In Progress.
-- 계획과 달라진 점: 없음.
-- 다음 단계: Task 0 branch isolation과 clean baseline.
+- 계획과 달라진 점: Task 1 독립 리뷰에서 값 비노출·JSON 타입 비교·manifest 음수 건수 검증을 강화했다.
+- 다음 단계: Task 2 cross-file/privacy/source/hash validation CLI.
