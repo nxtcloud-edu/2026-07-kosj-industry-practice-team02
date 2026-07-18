@@ -1,6 +1,6 @@
 # DATA-001 staged official data design
 
-- Status: Review — Q-DATA-002=A selected; written specification awaits user review
+- Status: Approved — user `명세 승인` on 2026-07-18; AI-executable DATA-001 plan in progress, PM review remains KEEP
 - Date: 2026-07-18 KST
 - Decision: D-033 / ADR-0015
 - Scope: DATA-001 authoring, validation, submission, PM approval artifact boundary
