@@ -29,7 +29,7 @@
 ## 계획 거버넌스
 
 - Plan ID: `DATA-001-STAGING-PLAN`
-- 상태: AI-executable scope complete / Human Review KEEP
+- 상태: AI scope complete / Review (PM pending)
 - 사용자 승인 근거: 2026-07-18 `명세 승인`과 “사람 작업은 KEEP하고 나머지는 계속 진행, 데이터는 AI가 초안 후 사용자 검토” 지시
 - 승인된 명세: `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md`
 - 결정: D-033 / A-026 / ADR-0015
@@ -341,11 +341,14 @@ Run focused/root tests, validator, secret scan, `git diff --check`; commit `data
 
 - [x] **Step 1: Set truthful task/version state**
 
-DATA-001 becomes `Human Review KEEP` with DRAFT 20/office 3/mapping 12 and validator PASS. `official_data` remains `0.0.0-not-populated`; `test_suite` becomes `0.6.0-data-staging`; `documentation` becomes `2.5.0`; application/web/API/shared contracts/DB/mock/prompt stay unchanged.
+Historical initial closeout set DRAFT 20/office 3/mapping 12 and validator PASS. Remediation 3 confirms the
+current state as `AI scope complete / Review (PM pending)`: `official_data` remains `0.0.0-not-populated`,
+`test_suite` is `0.7.0-data-trust-boundary`, `documentation` is `2.6.0`, and application/web/API/shared
+contracts/DB/mock/prompt remain unchanged.
 
 - [x] **Step 2: Run final verification evidence**
 
-Invoke `superpowers:verification-before-completion`, then run focused unit, explicit staging validator, full `scripts/verify.ps1`, JSON parse, package validation, secret scan, `git diff --check`, and exact runtime staging-reference scan. Scoped checks PASS; one fresh non-offline full run reached `TEST-ROOT` and was stopped after a >7-minute idle runner with no descendant, so it is inconclusive and not PASS.
+Invoke `superpowers:verification-before-completion`, then run focused unit, explicit staging validator, full `scripts/verify.ps1`, JSON parse, package validation, secret scan, `git diff --check`, and exact runtime staging-reference scan. Remediation 3 re-ran the exact verbose `TEST-ROOT` discovery once with live evidence: 171 tests passed in 511.715s (one Windows symlink capability skip). A fresh non-offline `scripts/verify.ps1` then passed end-to-end; its quiet `TEST-ROOT` stage took about 11 minutes before every remaining gate passed. The former “hang” was an early-stop/insufficient-observation conclusion, not a reproduced deterministic runner defect.
 
 - [x] **Step 3: Independent review and remediation**
 
@@ -415,8 +418,16 @@ Completed 6W1H note, actual commands/results, versions, security/data/rollback/h
 - 2026-07-18: Task 2 cross-file/privacy/source/hash/CLI gate complete. Independent review cycles closed one Critical and four Important findings, including Task 3 registry compatibility; final Spec PASS / Quality PASS at `327dab2` with 35 focused tests PASS.
 - 2026-07-18: Task 3 DRAFT 20/3/12 and 35-row PM packet complete. Review corrected truthful submission provenance and canonical JSON bytes; final Spec PASS / Quality PASS at `f7b9157`, validator issues 0 with `PM_REVIEW_REQUIRED` only.
 
+### Final Remediation 3 — root verification closeout
+
+- [x] Removed no code and made no runner change: a single direct, unbuffered verbose root discovery established that `TEST-ROOT` completes rather than hangs (`171` tests, `511.715s`, exit `0`, one unavailable-symlink skip).
+- [x] Ran one fresh non-offline full `scripts/verify.ps1` with a sufficient observation bound. `TEST-ROOT`, canonical `VALIDATE-DATA-001`, web/API/contract gates, both secret scans, package validation, and diff check all passed.
+- [x] Re-ran the 62-test DATA-001 suite; canonical validation twice produced the same report SHA-256; PENDING, synthetic APPROVED, and synthetic REJECTED lifecycle coverage remains green through the focused lifecycle test.
+- [x] Rechecked content/manifest/registry/matrix/audit pins and JSON/count boundaries. No official release, seed, ACTIVE record, runtime/API/DB/dependency change occurred.
+- [x] Governance now records `AI scope complete / Review (PM pending)` and preserves PM approval as the only remaining DATA-001 gate.
+
 ## 결과와 회고
 
-- 실제 결과: AI-executable scope complete / Human Review KEEP. DRAFT 20 KB·3 office·12 mapping과 PENDING manifest는 validator PASS이며 official release/seed/ACTIVE는 0이다.
-- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했고 Task 3에서 실제 제출 시각과 canonical JSON 바이트를 바로잡았다. Task 4의 exact child-timeout test는 PASS했지만 fresh full root runner는 `TEST-ROOT`에서 >7분 idle이라 scoped tree만 종료했고 full verify PASS를 주장하지 않는다.
+- 실제 결과: AI scope complete / Review (PM pending). DRAFT 20 KB·3 office·12 mapping과 PENDING manifest는 validator PASS이며 official release/seed/ACTIVE는 0이다.
+- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했고 Task 3에서 실제 제출 시각과 canonical JSON 바이트를 바로잡았다. Remediation 3는 충분한 단일 라이브 discovery와 fresh full gate로 기존 `TEST-ROOT` early-stop 기록을 해소했으며, runner defect를 발견하지 않아 코드 수정은 하지 않았다.
 - 다음 단계: PM의 35-record 검수·decision/comment, 그 뒤 별도 DATA-SEED-001.

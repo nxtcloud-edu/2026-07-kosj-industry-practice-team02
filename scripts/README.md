@@ -19,7 +19,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offline
 ```
 
-러너는 Windows PowerShell 5.1+, Node 24.12.0, pnpm 11.13.0, uv 0.11.28과 API venv Python 3.12.13을 먼저 확인한다. 이어 frozen pnpm/uv sync, root tests, 필수 DATA-001 canonical marker/schema/staging validator, Web lint/typecheck/test/synthetic-secret build, API format/lint/mypy/pytest, 계약 생성·diff·test, 두 secret scanner, package validator와 `git diff --check`를 fail-fast로 실행한다. canonical marker/schema/staging 중 하나라도 없으면 `VALIDATE-DATA-001`은 skip하지 않고 실패한다.
+러너는 Windows PowerShell 5.1+, Node 24.12.0, pnpm 11.13.0, uv 0.11.28과 API venv Python 3.12.13을 먼저 확인한다. 이어 frozen pnpm/uv sync, root tests, 필수 DATA-001 canonical marker/schema/staging validator, Web lint/typecheck/test/synthetic-secret build, API format/lint/mypy/pytest, 계약 생성·diff·test, 두 secret scanner, package validator와 `git diff --check`를 fail-fast로 실행한다. canonical marker/schema/staging 중 하나라도 없으면 `VALIDATE-DATA-001`은 skip하지 않고 실패한다. `TEST-ROOT`은 하위 프로세스 정리 회귀를 포함해 조용한 시간이 길 수 있으므로, 2026-07-18 Remediation 3의 direct 171-test discovery(511.715s)와 fresh full gate PASS 이전에 조기 종료했던 기록을 정지 결함으로 해석하지 않는다.
 
 ## DATA-001 staging validation
 

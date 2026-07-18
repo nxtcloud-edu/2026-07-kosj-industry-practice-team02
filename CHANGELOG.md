@@ -39,7 +39,7 @@
 
 ### Changed
 
-- Marked DATA-001 AI-executable scope complete and handed it to PM review KEEP; `official_data` remains `0.0.0-not-populated`, while test-suite and documentation evidence advance to `0.6.0-data-staging` and `2.5.0`
+- Marked DATA-001 AI scope complete / Review (PM pending); `official_data` remains `0.0.0-not-populated`, while test-suite and documentation evidence advance to `0.7.0-data-trust-boundary` and `2.6.0`. Remediation 3 cleared the historical `TEST-ROOT` early-stop concern with a direct 171-test discovery (511.715s) and a fresh full verification pass; PM approval/release/seed remain out of scope.
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
 - Clarified local-first/zero-infrastructure-budget as the active target and managed hosting as separately approved future work
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain

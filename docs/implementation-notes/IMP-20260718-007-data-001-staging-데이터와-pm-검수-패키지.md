@@ -1,9 +1,9 @@
 # IMP-20260718-007 — DATA-001 staging 데이터와 PM 검수 패키지
 
-- Date/Time (KST): 2026-07-18T20:04:33+09:00
+- Date/Time (KST): 2026-07-18T20:04:33+09:00 (Remediation 3 closeout: 2026-07-19T00:03:18+09:00)
 - Task ID: DATA-001
 - Type: implementation/data-quality/governance-closeout
-- Status: AI-executable scope complete / Human Review KEEP
+- Status: AI scope complete / Review (PM pending)
 - Author/Agent: Codex(Architecture·AI/Data·Backend·Security·Docs)
 - Branch: `codex/data-001-staging-review`; worktree `.worktrees/data-001-staging-review`
 - Base commit: `36da4b1`
@@ -21,9 +21,9 @@
 
 - canonical staging은 `0.1.0-draft.1` DRAFT KB 20, office 3, mapping 12이며 PENDING manifest를 가진다.
 - validator는 source/count/PII/mock/secret/order/hash/approval boundary를 fail closed로 검사한다.
-- DATA-001 상태는 `Human Review KEEP`, PM review pending으로 기록한다.
+- DATA-001 상태는 `AI scope complete / Review (PM pending)`으로 기록한다.
 - `official_data`는 `0.0.0-not-populated`을 유지하고 ACTIVE/release/seed/readiness를 만들지 않는다.
-- `test_suite`는 `0.6.0-data-staging`, `documentation`은 `2.5.0`으로만 갱신한다.
+- Remediation 3 closeout에서 `test_suite`는 `0.7.0-data-trust-boundary`, `documentation`은 `2.6.0`으로 갱신한다.
 - application/web/API/shared contracts/DB/mock/prompt, dependency, Docker/cloud은 변경하지 않는다.
 - 실행한 검증과 full root gate 제한을 숨기지 않고 재현·rollback·handoff를 남긴다.
 
@@ -124,6 +124,14 @@ write boundary를 fail closed한다. Hash mismatch는 PM approval을 무효로 �
 | Test suite | 0.5.0-db-baseline | 0.6.0-data-staging | DATA-001 validation/test gate 추가 |
 | Documentation | 2.4.2 | 2.5.0 | plan, lineage, PM handoff, closeout evidence |
 
+### Remediation 3 closeout version update
+
+| 축 | Before | After | 변경 이유 |
+|---|---|---|---|
+| Test suite | 0.6.0-data-staging | 0.7.0-data-trust-boundary | lifecycle/trust-boundary 62-test suite와 tracked matrix·audit·runtime isolation evidence를 final closeout에 반영 |
+| Documentation | 2.5.0 | 2.6.0 | root-runner diagnosis, full verification evidence, governance/status and handoff synchronization |
+| Official data and runtime axes | unchanged | unchanged | official release/seed/ACTIVE, DB/API/product/dependency/runtime change 0 |
+
 ## 8. 명령과 테스트 증거
 
 | 명령/검증 | 결과 | 시간/개수 | 증거 |
@@ -139,11 +147,23 @@ write boundary를 fail closed한다. Hash mismatch는 PM approval을 무효로 �
 | `git diff --check` | PASS | whitespace errors 0 | final diff gate rerun before commit |
 | `scripts/verify.ps1` (non-offline, one fresh run) | INCONCLUSIVE | TEST-ROOT runner idle >7 min | started 19:54:05 KST; exact focused child test had passed; PID 421264 had CPU 0.171875 unchanged/no descendant/no further output after `TEST-ROOT`, so only that worktree-scoped runner was stopped and wrapper/tree became 0 |
 
+### Remediation 3 fresh evidence
+
+| 명령/검증 | 결과 | 시간/개수 | 증거 |
+|---|---|---|---|
+| `apps/api/.venv/Scripts/python.exe -u -B -m unittest discover -s scripts/tests -p test_*.py -v` | PASS | 171 tests, 511.715s; skipped 1 | direct live verbose diagnosis; all tests completed, skip reason `symbolic links unavailable: OSError` |
+| `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1` | PASS | one fresh non-offline complete run | `TEST-ROOT` passed after about 11 minutes, then DATA-001, web, API, contracts, both secret scans, package and diff gates all passed; terminal `[PASS] verification=complete` |
+| `apps/api/.venv/Scripts/python.exe -u -B -m unittest scripts.tests.test_data_staging_validation -q` | PASS | 62 tests, 22.917s | focused fail-closed staging/trust-boundary suite |
+| `apps/api/.venv/Scripts/python.exe -u -B -m unittest scripts.tests.test_data_staging_validation.DataStagingBusinessValidationTests.test_reviewed_approved_and_rejected_states_validate -v` | PASS | 1 test, 0.765s | synthetic APPROVED and REJECTED lifecycle validation |
+| canonical `validate --report` twice | PASS | issues 0; report hashes equal | report SHA-256 `460c6e6613cdd18f5a3abace116da14dbb036b2d60855d835038c9cf9afd7d2d` both times |
+| content/manifest/registry/matrix/audit SHA-256, JSON/CSV counts | PASS | KB 20, office 3, mapping 12, manifest decisions 35, registry 20 | content, approval-manifest, source-registry, approved matrix and four audit pins matched the tracked trust chain |
+
 ### 미실행 검증과 이유
 
-No second full root run was started: the requested single fresh non-offline run was attempted and is not PASS
-evidence. PM source/content approval, DATA-SEED-001 promotion/import, DB seed, ACTIVE query, readiness 200,
-public deployment, and performance/UI checks are outside this task and remain unexecuted.
+The historical full-root attempt was not PASS evidence because it was stopped early. Remediation 3 completed a
+single direct live root discovery and one fresh full non-offline verification run, both PASS. PM source/content
+approval, DATA-SEED-001 promotion/import, DB seed, ACTIVE query, readiness 200, public deployment, and
+performance/UI checks remain outside this task and unexecuted.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
@@ -181,8 +201,8 @@ public deployment, and performance/UI checks are outside this task and remain un
   remain REJECT recommendations unless PM has stronger official evidence.
 - PM must recheck TAX-03/05 official routes and 2026-variable waste fee/day/refund and office contact/hour facts.
 - DATA-SEED-001 alone may create immutable release/seed/import; READY-001 alone may reconsider `/ready=200`.
-- The full root gate has an unresolved TEST-ROOT hang despite the exact child-timeout regression passing; do not
-  report the full `scripts/verify.ps1` suite as PASS until root cause is found and a fresh run exits 0.
+- PM approval remains the only DATA-001 decision gate. The prior `TEST-ROOT` concern is closed: long silent
+  subprocess regression intervals require a sufficient observation bound, but no deterministic runner bug was reproduced.
 
 ## 12. AI 내부 구현 세부 — 인간이 굳이 이해하지 않아도 되는 내용
 
@@ -212,24 +232,48 @@ review. DATA-SEED-001 owns immutable release/import compensation; READY-001 owns
 
 Start with the tracked DATA-001 plan, `docs/data-lineage/DATA-001-0.1.0-draft.1.md`, the four tracked summaries under
 `docs/data-lineage/source-audits/`, `data/schemas/data-001/v1/approved-source-matrix.json`, this note and the PM packet.
-Preserve the canonical DRAFT bytes and use the hash comparison before any PM decision. Investigate the root
-`TEST-ROOT` process hang before claiming a full root verification pass.
+Preserve the canonical DRAFT bytes and use the hash comparison before any PM decision. For root verification, allow
+the quiet `TEST-ROOT` stage its documented long subprocess-regression duration; it has fresh direct and full-gate PASS evidence.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - Human PM review is KEEP; no automatic approval or promotion is authorized.
 - Variable official facts and TAX legacy routes need human revalidation.
-- The full root suite limitation is an environmental/tooling investigation item; focused DATA-001 and exact
-  child-timeout tests pass, but root PASS is unavailable.
+- No runner limitation remains: `TEST-ROOT` and a fresh full verification gate passed. This evidence does not
+  authorize PM approval, DATA-SEED-001, readiness, or public release.
 - A-021/Q-SEC-003 remains a separate public-release blocker.
 - Next authorized product sequence: PM review → DATA-SEED-001 plan/approval → immutable release/import → READY-001.
 
 ## 15. 자체 리뷰
 
-- [x] requested AI-executable DATA-001 scope and truthful Human Review KEEP status recorded
-- [x] scoped tests/validation and full-root limitation documented with actual evidence
+- [x] requested AI scope and truthful Review (PM pending) status recorded
+- [x] direct root diagnosis and fresh full verification evidence documented with actual PASS results
 - [x] source-of-truth/ADR/contract/version/governance synchronization checked; TEAM_DECISIONS/PROJECT_PLAN unchanged because no drift
 - [x] no privacy raw payload, secret, official release, DB/API/runtime/dependency/Docker/cloud change
 - [x] implementation note INDEX updated
 - [x] independent Task 4 review: Critical 0; reproducible command evidence corrected after its one Important finding
-- [x] final closeout commit: `docs(data): hand off DATA-001 for PM review`
+- [x] Remediation 3 closeout commit pending: `docs(data): close DATA-001 trust-boundary remediation`
+
+## 16. Final Remediation 3 — TEST-ROOT diagnosis and data-trust closeout
+
+### 원인 조사와 결론
+
+The previous report stopped `scripts/verify.ps1` after more than seven quiet minutes at `TEST-ROOT` and therefore
+correctly marked that historical run inconclusive. Remediation 3 first confirmed that no prior unittest/verify
+process tree remained, then ran the exact root command once with unbuffered verbose output and a sufficient bound.
+It completed 171 tests in 511.715 seconds with exit 0; the long intervals were legitimate patched-tooling and local
+database subprocess regression cases. One fresh full verification gate subsequently passed. No deterministic
+repository runner defect exists in the reproduced environment, so no code or test-runner change was made.
+
+### Hashes and boundary evidence
+
+- report: `460c6e6613cdd18f5a3abace116da14dbb036b2d60855d835038c9cf9afd7d2d`
+- KB/offices/mappings/manifest: `38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365`, `fe942ce476c7d78f5b17deb10fd3b53e5b673f3ae36cf67a042823ccd51a7af0`, `a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b`, `997b5dcdfce2971af9ac4b81379e4065d24f501283f2fafaeddd5ce303039c9b`
+- registry/matrix: `0d90d45fc1e8a3520a7381b6f849fe2c7e40ad73b3782a1225ca04f557f346f7`, `19952d1ead2cb3878de7e3f80c7c5bde28b351781d8bf8d4947494f1ccfe29de`
+- source audits (move-cert/waste/tax/office-mapping): `2781768e30103d5a25deb83d640a27c69e1fc600461338dd310296bffc97b103`, `f71919da9b4d3df3dced088504aaff663ec881c4005fa5281d5dd2ebfe476d6b`, `8763c8cb459056b62c73f9ce7440f93193b7023dab6f1dda0d16e60c111d4105`, `6222c99274245c9fb81be155ee5a1804d9656037cf1db66c8d51e694884521e1`
+
+### Human-required handoff
+
+PM must still conduct the 35-record review, record every decision and non-empty comment, and remain distinct from
+`AI-DATA-BACKEND`. This remediation neither approves any record nor creates an official release, seed, ACTIVE record,
+DB/API/runtime/dependency change, or external call. DATA-SEED-001 remains blocked until the PM manifest is complete.

@@ -37,7 +37,7 @@
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 12건 staging 작성·전수 검수 | Review | [DATA plan](docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md), D-033/ADR-0015, [IMP-20260718-007](docs/implementation-notes/IMP-20260718-007-data-001-staging-데이터와-pm-검수-패키지.md) | AI-executable scope complete, PM review pending. PM이 35 records의 source/content/확인일과 decision/comment를 전수 검수; initial projection KB 19+WASTE-03 보류, mapping 10 approve/2 reject 권고, official release/seed 0 |
+| DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 12건 staging 작성·전수 검수 | Review | [DATA plan](docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md), D-033/ADR-0015, [IMP-20260718-007](docs/implementation-notes/IMP-20260718-007-data-001-staging-데이터와-pm-검수-패키지.md) | AI scope complete / Review (PM pending). PM이 35 records의 source/content/확인일과 decision/comment를 전수 검수; initial projection KB 19+WASTE-03 보류, mapping 10 approve/2 reject 권고, official release/seed 0 |
 | DATA-SEED-001 | P0 | Backend·Data | 승인 record의 immutable official release·버전 seed·lineage | Blocked | DATA-001 approved manifest, 별도 plan approval | 초기 ACTIVE seed 19·office 3·mapping 10~12, WASTE-03 0·mock 0, reproducible promotion/import/rollback; REG-001 뒤 최종 KB 20 release |
 | READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DATA-SEED-001, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |

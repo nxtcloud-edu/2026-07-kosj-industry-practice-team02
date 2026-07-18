@@ -1,6 +1,6 @@
 # DATA-001 staged official data design
 
-- Status: Approved — user `명세 승인` on 2026-07-18; AI-executable DATA-001 scope complete with DRAFT 20/3/12 and validator PASS, PM review remains KEEP
+- Status: Approved — user `명세 승인` on 2026-07-18; AI scope complete / Review (PM pending) with DRAFT 20/3/12 and validator PASS
 - Date: 2026-07-18 KST
 - Decision: D-033 / ADR-0015
 - Scope: DATA-001 authoring, validation, submission, PM approval artifact boundary
