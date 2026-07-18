@@ -4,6 +4,8 @@
 
 ### Added
 
+- WEB-HOME-001 static `/chat` preparation shell, navigable home CTA, explicit no-input/no-storage/request allowlist browser guard, 390/430/desktop accessibility checks, and actual Chrome UI 200% zoom verification
+- Standalone exact-locked `tools/web-e2e` Playwright test project and a permanent production dependency/deploy gate that keeps Playwright out of the citizen Web runtime graph
 - DATA-001 internal staging schemas, dependency-free fail-closed validator, canonical DRAFT KB 20·office 3·mapping 12, hash-bound `PENDING_PM_REVIEW` manifest, deterministic validation report, lineage, and PM review packet; all remain non-ACTIVE and outside citizen reads, seed, and readiness
 - Codex repository guidance, first-run interview prompt, source-of-truth hierarchy
 - ADR, implementation-note, handoff, ambiguity-audit workflows
@@ -39,7 +41,7 @@
 
 ### Changed
 
-- Marked DATA-001 AI scope complete / Review (PM pending); `official_data` remains `0.0.0-not-populated`, while test-suite and documentation evidence advance to `0.7.0-data-trust-boundary` and `2.6.0`. Remediation 3 cleared the historical `TEST-ROOT` early-stop concern with a direct 171-test discovery (511.715s) and a fresh full verification pass; PM approval/release/seed remain out of scope.
+- Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged and `official_data` remains `0.0.0-not-populated`; release, seed, DB rows, ACTIVE reads, and readiness are still pending their separately approved transition.
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
 - Clarified local-first/zero-infrastructure-budget as the active target and managed hosting as separately approved future work
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain
@@ -87,7 +89,7 @@
 
 ### Pending
 
-- Official KB and office data
+- Immutable official KB/office release, disposable-local seed, and readiness activation after DATA-SEED-001 written specification and execution-plan approval
 - Deployment accounts and URLs
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;

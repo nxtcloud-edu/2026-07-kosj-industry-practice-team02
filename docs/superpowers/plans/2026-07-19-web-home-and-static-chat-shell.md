@@ -6,7 +6,7 @@
 
 **Architecture:** Keep both routes as Next.js App Router Server Components. Reuse the existing global semantic, mobile-first visual foundation and add only static markup and CSS; `/chat` has no client component, state, form control, request, storage, cookie, API, LLM, or official-data dependency. Add render tests first, then a production-browser Playwright gate for navigation, privacy boundary, responsive layout, focus, and contrast evidence.
 
-**Tech Stack:** Next.js 16.2.10, React 19.2.7, TypeScript 5.9.3, Tailwind CSS 4.3.2 local CSS, Vitest 4.1.10 + Testing Library, and dev-only `@playwright/test` 1.61.1.
+**Tech Stack:** Next.js 16.2.10, React 19.2.7, TypeScript 5.9.3, Tailwind CSS 4.3.2 local CSS, Vitest 4.1.10 + Testing Library, and standalone dev-only `tools/web-e2e` with `@playwright/test` 1.61.1.
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@
 - Use semantic landmarks, exactly one `h1` per route, a visible keyboard focus indicator, body contrast of at least 4.5:1, and the existing Korean system-font stack.
 - Verify 390px, 430px, and desktop viewports with no horizontal overflow; verify keyboard navigation and focus in a real production browser.
 - No public API, OpenAPI/schema, database migration, database seed, official/mock-data version, environment variable, cookie, or deployment change is allowed.
-- Use Node `24.12.0` and pnpm `11.13.0`; all package changes must be exact-versioned and locked by the root `pnpm-lock.yaml`.
+- Use Node `24.12.0` and pnpm `11.13.0`; the citizen Web runtime stays on the unchanged root lock while standalone browser tooling is exact-versioned by `tools/web-e2e/pnpm-lock.yaml`.
 - Create the required implementation note, index row, TASKS row update, changelog entry, and version-manifest update as part of the final documentation task.
 
 ---
@@ -29,7 +29,7 @@
 - `apps/web/src/app/chat/` does not exist, so adding a `/chat` link before adding the route would produce a 404.
 - `apps/web/src/app/globals.css` already supplies system fonts, 18px base text, contrast-safe tokens, skip-link behavior, focus styling, and responsive `.service-grid` breakpoints.
 - `apps/web/package.json` has Vitest/Testing Library but no direct browser-test runner. The root lock contains only optional Playwright peer metadata; it is not an installed test tool.
-- `PLAN-20260714-001-foundation-and-governed-chat.md` already approved Playwright and axe-class tooling as development/test dependencies. This task needs repeatable viewport, navigation, focus, and network/privacy checks that JSDOM cannot make, so install only the already-approved dev dependency `@playwright/test@1.61.1`; do not install `axe-core` or any runtime package in this slice. Version `1.61.1` was verified on 2026-07-19 against the Microsoft-published npm registry metadata; it supports Node `>=18`, and the official Playwright system requirements list current Node 24.x.
+- `PLAN-20260714-001-foundation-and-governed-chat.md` already approved Playwright and axe-class tooling as development/test dependencies. This task needs repeatable viewport, navigation, focus, and network/privacy checks that JSDOM cannot make, so install only the already-approved dev dependency `@playwright/test@1.61.1` in a standalone test project; do not install `axe-core` or any runtime package in this slice. Version `1.61.1` was verified on 2026-07-19 against the Microsoft-published npm registry metadata; it supports Node `>=18`, and the official Playwright system requirements list current Node 24.x.
 - This is independent of DATA-SEED-001. The static wording must not read staging data, official data, or the pending approval manifest and must leave `/ready=503` unchanged.
 
 ## File Structure
@@ -41,10 +41,15 @@
 | `apps/web/src/app/page.test.tsx` | Modify | Replace the obsolete no-`/chat` assertion with an accessible CTA destination assertion. |
 | `apps/web/src/app/page.tsx` | Modify | Point the sole primary home CTA to `/chat`; preserve the supported-services section and all approved wording. |
 | `apps/web/src/app/globals.css` | Modify | Style the static chat shell with the existing tokens, focus treatment, and mobile-first layout. |
-| `apps/web/e2e/home-chat-shell.spec.ts` | Create | Production-browser checks for navigation, responsive widths, landmarks/focus, no form/storage/cookie/API/external request, and text contrast. |
-| `apps/web/playwright.config.ts` | Create | Local loopback production-server configuration and three browser projects. |
-| `apps/web/package.json` | Modify | Add exact dev-only Playwright package and `test:e2e` script; no production dependency changes. |
-| `pnpm-lock.yaml` | Modify | Frozen lock resolution for the exact approved dev-only package. |
+| `apps/web/vitest.config.ts` | Modify | Preserve Vitest defaults while excluding the standalone `e2e/**` path. |
+| `tools/web-e2e/e2e/home-chat-shell.spec.ts` | Create | Production-browser checks for navigation, responsive widths, landmarks/focus, no form/storage/cookie/API/external request, and text contrast. |
+| `tools/web-e2e/playwright.config.ts` | Create | Local loopback production-server configuration and three browser projects. |
+| `tools/web-e2e/package.json` | Create | Private standalone test package with exact dev-only Playwright. |
+| `tools/web-e2e/pnpm-workspace.yaml` | Create | Make browser tooling an independent pnpm workspace/importer. |
+| `tools/web-e2e/pnpm-lock.yaml` | Create | Frozen lock for the exact approved dev-only package. |
+| `scripts/check_web_prod_dependency_boundary.mjs` | Create | Fail if Playwright enters the Web production list or isolated deploy output. |
+| `scripts/verify.ps1` | Modify | Install standalone browser tooling and run the production dependency gate. |
+| `scripts/tests/test_verify_runner.py` | Modify | Keep the new verification stages ordered and non-optional. |
 | `apps/web/README.md` | Modify | Correct the route inventory and static privacy boundary. |
 | `TASKS.md` | Modify | Mark WEB-HOME-001 Done only after all listed gates pass and link its implementation note. |
 | `CHANGELOG.md` | Modify | Add the static `/chat` shell and its browser verification under Unreleased. |
@@ -295,29 +300,32 @@ Expected: one commit containing only the CTA and its test change.
 **Files:**
 
 - Modify: `apps/web/src/app/globals.css`
-- Create: `apps/web/e2e/home-chat-shell.spec.ts`
-- Create: `apps/web/playwright.config.ts`
-- Modify: `apps/web/package.json`
-- Modify: `pnpm-lock.yaml`
+- Modify: `apps/web/vitest.config.ts`
+- Create: `tools/web-e2e/e2e/home-chat-shell.spec.ts`
+- Create: `tools/web-e2e/playwright.config.ts`
+- Create: `tools/web-e2e/package.json`
+- Create: `tools/web-e2e/pnpm-workspace.yaml`
+- Create: `tools/web-e2e/pnpm-lock.yaml`
+- Create: `scripts/check_web_prod_dependency_boundary.mjs`
+- Modify: `scripts/verify.ps1`
+- Modify: `scripts/tests/test_verify_runner.py`
 
 **Consumes:** Static route/CTA markup from Tasks 1 and 2 plus existing color tokens and base focus rule.
 
 **Produces:** Repeatable Chromium validation at 390px, 430px, and desktop; a local-only test runner; scoped responsive styles with no external asset or runtime behavior.
 
-- [ ] **Step 1: Add the exact dev-only browser test dependency and script.**
+- [x] **Step 1: Add exact dev-only browser tooling without changing the Web production importer.**
 
-Change only the following `apps/web/package.json` entries:
+Create the standalone `tools/web-e2e/package.json`:
 
 ```json
 {
+  "name": "@sejong-ai/web-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.13.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1"
@@ -325,11 +333,11 @@ Change only the following `apps/web/package.json` entries:
 }
 ```
 
-Merge the shown entries into the existing object; retain every existing exact dependency version. Then generate only the lock update:
+Add `tools/web-e2e/pnpm-workspace.yaml` with `packages: []`, then generate its independent lock and install it:
 
-Run: `corepack.cmd pnpm add --filter @sejong-ai/web --save-dev --save-exact @playwright/test@1.61.1`
+Run: `corepack.cmd pnpm --dir tools/web-e2e install --frozen-lockfile --ignore-scripts`
 
-Expected: `apps/web/package.json` and root `pnpm-lock.yaml` change; no `dependencies` entry changes. Review the diff before any browser download.
+Expected: Playwright exists only in `tools/web-e2e/pnpm-lock.yaml`; `apps/web/package.json`, root `pnpm-workspace.yaml`, and root `pnpm-lock.yaml` remain dependency-identical to the pre-slice baseline. `node scripts/check_web_prod_dependency_boundary.mjs` must prove zero Playwright packages in both the Web production list and an isolated production deploy.
 
 - [ ] **Step 2: Create the local production-server configuration.**
 
@@ -350,7 +358,8 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "corepack.cmd pnpm --filter @sejong-ai/web start -- --hostname 127.0.0.1 --port 3001",
+      "corepack.cmd pnpm --filter @sejong-ai/web exec next start --hostname 127.0.0.1 --port 3001",
+    cwd: "../..",
     url: "http://127.0.0.1:3001",
     reuseExistingServer: false,
     timeout: 120_000,
@@ -408,9 +417,15 @@ test("chat shell has the static privacy boundary and approved visible scope", as
     })),
   ).toEqual({ indexedDbCount: 0, localStorageCount: 0, sessionStorageCount: 0 });
 
-  const requestOrigins = requests.map((requestUrl) => new URL(requestUrl).origin);
-  expect(requestOrigins.every((origin) => origin === "http://127.0.0.1:3001")).toBe(true);
-  expect(requests.filter((requestUrl) => new URL(requestUrl).pathname.startsWith("/api/")).toEqual([]);
+  const isAllowedCitizenShellRequest = (requestUrl: string) => {
+    const { origin, pathname } = new URL(requestUrl);
+    return (
+      origin === "http://127.0.0.1:3001" &&
+      (pathname === "/" || pathname === "/chat" || pathname.startsWith("/_next/static/"))
+    );
+  };
+  expect(isAllowedCitizenShellRequest("http://127.0.0.1:3001/track")).toBe(false);
+  expect(requests.every(isAllowedCitizenShellRequest)).toBe(true);
 });
 
 test("chat shell fits the viewport and retains focus and readable contrast", async ({ page }) => {
@@ -456,8 +471,8 @@ Run:
 
 ```powershell
 corepack.cmd pnpm --filter @sejong-ai/web build
-corepack.cmd pnpm --filter @sejong-ai/web exec playwright install chromium
-corepack.cmd pnpm --filter @sejong-ai/web test:e2e
+corepack.cmd pnpm --dir tools/web-e2e exec playwright install chromium
+corepack.cmd pnpm --dir tools/web-e2e test
 ```
 
 Expected: first two commands succeed; all three viewport projects fail the third test because `.chat-info-grid` has no `display: grid` style. Do not accept an accidental pass by weakening that assertion.
@@ -574,7 +589,8 @@ corepack.cmd pnpm --filter @sejong-ai/web test
 corepack.cmd pnpm --filter @sejong-ai/web typecheck
 corepack.cmd pnpm --filter @sejong-ai/web lint
 corepack.cmd pnpm --filter @sejong-ai/web build
-corepack.cmd pnpm --filter @sejong-ai/web test:e2e
+corepack.cmd pnpm --dir tools/web-e2e test
+node scripts/check_web_prod_dependency_boundary.mjs
 ```
 
 Expected: Vitest `6 passed`; typecheck/lint/build exit `0`; Playwright `9 passed` (three tests in each of 390, 430, and desktop projects). Test artifacts are local/transient and must not be committed.
@@ -595,11 +611,11 @@ For each viewport (390×844, 430×932, 1440×900), visit `/` and `/chat` on `htt
 Run:
 
 ```powershell
-git add apps/web/src/app/globals.css apps/web/e2e/home-chat-shell.spec.ts apps/web/playwright.config.ts apps/web/package.json pnpm-lock.yaml
+git add apps/web/src/app/globals.css apps/web/vitest.config.ts tools/web-e2e scripts/check_web_prod_dependency_boundary.mjs scripts/verify.ps1 scripts/tests/test_verify_runner.py
 git commit -m "test(web): verify static home chat entry in browser"
 ```
 
-Expected: one commit with dev-only test tooling, no runtime package change, and no generated browser binary/artifact.
+Expected: browser tooling is standalone and exact-locked, the permanent production-graph gate is wired into root verification, and no runtime package or generated browser binary/artifact is added.
 
 ## Task 4: Synchronize Documentation, Version Axes, and Handoff Evidence
 
@@ -652,7 +668,7 @@ Set only these manifest values, preserving all other axes and replacing `updated
 "application": "0.2.0",
 "web": "0.2.0-static-chat-shell",
 "test_suite": "0.8.0-web-browser-gate",
-"documentation": "2.7.0"
+"documentation": "2.7.1"
 ```
 
 - [ ] **Step 3: Create the implementation note from the repository template with complete evidence.**
@@ -663,18 +679,18 @@ Complete `docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-�
 - Task ID: WEB-HOME-001; status Done only if all Task 3 commands passed.
 - Decision: Q-WEB-001=A; a static `/chat` shell was chosen to prevent the prior 404 while API-CHAT-001 and WEB-CHAT-001 remain unimplemented.
 - Scope: exactly four areas, no form/input/fetch/storage/cookie/API/LLM/official or mock data/external asset.
-- Versions: application 0.1.0→0.2.0, web 0.1.0→0.2.0-static-chat-shell, test suite 0.7.0-data-trust-boundary→0.8.0-web-browser-gate, documentation 2.6.1→2.7.0; API, DB, official data, mock data, and prompt set unchanged.
-- Dependencies: `@playwright/test@1.61.1` is dev-only, pre-approved by PLAN-001, exact-locked, and Chromium is a local test artifact; no production dependency was added.
+- Versions: application 0.1.0→0.2.0, web 0.1.0→0.2.0-static-chat-shell, test suite 0.7.0-data-trust-boundary→0.8.0-web-browser-gate, documentation 2.7.0→2.7.1; API, DB, official data, mock data, and prompt set unchanged.
+- Dependencies: `@playwright/test@1.61.1` is dev-only, pre-approved by PLAN-001, exact-locked only in standalone `tools/web-e2e`, and Chromium is a local test artifact; the Web production list and isolated deploy contain zero Playwright packages.
 - Evidence: exact Vitest/typecheck/lint/build/Playwright commands, pass counts, viewport dimensions, manual keyboard/zoom/console/network checks, and `git diff --check` result.
 - Privacy/security: no raw question exists in either page; no request/storage/cookie/data/provider path is present; public deployment remains blocked by Q-SEC-003/A-021.
-- Rollback: `git revert` the three WEB-HOME commits in reverse order; this restores the prior no-`/chat`-link state without DB/data/API cleanup.
+- Rollback: revert the four WEB-HOME commits `64d5b81`, `c3db708`, `698bf47`, `2d70ae0` in reverse order; this restores the prior no-`/chat`-link state without DB/data/API cleanup.
 - Remaining risk: the preparation shell is intentionally not a chat product; WEB-CHAT-001 cannot add a form or network call until API-CHAT-001, ACTIVE seed/readiness, and its own privacy/accessibility plan are complete.
 ```
 
 Add this exact index-row shape to `docs/implementation-notes/INDEX.md`, replacing the three version values with the final actual values only if a prior task changed them:
 
 ```md
-| [IMP-20260719-005](IMP-20260719-005-web-home과-정적-채팅-준비-화면.md) | 2026-07-19 | WEB-HOME-001 | implementation | 홈 CTA와 입력·저장 없는 정적 `/chat` 준비 화면, mobile/desktop browser gate | app 0.1.0→0.2.0; web 0.1.0→0.2.0; tests 0.7.0→0.8.0; docs 2.6.1→2.7.0 | Done |
+| [IMP-20260719-005](IMP-20260719-005-web-home과-정적-채팅-준비-화면.md) | 2026-07-19 | WEB-HOME-001 | implementation | 홈 CTA와 입력·저장 없는 정적 `/chat` 준비 화면, standalone browser/prod graph gate | app 0.1.0→0.2.0; web 0.1.0→0.2.0; tests 0.7.0→0.8.0; docs 2.7.0→2.7.1 | Done — final rereview 0/0/0 |
 ```
 
 - [ ] **Step 4: Run final quality, safety, and documentation checks.**
@@ -683,11 +699,14 @@ Run:
 
 ```powershell
 corepack.cmd pnpm install --frozen-lockfile --ignore-scripts
+corepack.cmd pnpm --dir tools/web-e2e install --frozen-lockfile --ignore-scripts
 corepack.cmd pnpm --filter @sejong-ai/web test
 corepack.cmd pnpm --filter @sejong-ai/web typecheck
 corepack.cmd pnpm --filter @sejong-ai/web lint
 corepack.cmd pnpm --filter @sejong-ai/web build
-corepack.cmd pnpm --filter @sejong-ai/web test:e2e
+corepack.cmd pnpm --dir tools/web-e2e test
+node scripts/check_web_prod_dependency_boundary.mjs
+python -B -m unittest -v scripts.tests.test_verify_runner
 node scripts/check_web_bundle_secrets.mjs apps/web/.next
 git diff --check
 git status --short
@@ -714,21 +733,46 @@ Confirm each statement against the final diff:
 Run:
 
 ```powershell
-git add apps/web/README.md TASKS.md CHANGELOG.md versions/manifest.json docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-준비-화면.md docs/implementation-notes/INDEX.md
+git add apps/web/README.md TASKS.md CHANGELOG.md versions/manifest.json docs/superpowers/plans/2026-07-19-web-home-and-static-chat-shell.md docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-준비-화면.md docs/implementation-notes/INDEX.md
 git commit -m "docs: record WEB-HOME-001 completion"
 ```
 
 Expected: one documentation-only commit after all quality gates are green.
+
+## Execution Outcome and Deviations
+
+Completed code commits on main are `2d70ae0`, `698bf47`, `c3db708`, and remediation
+`64d5b81`. The final independent rereview was PASS with Critical 0 / Important 0 / Minor 0.
+
+- The planned `pnpm start -- --hostname` syntax passed a literal `--` to Next. The executed
+  configuration uses `pnpm exec next start --hostname ...`.
+- A direct Web importer devDependency caused pnpm to select Next's optional Playwright peer in the
+  production graph. Playwright was therefore moved to standalone `tools/web-e2e`; the root lock was
+  restored byte-identical to the pre-slice baseline and a permanent list/deploy regression gate was
+  added to `scripts/verify.ps1`.
+- `apps/web/vitest.config.ts` preserves `configDefaults.exclude` and adds `e2e/**`; replacing the
+  defaults had incorrectly exposed `node_modules` tests during RED.
+- The browser request assertion was tightened from same-origin/non-API to exact `/`, `/chat`, and
+  `/_next/static/**`; a synthetic `/track` URL proves the guard is non-vacuous.
+- Real Chrome UI 200% zoom was performed with OS-level browser shortcuts, not CSS emulation. DPR
+  changed 2→4; both routes had visual viewport/client/scroll width 498/498/498, zero element or text
+  Range overflow, and OS foreground screenshots were reviewed.
+- Concurrent build/typecheck can race on generated `.next/types`, and pnpm 11's default
+  `verifyDepsBeforeRun=install` may attempt a non-interactive modules purge. Final gates were run
+  sequentially with the repository runner's scoped `PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false`.
+- Next's multiple-lockfile/worktree inference and `NO_COLOR`/`FORCE_COLOR` messages remained
+  non-blocking environment warnings; no console/page error or external request was observed.
 
 ## Complete Verification Matrix
 
 | Layer | Command or check | Expected evidence |
 | --- | --- | --- |
 | Unit render | `corepack.cmd pnpm --filter @sejong-ai/web test` | `6 passed`; both routes have one h1, semantic landmarks, exact four areas, limits, native links, and no chat form controls. |
-| Type | `corepack.cmd pnpm --filter @sejong-ai/web typecheck` | Exit `0`; Playwright config/spec and Server Components type-check. |
-| Lint | `corepack.cmd pnpm --filter @sejong-ai/web lint` | Exit `0`; no unused browser-test helper or invalid JSX. |
+| Type | `corepack.cmd pnpm --filter @sejong-ai/web typecheck` | Exit `0`; Server Components and render tests type-check. |
+| Lint | `corepack.cmd pnpm --filter @sejong-ai/web lint` | Exit `0`; no unused helper or invalid JSX in the Web package. |
 | Build | `corepack.cmd pnpm --filter @sejong-ai/web build` | Exit `0`; `/` and `/chat` production routes build. |
-| Browser | `corepack.cmd pnpm --filter @sejong-ai/web test:e2e` | `9 passed`; CTA keyboard navigation, no form/storage/cookie/API/third-party request, no overflow, focus, and contrast at all three viewports. |
+| Browser | `corepack.cmd pnpm --dir tools/web-e2e test` | `9 passed`; CTA keyboard navigation, explicit request allowlist, no form/storage/cookie, no overflow, focus, and contrast at all three viewports. |
+| Production dependency | `node scripts/check_web_prod_dependency_boundary.mjs` | Exit `0`; Playwright is absent from the citizen Web production list and isolated deploy. |
 | Secret boundary | `node scripts/check_web_bundle_secrets.mjs apps/web/.next` | Exit `0`; browser artifact exposes no prohibited server marker/value. |
 | Manual browser QA | Production server at `127.0.0.1:3001` | 390/430/desktop, 200% zoom, Tab/Enter, focus, console, and Network checklist recorded in note. |
 | Diff | `git diff --check` and final self-review table | No whitespace error, no data/API/DB/contract drift, no generated test artifact. |
@@ -756,7 +800,7 @@ Expected result: `/chat` is removed and the home page returns to its prior truth
 
 ## Human Decision Boundary
 
-Already approved by the user: Q-WEB-001=A, the static no-input `/chat` preparation route, its home CTA, and execution of this narrow WEB-HOME-001 slice. PLAN-001 already approved Playwright as test tooling; this plan fixes the exact dev-only package to `@playwright/test@1.61.1` and requires lockfile review.
+Already approved by the user: Q-WEB-001=A, the static no-input `/chat` preparation route, its home CTA, and execution of this narrow WEB-HOME-001 slice. PLAN-001 already approved Playwright as test tooling; execution fixes the exact dev-only package to `@playwright/test@1.61.1` in a standalone lock and permanently verifies that it does not enter the Web production graph.
 
 Still requires a separate human decision or existing upstream completion: official-data approval materialization, DATA-SEED-001, readiness activation, API-CHAT-001, any actual chat input/API/LLM behavior, P2 behavior, public deployment, or new runtime dependency.
 
@@ -766,7 +810,7 @@ AI-internal choices are limited to markup structure, class names, test helpers, 
 
 - **Spec coverage:** Tasks 1–2 create the approved route and CTA; Task 1/2 tests preserve the exact four areas and limits; Task 3 covers no-input/no-request, responsive 390/430/desktop, keyboard/focus/contrast, no external asset, and dev dependency; Task 4 records versions, note, rollback, and handoff.
 - **No placeholders:** Every code-changing task contains exact paths, commands, expected outcomes, and concrete source/test snippets. The only values filled at execution time are timestamps, measured command durations, screenshots on failure, and actual commit SHA values, which must be recorded rather than invented.
-- **Type consistency:** `ChatPreparationPage`, `민원 안내 시작하기`, `준비 중인 지원 분야`, `.chat-info-grid`, and `test:e2e` use the same names across implementation and tests. The test file removes its unused helper before typecheck.
+- **Type consistency:** `ChatPreparationPage`, `민원 안내 시작하기`, `준비 중인 지원 분야`, `.chat-info-grid`, and `tools/web-e2e` use the same names across implementation and tests.
 - **Scope check:** The plan intentionally excludes a form, API, data, provider, admin, official sources, and public deployment. It is a standalone, testable child slice and does not wait for the blocked data-release decisions.
 
 ## Execution Handoff

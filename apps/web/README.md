@@ -14,7 +14,7 @@
 
 `apps/web/.env.example`을 `apps/web/.env.local`로 복사한다. 브라우저에 포함 가능한 값은
 `NEXT_PUBLIC_API_BASE_URL` 한 개뿐이며 기본값은 local API `http://127.0.0.1:8000`이다.
-현재 정적 `/` 화면은 아직 이 값을 읽거나 API를 호출하지 않는다. backend 비밀 이름이나 값을
+현재 두 정적 화면(`/`, `/chat`)은 아직 이 값을 읽거나 API를 호출하지 않는다. backend 비밀 이름이나 값을
 web 템플릿에 추가하면 안 된다.
 
 ## 로컬 명령
@@ -27,6 +27,9 @@ corepack pnpm --filter @sejong-ai/web lint
 corepack pnpm --filter @sejong-ai/web typecheck
 corepack pnpm --filter @sejong-ai/web test
 corepack pnpm --filter @sejong-ai/web build
+corepack pnpm --dir tools/web-e2e install --frozen-lockfile --ignore-scripts
+corepack pnpm --dir tools/web-e2e test
+node scripts/check_web_prod_dependency_boundary.mjs
 ```
 
 Node와 pnpm의 정확한 버전은 저장소 루트의 `.node-version`과 `package.json#packageManager`를 따른다.

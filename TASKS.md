@@ -43,7 +43,7 @@
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |
 | LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |
 | API-CHAT-001 | P0 | Backend·QA | `/api/v1/chat`·signed context와 공통 오류 계약 | Blocked | CONTRACT-001, AI-001, LLM-001 | SUCCESS/FOLLOWUP/FALLBACK 200, 안전 대체 없는 503, 900초 token/tamper reset/current request 우선/source 결합·token persistence 0 |
-| WEB-HOME-001 | P0 | Frontend·QA | `/` 서비스 소개·4개 지원 분야·한계·`/chat` 진입 | In Progress | DEV-001 complete; Q-WEB-001=A/D-037; [approved child plan](docs/superpowers/plans/2026-07-19-web-home-and-static-chat-shell.md) | no-input/no-storage/no-fetch static `/chat` 준비 화면과 home CTA를 TDD 구현하고 390/430/desktop·키보드·focus·contrast 검증 |
+| WEB-HOME-001 | P0 | Frontend·QA | `/` 서비스 소개·4개 지원 분야·한계·`/chat` 진입 | Done | DEV-001 complete; Q-WEB-001=A/D-037; [execution plan](docs/superpowers/plans/2026-07-19-web-home-and-static-chat-shell.md) | 정적 `/chat`·home CTA, 입력/저장/외부 요청 0, 390/430/desktop·키보드·focus·contrast·실제 Chrome UI 200%·prod dependency gate PASS, [IMP-20260719-005](docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-준비-화면.md) |
 | WEB-CHAT-001 | P0 | Frontend·QA | `/chat` current-tab 대화·카드·출처·폴백·기관 | Blocked | API-CHAT-001, WEB-HOME-001 | 390/430px, 키보드·포커스·대비, 중복 전송·503 재시도·empty office, 새로고침 소멸·browser storage/token log 0 |
 
 ## Phase 3 — 관리자 개선 루프
