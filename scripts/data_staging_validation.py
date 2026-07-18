@@ -18,6 +18,18 @@ CONTENT_ARTIFACTS = (
     "offices.json",
     "office_service_mappings.json",
 )
+CANONICAL_KB_IDS = tuple(
+    f"KB-{category}-{number:02d}"
+    for category in ("CERT", "MOVE", "TAX", "WASTE")
+    for number in range(1, 6)
+)
+CANONICAL_KB_CATEGORIES = {
+    "CERT": "CERTIFICATE_ISSUANCE",
+    "MOVE": "MOVE_IN_RESIDENT_REGISTRATION",
+    "TAX": "LOCAL_TAX_GENERAL",
+    "WASTE": "BULKY_WASTE",
+}
+SOURCE_REGISTRY_COLUMNS = ("kb_id", "공식 출처명", "제공기관", "URL", "확인일")
 ALLOWED_SOURCE_HOSTS = frozenset({
     "plus.gov.kr",
     "www.law.go.kr",
@@ -111,7 +123,8 @@ def build_pending_manifest(draft_dir: Path, submitted_at: str) -> dict[str, obje
 
 
 def validate_staging(
-    draft_dir: Path, schema_dir: Path, source_registry: Path
+    draft_dir: Path, schema_dir: Path, source_registry: Path,
+    manifest_override: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Return a value-free deterministic validation report for one DATA-001 draft."""
     issues: list[ValidationIssue] = []
@@ -123,6 +136,15 @@ def validate_staging(
         "approval_manifest.json": "approval-manifest.schema.json",
     }
     for artifact, schema_name in schemas.items():
+        if artifact == "approval_manifest.json" and manifest_override is not None:
+            artifacts[artifact] = manifest_override
+            try:
+                schema = load_json_object(schema_dir / schema_name)
+            except (OSError, ValueError, json.JSONDecodeError):
+                _issue(issues, "SCHEMA_LOAD_ERROR", artifact, None, None)
+            else:
+                issues.extend(validate_schema(manifest_override, schema, artifact))
+            continue
         try:
             artifacts[artifact] = load_json_object(draft_dir / artifact)
         except (OSError, ValueError, json.JSONDecodeError):
@@ -148,6 +170,7 @@ def validate_staging(
             _issue(issues, f"COUNT_{key.upper()}", artifact, None, "records")
 
     _validate_records(kb_records, "kb_records.json", "id", issues)
+    _validate_canonical_kb_records(kb_records, issues)
     _validate_records(office_records, "offices.json", "public_id", issues)
     _validate_mappings(mapping_records, office_records, issues)
     _validate_kb_draft_metadata(kb_records, issues)
@@ -270,6 +293,21 @@ def _validate_records(
         _issue(issues, "RECORD_ORDER", artifact, None, "records")
 
 
+def _validate_canonical_kb_records(
+    records: list[dict[str, object]], issues: list[ValidationIssue]
+) -> None:
+    identifiers = [record.get("id") for record in records]
+    if identifiers != list(CANONICAL_KB_IDS):
+        _issue(issues, "KB_CANONICAL_ID_SET", "kb_records.json", None, "records")
+    for record in records:
+        record_id = _safe_id(record.get("id"), _KB_ID_PATTERN)
+        if record_id is None:
+            continue
+        category_prefix = record_id.split("-")[1]
+        if record.get("category") != CANONICAL_KB_CATEGORIES.get(category_prefix):
+            _issue(issues, "KB_CATEGORY_MISMATCH", "kb_records.json", record_id, "category")
+
+
 def _validate_mappings(
     mappings: list[dict[str, object]], offices: list[dict[str, object]],
     issues: list[ValidationIssue],
@@ -334,13 +372,6 @@ def _validate_sources(
             if map_url is not None and not _has_allowed_map_host(map_url):
                 _issue(issues, "SOURCE_DOMAIN_NOT_ALLOWED", artifact, record_id, "map_url")
     registry = _load_source_registry(source_registry, issues)
-    expected_ids = {
-        value
-        for record in kb_records
-        if isinstance((value := record.get("id")), str)
-    }
-    if set(registry) != expected_ids:
-        _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
     for record in kb_records:
         record_id = record.get("id")
         if not isinstance(record_id, str) or record_id not in registry:
@@ -356,20 +387,35 @@ def _validate_sources(
             _issue(issues, "SOURCE_METADATA_MISMATCH", "kb_records.json", record_id, "source_url")
 
 
-def _load_source_registry(
-    path: Path, issues: list[ValidationIssue]
-) -> dict[str, dict[str, str]]:
+def _load_source_registry(path: Path, issues: list[ValidationIssue]) -> dict[str, dict[str, str]]:
     try:
         with path.open("r", encoding="utf-8", newline="") as source:
-            rows = list(csv.DictReader(source))
+            reader = csv.DictReader(source)
+            fieldnames = tuple(reader.fieldnames or ())
+            rows = list(reader)
     except OSError:
         _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
         return {}
+    if fieldnames != SOURCE_REGISTRY_COLUMNS:
+        _issue(issues, "SOURCE_REGISTRY_COLUMN_SET", "kb_source_registry.csv", None, None)
     registry: dict[str, dict[str, str]] = {}
+    identifiers: list[str] = []
     for row in rows:
         record_id = row.get("kb_id")
-        if isinstance(record_id, str) and record_id:
-            registry[record_id] = row
+        if not isinstance(record_id, str) or _safe_id(record_id, _KB_ID_PATTERN) is None:
+            _issue(issues, "SOURCE_REGISTRY_MALFORMED_ID", "kb_source_registry.csv", None, "kb_id")
+            continue
+        identifiers.append(record_id)
+        if record_id in registry:
+            _issue(issues, "SOURCE_REGISTRY_DUPLICATE_ID", "kb_source_registry.csv", record_id, "kb_id")
+            continue
+        if any(not isinstance(row.get(column), str) or not row[column].strip() for column in SOURCE_REGISTRY_COLUMNS):
+            _issue(issues, "SOURCE_REGISTRY_METADATA_REQUIRED", "kb_source_registry.csv", record_id, None)
+        registry[record_id] = row
+    if identifiers != list(CANONICAL_KB_IDS):
+        _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
+    if identifiers != sorted(identifiers):
+        _issue(issues, "SOURCE_REGISTRY_ROW_ORDER", "kb_source_registry.csv", None, "kb_id")
     return registry
 
 
@@ -392,13 +438,11 @@ def _validate_text_safety(
         record_id = _record_identifier(record)
         for field, value in _text_fields(record):
             top_level = field.split(".", 1)[0]
-            if top_level in allowed_fields:
-                continue
             if _SECRET_PATTERN.search(value):
                 _issue(issues, "SECRET_DETECTED", artifact, record_id, field)
             if _MOCK_PATTERN.search(value):
                 _issue(issues, "MOCK_REFERENCE", artifact, record_id, field)
-            if any(pattern.search(value) for pattern in _PII_PATTERNS):
+            if top_level not in allowed_fields and any(pattern.search(value) for pattern in _PII_PATTERNS):
                 _issue(issues, "PII_DETECTED", artifact, record_id, field)
 
 

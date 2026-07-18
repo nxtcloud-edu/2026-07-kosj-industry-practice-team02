@@ -19,6 +19,7 @@ from scripts.data_staging_validation import (
     validate_schema,
     write_json,
 )
+from scripts.validate_data_staging import main as data_staging_cli
 
 
 SCHEMA_DIR = Path("data/schemas/data-001/v1")
@@ -388,9 +389,11 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
     def source_registry(self, directory: Path) -> Path:
         registry = directory / "kb_source_registry.csv"
         rows = ["kb_id,공식 출처명,제공기관,URL,확인일"]
-        for number in range(1, 21):
-            category = ("MOVE", "CERT", "WASTE", "TAX")[(number - 1) // 5]
-            record_id = f"KB-{category}-{((number - 1) % 5) + 1:02d}"
+        for record_id in sorted(record["id"] for record in (self.valid_kb(number) for number in range(1, 21))):
+            number = next(
+                number for number in range(1, 21)
+                if self.valid_kb(number)["id"] == record_id
+            )
             rows.append(
                 f"{record_id},공식 민원 안내,정부24,https://plus.gov.kr/service/{number},2026-07-18"
             )
@@ -544,6 +547,170 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertEqual(2, usage.returncode)
             self.assertEqual("[FAIL] step=VALIDATE-DATA-001 reason=usage\n", usage.stdout)
             self.assertEqual("", usage.stderr)
+
+    def test_office_phone_and_address_still_reject_secrets_and_mock_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            offices = load_json_object(directory / "offices.json")
+            records = offices["records"]
+            assert isinstance(records, list) and isinstance(records[0], dict)
+            records[0]["phone"] = "token=private-value mock"
+            records[0]["address"] = "secret=private-value 시연용 샘플"
+            write_json(directory / "offices.json", offices)
+            issues = self.validate(directory, registry)["issues"]
+            codes_by_field = {
+                issue["field"]: issue["code"] for issue in issues
+                if issue["artifact"] == "offices.json"
+            }
+            self.assertEqual("SECRET_DETECTED", codes_by_field["phone"])
+            self.assertEqual("SECRET_DETECTED", codes_by_field["address"])
+            self.assertIn(
+                "MOCK_REFERENCE",
+                {issue["code"] for issue in issues if issue["artifact"] == "offices.json"},
+            )
+
+    def test_cli_report_rejects_content_and_outside_destinations_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            content = directory / "kb_records.json"
+            before = content.read_bytes()
+            self.assertEqual(1, data_staging_cli([
+                "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
+                "--report", str(content),
+            ]))
+            self.assertEqual(before, content.read_bytes())
+            outside = Path(temporary_directory) / "outside-report.json"
+            self.assertEqual(1, data_staging_cli([
+                "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
+                "--report", str(outside),
+            ]))
+            self.assertFalse(outside.exists())
+            allowed = Path("data/processed/.task2-validation-report.json")
+            try:
+                self.assertEqual(0, data_staging_cli([
+                    "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
+                    "--report", str(allowed),
+                ]))
+                self.assertTrue(allowed.is_file())
+            finally:
+                allowed.unlink(missing_ok=True)
+
+    def test_cli_report_rejects_processed_symlink_alias_without_outside_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            alias = Path("data/processed/.task2-alias")
+            target = Path(temporary_directory) / "outside"
+            target.mkdir()
+            try:
+                alias.symlink_to(target, target_is_directory=True)
+            except OSError as error:
+                junction = subprocess.run(
+                    ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(target)],
+                    text=True, capture_output=True, check=False,
+                )
+                if junction.returncode != 0:
+                    self.skipTest(f"link unavailable: {type(error).__name__}")
+            try:
+                report = alias / "report.json"
+                self.assertEqual(1, data_staging_cli([
+                    "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
+                    "--report", str(report),
+                ]))
+                self.assertFalse((target / "report.json").exists())
+            finally:
+                if alias.is_dir():
+                    alias.rmdir()
+                else:
+                    alias.unlink(missing_ok=True)
+
+    def test_prepare_rejects_invalid_content_before_replacing_existing_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = directory / "approval_manifest.json"
+            prior = manifest.read_bytes()
+            kb = load_json_object(directory / "kb_records.json")
+            kb["records"] = []
+            write_json(directory / "kb_records.json", kb)
+            content = (directory / "kb_records.json").read_bytes()
+            self.assertEqual(1, data_staging_cli([
+                "prepare", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T18:00:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            self.assertEqual(prior, manifest.read_bytes())
+            self.assertEqual(content, (directory / "kb_records.json").read_bytes())
+
+    def test_prepare_rejects_pii_and_unapproved_source_without_replacing_manifest(self) -> None:
+        for field, value in (("answer_summary", "900101-1234567"), ("source_url", "https://example.test/nope")):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary_directory:
+                directory = self.complete_draft(Path(temporary_directory) / "draft")
+                registry = self.source_registry(Path(temporary_directory))
+                manifest = directory / "approval_manifest.json"
+                prior = manifest.read_bytes()
+                kb = load_json_object(directory / "kb_records.json")
+                records = kb["records"]
+                assert isinstance(records, list) and isinstance(records[0], dict)
+                records[0][field] = value
+                write_json(directory / "kb_records.json", kb)
+                self.assertEqual(1, data_staging_cli([
+                    "prepare", "--draft-dir", str(directory),
+                    "--submitted-at", "2026-07-18T18:00:00+09:00",
+                    "--source-registry", str(registry),
+                ]))
+                self.assertEqual(prior, manifest.read_bytes())
+
+    def test_prepare_accepts_valid_first_submission_without_current_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = directory / "approval_manifest.json"
+            manifest.unlink()
+            self.assertEqual(0, data_staging_cli([
+                "prepare", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T18:00:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            self.assertTrue(manifest.is_file())
+            prepared = load_json_object(manifest)
+            self.assertEqual("PENDING_PM_REVIEW", prepared["state"])
+
+    def test_canonical_kb_and_source_registry_rows_are_not_draft_defined(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            kb = load_json_object(directory / "kb_records.json")
+            records = kb["records"]
+            assert isinstance(records, list) and isinstance(records[0], dict)
+            records[0]["id"] = "KB-MOVE-06"
+            records[0]["category"] = "CERTIFICATE_ISSUANCE"
+            write_json(directory / "kb_records.json", kb)
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace("KB-CERT-01", "KB-MOVE-06")
+                + "KB-MOVE-06,conflict,provider,https://plus.gov.kr/conflict,2026-07-18\n",
+                encoding="utf-8", newline="\n",
+            )
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({
+                "KB_CANONICAL_ID_SET", "KB_CATEGORY_MISMATCH", "SOURCE_REGISTRY_DUPLICATE_ID",
+                "SOURCE_REGISTRY_ROW_ORDER",
+            } <= codes)
+
+    def test_source_registry_requires_exact_columns_and_nonempty_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace(
+                    "kb_id,공식 출처명,제공기관,URL,확인일", "kb_id,공식 출처명,제공기관,URL,extra"
+                ).replace("정부24", "", 1),
+                encoding="utf-8", newline="\n",
+            )
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"SOURCE_REGISTRY_COLUMN_SET", "SOURCE_REGISTRY_METADATA_REQUIRED"} <= codes)
 
 
 if __name__ == "__main__":
