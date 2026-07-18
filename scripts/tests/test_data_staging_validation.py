@@ -408,6 +408,11 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
     def codes(self, report: dict[str, object]) -> set[str]:
         return {issue["code"] for issue in report["issues"]}  # type: ignore[index]
 
+    def canonical_json_bytes(self, value: object) -> bytes:
+        return (
+            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+
     def reviewed_manifest(
         self, directory: Path, state: str = "APPROVED_FOR_INITIAL_RELEASE",
         approved_mappings: int = 10,
@@ -941,6 +946,7 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             manifest_path = directory / "approval_manifest.json"
             legacy = self.legacy_pending_manifest(directory)
             write_json(manifest_path, legacy)
+            self.assertEqual(self.canonical_json_bytes(legacy), manifest_path.read_bytes())
             self.assertEqual(0, data_staging_cli([
                 "migrate-pending", "--draft-dir", str(directory),
                 "--submitted-at", "2026-07-18T21:15:00+09:00",
@@ -950,6 +956,65 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertEqual("2026-07-18T21:15:00+09:00", migrated["submitted_at"])
             self.assertTrue(all(entry["decision"] is None for entry in migrated["decisions"]))
             self.assertTrue(all("recommended_decision" in entry for entry in migrated["decisions"]))
+
+    def test_migrate_pending_refuses_noncanonical_legacy_bytes_without_writes(self) -> None:
+        def reversed_top_level(_: bytes, manifest: dict[str, object]) -> bytes:
+            reordered = dict(reversed(tuple(manifest.items())))
+            return (
+                json.dumps(reordered, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
+            ).encode("utf-8")
+
+        def reversed_nested_artifact(canonical: bytes, manifest: dict[str, object]) -> bytes:
+            artifacts = manifest["artifacts"]
+            assert isinstance(artifacts, list) and isinstance(artifacts[0], dict)
+            artifact = artifacts[0]
+            old = (
+                "    {\n"
+                f"      \"path\": {json.dumps(artifact['path'], ensure_ascii=False)},\n"
+                f"      \"record_count\": {artifact['record_count']},\n"
+                f"      \"sha256\": {json.dumps(artifact['sha256'])}\n"
+                "    }"
+            ).encode("utf-8")
+            new = (
+                "    {\n"
+                f"      \"sha256\": {json.dumps(artifact['sha256'])},\n"
+                f"      \"record_count\": {artifact['record_count']},\n"
+                f"      \"path\": {json.dumps(artifact['path'], ensure_ascii=False)}\n"
+                "    }"
+            ).encode("utf-8")
+            self.assertIn(old, canonical)
+            return canonical.replace(old, new, 1)
+
+        variants = (
+            ("reversed_top_level_keys", reversed_top_level),
+            ("reversed_nested_artifact_keys", reversed_nested_artifact),
+            ("four_space_indent", lambda _, value: (
+                json.dumps(value, ensure_ascii=False, indent=4, sort_keys=True) + "\n"
+            ).encode("utf-8")),
+            ("crlf", lambda canonical, _: canonical.replace(b"\n", b"\r\n")),
+            ("utf8_bom", lambda canonical, _: b"\xef\xbb\xbf" + canonical),
+            ("missing_trailing_lf", lambda canonical, _: canonical.removesuffix(b"\n")),
+            ("duplicate_member", lambda canonical, _: canonical.replace(
+                b"{\n", b'{\n  "schema_version": 1,\n', 1
+            )),
+        )
+        for name, alter in variants:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary_directory:
+                directory = self.complete_draft(Path(temporary_directory) / "draft")
+                registry = self.source_registry(Path(temporary_directory))
+                manifest_path = directory / "approval_manifest.json"
+                legacy = self.legacy_pending_manifest(directory)
+                canonical = self.canonical_json_bytes(legacy)
+                altered = alter(canonical, legacy)
+                self.assertNotEqual(canonical, altered)
+                manifest_path.write_bytes(altered)
+                before = manifest_path.read_bytes()
+                self.assertEqual(1, data_staging_cli([
+                    "migrate-pending", "--draft-dir", str(directory),
+                    "--submitted-at", "2026-07-18T21:15:00+09:00",
+                    "--source-registry", str(registry),
+                ]))
+                self.assertEqual(before, manifest_path.read_bytes())
 
     def test_migrate_pending_refuses_every_altered_legacy_boundary_without_writes(self) -> None:
         def set_artifact(manifest: dict[str, object], field: str, value: object) -> None:
