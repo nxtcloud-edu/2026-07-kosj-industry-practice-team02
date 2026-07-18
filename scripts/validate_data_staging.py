@@ -14,7 +14,11 @@ import tempfile
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.data_staging_validation import build_pending_manifest, validate_staging
+from scripts.data_staging_validation import (
+    build_pending_manifest,
+    load_json_object,
+    validate_staging,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +38,10 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--draft-dir", required=True)
     prepare.add_argument("--submitted-at", required=True)
     prepare.add_argument("--source-registry", default=str(DEFAULT_SOURCE_REGISTRY))
+    migrate = subcommands.add_parser("migrate-pending", add_help=False)
+    migrate.add_argument("--draft-dir", required=True)
+    migrate.add_argument("--submitted-at", required=True)
+    migrate.add_argument("--source-registry", default=str(DEFAULT_SOURCE_REGISTRY))
     validate = subcommands.add_parser("validate", add_help=False)
     validate.add_argument("--draft-dir", required=True)
     validate.add_argument("--report")
@@ -53,7 +61,19 @@ def main(argv: list[str] | None = None) -> int:
             if not report["valid"]:
                 _print_issue_failure("PREPARE-DATA-001", report)
                 return 1
-            _write_json_atomic(Path(arguments.draft_dir) / "approval_manifest.json", manifest)
+            manifest_path = draft_dir / "approval_manifest.json"
+            candidate_bytes = _json_bytes(manifest)
+            if manifest_path.exists():
+                existing = load_json_object(manifest_path)
+                if _has_review_evidence(existing):
+                    print("[FAIL] step=PREPARE-DATA-001 issues=PREPARE_REVIEW_EVIDENCE:1")
+                    return 1
+                if manifest_path.read_bytes() != candidate_bytes:
+                    print("[FAIL] step=PREPARE-DATA-001 issues=PREPARE_MANIFEST_IMMUTABLE:1")
+                    return 1
+                print("[PASS] step=PREPARE-DATA-001")
+                return 0
+            _write_json_atomic(manifest_path, manifest)
         except (OSError, ValueError, json.JSONDecodeError):
             print("[FAIL] step=PREPARE-DATA-001 reason=validation")
             return 1
@@ -80,19 +100,87 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         _print_issue_failure("VALIDATE-DATA-001", report)
         return 1
+    if arguments.command == "migrate-pending":
+        try:
+            draft_dir = Path(arguments.draft_dir)
+            manifest_path = draft_dir / "approval_manifest.json"
+            existing = load_json_object(manifest_path)
+            candidate = build_pending_manifest(draft_dir, arguments.submitted_at)
+            if not _is_legacy_pending_manifest(existing, candidate):
+                print("[FAIL] step=MIGRATE-DATA-001 issues=MIGRATE_PENDING_REFUSED:1")
+                return 1
+            report = validate_staging(
+                draft_dir, SCHEMA_DIR, Path(arguments.source_registry), candidate
+            )
+            if not report["valid"]:
+                _print_issue_failure("MIGRATE-DATA-001", report)
+                return 1
+            _write_json_atomic(manifest_path, candidate)
+        except (OSError, ValueError, json.JSONDecodeError):
+            print("[FAIL] step=MIGRATE-DATA-001 issues=MIGRATE_PENDING_REFUSED:1")
+            return 1
+        print("[PASS] step=MIGRATE-DATA-001")
+        return 0
     print("[FAIL] step=VALIDATE-DATA-001 reason=usage")
     return 2
 
 
 def _write_json_atomic(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    serialized = _json_bytes(value).decode("utf-8")
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
     ) as temporary:
         temporary.write(serialized)
         temporary_path = Path(temporary.name)
     temporary_path.replace(path)
+
+
+def _json_bytes(value: object) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _has_review_evidence(manifest: dict[str, object]) -> bool:
+    if manifest.get("state") in {"APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
+        return True
+    if any(manifest.get(field) is not None for field in ("reviewed_by", "reviewed_at", "review_comment")):
+        return True
+    decisions = manifest.get("decisions")
+    return isinstance(decisions, list) and any(
+        isinstance(entry, dict)
+        and (entry.get("decision") is not None or entry.get("comment") is not None)
+        for entry in decisions
+    )
+
+
+def _is_legacy_pending_manifest(
+    existing: dict[str, object], candidate: dict[str, object]
+) -> bool:
+    if existing.get("state") != "PENDING_PM_REVIEW":
+        return False
+    if any(existing.get(field) is not None for field in ("reviewed_by", "reviewed_at", "review_comment")):
+        return False
+    if existing.get("artifacts") != candidate.get("artifacts"):
+        return False
+    old_decisions = existing.get("decisions")
+    new_decisions = candidate.get("decisions")
+    if not isinstance(old_decisions, list) or not isinstance(new_decisions, list):
+        return False
+    if len(old_decisions) != len(new_decisions):
+        return False
+    for old, new in zip(old_decisions, new_decisions, strict=True):
+        if not isinstance(old, dict) or not isinstance(new, dict):
+            return False
+        if set(old) != {"record_type", "record_id", "decision", "comment"}:
+            return False
+        if (
+            old.get("record_type") != new.get("record_type")
+            or old.get("record_id") != new.get("record_id")
+            or old.get("decision") != new.get("recommended_decision")
+            or old.get("comment") is not None
+        ):
+            return False
+    return True
 
 
 def _print_issue_failure(step: str, report: dict[str, object]) -> None:

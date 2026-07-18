@@ -408,6 +408,34 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
     def codes(self, report: dict[str, object]) -> set[str]:
         return {issue["code"] for issue in report["issues"]}  # type: ignore[index]
 
+    def reviewed_manifest(
+        self, directory: Path, state: str = "APPROVED_FOR_INITIAL_RELEASE",
+        approved_mappings: int = 10,
+    ) -> dict[str, object]:
+        manifest = build_pending_manifest(directory, "2026-07-18T20:45:00+09:00")
+        manifest.update({
+            "state": state,
+            "reviewed_by": "PM-REVIEWER",
+            "reviewed_at": "2026-07-18T21:00:00+09:00",
+            "review_comment": "전수 검수 완료",
+        })
+        decisions = manifest["decisions"]
+        assert isinstance(decisions, list)
+        mapping_approved = 0
+        for entry in decisions:
+            assert isinstance(entry, dict)
+            recommendation = entry["recommended_decision"]
+            decision = recommendation
+            if entry["record_type"] == "MAPPING":
+                if mapping_approved < approved_mappings:
+                    decision = "APPROVE_INITIAL_RELEASE"
+                    mapping_approved += 1
+                else:
+                    decision = "REJECT"
+            entry["decision"] = decision
+            entry["comment"] = "PM record 검수 완료"
+        return manifest
+
     def test_exact_counts_ids_and_record_order_are_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = self.complete_draft(Path(temporary_directory) / "draft")
@@ -741,6 +769,133 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertIn(
                 "SOURCE_REGISTRY_COLUMN_SET", self.codes(self.validate(directory, registry))
             )
+
+    def test_pending_manifest_separates_recommendations_from_null_pm_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = load_json_object(directory / "approval_manifest.json")
+            decisions = manifest["decisions"]
+            assert isinstance(decisions, list)
+            self.assertEqual(35, len(decisions))
+            self.assertTrue(all(entry["decision"] is None for entry in decisions))
+            self.assertTrue(all(entry["comment"] is None for entry in decisions))
+            self.assertEqual("WITHHOLD_FOR_REGRESSION", decisions[17]["recommended_decision"])
+            report = self.validate(directory, registry)
+            self.assertTrue(report["valid"])
+            self.assertEqual(["PM_REVIEW_REQUIRED"], report["warnings"])
+
+    def test_reviewed_approved_and_rejected_states_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            for state in ("APPROVED_FOR_INITIAL_RELEASE", "REJECTED"):
+                with self.subTest(state=state):
+                    manifest = self.reviewed_manifest(directory, state)
+                    if state == "REJECTED":
+                        for entry in manifest["decisions"]:
+                            entry["decision"] = "REJECT"
+                    write_json(directory / "approval_manifest.json", manifest)
+                    report = self.validate(directory, registry)
+                    self.assertTrue(report["valid"], report["issues"])
+                    self.assertEqual([], report["warnings"])
+
+    def test_approved_state_allows_ten_to_twelve_mapping_approvals(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            for approved_mappings in (10, 11, 12):
+                with self.subTest(approved_mappings=approved_mappings):
+                    write_json(
+                        directory / "approval_manifest.json",
+                        self.reviewed_manifest(directory, approved_mappings=approved_mappings),
+                    )
+                    report = self.validate(directory, registry)
+                    self.assertTrue(report["valid"], report["issues"])
+                    self.assertEqual(approved_mappings, report["approval_projection"]["initial_mapping"])
+
+    def test_reviewed_state_rejects_self_review_and_missing_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = self.reviewed_manifest(directory)
+            manifest["reviewed_by"] = "AI-DATA-BACKEND"
+            manifest["review_comment"] = ""
+            manifest["decisions"][0]["comment"] = None
+            write_json(directory / "approval_manifest.json", manifest)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"SELF_APPROVAL", "REVIEW_METADATA_REQUIRED", "DECISION_COMMENT_REQUIRED"} <= codes)
+
+    def test_manifest_decisions_reject_duplicate_type_swap_and_wrong_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = self.reviewed_manifest(directory)
+            decisions = manifest["decisions"]
+            decisions.insert(0, dict(decisions[0]))
+            decisions[2]["record_type"] = "OFFICE"
+            decisions[3], decisions[4] = decisions[4], decisions[3]
+            write_json(directory / "approval_manifest.json", manifest)
+            codes = self.codes(self.validate(directory, registry))
+            self.assertTrue({"DECISION_DUPLICATE", "DECISION_TYPE_ID_MISMATCH", "DECISION_ORDER"} <= codes)
+
+    def test_prepare_protects_reviewed_and_differing_pending_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest_path = directory / "approval_manifest.json"
+            reviewed = self.reviewed_manifest(directory)
+            write_json(manifest_path, reviewed)
+            before = manifest_path.read_bytes()
+            self.assertEqual(1, data_staging_cli([
+                "prepare", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T20:45:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            self.assertEqual(before, manifest_path.read_bytes())
+            pending = build_pending_manifest(directory, "2026-07-18T20:45:00+09:00")
+            write_json(manifest_path, pending)
+            before = manifest_path.read_bytes()
+            self.assertEqual(1, data_staging_cli([
+                "prepare", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T20:46:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            self.assertEqual(before, manifest_path.read_bytes())
+
+    def test_prepare_is_idempotent_only_for_byte_identical_pending_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest_path = directory / "approval_manifest.json"
+            pending = build_pending_manifest(directory, "2026-07-18T20:45:00+09:00")
+            write_json(manifest_path, pending)
+            before = manifest_path.read_bytes()
+            self.assertEqual(0, data_staging_cli([
+                "prepare", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T20:45:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            self.assertEqual(before, manifest_path.read_bytes())
+
+    def test_migrate_pending_upgrades_only_legacy_unreviewed_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest_path = directory / "approval_manifest.json"
+            legacy = load_json_object(manifest_path)
+            for entry in legacy["decisions"]:
+                entry["decision"] = entry.pop("recommended_decision")
+            write_json(manifest_path, legacy)
+            self.assertEqual(0, data_staging_cli([
+                "migrate-pending", "--draft-dir", str(directory),
+                "--submitted-at", "2026-07-18T21:15:00+09:00",
+                "--source-registry", str(registry),
+            ]))
+            migrated = load_json_object(manifest_path)
+            self.assertEqual("2026-07-18T21:15:00+09:00", migrated["submitted_at"])
+            self.assertTrue(all(entry["decision"] is None for entry in migrated["decisions"]))
+            self.assertTrue(all("recommended_decision" in entry for entry in migrated["decisions"]))
 
 
 if __name__ == "__main__":

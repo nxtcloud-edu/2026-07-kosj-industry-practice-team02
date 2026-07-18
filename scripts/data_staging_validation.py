@@ -214,7 +214,11 @@ def validate_staging(
             }
             for issue in normalized_issues
         ],
-        "warnings": ["PM_REVIEW_REQUIRED"],
+        "warnings": (
+            ["PM_REVIEW_REQUIRED"]
+            if artifacts.get("approval_manifest.json", {}).get("state") == "PENDING_PM_REVIEW"
+            else []
+        ),
     }
 
 
@@ -242,10 +246,11 @@ def _recommended_decisions(draft_dir: Path) -> list[dict[str, object]]:
             decisions.append({
                 "record_type": "KB",
                 "record_id": record_id,
-                "decision": (
+                "recommended_decision": (
                     "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03"
                     else "APPROVE_INITIAL_RELEASE"
                 ),
+                "decision": None,
                 "comment": None,
             })
     for record in _records(load_json_object(draft_dir / "offices.json")):
@@ -254,7 +259,8 @@ def _recommended_decisions(draft_dir: Path) -> list[dict[str, object]]:
             decisions.append({
                 "record_type": "OFFICE",
                 "record_id": record_id,
-                "decision": "APPROVE_INITIAL_RELEASE",
+                "recommended_decision": "APPROVE_INITIAL_RELEASE",
+                "decision": None,
                 "comment": None,
             })
     for record in _records(load_json_object(draft_dir / "office_service_mappings.json")):
@@ -265,12 +271,13 @@ def _recommended_decisions(draft_dir: Path) -> list[dict[str, object]]:
             decisions.append({
                 "record_type": "MAPPING",
                 "record_id": record_id,
-                "decision": (
+                "recommended_decision": (
                     "REJECT" if record_id in {
                         "OFFICE-AREUM:LOCAL_TAX_GENERAL",
                         "OFFICE-DODAM:BULKY_WASTE",
                     } else "APPROVE_INITIAL_RELEASE"
                 ),
+                "decision": None,
                 "comment": None,
             })
     return sorted(decisions, key=lambda decision: (
@@ -506,15 +513,26 @@ def _validate_manifest(
     artifact = "approval_manifest.json"
     if not isinstance(manifest, dict):
         return
-    if manifest.get("state") != "PENDING_PM_REVIEW":
-        _issue(issues, "PENDING_REVIEW_STATE", artifact, None, "state")
+    state = manifest.get("state")
+    if state not in {"PENDING_PM_REVIEW", "APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
+        _issue(issues, "MANIFEST_STATE", artifact, None, "state")
     reviewed_by = manifest.get("reviewed_by")
-    if any(manifest.get(field) is not None for field in (
-        "reviewed_by", "reviewed_at", "review_comment"
-    )):
-        _issue(issues, "PENDING_REVIEW_METADATA", artifact, None, "reviewed_by")
     if reviewed_by == manifest.get("created_by") and reviewed_by is not None:
         _issue(issues, "SELF_APPROVAL", artifact, None, "reviewed_by")
+    if state == "PENDING_PM_REVIEW":
+        if any(manifest.get(field) is not None for field in (
+            "reviewed_by", "reviewed_at", "review_comment"
+        )):
+            _issue(issues, "PENDING_REVIEW_METADATA", artifact, None, "reviewed_by")
+    elif state in {"APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
+        if (
+            not isinstance(reviewed_by, str) or not reviewed_by.strip()
+            or not isinstance(manifest.get("reviewed_at"), str)
+            or not _is_iso_datetime(str(manifest.get("reviewed_at")))
+            or not isinstance(manifest.get("review_comment"), str)
+            or not str(manifest.get("review_comment")).strip()
+        ):
+            _issue(issues, "REVIEW_METADATA_REQUIRED", artifact, None, "reviewed_by")
 
     entries = manifest.get("artifacts")
     if not isinstance(entries, list):
@@ -539,27 +557,58 @@ def _validate_manifest(
     decisions = manifest.get("decisions")
     if not isinstance(decisions, list):
         decisions = []
-    actual = {
-        decision.get("record_id"): decision.get("decision")
-        for decision in decisions
-        if isinstance(decision, dict) and isinstance(decision.get("record_id"), str)
-    }
-    if set(actual) != set(expected):
+    pairs = [
+        (decision.get("record_type"), decision.get("record_id"))
+        for decision in decisions if isinstance(decision, dict)
+    ]
+    expected_pairs = [(record_type, record_id) for record_type, record_id, _ in expected]
+    if len(pairs) != len(set(pairs)):
+        _issue(issues, "DECISION_DUPLICATE", artifact, None, "decisions")
+    expected_type_by_id = {record_id: record_type for record_type, record_id, _ in expected}
+    if any(expected_type_by_id.get(record_id) != record_type for record_type, record_id in pairs):
+        _issue(issues, "DECISION_TYPE_ID_MISMATCH", artifact, None, "decisions")
+    if set(pairs) != set(expected_pairs) or len(pairs) != len(expected_pairs):
         _issue(issues, "DECISION_COVERAGE", artifact, None, "decisions")
-    if actual.get("KB-WASTE-03") != "WITHHOLD_FOR_REGRESSION":
-        _issue(issues, "WASTE_03_DECISION", artifact, "KB-WASTE-03", "decisions")
-    for record_id, decision in expected.items():
-        if actual.get(record_id) != decision and record_id != "KB-WASTE-03":
-            _issue(issues, "DECISION_POLICY_MISMATCH", artifact, record_id, "decisions")
-    projection = _approval_projection(manifest)
-    if projection != {
-        "initial_kb": 19,
-        "initial_office": 3,
-        "initial_mapping": 10,
-        "withheld_kb": 1,
-        "rejected_mapping": 2,
-    }:
-        _issue(issues, "INITIAL_PROJECTION_MISMATCH", artifact, None, "decisions")
+    if pairs != expected_pairs:
+        _issue(issues, "DECISION_ORDER", artifact, None, "decisions")
+    recommendations = {
+        (decision.get("record_type"), decision.get("record_id")): decision.get("recommended_decision")
+        for decision in decisions if isinstance(decision, dict)
+    }
+    for record_type, record_id, recommendation in expected:
+        if recommendations.get((record_type, record_id)) != recommendation:
+            _issue(issues, "RECOMMENDATION_POLICY_MISMATCH", artifact, record_id, "recommended_decision")
+
+    structurally_valid = pairs == expected_pairs and len(pairs) == len(expected_pairs)
+    if state == "PENDING_PM_REVIEW":
+        if recommendations.get(("KB", "KB-WASTE-03")) != "WITHHOLD_FOR_REGRESSION":
+            _issue(issues, "WASTE_03_DECISION", artifact, "KB-WASTE-03", "recommended_decision")
+        if any(
+            isinstance(decision, dict)
+            and (decision.get("decision") is not None or decision.get("comment") is not None)
+            for decision in decisions
+        ):
+            _issue(issues, "PENDING_DECISION_EVIDENCE", artifact, None, "decisions")
+        if _approval_projection(manifest) != {
+            "initial_kb": 19,
+            "initial_office": 3,
+            "initial_mapping": 10,
+            "withheld_kb": 1,
+            "rejected_mapping": 2,
+        }:
+            _issue(issues, "INITIAL_PROJECTION_MISMATCH", artifact, None, "decisions")
+    elif state in {"APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
+        for decision in decisions:
+            if not isinstance(decision, dict):
+                continue
+            if not isinstance(decision.get("comment"), str) or not str(decision.get("comment")).strip():
+                _issue(issues, "DECISION_COMMENT_REQUIRED", artifact, _manifest_record_id(decision), "comment")
+            if decision.get("decision") is None:
+                _issue(issues, "DECISION_REQUIRED", artifact, _manifest_record_id(decision), "decision")
+            if decision.get("record_type") in {"OFFICE", "MAPPING"} and decision.get("decision") == "WITHHOLD_FOR_REGRESSION":
+                _issue(issues, "DECISION_DISPOSITION_MISMATCH", artifact, _manifest_record_id(decision), "decision")
+        if state == "APPROVED_FOR_INITIAL_RELEASE" and structurally_valid:
+            _validate_approved_projection(decisions, issues)
 
 
 def _load_artifact_or_empty(path: Path) -> dict[str, object]:
@@ -572,19 +621,19 @@ def _load_artifact_or_empty(path: Path) -> dict[str, object]:
 def _expected_decisions(
     kb_records: list[dict[str, object]], offices: list[dict[str, object]],
     mappings: list[dict[str, object]],
-) -> dict[str, str]:
-    expected: dict[str, str] = {}
+) -> list[tuple[str, str, str]]:
+    expected: list[tuple[str, str, str]] = []
     for record in kb_records:
         record_id = _safe_id(record.get("id"), _KB_ID_PATTERN)
         if record_id is not None:
-            expected[record_id] = (
+            expected.append(("KB", record_id, (
                 "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03"
                 else "APPROVE_INITIAL_RELEASE"
-            )
+            )))
     for record in offices:
         record_id = _safe_id(record.get("public_id"), _OFFICE_ID_PATTERN)
         if record_id is not None:
-            expected[record_id] = "APPROVE_INITIAL_RELEASE"
+            expected.append(("OFFICE", record_id, "APPROVE_INITIAL_RELEASE"))
     for record in mappings:
         office_id = record.get("office_public_id")
         intent = record.get("intent")
@@ -592,19 +641,60 @@ def _expected_decisions(
             record_id = _safe_mapping_key(f"{office_id}:{intent}")
             if record_id is None:
                 continue
-            expected[record_id] = (
+            expected.append(("MAPPING", record_id, (
                 "REJECT" if record_id in {
                     "OFFICE-AREUM:LOCAL_TAX_GENERAL",
                     "OFFICE-DODAM:BULKY_WASTE",
                 } else "APPROVE_INITIAL_RELEASE"
-            )
-    return expected
+            )))
+    return sorted(expected, key=lambda entry: (entry[0], entry[1]))
 
 
 def _approval_projection(manifest: object | None) -> dict[str, int]:
     decisions = manifest.get("decisions") if isinstance(manifest, dict) else []
     if not isinstance(decisions, list):
         decisions = []
+    specs = _static_decision_specs()
+    expected_pairs = [(record_type, record_id) for record_type, record_id, _ in specs]
+    pairs = [
+        (entry.get("record_type"), entry.get("record_id"))
+        for entry in decisions if isinstance(entry, dict)
+    ]
+    if pairs != expected_pairs:
+        return _empty_projection()
+    state = manifest.get("state") if isinstance(manifest, dict) else None
+    if any(
+        entry.get("recommended_decision") != recommendation
+        for entry, (_, _, recommendation) in zip(decisions, specs, strict=True)
+        if isinstance(entry, dict)
+    ):
+        return _empty_projection()
+    field = "recommended_decision" if state == "PENDING_PM_REVIEW" else "decision"
+    if state == "PENDING_PM_REVIEW" and any(
+        isinstance(entry, dict)
+        and (entry.get("decision") is not None or entry.get("comment") is not None)
+        for entry in decisions
+    ):
+        return _empty_projection()
+    if state in {"APPROVED_FOR_INITIAL_RELEASE", "REJECTED"} and any(
+        not isinstance(entry, dict)
+        or entry.get("decision") not in {"APPROVE_INITIAL_RELEASE", "WITHHOLD_FOR_REGRESSION", "REJECT"}
+        or (
+            entry.get("record_type") in {"OFFICE", "MAPPING"}
+            and entry.get("decision") == "WITHHOLD_FOR_REGRESSION"
+        )
+        for entry in decisions
+    ):
+        return _empty_projection()
+    if state == "APPROVED_FOR_INITIAL_RELEASE":
+        reviewed_by_pair = {
+            (entry.get("record_type"), entry.get("record_id")): entry.get("decision")
+            for entry in decisions if isinstance(entry, dict)
+        }
+        if not all(_approved_policy_flags(reviewed_by_pair)):
+            return _empty_projection()
+    if state not in {"PENDING_PM_REVIEW", "APPROVED_FOR_INITIAL_RELEASE", "REJECTED"}:
+        return _empty_projection()
     approved = {"KB": 0, "OFFICE": 0, "MAPPING": 0}
     withheld_kb = 0
     rejected_mapping = 0
@@ -612,7 +702,7 @@ def _approval_projection(manifest: object | None) -> dict[str, int]:
         if not isinstance(decision, dict):
             continue
         record_type = decision.get("record_type")
-        disposition = decision.get("decision")
+        disposition = decision.get(field)
         if record_type in approved and disposition == "APPROVE_INITIAL_RELEASE":
             approved[record_type] += 1
         elif record_type == "KB" and disposition == "WITHHOLD_FOR_REGRESSION":
@@ -626,6 +716,65 @@ def _approval_projection(manifest: object | None) -> dict[str, int]:
         "withheld_kb": withheld_kb,
         "rejected_mapping": rejected_mapping,
     }
+
+
+def _static_decision_specs() -> list[tuple[str, str, str]]:
+    office_ids = ("OFFICE-AREUM", "OFFICE-DODAM", "OFFICE-JOCHIWON")
+    mappings = [f"{office_id}:{intent}" for office_id in office_ids for intent in sorted(SUPPORTED_INTENTS)]
+    specs = [
+        ("KB", record_id, "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03" else "APPROVE_INITIAL_RELEASE")
+        for record_id in CANONICAL_KB_IDS
+    ]
+    specs.extend(("MAPPING", record_id, "REJECT" if record_id in {
+        "OFFICE-AREUM:LOCAL_TAX_GENERAL", "OFFICE-DODAM:BULKY_WASTE",
+    } else "APPROVE_INITIAL_RELEASE") for record_id in mappings)
+    specs.extend(("OFFICE", record_id, "APPROVE_INITIAL_RELEASE") for record_id in office_ids)
+    return specs
+
+
+def _empty_projection() -> dict[str, int]:
+    return {"initial_kb": 0, "initial_office": 0, "initial_mapping": 0, "withheld_kb": 0, "rejected_mapping": 0}
+
+
+def _manifest_record_id(decision: Mapping[str, object]) -> str | None:
+    value = decision.get("record_id")
+    return value if isinstance(value, str) and re.fullmatch(
+        rf"(?:{_KB_ID_PATTERN}|{_OFFICE_ID_PATTERN}(?::(?:{'|'.join(sorted(SUPPORTED_INTENTS))}))?)", value
+    ) else None
+
+
+def _validate_approved_projection(
+    decisions: list[object], issues: list[ValidationIssue]
+) -> None:
+    by_pair = {
+        (entry.get("record_type"), entry.get("record_id")): entry.get("decision")
+        for entry in decisions if isinstance(entry, dict)
+    }
+    kb_valid, office_valid, mapping_valid = _approved_policy_flags(by_pair)
+    if not kb_valid:
+        _issue(issues, "WASTE_03_DECISION", "approval_manifest.json", "KB-WASTE-03", "decision")
+    if not (kb_valid and office_valid and mapping_valid):
+        _issue(issues, "INITIAL_PROJECTION_MISMATCH", "approval_manifest.json", None, "decisions")
+
+
+def _approved_policy_flags(
+    by_pair: Mapping[tuple[object, object], object]
+) -> tuple[bool, bool, bool]:
+    kb_valid = all(
+        by_pair.get(("KB", record_id)) == (
+            "WITHHOLD_FOR_REGRESSION" if record_id == "KB-WASTE-03" else "APPROVE_INITIAL_RELEASE"
+        ) for record_id in CANONICAL_KB_IDS
+    )
+    office_valid = all(
+        by_pair.get(("OFFICE", record_id)) == "APPROVE_INITIAL_RELEASE"
+        for record_id in ("OFFICE-AREUM", "OFFICE-DODAM", "OFFICE-JOCHIWON")
+    )
+    mapping_values = [value for (record_type, _), value in by_pair.items() if record_type == "MAPPING"]
+    mapping_valid = (
+        all(value in {"APPROVE_INITIAL_RELEASE", "REJECT"} for value in mapping_values)
+        and 10 <= mapping_values.count("APPROVE_INITIAL_RELEASE") <= 12
+    )
+    return kb_valid, office_valid, mapping_valid
 
 
 def _validate_runtime_staging_references(issues: list[ValidationIssue]) -> None:
