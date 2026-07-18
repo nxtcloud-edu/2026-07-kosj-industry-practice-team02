@@ -168,21 +168,26 @@ mapping은 각 office×4 intent 12행을 모두 staging한다. evidence URL은 �
 - Modify: `docs/implementation-notes/IMP-20260718-007-data-001-staging-데이터와-pm-검수-패키지.md`
 - Modify: `docs/implementation-notes/INDEX.md`
 
-- [ ] **Step 1: Commit the approved plan on main**
+- [x] **Step 1: Commit the approved plan on main**
 
 Run `git diff --check`, package validation, secret scan, then commit only plan/governance/note-start files with `docs(data): start approved DATA-001 staging plan`.
 
-- [ ] **Step 2: Create the isolated branch/worktree**
+- [x] **Step 2: Create the isolated branch/worktree**
 
 Invoke `superpowers:using-git-worktrees`, create `codex/data-001-staging-review` at `.worktrees/data-001-staging-review`, and prove it is ignored.
 
-- [ ] **Step 3: Run the clean no-Docker baseline**
+- [x] **Step 3: Run the clean no-Docker baseline**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
 Expected: exit 0; DB/Docker is not started and `/ready=503` remains the approved no-seed state.
+
+Actual: main plan commit `aa52c42`, branch/worktree created clean. Ignored `uv` and patched Supabase
+runtime were copied byte-for-byte because ignored tools are not inherited by Git worktrees; hashes matched
+their pinned sources. Focused root 85 tests and patched runtime 24 tests passed, then full
+`scripts/verify.ps1` exited 0 through root/web/API/contract/secret/package/diff gates without Docker/DB.
 
 ## Task 1: Add internal staging schemas and schema validation
 
@@ -387,6 +392,7 @@ Complete 6W1H note, actual commands/results, versions, security/data/rollback/ha
 - 2026-07-18: Q-DATA-002=A, D-033/ADR-0015 승인.
 - 2026-07-18: 사용자가 written spec을 승인하고 사람 작업 KEEP, 나머지 연속 진행, AI data draft 후 사용자 검토를 지시.
 - 2026-07-18: 네 독립 source audit에서 신규 A/Blocker 0, mapping 10 APPROVE 권고/2 REJECT 권고 확인.
+- 2026-07-18: `codex/data-001-staging-review` worktree baseline full gate PASS; Task 0 complete.
 
 ## 결과와 회고
 

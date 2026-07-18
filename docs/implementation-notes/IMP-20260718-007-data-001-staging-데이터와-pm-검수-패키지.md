@@ -5,7 +5,7 @@
 - Type: implementation/data-quality
 - Status: In Progress — AI-executable scope; PM review KEEP
 - Author/Agent: Codex(Architecture·AI/Data·Backend·Security·Docs)
-- Branch: plan start on `main`; execution target `codex/data-001-staging-review`
+- Branch: `codex/data-001-staging-review`; worktree `.worktrees/data-001-staging-review`
 - Base commit: `e4aa1cd`
 - Related plan/ADR/RFP: DATA-001 staging plan / D-033 / A-026 / ADR-0015 / DAR-001·002 / SER-001·003
 
@@ -125,6 +125,9 @@ promotion은 없다. 승인 전 변경은 branch commit revert로 제거할 수 
 |---|---|---|
 | authority/spec/contract/source reads | PASS | terminal evidence |
 | 4-domain official source audit | PASS, new A/Blocker 0 | ignored `.superpowers/sdd/data-001-*-audit.md` |
+| focused root baseline | PASS, 85 tests + 1 expected symlink skip | terminal evidence |
+| patched runtime baseline | PASS, 24 tests | pinned local runtime hash evidence |
+| `scripts/verify.ps1` clean baseline | PASS, all stable steps | terminal evidence |
 | exact implementation tests/root gate | 실행 전 | Task 1~4에서 실제 결과로 교체 |
 
 ### 미실행 검증과 이유
