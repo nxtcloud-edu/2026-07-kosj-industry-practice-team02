@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DATA-001 approval manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_id", "draft_version", "state", "created_by", "submitted_at", "reviewed_by", "reviewed_at", "review_comment", "artifacts", "decisions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "dataset_id": {"const": "sejong-data-001"},
+    "draft_version": {"type": "string", "pattern": "^0\\.1\\.0-draft\\.1$"},
+    "state": {"enum": ["DRAFT", "PENDING_PM_REVIEW", "APPROVED_FOR_INITIAL_RELEASE", "REJECTED"]},
+    "created_by": {"const": "AI-DATA-BACKEND"},
+    "submitted_at": {"type": ["string", "null"], "format": "date-time"},
+    "reviewed_by": {"type": ["string", "null"]},
+    "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+    "review_comment": {"type": ["string", "null"]},
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "record_count", "sha256"],
+        "properties": {
+          "path": {"enum": ["kb_records.json", "offices.json", "office_service_mappings.json"]},
+          "record_count": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record_type", "record_id", "decision", "comment"],
+        "properties": {
+          "record_type": {"enum": ["KB", "OFFICE", "MAPPING"]},
+          "record_id": {"type": "string", "minLength": 1},
+          "decision": {"enum": ["APPROVE_INITIAL_RELEASE", "WITHHOLD_FOR_REGRESSION", "REJECT"]},
+          "comment": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
