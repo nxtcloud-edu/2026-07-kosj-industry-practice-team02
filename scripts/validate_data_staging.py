@@ -63,8 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         print("[FAIL] step=VALIDATE-DATA-001 reason=usage")
         return 2
     if arguments.command in {"prepare", "validate", "migrate-pending"}:
-        draft_dir = Path(arguments.draft_dir)
-        source_registry = Path(arguments.source_registry)
+        draft_dir = _repository_rooted_path(arguments.draft_dir)
+        source_registry = _repository_rooted_path(arguments.source_registry)
         if not _canonical_inputs_are_trusted(
             draft_dir,
             source_registry,
@@ -77,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
             }[arguments.command]
             print(f"[FAIL] step={step} issues=PATH_BOUNDARY_INVALID:1")
             return 1
+        draft_dir = CANONICAL_DRAFT_DIR.resolve()
+        source_registry = DEFAULT_SOURCE_REGISTRY.resolve()
     if arguments.command == "prepare":
         try:
             manifest = build_pending_manifest(draft_dir, arguments.submitted_at)
@@ -106,16 +108,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == "validate":
         try:
-            if arguments.report and not _is_safe_report_destination(
-                Path(arguments.report), draft_dir
-            ):
-                print("[FAIL] step=VALIDATE-DATA-001 issues=REPORT_DESTINATION_INVALID:1")
-                return 1
+            report_path = None
+            if arguments.report:
+                report_path = _repository_rooted_path(arguments.report)
+                if not _is_safe_report_destination(report_path, draft_dir):
+                    print("[FAIL] step=VALIDATE-DATA-001 issues=REPORT_DESTINATION_INVALID:1")
+                    return 1
+                report_path = CANONICAL_REPORT_PATH.resolve()
             report = validate_staging(
                 draft_dir, SCHEMA_DIR, source_registry
             )
-            if arguments.report:
-                _write_json_atomic(Path(arguments.report), report)
+            if report_path is not None:
+                _write_json_atomic(report_path, report)
         except (OSError, ValueError, json.JSONDecodeError):
             print("[FAIL] step=VALIDATE-DATA-001 issues=VALIDATION_RUNTIME_ERROR:1")
             return 1
@@ -206,6 +210,12 @@ def _print_issue_failure(step: str, report: dict[str, object]) -> None:
     )
     summary = ",".join(f"{code}:{counts[code]}" for code in sorted(counts))
     print(f"[FAIL] step={step} issues={summary}")
+
+
+def _repository_rooted_path(value: str | Path) -> Path:
+    path = Path(value)
+    candidate = path if path.is_absolute() else REPOSITORY_ROOT / path
+    return candidate.absolute()
 
 
 def _is_safe_report_destination(report: Path, draft_dir: Path) -> bool:

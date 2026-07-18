@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -1260,6 +1261,101 @@ class DataStagingFinalRemediationTests(unittest.TestCase):
                 self.assertEqual(before, manifest.read_bytes())
             finally:
                 alias.rmdir()
+
+    def test_relative_canonical_report_from_external_cwd_uses_absolute_repo_path(self) -> None:
+        repository_root = Path.cwd().resolve()
+        draft = (repository_root / "data/staging/data-001/0.1.0-draft.1").resolve()
+        registry = (repository_root / "data/official/kb_source_registry.csv").resolve()
+        script = (repository_root / "scripts/validate_data_staging.py").resolve()
+        canonical_report = staging_cli_module.CANONICAL_REPORT_PATH.resolve()
+        relative_draft = "data/staging/data-001/0.1.0-draft.1"
+        relative_registry = "data/official/kb_source_registry.csv"
+        relative_report = "data/processed/data-001/0.1.0-draft.1/validation-report.json"
+        before = canonical_report.read_bytes()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            external_root = Path(temporary_directory)
+            prior_cwd = Path.cwd()
+            try:
+                os.chdir(external_root)
+                with (
+                    mock.patch.object(staging_cli_module, "_write_json_atomic") as writer,
+                    mock.patch.object(
+                        staging_cli_module,
+                        "validate_staging",
+                        wraps=staging_cli_module.validate_staging,
+                    ) as validator,
+                ):
+                    self.assertEqual(0, staging_cli_module.main([
+                        "validate", "--draft-dir", relative_draft,
+                        "--source-registry", relative_registry, "--report", relative_report,
+                    ]))
+                writer.assert_called_once()
+                self.assertEqual(canonical_report, writer.call_args.args[0])
+                validator.assert_called_once()
+                self.assertEqual(draft, validator.call_args.args[0])
+                self.assertEqual(registry, validator.call_args.args[2])
+            finally:
+                os.chdir(prior_cwd)
+
+            completed = subprocess.run(
+                [
+                    sys.executable, "-B", str(script), "validate", "--draft-dir",
+                    relative_draft, "--source-registry", relative_registry,
+                    "--report", relative_report,
+                ],
+                cwd=external_root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout)
+            self.assertFalse((external_root / relative_report).exists())
+            self.assertEqual(before, canonical_report.read_bytes())
+
+    def test_operations_config_selector_and_git_ls_files_scan_are_complete(self) -> None:
+        selected = (
+            "ops/config.toml",
+            "operations/runtime.json",
+            "config/deploy.yml",
+            ".config/runtime.json",
+            "deploy/settings.yaml",
+            "deployment/config.json",
+            "infra/runtime.toml",
+            "infrastructure/deploy.psd1",
+            "root-config.toml",
+        )
+        self.assertTrue(all(validation._is_runtime_or_operations_file(path) for path in selected))
+        self.assertFalse(validation._is_runtime_or_operations_file("docs/config/deploy.yml"))
+        self.assertFalse(validation._is_runtime_or_operations_file("data/staging/config.json"))
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            samples = {
+                "ops/config.toml": 'data_root = "da" + "ta"\nstage_dir = "stag" + "ing"\n',
+                "config/deploy.yml": 'runtime_path: "DATA/STAGING/release"\n',
+                ".config/runtime.json": '{"runtime_path":"data/staging/release"}\n',
+                "deployment/config.json": '{"runtime_path":"data/staging/release"}\n',
+                "infra/runtime.toml": 'data_root="da"+"ta"\nstage_dir="stag"+"ing"\n',
+                "docs/config/ignored.yml": 'runtime_path: "data/staging/release"\n',
+                "data/staging/ignored.json": '{"runtime_path":"data/staging/release"}\n',
+            }
+            for relative, content in samples.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", "."], cwd=root, check=True)
+            issues: list[ValidationIssue] = []
+            with mock.patch.object(validation, "REPOSITORY_ROOT", root):
+                validation._validate_runtime_staging_references(issues)
+            self.assertEqual(
+                {
+                    ".config/runtime.json", "config/deploy.yml", "deployment/config.json",
+                    "infra/runtime.toml", "ops/config.toml",
+                },
+                {issue.artifact for issue in issues},
+            )
+            self.assertTrue(all(issue.code == "RUNTIME_STAGING_REFERENCE" for issue in issues))
 
     def test_unknown_property_issue_never_contains_untrusted_member_name(self) -> None:
         schema = {

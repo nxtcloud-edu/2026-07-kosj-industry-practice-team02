@@ -128,6 +128,13 @@ _RUNTIME_SUFFIXES = frozenset({
     ".psd1", ".psm1", ".py", ".sh", ".sql", ".toml", ".ts", ".tsx",
     ".yaml", ".yml",
 })
+_OPERATIONS_CONFIG_ROOTS = frozenset({
+    ".config", "config", "deploy", "deployment", "infra", "infrastructure",
+    "operations", "ops",
+})
+_OPERATIONS_CONFIG_SUFFIXES = frozenset({
+    ".json", ".ps1", ".psd1", ".psm1", ".toml", ".yaml", ".yml",
+})
 
 
 @dataclass(frozen=True, order=True)
@@ -1133,23 +1140,35 @@ def _validate_runtime_staging_references(issues: list[ValidationIssue]) -> None:
 def _is_runtime_or_operations_file(name: str) -> bool:
     normalized = name.replace("\\", "/")
     path = Path(normalized)
+    parts = tuple(part.lower() for part in path.parts)
+    suffix = path.suffix.lower()
     executable_or_config = (
-        path.suffix.lower() in _RUNTIME_SUFFIXES
+        suffix in _RUNTIME_SUFFIXES
         or path.name.lower() in {
             ".env.example", "dockerfile", "makefile", "package.json",
             "pnpm-workspace.yaml",
         }
     )
     in_runtime_tree = (
-        normalized.startswith(("apps/", "packages/", "database/", "scripts/"))
-        or normalized.startswith(".github/workflows/")
-        or normalized == "supabase/config.toml"
-        or normalized == "supabase/seed.sql"
-        or normalized.startswith("supabase/migrations/")
-        or path.suffix.lower() in {".ps1", ".psd1", ".psm1"}
+        normalized.lower().startswith(("apps/", "packages/", "database/", "scripts/"))
+        or normalized.lower().startswith(".github/workflows/")
+        or normalized.lower() == "supabase/config.toml"
+        or normalized.lower() == "supabase/seed.sql"
+        or normalized.lower().startswith("supabase/migrations/")
+        or suffix in {".ps1", ".psd1", ".psm1"}
+    )
+    excluded_artifact_tree = bool(parts) and parts[0] in {"data", "docs"}
+    in_operations_config_tree = (
+        not excluded_artifact_tree
+        and suffix in _OPERATIONS_CONFIG_SUFFIXES
+        and any(part in _OPERATIONS_CONFIG_ROOTS for part in parts[:-1])
     )
     root_config = "/" not in normalized and executable_or_config
-    return (in_runtime_tree and executable_or_config) or root_config
+    return (
+        (in_runtime_tree and executable_or_config)
+        or in_operations_config_tree
+        or root_config
+    )
 
 
 def _scan_runtime_files(
