@@ -228,7 +228,7 @@ def validate_staging(
         ],
         "warnings": (
             ["PM_REVIEW_REQUIRED"]
-            if state == "PENDING_PM_REVIEW"
+            if valid and state == "PENDING_PM_REVIEW"
             else []
         ),
     }

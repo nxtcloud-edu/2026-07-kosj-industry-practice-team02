@@ -836,6 +836,7 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             self.assertFalse(report["valid"])
             self.assertIsNone(report["approval_projection"])
             self.assertIsNone(report["recommendation_projection"])
+            self.assertEqual([], report["warnings"])
 
             decision_invalid = self.reviewed_manifest(directory)
             decision_invalid["decisions"][0]["decision"] = None
@@ -968,6 +969,8 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
 
         mutations = (
             ("schema_version", lambda value: value.__setitem__("schema_version", 99)),
+            ("schema_version_bool", lambda value: value.__setitem__("schema_version", True)),
+            ("schema_version_float", lambda value: value.__setitem__("schema_version", 1.0)),
             ("dataset_id", lambda value: value.__setitem__("dataset_id", "other-data")),
             ("draft_version", lambda value: value.__setitem__("draft_version", "0.1.0-draft.2")),
             ("state", lambda value: value.__setitem__("state", "REJECTED")),
@@ -980,11 +983,13 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             ("top_level_unknown", lambda value: value.__setitem__("unexpected", True)),
             ("artifact_path", lambda value: set_artifact(value, "path", "other.json")),
             ("artifact_count", lambda value: set_artifact(value, "record_count", 99)),
+            ("artifact_count_bool", lambda value: set_artifact(value, "record_count", True)),
             ("artifact_hash", lambda value: set_artifact(value, "sha256", "0" * 64)),
             ("artifact_unknown", lambda value: set_artifact(value, "unexpected", True)),
             ("decision_type", lambda value: set_decision(value, "record_type", "OFFICE")),
             ("decision_id", lambda value: set_decision(value, "record_id", "KB-MOVE-01")),
             ("decision_value", lambda value: set_decision(value, "decision", "REJECT")),
+            ("decision_value_bool", lambda value: set_decision(value, "decision", True)),
             ("decision_comment", lambda value: set_decision(value, "comment", "altered")),
             ("decision_unknown", lambda value: set_decision(value, "unexpected", True)),
             ("decision_order", reorder_decisions),

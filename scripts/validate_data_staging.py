@@ -173,7 +173,23 @@ def _is_legacy_pending_manifest(
     expected = dict(candidate)
     expected["submitted_at"] = LEGACY_PENDING_SUBMITTED_AT
     expected["decisions"] = legacy_decisions
-    return existing == expected
+    return _json_equal(existing, expected)
+
+
+def _json_equal(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict) and isinstance(right, dict):
+        return (
+            left.keys() == right.keys()
+            and all(_json_equal(left[key], right[key]) for key in left)
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _json_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right, strict=True)
+        )
+    return left == right
 
 
 def _print_issue_failure(step: str, report: dict[str, object]) -> None:
