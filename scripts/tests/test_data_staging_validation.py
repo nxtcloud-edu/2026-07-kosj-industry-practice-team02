@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -658,15 +659,12 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
                 "--report", str(outside),
             ]))
             self.assertFalse(outside.exists())
-            allowed = Path("data/processed/.task2-validation-report.json")
-            try:
-                self.assertEqual(0, data_staging_cli([
-                    "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
-                    "--report", str(allowed),
-                ]))
-                self.assertTrue(allowed.is_file())
-            finally:
-                allowed.unlink(missing_ok=True)
+            arbitrary_processed = Path("data/processed/.task2-validation-report.json")
+            self.assertEqual(1, data_staging_cli([
+                "validate", "--draft-dir", str(directory), "--source-registry", str(registry),
+                "--report", str(arbitrary_processed),
+            ]))
+            self.assertFalse(arbitrary_processed.exists())
 
     def test_cli_report_rejects_processed_symlink_alias_without_outside_write(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1130,6 +1128,139 @@ class DataStagingFinalRemediationTests(unittest.TestCase):
     def codes(self, report: dict[str, object]) -> set[str]:
         return self.fixture.codes(report)
 
+    def make_directory_link(self, alias: Path, target: Path) -> None:
+        try:
+            alias.symlink_to(target, target_is_directory=True)
+        except OSError as error:
+            junction = subprocess.run(
+                ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(target)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if junction.returncode != 0:
+                self.skipTest(f"link unavailable: {type(error).__name__}")
+
+    def test_coordinated_content_manifest_and_matrix_drift_fails_pinned_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            draft = root / "draft"
+            shutil.copytree(Path("data/staging/data-001/0.1.0-draft.1"), draft)
+            kb_path = draft / "kb_records.json"
+            kb = load_json_object(kb_path)
+            kb["records"][0]["answer_summary"] = "승인되지 않은 동시 변경"
+            write_json(kb_path, kb)
+            manifest = load_json_object(draft / "approval_manifest.json")
+            for artifact in manifest["artifacts"]:
+                if artifact["path"] == "kb_records.json":
+                    artifact["sha256"] = sha256_file(kb_path)
+            write_json(draft / "approval_manifest.json", manifest)
+            matrix_path = root / "approved-source-matrix.json"
+            matrix = load_json_object(SCHEMA_DIR / "approved-source-matrix.json")
+            for artifact in matrix["content_artifacts"]:
+                if artifact["path"] == "kb_records.json":
+                    artifact["sha256"] = sha256_file(kb_path)
+            write_json(matrix_path, matrix)
+            with (
+                mock.patch.object(validation, "CANONICAL_DRAFT_DIR", draft),
+                mock.patch.object(validation, "CANONICAL_SOURCE_MATRIX", matrix_path),
+            ):
+                report = validate_staging(
+                    draft, SCHEMA_DIR, Path("data/official/kb_source_registry.csv")
+                )
+            self.assertFalse(report["valid"])
+            self.assertIn("SOURCE_MATRIX_HASH_MISMATCH", self.codes(report))
+
+    def test_production_report_path_is_exact_and_never_overwrites_pm_packet(self) -> None:
+        draft = Path("data/staging/data-001/0.1.0-draft.1")
+        canonical = Path(
+            "data/processed/data-001/0.1.0-draft.1/validation-report.json"
+        )
+        packet = Path("data/processed/data-001/0.1.0-draft.1/PM_REVIEW_PACKET.md")
+        arbitrary = Path("data/processed/arbitrary.json")
+        before = packet.read_bytes()
+        self.assertTrue(staging_cli_module._is_safe_report_destination(canonical, draft))
+        self.assertFalse(staging_cli_module._is_safe_report_destination(packet, draft))
+        self.assertFalse(staging_cli_module._is_safe_report_destination(arbitrary, draft))
+        self.assertEqual(1, staging_cli_module.main([
+            "validate", "--draft-dir", str(draft), "--report", str(packet),
+        ]))
+        self.assertEqual(before, packet.read_bytes())
+        self.assertFalse(arbitrary.exists())
+
+    def test_korean_password_is_value_free_across_every_staging_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            marker = "비밀번호 123456"
+            changes = (
+                ("kb_records.json", "answer_summary"),
+                ("offices.json", "opening_hours"),
+                ("office_service_mappings.json", "department_label"),
+            )
+            for artifact, field in changes:
+                value = load_json_object(directory / artifact)
+                value["records"][0][field] = marker
+                write_json(directory / artifact, value)
+            manifest = load_json_object(directory / "approval_manifest.json")
+            manifest["review_comment"] = marker
+            write_json(directory / "approval_manifest.json", manifest)
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace("한계\n", f"{marker}\n", 1),
+                encoding="utf-8",
+                newline="\n",
+            )
+            report = self.validate(directory, registry)
+            secret_artifacts = {
+                issue["artifact"] for issue in report["issues"]
+                if issue["code"] == "SECRET_DETECTED"
+            }
+            self.assertEqual({
+                "approval_manifest.json", "kb_records.json", "kb_source_registry.csv",
+                "offices.json", "office_service_mappings.json",
+            }, secret_artifacts)
+            self.assertNotIn(marker, json.dumps(report, ensure_ascii=False))
+
+    def test_source_audit_hash_reader_and_cli_preflight_reject_junctions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            target = root / "audit-target"
+            target.mkdir()
+            canonical_audits = Path("docs/data-lineage/source-audits")
+            for source in canonical_audits.glob("*.md"):
+                shutil.copy2(source, target / source.name)
+            alias_parent = root / "docs" / "data-lineage"
+            alias_parent.mkdir(parents=True)
+            alias = alias_parent / "source-audits"
+            self.make_directory_link(alias, target)
+            matrix = load_json_object(SCHEMA_DIR / "approved-source-matrix.json")
+            issues: list[ValidationIssue] = []
+            try:
+                with mock.patch.object(validation, "REPOSITORY_ROOT", root):
+                    validation._validate_source_audit_hashes(matrix, issues)
+                self.assertIn("SOURCE_AUDIT_HASH_MISMATCH", {issue.code for issue in issues})
+                audit_paths = getattr(staging_cli_module, "CANONICAL_SOURCE_AUDIT_PATHS", ())
+                self.assertEqual(4, len(audit_paths))
+                draft = self.complete_draft(root / "draft")
+                registry = self.source_registry(root)
+                manifest = draft / "approval_manifest.json"
+                before = manifest.read_bytes()
+                linked_audits = tuple(alias / Path(path).name for path in audit_paths)
+                with (
+                    mock.patch.object(staging_cli_module, "CANONICAL_DRAFT_DIR", draft),
+                    mock.patch.object(staging_cli_module, "DEFAULT_SOURCE_REGISTRY", registry),
+                    mock.patch.object(
+                        staging_cli_module, "CANONICAL_SOURCE_AUDIT_PATHS", linked_audits
+                    ),
+                ):
+                    self.assertEqual(1, staging_cli_module.main([
+                        "validate", "--draft-dir", str(draft),
+                        "--source-registry", str(registry),
+                    ]))
+                self.assertEqual(before, manifest.read_bytes())
+            finally:
+                alias.rmdir()
+
     def test_unknown_property_issue_never_contains_untrusted_member_name(self) -> None:
         schema = {
             "type": "object",
@@ -1254,6 +1385,15 @@ class DataStagingFinalRemediationTests(unittest.TestCase):
                 "comment.py": '/* comment */ path = "data/staging/x"\n',
                 "concat.py": 'path = "data" + "/staging/x"\n',
                 "config.toml": 'data_root = "data"\nstage_dir = "staging"\n',
+                "split.ps1": (
+                    '$root = Join-Path $PSScriptRoot ("da"+"ta")\n'
+                    '$stage = "stag"+"ing"\n'
+                    '$target = Join-Path $root $stage\n'
+                ),
+                "split.toml": (
+                    'data_root = "da" + "ta"\n'
+                    'stage_dir = "stag" + "ing"\n'
+                ),
             }
             files = []
             for name, content in samples.items():

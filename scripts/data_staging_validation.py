@@ -26,6 +26,18 @@ CANONICAL_DRAFT_DIR = REPOSITORY_ROOT / "data" / "staging" / "data-001" / "0.1.0
 CANONICAL_SOURCE_MATRIX = (
     REPOSITORY_ROOT / "data" / "schemas" / "data-001" / "v1" / "approved-source-matrix.json"
 )
+APPROVED_SOURCE_MATRIX_SHA256 = (
+    "19952d1ead2cb3878de7e3f80c7c5bde28b351781d8bf8d4947494f1ccfe29de"
+)
+CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS = (
+    "docs/data-lineage/source-audits/data-001-move-cert-source-audit.md",
+    "docs/data-lineage/source-audits/data-001-office-mapping-audit.md",
+    "docs/data-lineage/source-audits/data-001-tax-source-audit.md",
+    "docs/data-lineage/source-audits/data-001-waste-source-audit.md",
+)
+CANONICAL_SOURCE_AUDIT_PATHS = tuple(
+    REPOSITORY_ROOT / path for path in CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS
+)
 CANONICAL_KB_IDS = tuple(
     f"KB-{category}-{number:02d}"
     for category in ("CERT", "MOVE", "TAX", "WASTE")
@@ -92,6 +104,10 @@ _PII_PATTERNS = (
 )
 _SECRET_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|secret|token|password)\s*[:=]|\bsk-[A-Za-z0-9_-]+)"
+)
+_AUTH_SECRET_VALUE_PATTERN = re.compile(
+    r"(?i)(?:비밀번호|암호|\b(?:password|passcode|pin)\b|인증\s*(?:번호|코드))"
+    r"\s*(?:[:=]|은|는)?\s*[A-Za-z0-9!@#$%^&*_.-]{4,}"
 )
 _MOCK_PATTERN = re.compile(r"(?i)(?:\bmock\b|시연용\s*샘플)")
 _KB_ID_PATTERN = r"KB-(?:MOVE|CERT|WASTE|TAX)-[0-9]{2}"
@@ -202,11 +218,18 @@ def validate_staging(
     approved_matrix: dict[str, object] | None = None
     if canonical_run:
         try:
-            approved_matrix = load_json_object(CANONICAL_SOURCE_MATRIX)
-            if CANONICAL_SOURCE_MATRIX.read_bytes() != _canonical_json_bytes(approved_matrix):
-                _issue(issues, "SOURCE_MATRIX_NOT_CANONICAL", "approved-source-matrix.json", None, None)
+            matrix_hash = _sha256_trusted_file(CANONICAL_SOURCE_MATRIX)
         except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
-            _issue(issues, "SOURCE_MATRIX_LOAD_ERROR", "approved-source-matrix.json", None, None)
+            matrix_hash = None
+        if matrix_hash != APPROVED_SOURCE_MATRIX_SHA256:
+            _issue(issues, "SOURCE_MATRIX_HASH_MISMATCH", "approved-source-matrix.json", None, None)
+        else:
+            try:
+                approved_matrix = load_json_object(CANONICAL_SOURCE_MATRIX)
+                if CANONICAL_SOURCE_MATRIX.read_bytes() != _canonical_json_bytes(approved_matrix):
+                    _issue(issues, "SOURCE_MATRIX_NOT_CANONICAL", "approved-source-matrix.json", None, None)
+            except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+                _issue(issues, "SOURCE_MATRIX_LOAD_ERROR", "approved-source-matrix.json", None, None)
     schemas = {
         "kb_records.json": "kb-records.schema.json",
         "offices.json": "offices.schema.json",
@@ -586,7 +609,7 @@ def _validate_text_safety(
         record_id = _record_identifier(record)
         for field, value in _text_fields(record):
             top_level = field.split(".", 1)[0]
-            if _SECRET_PATTERN.search(value):
+            if _SECRET_PATTERN.search(value) or _AUTH_SECRET_VALUE_PATTERN.search(value):
                 _issue(issues, "SECRET_DETECTED", artifact, record_id, field)
             if _MOCK_PATTERN.search(value):
                 _issue(issues, "MOCK_REFERENCE", artifact, record_id, field)
@@ -1038,12 +1061,7 @@ def _validate_source_registry_hash(
 def _validate_source_audit_hashes(
     matrix: Mapping[str, object], issues: list[ValidationIssue]
 ) -> None:
-    expected_paths = (
-        "docs/data-lineage/source-audits/data-001-move-cert-source-audit.md",
-        "docs/data-lineage/source-audits/data-001-office-mapping-audit.md",
-        "docs/data-lineage/source-audits/data-001-tax-source-audit.md",
-        "docs/data-lineage/source-audits/data-001-waste-source-audit.md",
-    )
+    expected_paths = CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS
     entries = matrix.get("source_audits")
     if not isinstance(entries, list) or [
         entry.get("path") if isinstance(entry, dict) else None for entry in entries
@@ -1057,7 +1075,7 @@ def _validate_source_audit_hashes(
             continue
         path = REPOSITORY_ROOT / entry["path"]
         try:
-            actual = sha256_file(path)
+            actual = _sha256_trusted_file(path)
         except OSError:
             actual = None
         if actual != entry.get("sha256"):
@@ -1159,7 +1177,7 @@ def _scan_runtime_files(
 
 
 def _is_runtime_staging_reference(text: str) -> bool:
-    normalized = text.lower().replace("\\", "/")
+    normalized = _collapse_literal_concatenations(text).lower().replace("\\", "/")
     normalized = re.sub(r"/+", "/", normalized)
     if re.search(r"data\s*/\s*staging(?:\s*/|\b)", normalized):
         return True
@@ -1178,6 +1196,29 @@ def _is_runtime_staging_reference(text: str) -> bool:
         normalized,
         flags=re.DOTALL,
     ) is not None
+
+
+def _collapse_literal_concatenations(text: str) -> str:
+    pattern = re.compile(
+        r"(?P<left_quote>[\"'])(?P<left>[A-Za-z0-9_./\\-]*)"
+        r"(?P=left_quote)\s*\+\s*"
+        r"(?P<right_quote>[\"'])(?P<right>[A-Za-z0-9_./\\-]*)"
+        r"(?P=right_quote)"
+    )
+    while True:
+        collapsed = pattern.sub(
+            lambda match: f'"{match.group("left")}{match.group("right")}"',
+            text,
+        )
+        if collapsed == text:
+            return text
+        text = collapsed
+
+
+def _sha256_trusted_file(path: Path) -> str:
+    if _has_reparse_component(path) or not path.is_file():
+        raise OSError("untrusted linked path")
+    return sha256_file(path)
 
 
 def _has_reparse_component(path: Path) -> bool:

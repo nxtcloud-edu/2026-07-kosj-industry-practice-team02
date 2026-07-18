@@ -90,7 +90,7 @@
 |---|---|---|
 | `data/schemas/data-001/v1/` | KB, office, mapping, approval-manifest internal JSON Schema 4개 | DRAFT field/state/type 제한 |
 | `scripts/data_staging_validation.py` / `scripts/validate_data_staging.py` | schema/cross-file/privacy/source/hash/runtime boundary 검사와 prepare/validate CLI | reproducible fail-closed gate |
-| `scripts/tests/test_data_staging_validation.py` / `scripts/verify.ps1` | 56 focused tests와 mandatory root `VALIDATE-DATA-001` integration | regression/runtime isolation, canonical path/reparse/privacy/source-matrix hardening |
+| `scripts/tests/test_data_staging_validation.py` / `scripts/verify.ps1` | 60 focused tests와 mandatory root `VALIDATE-DATA-001` integration | regression/runtime isolation, canonical path/reparse/privacy/source-matrix hardening |
 | `data/schemas/data-001/v1/approved-source-matrix.json` / `docs/data-lineage/source-audits/` | exact source/content/registry/audit hash trust anchor와 sanitized tracked 감사 요약 4개 | PM 검수 전 coordinated drift와 mutable ignored audit 의존 제거 |
 | `data/staging/...` | canonical DRAFT 20/3/12+PENDING manifest | PM이 검수할 exact input |
 | `data/processed/...`, `docs/data-lineage/...` | value-free report, 35-row PM packet, source→draft→promotion lineage | human review and handoff |
@@ -129,7 +129,7 @@ write boundary를 fail closed한다. Hash mismatch는 PM approval을 무효로 �
 | 명령/검증 | 결과 | 시간/개수 | 증거 |
 |---|---|---|---|
 | `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_child_timeout_terminates_spawned_descendant -v` | PASS | 1 test, 15.189s | exact known child-timeout regression |
-| `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging_validation -q` | PASS | 56 tests, 20.773s | focused DATA-001 suite after Final Remediation 2 |
+| `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging_validation -q` | PASS | 60 tests, 18.205s | focused DATA-001 suite after Final Remediation 2 review fixes |
 | `apps/api/.venv/Scripts/python.exe -B scripts/validate_data_staging.py validate --draft-dir data/staging/data-001/0.1.0-draft.1 --report <processed-report>` twice | PASS | report SHA-256 identical | `460c6e6613cdd18f5a3abace116da14dbb036b2d60855d835038c9cf9afd7d2d`, issues 0, warning only `PM_REVIEW_REQUIRED` |
 | JSON/CSV parse + counts/manifest/report/hash comparison | PASS | KB 20, office 3, mapping 12, decisions 35, registry 20 | manifest/report/direct SHA-256 exact match |
 | tracked runtime/operations staging-reference scan | PASS | issues 0 | apps/packages/database/scripts, Supabase config/seed/migrations, repo-wide PowerShell/config; case/comment/concat/split bypass tests included |
@@ -151,7 +151,9 @@ public deployment, and performance/UI checks are outside this task and remain un
   is allowed only for the exact `(office id, field, value)` in the tracked approved source matrix. Manifest,
   registry and content strings are scanned before a value-free report can be emitted.
 - Security: secret/mock/unsafe source/self-approval/hash mismatch/runtime staging reference fail closed; errors
-  contain no payload values. No credential, dependency, Docker, cloud, DB, or external LLM action occurred.
+  contain no payload values. The source matrix has an independent code SHA-256 pin; Korean password/code forms,
+  split PowerShell/config staging paths, audit reparse paths and noncanonical report destinations fail closed.
+  No credential, dependency, Docker, cloud, DB, or external LLM action occurred.
 - Accessibility: UI/runtime change 0. PM packet is textual/table-based; existing UI accessibility posture is unchanged.
 - Performance/cost: local 35-record validator report deterministic; no stated product performance target changes;
   external cost is 0 won.

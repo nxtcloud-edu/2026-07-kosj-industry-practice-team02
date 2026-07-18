@@ -405,6 +405,8 @@ Completed 6W1H note, actual commands/results, versions, security/data/rollback/h
 
 검증 체크포인트: 각 finding의 focused RED→GREEN, 전체 staging unittest, canonical validate 연속 2회와 report 결정성, JSON/CSV/schema/audit hash, secret/package/runtime/path 검사, PowerShell parser, `git diff --check`. 공식 release/seed/DB/API/product/version closeout은 변경하지 않는다.
 
+독립 리뷰 후속: matrix는 파싱 전 validator code의 exact SHA-256 pin을 요구하고, report는 canonical validation report 한 경로만 허용한다. 네 audit도 production reparse preflight와 trusted hash reader를 통과하며, split PowerShell/config 경로와 한국어 비밀번호 값 회귀를 추가했다.
+
 - 2026-07-18: Q-DATA-002=A, D-033/ADR-0015 승인.
 - 2026-07-18: 사용자가 written spec을 승인하고 사람 작업 KEEP, 나머지 연속 진행, AI data draft 후 사용자 검토를 지시.
 - 2026-07-18: 네 독립 source audit에서 신규 A/Blocker 0, mapping 10 APPROVE 권고/2 REJECT 권고 확인.

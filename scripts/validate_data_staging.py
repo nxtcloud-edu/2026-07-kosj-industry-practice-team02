@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.data_staging_validation import (
+    CANONICAL_SOURCE_AUDIT_PATHS,
     CANONICAL_SOURCE_MATRIX,
     CONTENT_ARTIFACTS,
     build_pending_manifest,
@@ -28,6 +29,10 @@ SCHEMA_DIR = REPOSITORY_ROOT / "data" / "schemas" / "data-001" / "v1"
 DEFAULT_SOURCE_REGISTRY = REPOSITORY_ROOT / "data" / "official" / "kb_source_registry.csv"
 CANONICAL_DRAFT_DIR = (
     REPOSITORY_ROOT / "data" / "staging" / "data-001" / "0.1.0-draft.1"
+)
+CANONICAL_REPORT_PATH = (
+    REPOSITORY_ROOT / "data" / "processed" / "data-001" / "0.1.0-draft.1"
+    / "validation-report.json"
 )
 LEGACY_PENDING_SUBMITTED_AT = "2026-07-18T19:32:04+09:00"
 
@@ -204,22 +209,17 @@ def _print_issue_failure(step: str, report: dict[str, object]) -> None:
 
 
 def _is_safe_report_destination(report: Path, draft_dir: Path) -> bool:
-    processed_root = (REPOSITORY_ROOT / "data" / "processed").resolve()
     candidate = report if report.is_absolute() else (REPOSITORY_ROOT / report)
     candidate = candidate.absolute()
-    if not _is_within(candidate.resolve(), processed_root):
+    if _has_reparse_component(candidate):
         return False
-    resolved_draft = draft_dir.resolve()
-    resolved_candidate = candidate.resolve()
-    if _is_within(resolved_candidate, resolved_draft) or _is_within(resolved_draft, resolved_candidate):
-        return False
-    current = candidate.anchor and Path(candidate.anchor)
-    if not isinstance(current, Path):
-        return False
-    for part in candidate.parts[1:]:
-        current = current / part
-        if current.exists() and _is_link_or_reparse_point(current):
+    try:
+        if os.path.normcase(str(candidate.resolve())) != os.path.normcase(
+            str(CANONICAL_REPORT_PATH.resolve())
+        ):
             return False
+    except OSError:
+        return False
     return True
 
 
@@ -233,6 +233,7 @@ def _canonical_inputs_are_trusted(
     required_files = [
         DEFAULT_SOURCE_REGISTRY,
         CANONICAL_SOURCE_MATRIX,
+        *CANONICAL_SOURCE_AUDIT_PATHS,
         *(SCHEMA_DIR / name for name in (
             "approval-manifest.schema.json",
             "kb-records.schema.json",
