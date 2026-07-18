@@ -306,27 +306,27 @@ Add `VALIDATE-DATA-001` after `TEST-ROOT` using repository Python. Run focused t
 
 **Interfaces:** Consumes Task 2 CLI and matrices in this plan. Produces only PENDING review evidence; no release/seed.
 
-- [ ] **Step 1: Update source registry deterministically**
+- [x] **Step 1: Update source registry deterministically**
 
 Keep 20 IDs/order. Set verification date `2026-07-18`, author `AI-DATA-BACKEND`, status `검수 대기`, reviewer blank. Replace MOVE-01..04 and CERT-01..05 with the exact plus URLs in the source matrix. Narrow TAX-02 title/scope. Do not invent TAX-03/05 plus links.
 
-- [ ] **Step 2: Author KB 20 records**
+- [x] **Step 2: Author KB 20 records**
 
 Use 5 records per category and 3..5 generalized questions each. Text must stay within the source matrix, preserve conditional documents/fees/times, and place personal lookup/legal/application limitations in `caution`. No contact number is copied into KB free text.
 
-- [ ] **Step 3: Author offices and 12 mappings**
+- [x] **Step 3: Author offices and 12 mappings**
 
 Use the exact office/mapping matrix. All 12 candidates remain in staging; packet recommends 10 APPROVE and 2 REJECT. `map_url` uses the three official-page-provided Kakao links but provenance stays on sejong.go.kr.
 
-- [ ] **Step 4: Prepare manifest and run validation**
+- [x] **Step 4: Prepare manifest and run validation**
 
 Run `prepare`, then `validate` twice. The second report and three hashes must be byte-identical to the first; counts 20/3/12, initial projection 19/3/10, issues 0, warning exactly `PM_REVIEW_REQUIRED`.
 
-- [ ] **Step 5: Generate PM packet and lineage**
+- [x] **Step 5: Generate PM packet and lineage**
 
 Packet lists every record ID, service/office/mapping label, source link, verified date, safe-scope summary and recommended disposition. It clearly labels all content `미승인 DRAFT`, highlights WASTE-03 WITHHOLD and two mapping REJECT rows, and provides blank PM comment/check boxes. It must not claim PM approval.
 
-- [ ] **Step 6: Commit data draft**
+- [x] **Step 6: Commit data draft**
 
 Run focused/root tests, validator, secret scan, `git diff --check`; commit `data: prepare DATA-001 PM review package`.
 
@@ -395,9 +395,10 @@ Complete 6W1H note, actual commands/results, versions, security/data/rollback/ha
 - 2026-07-18: `codex/data-001-staging-review` worktree baseline full gate PASS; Task 0 complete.
 - 2026-07-18: Task 1 schemas/validator TDD complete; independent review found and fixed malformed-ID value exposure, boolean/integer equality, and unenforced numeric minimum. Re-review Spec PASS / Quality PASS at `a21f4fe`.
 - 2026-07-18: Task 2 cross-file/privacy/source/hash/CLI gate complete. Independent review cycles closed one Critical and four Important findings, including Task 3 registry compatibility; final Spec PASS / Quality PASS at `327dab2` with 35 focused tests PASS.
+- 2026-07-18: Task 3 DRAFT 20/3/12 and 35-row PM packet complete. Review corrected truthful submission provenance and canonical JSON bytes; final Spec PASS / Quality PASS at `f7b9157`, validator issues 0 with `PM_REVIEW_REQUIRED` only.
 
 ## 결과와 회고
 
 - 실제 결과: In Progress.
-- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했다. 기존 root child-timeout test의 환경 hang은 최종 검증에서 재확인한다.
-- 다음 단계: Task 3 source-verified DRAFT artifacts and PM packet.
+- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했고 Task 3에서 실제 제출 시각과 canonical JSON 바이트를 바로잡았다. 기존 root child-timeout test의 환경 hang은 최종 검증에서 재확인한다.
+- 다음 단계: Task 4 governance/version/final evidence and PM handoff.
