@@ -29,7 +29,13 @@ CANONICAL_KB_CATEGORIES = {
     "TAX": "LOCAL_TAX_GENERAL",
     "WASTE": "BULKY_WASTE",
 }
-SOURCE_REGISTRY_COLUMNS = ("kb_id", "공식 출처명", "제공기관", "URL", "확인일")
+SOURCE_REGISTRY_COLUMNS = (
+    "kb_id", "분야", "세부 주제", "공식 출처명", "제공기관", "URL", "확인일",
+    "사용 필드", "작성 상태", "작성자", "검수자", "한계·주의",
+)
+SOURCE_REGISTRY_REQUIRED_METADATA = tuple(
+    column for column in SOURCE_REGISTRY_COLUMNS if column != "검수자"
+)
 ALLOWED_SOURCE_HOSTS = frozenset({
     "plus.gov.kr",
     "www.law.go.kr",
@@ -409,8 +415,18 @@ def _load_source_registry(path: Path, issues: list[ValidationIssue]) -> dict[str
         if record_id in registry:
             _issue(issues, "SOURCE_REGISTRY_DUPLICATE_ID", "kb_source_registry.csv", record_id, "kb_id")
             continue
-        if any(not isinstance(row.get(column), str) or not row[column].strip() for column in SOURCE_REGISTRY_COLUMNS):
+        if any(
+            not isinstance(row.get(column), str) or not row[column].strip()
+            for column in SOURCE_REGISTRY_REQUIRED_METADATA
+        ):
             _issue(issues, "SOURCE_REGISTRY_METADATA_REQUIRED", "kb_source_registry.csv", record_id, None)
+        if (
+            row.get("확인일") != "2026-07-18"
+            or row.get("작성 상태") != "검수 대기"
+            or row.get("작성자") != "AI-DATA-BACKEND"
+            or row.get("검수자") != ""
+        ):
+            _issue(issues, "SOURCE_REGISTRY_PENDING_METADATA", "kb_source_registry.csv", record_id, None)
         registry[record_id] = row
     if identifiers != list(CANONICAL_KB_IDS):
         _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")

@@ -388,14 +388,16 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
 
     def source_registry(self, directory: Path) -> Path:
         registry = directory / "kb_source_registry.csv"
-        rows = ["kb_id,공식 출처명,제공기관,URL,확인일"]
+        rows = [
+            "kb_id,분야,세부 주제,공식 출처명,제공기관,URL,확인일,사용 필드,작성 상태,작성자,검수자,한계·주의"
+        ]
         for record_id in sorted(record["id"] for record in (self.valid_kb(number) for number in range(1, 21))):
             number = next(
                 number for number in range(1, 21)
                 if self.valid_kb(number)["id"] == record_id
             )
             rows.append(
-                f"{record_id},공식 민원 안내,정부24,https://plus.gov.kr/service/{number},2026-07-18"
+                f"{record_id},분야,세부 주제,공식 민원 안내,정부24,https://plus.gov.kr/service/{number},2026-07-18,사용 필드,검수 대기,AI-DATA-BACKEND,,한계"
             )
         registry.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
         return registry
@@ -705,12 +707,40 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             registry = self.source_registry(Path(temporary_directory))
             registry.write_text(
                 registry.read_text(encoding="utf-8").replace(
-                    "kb_id,공식 출처명,제공기관,URL,확인일", "kb_id,공식 출처명,제공기관,URL,extra"
+                    "kb_id,분야,세부 주제,공식 출처명,제공기관,URL,확인일,사용 필드,작성 상태,작성자,검수자,한계·주의",
+                    "kb_id,분야,세부 주제,공식 출처명,제공기관,URL,확인일,사용 필드,작성 상태,작성자,검수자,extra",
                 ).replace("정부24", "", 1),
                 encoding="utf-8", newline="\n",
             )
             codes = self.codes(self.validate(directory, registry))
             self.assertTrue({"SOURCE_REGISTRY_COLUMN_SET", "SOURCE_REGISTRY_METADATA_REQUIRED"} <= codes)
+
+    def test_task3_shaped_source_registry_requires_pending_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            self.assertTrue(self.validate(directory, registry)["valid"])
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace("검수 대기", "작성 완료", 1)
+                .replace("AI-DATA-BACKEND", "", 1),
+                encoding="utf-8", newline="\n",
+            )
+            codes = self.codes(self.validate(directory, registry))
+            self.assertIn("SOURCE_REGISTRY_PENDING_METADATA", codes)
+
+    def test_task3_registry_reordered_header_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace(
+                    "분야,세부 주제", "세부 주제,분야", 1
+                ),
+                encoding="utf-8", newline="\n",
+            )
+            self.assertIn(
+                "SOURCE_REGISTRY_COLUMN_SET", self.codes(self.validate(directory, registry))
+            )
 
 
 if __name__ == "__main__":
