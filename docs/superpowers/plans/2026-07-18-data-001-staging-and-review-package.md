@@ -254,7 +254,7 @@ Run focused unittest, root unittest discovery, secret scan, `git diff --check`; 
 
 **Interfaces:** Consumes Task 1 schema helpers. Produces `build_pending_manifest`, `validate_staging`, stable CLI and report.
 
-- [ ] **Step 1: Write RED business-rule tests**
+- [x] **Step 1: Write RED business-rule tests**
 
 Create temporary complete 20/3/12 fixtures and independently mutate them. Exact tests/rules:
 
@@ -272,17 +272,17 @@ RUNTIME_STAGING_REFERENCE
 
 Privacy tests must prove a resident number, personal mobile, email, vehicle plate, detailed residential unit, and secret token are rejected while official office `044` telephone and office address fields pass.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Expected: missing `validate_staging`/CLI behavior failures.
 
-- [ ] **Step 3: Implement fail-closed business validation**
+- [x] **Step 3: Implement fail-closed business validation**
 
 Allowed source hosts are exactly `plus.gov.kr`, `www.law.go.kr`, `law.go.kr`, `www.sjwaste.kr`, `www.wetax.go.kr`, `www.gov.kr`, `www.sejong.go.kr`. Only office `phone`/`address` fields may bypass personal-contact patterns. `map_url` may use `place.map.kakao.com` but never establishes provenance.
 
 Static runtime-reference scan covers `apps/`, `packages/`, `supabase/seed.sql`, `supabase/migrations/`, and `database/`; comments mentioning the boundary are ignored, imports/path literals referring to `data/staging/` fail.
 
-- [ ] **Step 4: Implement manifest preparation and CLI**
+- [x] **Step 4: Implement manifest preparation and CLI**
 
 ```powershell
 python -B scripts/validate_data_staging.py prepare --draft-dir data/staging/data-001/0.1.0-draft.1 --submitted-at 2026-07-18T18:00:00+09:00
@@ -291,7 +291,7 @@ python -B scripts/validate_data_staging.py validate --draft-dir data/staging/dat
 
 `prepare` hashes only three content files and atomically writes PENDING manifest. `validate` does not mutate staging. Success prints exactly `[PASS] step=VALIDATE-DATA-001`; failure prints issue code counts only and exits 1; usage error exits 2.
 
-- [ ] **Step 5: Add root gate and verify GREEN**
+- [x] **Step 5: Add root gate and verify GREEN**
 
 Add `VALIDATE-DATA-001` after `TEST-ROOT` using repository Python. Run focused tests plus `scripts/verify.ps1`; commit `feat(data): enforce DATA-001 review boundary`.
 
@@ -394,9 +394,10 @@ Complete 6W1H note, actual commands/results, versions, security/data/rollback/ha
 - 2026-07-18: 네 독립 source audit에서 신규 A/Blocker 0, mapping 10 APPROVE 권고/2 REJECT 권고 확인.
 - 2026-07-18: `codex/data-001-staging-review` worktree baseline full gate PASS; Task 0 complete.
 - 2026-07-18: Task 1 schemas/validator TDD complete; independent review found and fixed malformed-ID value exposure, boolean/integer equality, and unenforced numeric minimum. Re-review Spec PASS / Quality PASS at `a21f4fe`.
+- 2026-07-18: Task 2 cross-file/privacy/source/hash/CLI gate complete. Independent review cycles closed one Critical and four Important findings, including Task 3 registry compatibility; final Spec PASS / Quality PASS at `327dab2` with 35 focused tests PASS.
 
 ## 결과와 회고
 
 - 실제 결과: In Progress.
-- 계획과 달라진 점: Task 1 독립 리뷰에서 값 비노출·JSON 타입 비교·manifest 음수 건수 검증을 강화했다.
-- 다음 단계: Task 2 cross-file/privacy/source/hash validation CLI.
+- 계획과 달라진 점: Task 1·2 독립 리뷰에서 값 비노출, 검증 우회, 경로 쓰기 경계, canonical source registry 계약을 강화했다. 기존 root child-timeout test의 환경 hang은 최종 검증에서 재확인한다.
+- 다음 단계: Task 3 source-verified DRAFT artifacts and PM packet.
