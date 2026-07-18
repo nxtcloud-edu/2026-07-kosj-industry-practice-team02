@@ -9,7 +9,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
+import scripts.data_staging_validation as validation
+import scripts.validate_data_staging as staging_cli_module
 from scripts.data_staging_validation import (
     ValidationIssue,
     build_pending_manifest,
@@ -19,10 +22,23 @@ from scripts.data_staging_validation import (
     validate_schema,
     write_json,
 )
-from scripts.validate_data_staging import main as data_staging_cli
 
 
 SCHEMA_DIR = Path("data/schemas/data-001/v1")
+
+
+def data_staging_cli(argv: list[str]) -> int:
+    """Run production path checks against an isolated internal fixture boundary."""
+    try:
+        draft = Path(argv[argv.index("--draft-dir") + 1]).resolve()
+        registry = Path(argv[argv.index("--source-registry") + 1]).resolve()
+    except (ValueError, IndexError):
+        return staging_cli_module.main(argv)
+    with (
+        mock.patch.object(staging_cli_module, "CANONICAL_DRAFT_DIR", draft),
+        mock.patch.object(staging_cli_module, "DEFAULT_SOURCE_REGISTRY", registry),
+    ):
+        return staging_cli_module.main(argv)
 
 
 class DataStagingSchemaValidationTests(unittest.TestCase):
@@ -564,25 +580,32 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             runtime_reference = Path("apps") / "data_staging_boundary_test.py"
             runtime_reference.write_text('path = "data/staging/data-001"\n', encoding="utf-8")
             try:
-                self.assertIn("RUNTIME_STAGING_REFERENCE", self.codes(self.validate(directory, registry)))
+                issues: list[ValidationIssue] = []
+                validation._scan_runtime_files(
+                    [runtime_reference], Path.cwd(), issues
+                )
+                self.assertIn("RUNTIME_STAGING_REFERENCE", {issue.code for issue in issues})
             finally:
                 runtime_reference.unlink(missing_ok=True)
             cli = Path("scripts/validate_data_staging.py")
-            failed = subprocess.run(
-                [sys.executable, "-B", str(cli), "validate", "--draft-dir", str(directory), "--source-registry", str(registry)],
+            passed = subprocess.run(
+                [
+                    sys.executable, "-B", str(cli), "validate", "--draft-dir",
+                    "data/staging/data-001/0.1.0-draft.1",
+                ],
                 text=True, capture_output=True, check=False,
             )
-            self.assertEqual(0, failed.returncode)
-            self.assertEqual("[PASS] step=VALIDATE-DATA-001\n", failed.stdout)
-            invalid = load_json_object(directory / "kb_records.json")
-            invalid["records"] = []
-            write_json(directory / "kb_records.json", invalid)
+            self.assertEqual(0, passed.returncode)
+            self.assertEqual("[PASS] step=VALIDATE-DATA-001\n", passed.stdout)
             failed = subprocess.run(
                 [sys.executable, "-B", str(cli), "validate", "--draft-dir", str(directory), "--source-registry", str(registry)],
                 text=True, capture_output=True, check=False,
             )
             self.assertEqual(1, failed.returncode)
-            self.assertRegex(failed.stdout, r"^\[FAIL\] step=VALIDATE-DATA-001 issues=.+\n$")
+            self.assertEqual(
+                "[FAIL] step=VALIDATE-DATA-001 issues=PATH_BOUNDARY_INVALID:1\n",
+                failed.stdout,
+            )
             self.assertNotIn("공식", failed.stdout)
             usage = subprocess.run(
                 [sys.executable, "-B", str(cli), "validate"],
@@ -602,7 +625,11 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             records[0]["phone"] = "token=private-value mock"
             records[0]["address"] = "secret=private-value 시연용 샘플"
             write_json(directory / "offices.json", offices)
-            issues = self.validate(directory, registry)["issues"]
+            report = self.validate(directory, registry)
+            issues = report["issues"]
+            report_text = json.dumps(report, ensure_ascii=False)
+            self.assertNotIn("token=private-value", report_text)
+            self.assertNotIn("secret=private-value", report_text)
             codes_by_field = {
                 issue["field"]: issue["code"] for issue in issues
                 if issue["artifact"] == "offices.json"
@@ -1085,6 +1112,214 @@ class DataStagingBusinessValidationTests(unittest.TestCase):
             "--source-registry", "data/official/kb_source_registry.csv",
         ]))
         self.assertEqual(before, manifest_path.read_bytes())
+
+
+class DataStagingFinalRemediationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.fixture = DataStagingBusinessValidationTests()
+
+    def complete_draft(self, directory: Path) -> Path:
+        return self.fixture.complete_draft(directory)
+
+    def source_registry(self, directory: Path) -> Path:
+        return self.fixture.source_registry(directory)
+
+    def validate(self, draft_dir: Path, registry: Path) -> dict[str, object]:
+        return self.fixture.validate(draft_dir, registry)
+
+    def codes(self, report: dict[str, object]) -> set[str]:
+        return self.fixture.codes(report)
+
+    def test_unknown_property_issue_never_contains_untrusted_member_name(self) -> None:
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {},
+        }
+        issues = validate_schema(
+            {"citizen_private_email": "person@example.com"}, schema, "artifact.json"
+        )
+        self.assertEqual(1, len(issues))
+        serialized = json.dumps(asdict(issues[0]), ensure_ascii=False)
+        self.assertNotIn("citizen_private_email", serialized)
+        self.assertEqual("<unknown-property>", issues[0].field)
+
+    def test_duplicate_json_member_and_noncanonical_artifact_bytes_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            duplicate = Path(temporary_directory) / "duplicate.json"
+            duplicate.write_text('{"schema_version": 1, "schema_version": 2}\n', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                load_json_object(duplicate)
+
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            artifact = directory / "kb_records.json"
+            artifact.write_bytes(artifact.read_bytes() + b" ")
+            self.assertIn("JSON_NOT_CANONICAL", self.codes(self.validate(directory, registry)))
+
+    def test_schema_meta_validation_rejects_an_unsupported_keyword(self) -> None:
+        issues = validate_schema(
+            {},
+            {"type": "object", "properties": {}, "unevaluatedProperties": False},
+            "artifact.json",
+        )
+        self.assertIn("SCHEMA_UNSUPPORTED_KEYWORD", {issue.code for issue in issues})
+
+    def test_manifest_registry_and_unapproved_office_contact_are_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            manifest = load_json_object(directory / "approval_manifest.json")
+            manifest["review_comment"] = "person@example.com"
+            manifest["unique.person.9827@example.invalid"] = "person@example.com"
+            write_json(directory / "approval_manifest.json", manifest)
+            registry.write_text(
+                registry.read_text(encoding="utf-8").replace("한계\n", "연락 010-1234-5678\n", 1),
+                encoding="utf-8",
+                newline="\n",
+            )
+            report = self.validate(directory, registry)
+            issues = report["issues"]
+            report_text = json.dumps(report, ensure_ascii=False)
+            self.assertNotIn("person@example.com", report_text)
+            self.assertNotIn("010-1234-5678", report_text)
+            self.assertNotIn("unique.person.9827@example.invalid", report_text)
+            pii_artifacts = {
+                issue["artifact"] for issue in issues if issue["code"] == "PII_DETECTED"
+            }
+            self.assertTrue(
+                {"approval_manifest.json", "kb_source_registry.csv"}
+                <= pii_artifacts
+            )
+            matrix = load_json_object(SCHEMA_DIR / "approved-source-matrix.json")
+            offices = load_json_object(
+                Path("data/staging/data-001/0.1.0-draft.1/offices.json")
+            )["records"]
+            contact_issues: list[ValidationIssue] = []
+            validation._validate_text_safety(
+                offices,
+                "offices.json",
+                contact_issues,
+                office_public_contacts=validation._approved_office_public_contacts(matrix),
+            )
+            self.assertNotIn("PII_DETECTED", {issue.code for issue in contact_issues})
+            contact_issues = []
+            offices[0]["phone"] = "010-1234-5678"
+            validation._validate_text_safety(
+                offices,
+                "offices.json",
+                contact_issues,
+                office_public_contacts=validation._approved_office_public_contacts(matrix),
+            )
+            self.assertIn("PII_DETECTED", {issue.code for issue in contact_issues})
+
+    def test_privacy_policy_high_signal_identifiers_are_value_free(self) -> None:
+        values = (
+            "900101-5234567",
+            "M12345678",
+            "11-22-123456-78",
+            "1234-5678-9012-3456",
+            "계좌번호 123-456-789012",
+            "01012345678",
+            "person@example.com",
+            "12가3456",
+            "접수번호 SJ-2026-123456",
+            "인증번호 123456",
+            "세종시 보듬로 1 101동 1001호",
+            "제 이름은 김민수",
+            "제 질환: 비공개",
+            "위도=36.50000, 경도=127.25000",
+        )
+        for index, value in enumerate(values):
+            with self.subTest(index=index):
+                issues: list[ValidationIssue] = []
+                validation._validate_text_safety(
+                    [{"id": "KB-MOVE-01", "answer_summary": value}],
+                    "kb_records.json",
+                    issues,
+                )
+                self.assertIn("PII_DETECTED", {issue.code for issue in issues})
+                serialized = json.dumps([asdict(issue) for issue in issues], ensure_ascii=False)
+                self.assertNotIn(value, serialized)
+
+    def test_runtime_scan_detects_case_comment_concat_and_config_split_bypasses(self) -> None:
+        self.assertTrue(validation._is_runtime_or_operations_file("supabase/config.toml"))
+        self.assertTrue(validation._is_runtime_or_operations_file("ops/deploy.ps1"))
+        scanner = getattr(validation, "_scan_runtime_files", None)
+        self.assertTrue(callable(scanner))
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            samples = {
+                "upper.py": 'PATH = "DATA\\\\STAGING\\\\x"\n',
+                "comment.py": '/* comment */ path = "data/staging/x"\n',
+                "concat.py": 'path = "data" + "/staging/x"\n',
+                "config.toml": 'data_root = "data"\nstage_dir = "staging"\n',
+            }
+            files = []
+            for name, content in samples.items():
+                path = root / name
+                path.write_text(content, encoding="utf-8")
+                files.append(path)
+            issues: list[ValidationIssue] = []
+            scanner(files, root, issues)
+            self.assertEqual(set(samples), {issue.artifact for issue in issues})
+            self.assertTrue(all(issue.code == "RUNTIME_STAGING_REFERENCE" for issue in issues))
+
+    def test_production_cli_rejects_noncanonical_inputs_and_reparse_components(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = self.complete_draft(Path(temporary_directory) / "draft")
+            registry = self.source_registry(Path(temporary_directory))
+            self.assertEqual(1, staging_cli_module.main([
+                "validate", "--draft-dir", str(directory),
+                "--source-registry", str(registry),
+            ]))
+
+            target = Path(temporary_directory) / "target"
+            target.mkdir()
+            alias = Path(temporary_directory) / "alias"
+            try:
+                alias.symlink_to(target, target_is_directory=True)
+            except OSError as error:
+                junction = subprocess.run(
+                    ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(target)],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                if junction.returncode != 0:
+                    self.skipTest(f"link unavailable: {type(error).__name__}")
+            try:
+                self.assertTrue(staging_cli_module._has_reparse_component(alias / "child.json"))
+            finally:
+                alias.rmdir()
+
+    def test_canonical_source_matrix_detects_content_and_audit_hash_drift(self) -> None:
+        matrix_path = SCHEMA_DIR / "approved-source-matrix.json"
+        matrix = load_json_object(matrix_path)
+        kb = load_json_object(Path("data/staging/data-001/0.1.0-draft.1/kb_records.json"))
+        offices = load_json_object(Path("data/staging/data-001/0.1.0-draft.1/offices.json"))
+        mappings = load_json_object(
+            Path("data/staging/data-001/0.1.0-draft.1/office_service_mappings.json")
+        )
+        rows = validation._load_source_registry_rows(
+            Path("data/official/kb_source_registry.csv")
+        )
+        kb["records"][0]["source_url"] = "https://plus.gov.kr/allowed-but-unapproved"
+        issues: list[ValidationIssue] = []
+        validation._validate_approved_source_matrix(
+            kb["records"], offices["records"], mappings["records"], rows, matrix, issues
+        )
+        self.assertIn("SOURCE_MATRIX_MISMATCH", {issue.code for issue in issues})
+
+        matrix["source_audits"][0]["sha256"] = "0" * 64
+        issues = []
+        validation._validate_source_audit_hashes(matrix, issues)
+        self.assertIn("SOURCE_AUDIT_HASH_MISMATCH", {issue.code for issue in issues})
+
+    def test_root_verify_cannot_skip_missing_canonical_staging(self) -> None:
+        verify = Path("scripts/verify.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("VALIDATE-DATA-001 staging-absent", verify)
+        self.assertIn("DATA-001 canonical marker/schema", verify)
 
 
 if __name__ == "__main__":

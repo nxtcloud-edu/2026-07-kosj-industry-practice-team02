@@ -393,6 +393,18 @@ Completed 6W1H note, actual commands/results, versions, security/data/rollback/h
 
 ## 진행 기록
 
+### Final Remediation 2 — canonical staging trust boundary
+
+- [x] 개인정보·비밀·mock 검사를 manifest/registry/content의 모든 문자열에 적용하고, unknown property 보고는 고정 안전 경로만 사용한다. 기관 공개 연락처 예외는 추적된 승인 매트릭스의 exact `(office id, field, value)`에만 허용한다.
+- [x] production CLI의 prepare/validate/migrate 입력을 canonical draft/registry로 고정하고, 입력·schema·승인 매트릭스의 symlink/junction/reparse 구성요소를 읽기 전에 거부한다. report는 canonical processed 경계에만 쓴다.
+- [x] root verify는 canonical marker/schema 존재를 필수로 확인하고 staging 검증을 생략하지 않는다.
+- [x] tracked runtime/operations code와 config 전체를 대소문자·slash·공백·문자열 결합 우회까지 fail-closed로 검사하며, validator/CLI/tests/root gate만 exact allowlist로 둔다.
+- [x] 네 source audit의 개인정보 없는 tracked 요약과 hash-bound 승인 source matrix를 추가하고 KB/office/mapping/registry를 exact 비교한다.
+- [x] duplicate JSON member, 네 artifact canonical bytes, schema 지원 keyword meta-validation을 TDD로 강제한다.
+- [x] `TASKS.md`의 DATA-001 상태는 `Review`로 정규화하고 AI 완료/PM pending을 상세에 남긴다. lineage와 구현 노트의 재현·인계 경로를 tracked 근거로 갱신한다.
+
+검증 체크포인트: 각 finding의 focused RED→GREEN, 전체 staging unittest, canonical validate 연속 2회와 report 결정성, JSON/CSV/schema/audit hash, secret/package/runtime/path 검사, PowerShell parser, `git diff --check`. 공식 release/seed/DB/API/product/version closeout은 변경하지 않는다.
+
 - 2026-07-18: Q-DATA-002=A, D-033/ADR-0015 승인.
 - 2026-07-18: 사용자가 written spec을 승인하고 사람 작업 KEEP, 나머지 연속 진행, AI data draft 후 사용자 검토를 지시.
 - 2026-07-18: 네 독립 source audit에서 신규 A/Blocker 0, mapping 10 APPROVE 권고/2 REJECT 권고 확인.

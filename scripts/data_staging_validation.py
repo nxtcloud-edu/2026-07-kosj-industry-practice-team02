@@ -7,8 +7,11 @@ from datetime import date, datetime
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import stat
+import subprocess
 from typing import Mapping, Sequence
 from urllib.parse import urlparse
 
@@ -17,6 +20,11 @@ CONTENT_ARTIFACTS = (
     "kb_records.json",
     "offices.json",
     "office_service_mappings.json",
+)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_DRAFT_DIR = REPOSITORY_ROOT / "data" / "staging" / "data-001" / "0.1.0-draft.1"
+CANONICAL_SOURCE_MATRIX = (
+    REPOSITORY_ROOT / "data" / "schemas" / "data-001" / "v1" / "approved-source-matrix.json"
 )
 CANONICAL_KB_IDS = tuple(
     f"KB-{category}-{number:02d}"
@@ -36,6 +44,18 @@ SOURCE_REGISTRY_COLUMNS = (
 SOURCE_REGISTRY_REQUIRED_METADATA = tuple(
     column for column in SOURCE_REGISTRY_COLUMNS if column != "검수자"
 )
+_SAFE_REPORT_FIELD_COMPONENTS = frozenset({
+    "address", "answer_summary", "approved_at", "approved_by", "artifacts",
+    "category", "caution", "comment", "created_by", "data_origin", "dataset_id",
+    "decision", "decisions", "department", "department_label", "draft_version",
+    "evidence_source_url", "fee", "headers", "id", "intent", "last_verified_at",
+    "map_url", "office_name", "office_public_id", "opening_hours", "path", "phone",
+    "procedure_steps", "provider", "public_id", "question_examples", "record_count",
+    "record_id", "record_type", "recommended_decision", "records", "region",
+    "required_documents", "review_comment", "reviewed_at", "reviewed_by", "rows",
+    "schema_version", "service_name", "sha256", "source_service_id", "source_title",
+    "source_url", "state", "status", "submitted_at", "processing_time",
+}) | frozenset(SOURCE_REGISTRY_COLUMNS)
 ALLOWED_SOURCE_HOSTS = frozenset({
     "plus.gov.kr",
     "www.law.go.kr",
@@ -52,11 +72,23 @@ SUPPORTED_INTENTS = frozenset({
     "LOCAL_TAX_GENERAL",
 })
 _PII_PATTERNS = (
-    re.compile(r"\b\d{6}-?[1-4]\d{6}\b"),
-    re.compile(r"\b01[016789]-?\d{3,4}-?\d{4}\b"),
+    re.compile(r"\b\d{6}[- ]?[1-8]\d{6}\b"),
+    re.compile(r"\b01[016789][ -]?\d{3,4}[ -]?\d{4}\b"),
+    re.compile(r"\b0(?:2|[3-8][0-9])[ -]?\d{3,4}[ -]?\d{4}\b"),
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     re.compile(r"\b\d{2,3}[가-힣]\d{4}\b"),
     re.compile(r"\b\d{1,4}동\s*\d{1,4}호\b"),
+    re.compile(r"\b\d{2}-\d{2}-\d{6}-\d{2}\b"),
+    re.compile(r"\b[A-Z]{1,2}\d{7,8}\b"),
+    re.compile(r"\b(?:\d{4}[- ]?){3}\d{4}\b"),
+    re.compile(r"(?i)(?:계좌|account)\s*(?:번호|no\.?|[:=])?\s*\d[\d -]{8,18}\d"),
+    re.compile(r"(?:인증번호|인증\s*코드)\s*[:=]?\s*\d{4,8}"),
+    re.compile(r"(?i)(?:접수|민원|receipt|case)\s*(?:번호|no\.?)?\s*[:=]?\s*[A-Z]{0,4}[- ]?\d[\d-]{5,}"),
+    re.compile(r"\b[A-Z]{2,4}-\d{4}-\d{4,8}\b"),
+    re.compile(r"(?:저는|제\s*이름은|이름은|성명은)\s*[가-힣]{2,4}\b"),
+    re.compile(r"(?:이름|성명)\s*[:=]\s*[가-힣]{2,4}\b"),
+    re.compile(r"(?:제|나의)\s*(?:질환|병력|장애|수급자격|건강정보)\s*[:=]?\s*\S+"),
+    re.compile(r"(?i)(?:lat(?:itude)?|위도)\s*[:=]\s*3[3-9]\.\d{4,}.{0,80}(?:lon(?:gitude)?|경도)\s*[:=]\s*12[4-8]\.\d{4,}"),
 )
 _SECRET_PATTERN = re.compile(
     r"(?i)(?:\b(?:api[_-]?key|secret|token|password)\s*[:=]|\bsk-[A-Za-z0-9_-]+)"
@@ -64,6 +96,22 @@ _SECRET_PATTERN = re.compile(
 _MOCK_PATTERN = re.compile(r"(?i)(?:\bmock\b|시연용\s*샘플)")
 _KB_ID_PATTERN = r"KB-(?:MOVE|CERT|WASTE|TAX)-[0-9]{2}"
 _OFFICE_ID_PATTERN = r"OFFICE-(?:AREUM|DODAM|JOCHIWON)"
+_SUPPORTED_SCHEMA_KEYWORDS = frozenset({
+    "$schema", "additionalProperties", "const", "enum", "format", "items",
+    "maxItems", "maxLength", "minimum", "minItems", "minLength", "pattern",
+    "properties", "required", "title", "type", "uniqueItems",
+})
+_RUNTIME_ALLOWLIST = frozenset({
+    "scripts/data_staging_validation.py",
+    "scripts/tests/test_data_staging_validation.py",
+    "scripts/validate_data_staging.py",
+    "scripts/verify.ps1",
+})
+_RUNTIME_SUFFIXES = frozenset({
+    ".bat", ".cjs", ".cmd", ".env", ".js", ".json", ".mjs", ".ps1",
+    ".psd1", ".psm1", ".py", ".sh", ".sql", ".toml", ".ts", ".tsx",
+    ".yaml", ".yml",
+})
 
 
 @dataclass(frozen=True, order=True)
@@ -78,7 +126,17 @@ class ValidationIssue:
 
 def load_json_object(path: Path) -> dict[str, object]:
     """Load a JSON object without accepting arrays or scalar roots."""
-    value = json.loads(path.read_text(encoding="utf-8"))
+    def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, item in pairs:
+            if key in result:
+                raise ValueError("JSON_DUPLICATE_MEMBER")
+            result[key] = item
+        return result
+
+    value = json.loads(
+        path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates
+    )
     if not isinstance(value, dict):
         raise ValueError("JSON_ROOT_MUST_BE_OBJECT")
     return value
@@ -96,8 +154,13 @@ def sha256_file(path: Path) -> str:
 def write_json(path: Path, value: object) -> None:
     """Write canonical UTF-8 JSON used by DATA-001 staging artifacts."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
-    path.write_text(f"{serialized}\n", encoding="utf-8", newline="\n")
+    path.write_bytes(_canonical_json_bytes(value))
+
+
+def _canonical_json_bytes(value: object) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
 
 
 def build_pending_manifest(draft_dir: Path, submitted_at: str) -> dict[str, object]:
@@ -135,6 +198,15 @@ def validate_staging(
     """Return a value-free deterministic validation report for one DATA-001 draft."""
     issues: list[ValidationIssue] = []
     artifacts: dict[str, dict[str, object]] = {}
+    canonical_run = _same_resolved_path(draft_dir, CANONICAL_DRAFT_DIR)
+    approved_matrix: dict[str, object] | None = None
+    if canonical_run:
+        try:
+            approved_matrix = load_json_object(CANONICAL_SOURCE_MATRIX)
+            if CANONICAL_SOURCE_MATRIX.read_bytes() != _canonical_json_bytes(approved_matrix):
+                _issue(issues, "SOURCE_MATRIX_NOT_CANONICAL", "approved-source-matrix.json", None, None)
+        except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+            _issue(issues, "SOURCE_MATRIX_LOAD_ERROR", "approved-source-matrix.json", None, None)
     schemas = {
         "kb_records.json": "kb-records.schema.json",
         "offices.json": "offices.schema.json",
@@ -153,9 +225,11 @@ def validate_staging(
             continue
         try:
             artifacts[artifact] = load_json_object(draft_dir / artifact)
-        except (OSError, ValueError, json.JSONDecodeError):
+        except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
             _issue(issues, "ARTIFACT_MISSING", artifact, None, None)
             continue
+        if (draft_dir / artifact).read_bytes() != _canonical_json_bytes(artifacts[artifact]):
+            _issue(issues, "JSON_NOT_CANONICAL", artifact, None, None)
         try:
             schema = load_json_object(schema_dir / schema_name)
         except (OSError, ValueError, json.JSONDecodeError):
@@ -180,10 +254,39 @@ def validate_staging(
     _validate_records(office_records, "offices.json", "public_id", issues)
     _validate_mappings(mapping_records, office_records, issues)
     _validate_kb_draft_metadata(kb_records, issues)
-    _validate_sources(kb_records, office_records, mapping_records, source_registry, issues)
+    registry, registry_fieldnames = _validate_sources(
+        kb_records, office_records, mapping_records, source_registry, issues
+    )
     _validate_text_safety(kb_records, "kb_records.json", issues)
-    _validate_text_safety(office_records, "offices.json", issues, {"phone", "address"})
+    if approved_matrix is None:
+        _validate_text_safety(
+            office_records, "offices.json", issues,
+            fixture_allowed_fields={"phone", "address"},
+        )
+    else:
+        _validate_text_safety(
+            office_records,
+            "offices.json",
+            issues,
+            office_public_contacts=_approved_office_public_contacts(approved_matrix),
+        )
     _validate_text_safety(mapping_records, "office_service_mappings.json", issues)
+    manifest = artifacts.get("approval_manifest.json")
+    if isinstance(manifest, dict):
+        _validate_text_safety([manifest], "approval_manifest.json", issues)
+    _validate_text_safety(
+        [{"headers": list(registry_fieldnames), "rows": list(registry.values())}],
+        "kb_source_registry.csv",
+        issues,
+    )
+    if approved_matrix is not None:
+        _validate_approved_source_matrix(
+            kb_records, office_records, mapping_records, list(registry.values()),
+            approved_matrix, issues,
+        )
+        _validate_source_registry_hash(source_registry, approved_matrix, issues)
+        _validate_source_audit_hashes(approved_matrix, issues)
+        _validate_content_artifact_hashes(draft_dir, approved_matrix, issues)
     _validate_manifest(
         artifacts.get("approval_manifest.json"), draft_dir, kb_records, office_records,
         mapping_records, issues,
@@ -382,7 +485,7 @@ def _validate_sources(
     kb_records: list[dict[str, object]], offices: list[dict[str, object]],
     mappings: list[dict[str, object]], source_registry: Path,
     issues: list[ValidationIssue],
-) -> None:
+) -> tuple[dict[str, dict[str, str]], tuple[str, ...]]:
     for artifact, records, id_field, url_field in (
         ("kb_records.json", kb_records, "id", "source_url"),
         ("offices.json", offices, "public_id", "source_url"),
@@ -396,7 +499,7 @@ def _validate_sources(
             map_url = record.get("map_url")
             if map_url is not None and not _has_allowed_map_host(map_url):
                 _issue(issues, "SOURCE_DOMAIN_NOT_ALLOWED", artifact, record_id, "map_url")
-    registry = _load_source_registry(source_registry, issues)
+    registry, fieldnames = _load_source_registry(source_registry, issues)
     for record in kb_records:
         record_id = record.get("id")
         if not isinstance(record_id, str) or record_id not in registry:
@@ -410,17 +513,25 @@ def _validate_sources(
         )
         if not matches:
             _issue(issues, "SOURCE_METADATA_MISMATCH", "kb_records.json", record_id, "source_url")
+    return registry, fieldnames
 
 
-def _load_source_registry(path: Path, issues: list[ValidationIssue]) -> dict[str, dict[str, str]]:
+def _load_source_registry_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as source:
+        return list(csv.DictReader(source))
+
+
+def _load_source_registry(
+    path: Path, issues: list[ValidationIssue]
+) -> tuple[dict[str, dict[str, str]], tuple[str, ...]]:
     try:
         with path.open("r", encoding="utf-8", newline="") as source:
             reader = csv.DictReader(source)
             fieldnames = tuple(reader.fieldnames or ())
             rows = list(reader)
-    except OSError:
+    except (OSError, UnicodeDecodeError, csv.Error):
         _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
-        return {}
+        return {}, ()
     if fieldnames != SOURCE_REGISTRY_COLUMNS:
         _issue(issues, "SOURCE_REGISTRY_COLUMN_SET", "kb_source_registry.csv", None, None)
     registry: dict[str, dict[str, str]] = {}
@@ -451,7 +562,7 @@ def _load_source_registry(path: Path, issues: list[ValidationIssue]) -> dict[str
         _issue(issues, "SOURCE_REGISTRY_ID_SET", "kb_source_registry.csv", None, "kb_id")
     if identifiers != sorted(identifiers):
         _issue(issues, "SOURCE_REGISTRY_ROW_ORDER", "kb_source_registry.csv", None, "kb_id")
-    return registry
+    return registry, fieldnames
 
 
 def _has_allowed_source_host(value: object) -> bool:
@@ -466,9 +577,11 @@ def _has_allowed_map_host(value: object) -> bool:
 
 def _validate_text_safety(
     records: list[dict[str, object]], artifact: str, issues: list[ValidationIssue],
-    allowed_fields: set[str] | None = None,
+    fixture_allowed_fields: set[str] | None = None,
+    office_public_contacts: set[tuple[str, str, str]] | None = None,
 ) -> None:
-    allowed_fields = allowed_fields or set()
+    fixture_allowed_fields = fixture_allowed_fields or set()
+    office_public_contacts = office_public_contacts or set()
     for record in records:
         record_id = _record_identifier(record)
         for field, value in _text_fields(record):
@@ -477,7 +590,15 @@ def _validate_text_safety(
                 _issue(issues, "SECRET_DETECTED", artifact, record_id, field)
             if _MOCK_PATTERN.search(value):
                 _issue(issues, "MOCK_REFERENCE", artifact, record_id, field)
-            if top_level not in allowed_fields and any(pattern.search(value) for pattern in _PII_PATTERNS):
+            public_contact = (
+                record_id is not None
+                and (record_id, top_level, value) in office_public_contacts
+            )
+            if (
+                top_level not in fixture_allowed_fields
+                and not public_contact
+                and any(pattern.search(value) for pattern in _PII_PATTERNS)
+            ):
                 _issue(issues, "PII_DETECTED", artifact, record_id, field)
 
 
@@ -490,11 +611,20 @@ def _text_fields(value: object, prefix: str | None = None) -> Sequence[tuple[str
             for pair in _text_fields(item, _join(prefix, str(index)))
         ]
     if isinstance(value, dict):
-        return [
-            pair for key, item in value.items() if isinstance(key, str)
-            for pair in _text_fields(item, _join(prefix, key))
+        key_pairs = [
+            (_join(prefix, "<object-key>"), key)
+            for key in value if isinstance(key, str)
         ]
+        value_pairs = [
+            pair for key, item in value.items() if isinstance(key, str)
+            for pair in _text_fields(item, _join(prefix, _safe_field_component(key)))
+        ]
+        return key_pairs + value_pairs
     return []
+
+
+def _safe_field_component(value: str) -> str:
+    return value if value in _SAFE_REPORT_FIELD_COMPONENTS else "<unknown-property>"
 
 
 def _record_identifier(record: Mapping[str, object]) -> str | None:
@@ -793,38 +923,277 @@ def _approved_policy_flags(
     return kb_valid, office_valid, mapping_valid
 
 
-def _validate_runtime_staging_references(issues: list[ValidationIssue]) -> None:
-    repository_root = Path(__file__).resolve().parents[1]
-    paths = [
-        repository_root / "apps",
-        repository_root / "packages",
-        repository_root / "database",
-        repository_root / "supabase" / "seed.sql",
-        repository_root / "supabase" / "migrations",
+def _approved_office_public_contacts(
+    matrix: Mapping[str, object],
+) -> set[tuple[str, str, str]]:
+    contacts: set[tuple[str, str, str]] = set()
+    offices = matrix.get("offices")
+    if not isinstance(offices, list):
+        return contacts
+    for office in offices:
+        if not isinstance(office, dict) or not isinstance(office.get("public_id"), str):
+            continue
+        for field in ("address", "phone"):
+            value = office.get(field)
+            if isinstance(value, str):
+                contacts.add((office["public_id"], field, value))
+    return contacts
+
+
+def _validate_approved_source_matrix(
+    kb_records: list[dict[str, object]],
+    office_records: list[dict[str, object]],
+    mapping_records: list[dict[str, object]],
+    registry_rows: list[dict[str, str]],
+    matrix: Mapping[str, object],
+    issues: list[ValidationIssue],
+) -> None:
+    artifact = "approved-source-matrix.json"
+    if set(matrix) != {
+        "content_artifacts", "draft_version", "kb_records", "mappings", "offices",
+        "schema_version", "source_audits", "source_registry", "verified_at",
+    }:
+        _issue(issues, "SOURCE_MATRIX_MISMATCH", artifact, None, "<matrix-shape>")
+    if (
+        matrix.get("schema_version") != 1
+        or matrix.get("draft_version") != "0.1.0-draft.1"
+        or matrix.get("verified_at") != "2026-07-18"
+    ):
+        _issue(issues, "SOURCE_MATRIX_MISMATCH", artifact, None, None)
+
+    kb_fields = (
+        "category", "id", "last_verified_at", "provider", "source_title", "source_url",
+    )
+    office_fields = (
+        "address", "last_verified_at", "map_url", "office_name", "opening_hours",
+        "phone", "provider", "public_id", "region", "source_title", "source_url",
+    )
+    mapping_fields = (
+        "department_label", "evidence_source_url", "intent", "last_verified_at",
+        "office_public_id",
+    )
+    expected_kb = matrix.get("kb_records")
+    expected_offices = matrix.get("offices")
+    expected_mappings = matrix.get("mappings")
+    actual_kb = [{field: record.get(field) for field in kb_fields} for record in kb_records]
+    actual_offices = [
+        {field: record.get(field) for field in office_fields} for record in office_records
     ]
-    for path in paths:
-        candidates = path.rglob("*") if path.is_dir() else (path,)
-        for candidate in candidates:
-            if {".next", "node_modules", ".venv", "__pycache__"} & set(candidate.parts):
-                continue
-            if not candidate.is_file() or candidate.suffix.lower() not in {
-                ".py", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".sql", ".json", ".toml",
-            }:
-                continue
-            try:
-                lines = candidate.read_text(encoding="utf-8").splitlines()
-            except (OSError, UnicodeDecodeError):
-                continue
-            if any(_is_runtime_staging_reference(line) for line in lines):
-                relative = candidate.relative_to(repository_root).as_posix()
-                _issue(issues, "RUNTIME_STAGING_REFERENCE", relative, None, None)
+    recommendations = {
+        (record_type, record_id): recommendation
+        for record_type, record_id, recommendation in _static_decision_specs()
+    }
+    actual_mappings = []
+    for record in mapping_records:
+        projected = {field: record.get(field) for field in mapping_fields}
+        key = f"{record.get('office_public_id')}:{record.get('intent')}"
+        projected["recommended_decision"] = recommendations.get(("MAPPING", key))
+        actual_mappings.append(projected)
+
+    registry_projection = [
+        {
+            "category": CANONICAL_KB_CATEGORIES.get(row.get("kb_id", "").split("-")[1])
+            if len(row.get("kb_id", "").split("-")) > 1 else None,
+            "id": row.get("kb_id"),
+            "last_verified_at": row.get("확인일"),
+            "provider": row.get("제공기관"),
+            "source_title": row.get("공식 출처명"),
+            "source_url": row.get("URL"),
+        }
+        for row in registry_rows
+    ]
+    for actual, expected, field in (
+        (actual_kb, expected_kb, "kb_records"),
+        (registry_projection, expected_kb, "source_registry"),
+        (actual_offices, expected_offices, "offices"),
+        (actual_mappings, expected_mappings, "mappings"),
+    ):
+        if not _json_equal(actual, expected):
+            _issue(issues, "SOURCE_MATRIX_MISMATCH", artifact, None, field)
 
 
-def _is_runtime_staging_reference(line: str) -> bool:
-    stripped = line.lstrip()
-    if stripped.startswith(("#", "//", "--", "/*", "*")):
+def _validate_source_registry_hash(
+    source_registry: Path,
+    matrix: Mapping[str, object],
+    issues: list[ValidationIssue],
+) -> None:
+    expected = matrix.get("source_registry")
+    if not isinstance(expected, dict) or expected != {
+        "path": "data/official/kb_source_registry.csv",
+        "sha256": expected.get("sha256") if isinstance(expected.get("sha256"), str) else None,
+    }:
+        _issue(issues, "SOURCE_REGISTRY_HASH_MISMATCH", "approved-source-matrix.json", None, "source_registry")
+        return
+    if not _same_resolved_path(source_registry, REPOSITORY_ROOT / expected["path"]):
+        _issue(issues, "SOURCE_REGISTRY_HASH_MISMATCH", "kb_source_registry.csv", None, None)
+        return
+    try:
+        actual = sha256_file(source_registry)
+    except OSError:
+        actual = None
+    if actual != expected["sha256"]:
+        _issue(issues, "SOURCE_REGISTRY_HASH_MISMATCH", "kb_source_registry.csv", None, None)
+
+
+def _validate_source_audit_hashes(
+    matrix: Mapping[str, object], issues: list[ValidationIssue]
+) -> None:
+    expected_paths = (
+        "docs/data-lineage/source-audits/data-001-move-cert-source-audit.md",
+        "docs/data-lineage/source-audits/data-001-office-mapping-audit.md",
+        "docs/data-lineage/source-audits/data-001-tax-source-audit.md",
+        "docs/data-lineage/source-audits/data-001-waste-source-audit.md",
+    )
+    entries = matrix.get("source_audits")
+    if not isinstance(entries, list) or [
+        entry.get("path") if isinstance(entry, dict) else None for entry in entries
+    ] != list(expected_paths):
+        _issue(issues, "SOURCE_AUDIT_HASH_MISMATCH", "approved-source-matrix.json", None, "source_audits")
+        return
+    for entry in entries:
+        assert isinstance(entry, dict)
+        if set(entry) != {"path", "sha256"}:
+            _issue(issues, "SOURCE_AUDIT_HASH_MISMATCH", "approved-source-matrix.json", None, "source_audits")
+            continue
+        path = REPOSITORY_ROOT / entry["path"]
+        try:
+            actual = sha256_file(path)
+        except OSError:
+            actual = None
+        if actual != entry.get("sha256"):
+            _issue(issues, "SOURCE_AUDIT_HASH_MISMATCH", "approved-source-matrix.json", None, "source_audits")
+
+
+def _validate_content_artifact_hashes(
+    draft_dir: Path, matrix: Mapping[str, object], issues: list[ValidationIssue]
+) -> None:
+    entries = matrix.get("content_artifacts")
+    if not isinstance(entries, list) or [
+        entry.get("path") if isinstance(entry, dict) else None for entry in entries
+    ] != list(CONTENT_ARTIFACTS):
+        _issue(issues, "SOURCE_MATRIX_MISMATCH", "approved-source-matrix.json", None, "content_artifacts")
+        return
+    for entry in entries:
+        assert isinstance(entry, dict)
+        if set(entry) != {"path", "sha256"}:
+            _issue(issues, "SOURCE_MATRIX_MISMATCH", "approved-source-matrix.json", None, "content_artifacts")
+            continue
+        try:
+            actual = sha256_file(draft_dir / entry["path"])
+        except OSError:
+            actual = None
+        if actual != entry.get("sha256"):
+            _issue(issues, "SOURCE_MATRIX_MISMATCH", "approved-source-matrix.json", None, "content_artifacts")
+
+
+def _same_resolved_path(left: Path, right: Path) -> bool:
+    try:
+        return os.path.normcase(str(left.resolve())) == os.path.normcase(str(right.resolve()))
+    except OSError:
         return False
-    return "data/staging/" in line.replace("\\", "/")
+
+
+def _validate_runtime_staging_references(issues: list[ValidationIssue]) -> None:
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=REPOSITORY_ROOT,
+            check=True,
+            capture_output=True,
+        )
+        names = completed.stdout.decode("utf-8").split("\0")
+    except (OSError, subprocess.CalledProcessError, UnicodeDecodeError):
+        _issue(issues, "RUNTIME_SCAN_FAILED", "<runtime-scan>", None, None)
+        return
+    paths = [
+        REPOSITORY_ROOT / name for name in names
+        if name and _is_runtime_or_operations_file(name)
+    ]
+    _scan_runtime_files(paths, REPOSITORY_ROOT, issues, _RUNTIME_ALLOWLIST)
+
+
+def _is_runtime_or_operations_file(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    path = Path(normalized)
+    executable_or_config = (
+        path.suffix.lower() in _RUNTIME_SUFFIXES
+        or path.name.lower() in {
+            ".env.example", "dockerfile", "makefile", "package.json",
+            "pnpm-workspace.yaml",
+        }
+    )
+    in_runtime_tree = (
+        normalized.startswith(("apps/", "packages/", "database/", "scripts/"))
+        or normalized.startswith(".github/workflows/")
+        or normalized == "supabase/config.toml"
+        or normalized == "supabase/seed.sql"
+        or normalized.startswith("supabase/migrations/")
+        or path.suffix.lower() in {".ps1", ".psd1", ".psm1"}
+    )
+    root_config = "/" not in normalized and executable_or_config
+    return (in_runtime_tree and executable_or_config) or root_config
+
+
+def _scan_runtime_files(
+    paths: Sequence[Path],
+    repository_root: Path,
+    issues: list[ValidationIssue],
+    allowlist: frozenset[str] = frozenset(),
+) -> None:
+    for candidate in paths:
+        try:
+            relative = candidate.relative_to(repository_root).as_posix()
+        except ValueError:
+            relative = candidate.name
+        if relative in allowlist:
+            continue
+        try:
+            if _has_reparse_component(candidate) or not candidate.is_file():
+                raise OSError("untrusted runtime path")
+            text = candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            _issue(issues, "RUNTIME_FILE_UNTRUSTED", relative, None, None)
+            continue
+        if _is_runtime_staging_reference(text):
+            _issue(issues, "RUNTIME_STAGING_REFERENCE", relative, None, None)
+
+
+def _is_runtime_staging_reference(text: str) -> bool:
+    normalized = text.lower().replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
+    if re.search(r"data\s*/\s*staging(?:\s*/|\b)", normalized):
+        return True
+    compact = re.sub(r"[\s\"'`+(){}\[\],]", "", normalized)
+    if "data/staging" in compact:
+        return True
+    if re.search(
+        r"[\"']data[\"'].{0,200}[\"']/?staging[\"']",
+        normalized,
+        flags=re.DOTALL,
+    ) is not None:
+        return True
+    return re.search(
+        r"(?:root|path|dir)\w*\s*[:=]\s*[\"']?data[\"']?.{0,200}"
+        r"(?:stage|staging)\w*\s*[:=]\s*[\"']?staging[\"']?",
+        normalized,
+        flags=re.DOTALL,
+    ) is not None
+
+
+def _has_reparse_component(path: Path) -> bool:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not current.exists():
+            continue
+        try:
+            attributes = getattr(current.lstat(), "st_file_attributes", 0)
+        except OSError:
+            return True
+        if current.is_symlink() or bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT):
+            return True
+    return False
 
 
 def validate_schema(
@@ -832,6 +1201,7 @@ def validate_schema(
 ) -> Sequence[ValidationIssue]:
     """Validate the small JSON Schema subset used by DATA-001 contracts."""
     issues: list[ValidationIssue] = []
+    _validate_schema_meta(schema, artifact, issues)
     _validate(instance, schema, artifact, None, None, issues)
     return sorted(issues, key=lambda issue: (
         issue.artifact,
@@ -839,6 +1209,69 @@ def validate_schema(
         issue.field or "",
         issue.code,
     ))
+
+
+def _validate_schema_meta(
+    schema: Mapping[str, object], artifact: str, issues: list[ValidationIssue]
+) -> None:
+    for keyword, value in schema.items():
+        if keyword not in _SUPPORTED_SCHEMA_KEYWORDS:
+            _issue(
+                issues, "SCHEMA_UNSUPPORTED_KEYWORD", artifact, None,
+                "<schema-keyword>",
+            )
+            continue
+        if not _schema_keyword_value_is_supported(keyword, value):
+            _issue(
+                issues, "SCHEMA_KEYWORD_VALUE_INVALID", artifact, None,
+                "<schema-keyword>",
+            )
+            continue
+        if keyword == "properties" and isinstance(value, Mapping):
+            for child in value.values():
+                if isinstance(child, Mapping):
+                    _validate_schema_meta(child, artifact, issues)
+                else:
+                    _issue(
+                        issues, "SCHEMA_KEYWORD_VALUE_INVALID", artifact, None,
+                        "<schema-keyword>",
+                    )
+        elif keyword == "items" and isinstance(value, Mapping):
+            _validate_schema_meta(value, artifact, issues)
+        elif keyword == "format" and value not in {
+            "date", "date-time", "https-url", "uri",
+        }:
+            _issue(
+                issues, "SCHEMA_UNSUPPORTED_FORMAT", artifact, None,
+                "<schema-format>",
+            )
+
+
+def _schema_keyword_value_is_supported(keyword: str, value: object) -> bool:
+    if keyword in {"$schema", "pattern", "title"}:
+        return isinstance(value, str)
+    if keyword == "type":
+        names = [value] if isinstance(value, str) else value
+        return isinstance(names, list) and bool(names) and all(
+            isinstance(name, str)
+            and name in {"array", "boolean", "integer", "null", "object", "string"}
+            for name in names
+        )
+    if keyword in {"additionalProperties", "uniqueItems"}:
+        return isinstance(value, bool)
+    if keyword in {"properties", "items"}:
+        return isinstance(value, Mapping)
+    if keyword == "required":
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    if keyword == "enum":
+        return isinstance(value, list)
+    if keyword in {"maxItems", "maxLength", "minItems", "minLength"}:
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    if keyword == "minimum":
+        return _is_json_number(value)
+    if keyword == "format":
+        return isinstance(value, str)
+    return keyword == "const"
 
 
 def _validate(
@@ -898,7 +1331,7 @@ def _validate_object(
                     "SCHEMA_ADDITIONAL_PROPERTY",
                     artifact,
                     record_id,
-                    _join(field, name),
+                    _join(field, "<unknown-property>"),
                 )
     for name, child_schema in properties.items():
         if name in value and isinstance(name, str) and isinstance(child_schema, Mapping):

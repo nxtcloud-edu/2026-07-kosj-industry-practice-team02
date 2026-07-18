@@ -59,6 +59,8 @@
 | `docs/05_API_AND_CONTRACTS.md` | API 관리 규칙 |
 | `docs/07_SECURITY_PRIVACY.md` | 구현 보안 기준 |
 | `docs/08_TEST_STRATEGY.md` | 검증 전략 |
+| `data/schemas/data-001/v1/approved-source-matrix.json` | DATA-001 canonical content·registry·출처·기관 공개 연락처·audit hash 신뢰 기준 |
+| `docs/data-lineage/source-audits/` | 개인정보 없는 tracked 공식 출처 감사 요약 4개와 재현 근거 |
 
 ## source-of-truth와 legacy
 

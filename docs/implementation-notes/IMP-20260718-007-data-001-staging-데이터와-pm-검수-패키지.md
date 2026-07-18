@@ -90,7 +90,8 @@
 |---|---|---|
 | `data/schemas/data-001/v1/` | KB, office, mapping, approval-manifest internal JSON Schema 4개 | DRAFT field/state/type 제한 |
 | `scripts/data_staging_validation.py` / `scripts/validate_data_staging.py` | schema/cross-file/privacy/source/hash/runtime boundary 검사와 prepare/validate CLI | reproducible fail-closed gate |
-| `scripts/tests/test_data_staging_validation.py` / `scripts/verify.ps1` | 35 focused tests와 root `VALIDATE-DATA-001` integration | regression/runtime isolation |
+| `scripts/tests/test_data_staging_validation.py` / `scripts/verify.ps1` | 56 focused tests와 mandatory root `VALIDATE-DATA-001` integration | regression/runtime isolation, canonical path/reparse/privacy/source-matrix hardening |
+| `data/schemas/data-001/v1/approved-source-matrix.json` / `docs/data-lineage/source-audits/` | exact source/content/registry/audit hash trust anchor와 sanitized tracked 감사 요약 4개 | PM 검수 전 coordinated drift와 mutable ignored audit 의존 제거 |
 | `data/staging/...` | canonical DRAFT 20/3/12+PENDING manifest | PM이 검수할 exact input |
 | `data/processed/...`, `docs/data-lineage/...` | value-free report, 35-row PM packet, source→draft→promotion lineage | human review and handoff |
 | `data/official/kb_source_registry.csv` | 20 canonical IDs/order, date/author/status/reviewer boundary | source assignment audit |
@@ -128,10 +129,10 @@ write boundary를 fail closed한다. Hash mismatch는 PM approval을 무효로 �
 | 명령/검증 | 결과 | 시간/개수 | 증거 |
 |---|---|---|---|
 | `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests.test_child_timeout_terminates_spawned_descendant -v` | PASS | 1 test, 15.189s | exact known child-timeout regression |
-| `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging_validation -q` | PASS | 35 tests, 13.926s | focused DATA-001 suite |
-| `apps/api/.venv/Scripts/python.exe -B scripts/validate_data_staging.py validate --draft-dir data/staging/data-001/0.1.0-draft.1 --report data/processed/data-001/0.1.0-draft.1/validation-report.json` twice | PASS | report SHA-256 identical | `f744c45767e2d73f63b5fe4c1d6a5f89941904be07ff2bdf035b43f17d6056c9`, issues 0, warning only `PM_REVIEW_REQUIRED` |
+| `apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_data_staging_validation -q` | PASS | 56 tests, 20.773s | focused DATA-001 suite after Final Remediation 2 |
+| `apps/api/.venv/Scripts/python.exe -B scripts/validate_data_staging.py validate --draft-dir data/staging/data-001/0.1.0-draft.1 --report <processed-report>` twice | PASS | report SHA-256 identical | `460c6e6613cdd18f5a3abace116da14dbb036b2d60855d835038c9cf9afd7d2d`, issues 0, warning only `PM_REVIEW_REQUIRED` |
 | JSON/CSV parse + counts/manifest/report/hash comparison | PASS | KB 20, office 3, mapping 12, decisions 35, registry 20 | manifest/report/direct SHA-256 exact match |
-| direct runtime staging-reference scan | PASS | issues 0 | `apps/`, `packages/`, `database/`, `supabase/seed.sql`, migrations boundary |
+| tracked runtime/operations staging-reference scan | PASS | issues 0 | apps/packages/database/scripts, Supabase config/seed/migrations, repo-wide PowerShell/config; case/comment/concat/split bypass tests included |
 | `python -B scripts/validate_codex_package.py` | PASS | 12 required files | manifest valid |
 | `check_secret_patterns.ps1` | PASS | findings 0 | no secret pattern output |
 | PowerShell parser for `scripts/verify.ps1` | PASS | parse errors 0 | parser evidence |
@@ -147,7 +148,8 @@ public deployment, and performance/UI checks are outside this task and remain un
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: citizen question/PII/personal lookup result 0. Generalized examples only; public office phone/address
-  is allowed only in office fields with provenance.
+  is allowed only for the exact `(office id, field, value)` in the tracked approved source matrix. Manifest,
+  registry and content strings are scanned before a value-free report can be emitted.
 - Security: secret/mock/unsafe source/self-approval/hash mismatch/runtime staging reference fail closed; errors
   contain no payload values. No credential, dependency, Docker, cloud, DB, or external LLM action occurred.
 - Accessibility: UI/runtime change 0. PM packet is textual/table-based; existing UI accessibility posture is unchanged.
@@ -204,9 +206,10 @@ review. DATA-SEED-001 owns immutable release/import compensation; READY-001 owns
 
 ### 다음 개발자 시작점
 
-Start with `.superpowers/sdd/progress.md`, the Task 4 plan state, this note and the PM packet. Preserve the canonical
-DRAFT bytes and use the hash comparison before any PM decision. Investigate the root `TEST-ROOT` process hang before
-claiming a full root verification pass.
+Start with the tracked DATA-001 plan, `docs/data-lineage/DATA-001-0.1.0-draft.1.md`, the four tracked summaries under
+`docs/data-lineage/source-audits/`, `data/schemas/data-001/v1/approved-source-matrix.json`, this note and the PM packet.
+Preserve the canonical DRAFT bytes and use the hash comparison before any PM decision. Investigate the root
+`TEST-ROOT` process hang before claiming a full root verification pass.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 

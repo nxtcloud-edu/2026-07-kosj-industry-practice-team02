@@ -313,14 +313,19 @@ try {
         "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"
     )
     $data001DraftDirectory = Join-Path $repoRoot "data\staging\data-001\0.1.0-draft.1"
-    if (Test-Path -LiteralPath $data001DraftDirectory -PathType Container) {
-        Invoke-NativeStep -StepId "VALIDATE-DATA-001" -Executable $apiPython -Arguments @(
-            "-B", "scripts/validate_data_staging.py", "validate", "--draft-dir", $data001DraftDirectory
-        )
+    $data001CanonicalMarker = Join-Path $repoRoot "data\schemas\data-001\v1\approved-source-matrix.json"
+    $data001CanonicalSchema = Join-Path $repoRoot "data\schemas\data-001\v1\approval-manifest.schema.json"
+    if (
+        -not (Test-Path -LiteralPath $data001DraftDirectory -PathType Container) -or
+        -not (Test-Path -LiteralPath $data001CanonicalMarker -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $data001CanonicalSchema -PathType Leaf)
+    ) {
+        throw "[FAIL] step=VALIDATE-DATA-001 reason=DATA-001 canonical marker/schema missing"
     }
-    else {
-        Write-Output "[SKIP] step=VALIDATE-DATA-001 reason=staging-absent"
-    }
+    Write-Output "[PASS] step=VALIDATE-DATA-001 reason=DATA-001 canonical marker/schema present"
+    Invoke-NativeStep -StepId "VALIDATE-DATA-001" -Executable $apiPython -Arguments @(
+        "-B", "scripts/validate_data_staging.py", "validate", "--draft-dir", $data001DraftDirectory
+    )
     Invoke-NativeStep -StepId "LINT-WEB" -Executable "corepack.cmd" -Arguments @(
         "pnpm", "--filter", "@sejong-ai/web", "lint"
     )

@@ -15,6 +15,8 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.data_staging_validation import (
+    CANONICAL_SOURCE_MATRIX,
+    CONTENT_ARTIFACTS,
     build_pending_manifest,
     load_json_object,
     validate_staging,
@@ -24,6 +26,9 @@ from scripts.data_staging_validation import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = REPOSITORY_ROOT / "data" / "schemas" / "data-001" / "v1"
 DEFAULT_SOURCE_REGISTRY = REPOSITORY_ROOT / "data" / "official" / "kb_source_registry.csv"
+CANONICAL_DRAFT_DIR = (
+    REPOSITORY_ROOT / "data" / "staging" / "data-001" / "0.1.0-draft.1"
+)
 LEGACY_PENDING_SUBMITTED_AT = "2026-07-18T19:32:04+09:00"
 
 
@@ -52,12 +57,26 @@ def main(argv: list[str] | None = None) -> int:
     except (SystemExit, ValueError):
         print("[FAIL] step=VALIDATE-DATA-001 reason=usage")
         return 2
+    if arguments.command in {"prepare", "validate", "migrate-pending"}:
+        draft_dir = Path(arguments.draft_dir)
+        source_registry = Path(arguments.source_registry)
+        if not _canonical_inputs_are_trusted(
+            draft_dir,
+            source_registry,
+            require_manifest=arguments.command != "prepare",
+        ):
+            step = {
+                "prepare": "PREPARE-DATA-001",
+                "validate": "VALIDATE-DATA-001",
+                "migrate-pending": "MIGRATE-DATA-001",
+            }[arguments.command]
+            print(f"[FAIL] step={step} issues=PATH_BOUNDARY_INVALID:1")
+            return 1
     if arguments.command == "prepare":
         try:
-            draft_dir = Path(arguments.draft_dir)
             manifest = build_pending_manifest(draft_dir, arguments.submitted_at)
             report = validate_staging(
-                draft_dir, SCHEMA_DIR, Path(arguments.source_registry), manifest
+                draft_dir, SCHEMA_DIR, source_registry, manifest
             )
             if not report["valid"]:
                 _print_issue_failure("PREPARE-DATA-001", report)
@@ -82,14 +101,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == "validate":
         try:
-            draft_dir = Path(arguments.draft_dir)
             if arguments.report and not _is_safe_report_destination(
                 Path(arguments.report), draft_dir
             ):
                 print("[FAIL] step=VALIDATE-DATA-001 issues=REPORT_DESTINATION_INVALID:1")
                 return 1
             report = validate_staging(
-                draft_dir, SCHEMA_DIR, Path(arguments.source_registry)
+                draft_dir, SCHEMA_DIR, source_registry
             )
             if arguments.report:
                 _write_json_atomic(Path(arguments.report), report)
@@ -103,7 +121,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if arguments.command == "migrate-pending":
         try:
-            draft_dir = Path(arguments.draft_dir)
             manifest_path = draft_dir / "approval_manifest.json"
             existing = manifest_path.read_bytes()
             candidate = build_pending_manifest(draft_dir, arguments.submitted_at)
@@ -111,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("[FAIL] step=MIGRATE-DATA-001 issues=MIGRATE_PENDING_REFUSED:1")
                 return 1
             report = validate_staging(
-                draft_dir, SCHEMA_DIR, Path(arguments.source_registry), candidate
+                draft_dir, SCHEMA_DIR, source_registry, candidate
             )
             if not report["valid"]:
                 _print_issue_failure("MIGRATE-DATA-001", report)
@@ -206,6 +223,48 @@ def _is_safe_report_destination(report: Path, draft_dir: Path) -> bool:
     return True
 
 
+def _canonical_inputs_are_trusted(
+    draft_dir: Path, source_registry: Path, require_manifest: bool
+) -> bool:
+    if not _is_exact_resolved_path(draft_dir, CANONICAL_DRAFT_DIR):
+        return False
+    if not _is_exact_resolved_path(source_registry, DEFAULT_SOURCE_REGISTRY):
+        return False
+    required_files = [
+        DEFAULT_SOURCE_REGISTRY,
+        CANONICAL_SOURCE_MATRIX,
+        *(SCHEMA_DIR / name for name in (
+            "approval-manifest.schema.json",
+            "kb-records.schema.json",
+            "office-service-mappings.schema.json",
+            "offices.schema.json",
+        )),
+        *(CANONICAL_DRAFT_DIR / name for name in CONTENT_ARTIFACTS),
+    ]
+    if require_manifest:
+        required_files.append(CANONICAL_DRAFT_DIR / "approval_manifest.json")
+    required_directories = [REPOSITORY_ROOT, SCHEMA_DIR, CANONICAL_DRAFT_DIR]
+    for path in required_directories:
+        if not path.is_dir() or _has_reparse_component(path):
+            return False
+    for path in required_files:
+        if not path.is_file() or _has_reparse_component(path):
+            return False
+    manifest = CANONICAL_DRAFT_DIR / "approval_manifest.json"
+    return not manifest.exists() or not _has_reparse_component(manifest)
+
+
+def _is_exact_resolved_path(candidate: Path, expected: Path) -> bool:
+    if _has_reparse_component(candidate):
+        return False
+    try:
+        return os.path.normcase(str(candidate.resolve(strict=True))) == os.path.normcase(
+            str(expected.resolve(strict=True))
+        )
+    except OSError:
+        return False
+
+
 def _is_within(candidate: Path, parent: Path) -> bool:
     try:
         return os.path.commonpath((os.path.normcase(str(candidate)), os.path.normcase(str(parent)))) == os.path.normcase(str(parent))
@@ -216,8 +275,23 @@ def _is_within(candidate: Path, parent: Path) -> bool:
 def _is_link_or_reparse_point(path: Path) -> bool:
     if path.is_symlink():
         return True
-    attributes = getattr(path.stat(), "st_file_attributes", 0)
+    attributes = getattr(path.lstat(), "st_file_attributes", 0)
     return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _has_reparse_component(path: Path) -> bool:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if not current.exists():
+            continue
+        try:
+            if _is_link_or_reparse_point(current):
+                return True
+        except OSError:
+            return True
+    return False
 
 
 if __name__ == "__main__":
