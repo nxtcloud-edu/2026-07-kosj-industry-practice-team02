@@ -25,11 +25,16 @@
 - ADR-0011 and a written DB-001 design for private schemas, capability functions, atomic approval, retention, and layered DB/backend enforcement
 - User-approved DB-001 written specification and an execution-gated TDD plan covering pinned local tooling, five migrations/compensations, pgTAP, lazy FastAPI DB boundaries, concurrency, and rollback/replay
 - D-026/D-027 refinements for fail-closed non-superuser role verification, separate failed-question reason confirmation, immutable event classification, candidate gating, and required approval comments
-- DB-001 candidate lineage: six immutable timestamp forward migrations and six disposable-local
+- DB-001 candidate-stage lineage: six immutable timestamp forward migrations and six disposable-local
   compensations for private schema, invariants, capability/RLS, candidate workflow,
-  ACTIVE+OFFICIAL reads, and deferred validator posture; version promotion remains blocked
+  ACTIVE+OFFICIAL reads, and deferred validator posture. Promotion was blocked at that stage until the
+  later patched-runtime and actual-loopback gates produced the verified `0.3.0-local` baseline below
 - Six-file pgTAP 282 assertions, real backend integration 8/8, exact
   `006→005→004→003→002→001` compensation/absence/reset/replay gate, and local DB handoff/report
+- Checksum-pinned Supabase CLI v2.109.1 source, Go 1.25.11 toolchain, 1,824-byte two-file
+  loopback patch, reproducible runtime SHA-256, and patched-only DB runner with no stock/PATH fallback
+- Verified disposable `0.3.0-local` baseline: exact single `127.0.0.1:54322`, fresh pgTAP 282,
+  backend integration 8/8, six-stage compensation/absence/replay, final container 0/0, volume deletion 0
 
 ### Changed
 
@@ -70,6 +75,13 @@
   the HostIP-omitted probe still resolved to `127.0.0.1` plus IPv6 wildcard `::`, while the explicit
   `127.0.0.1` control remained single-loopback. Both probes were removed, container count returned to
   zero, and no Supabase DB mutation was run
+- Completed Q-SEC-006/A-024 and Q-TOOL-001/A-025 locally with source manifest
+  `c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657`, patch
+  `109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d`, and runtime
+  `751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c`; DB-001 is Done for
+  disposable local/private use only
+- Bounded DB child process trees in `73f300b`; focused descendant cleanup 1/1, full runner 50/50,
+  patched tooling 24/24, independent review 0/0/0 and final-code DB revalidation PASS
 
 ### Pending
 
@@ -78,5 +90,3 @@
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;
   default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked
-- Q-SEC-006/A-024 decision on a checksum-pinned project-local CLI patch that explicitly binds the DB
-  port to `127.0.0.1`; the unanswered default keeps all Supabase DB runtime and manifest promotion blocked

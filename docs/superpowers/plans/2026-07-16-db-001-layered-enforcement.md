@@ -13,7 +13,7 @@
 ## Plan governance
 
 - Plan ID: `DB-001-PLAN`
-- Status: In Progress — Tasks 0~9 complete; Q-SEC-006=A/D-031 child patched-CLI spec and execution plan approved, Task 10 implementation started; version/dependency promotion remains gated on fresh DB verification and review
+- Status: Completed for disposable local/private use — Tasks 0~10, remediation, final-code DB gate, final reviews, final verification and closeout commit complete
 - User approval: `계획 승인, 구현 시작` on 2026-07-16 KST
 - Execution branch: `codex/db-001-layered-enforcement`
 - Execution worktree: `.worktrees/db-001-layered-enforcement`
@@ -21,9 +21,9 @@
 - Decisions: D-018, D-025, D-026, D-027, D-028, D-029, D-030, D-031
 - ADRs: ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012, ADR-0013
 - Task 9A remediation plan: `docs/superpowers/plans/2026-07-17-db-001-deferred-trigger-security-fix.md`
-- Task 10 patched CLI plan: `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` (approved; implementation in progress)
-- Logical projection target: `database/schema-v1.draft.sql` describes the non-active `0.3.0-local` candidate; executable authority remains timestamp migrations
-- Conditional implementation target after D-031 implementation and all gates: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
+- Task 10 patched CLI plan: `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` (amendment approved; implementation, actual gate, reviews and final verification complete)
+- Logical projection: `database/schema-v1.draft.sql` describes the active local `0.3.0-local` baseline; executable authority remains timestamp migrations
+- Achieved local/private target: `database_schema=0.3.0-local`, `repo_guidance=1.5.0`, `test_suite=0.5.0-db-baseline`
 - Execution gate: no task below starts until the user explicitly approves this plan.
 - Execution mode: the user's recorded preference makes subagent-driven development the default. A fresh implementation agent handles one task, then specification and code-quality review occur before the next task.
 - Scope guard: no official seed, DeepSeek call, public route, readiness 200 transition, remote link/push, cloud resource, production auth, or new production dependency is authorized.
@@ -1625,7 +1625,7 @@ Official seed authority: not populated; DATA-SEED-001 remains blocked on PM-appr
 
 Document exact bootstrap, runner-owned loopback start, full DB verify, optional stop, local credential rotation, rollback/replay, and no-seed readiness behavior. The runner must reject Docker Engine below 28 and any network/container/runtime binding drift before reset or credential handling. Explicitly warn that the local stack has default development credentials, no TLS/rate limits, and must not be publicly exposed. Preserve separate approval gates for remote DB, public admin, data deletion, production backup, and CORS/domain changes.
 
-- [ ] **Step 3: Update task state, dependencies, and versions only after fresh safe-runtime evidence passes — BLOCKED pending D-031 implementation/full gate**
+- [x] **Step 3: Update task state, dependencies, and versions after fresh safe-runtime evidence passed**
 
 Set DB-001 to Done only after Task 9 evidence plus the Task 10 exact-loopback/full-gate/review evidence.
 Unblock dependencies only by replacing `DB-001` with their remaining real dependencies; do not mark
@@ -1676,7 +1676,7 @@ Expected: the original package snapshot is unchanged. The manifest's DB/repo/tes
 documentation may advance for D-031 design lineage. The active file inventory contains all DB-001 tracked
 files while ignored `.tools/`, `.env`, Supabase temporary directories, Docker state, and backups are absent.
 
-- [ ] **Step 6: Run final verification-before-completion — BLOCKED; do not run Supabase DB before D-031's separate implementation plan is approved and exact binary is ready**
+- [x] **Step 6: Rerun final verification-before-completion after closeout docs and review fixes**
 
 Invoke `superpowers:verification-before-completion`, then run:
 
@@ -1692,11 +1692,11 @@ git status --short
 
 Expected: the DB runner first proves an actual loopback-only Docker port and only then both verification gates exit 0; package/JSON/secret/diff checks pass, and Git status lists only intended DB-001 docs/report/note/security-runner changes before the final commit. The known historical `check_scope_drift.py` false positive against the immutable package snapshot is not used as a DB-001 completion gate.
 
-- [ ] **Step 7: Request final independent reviews after Step 6 — BLOCKED**
+- [x] **Step 7: Complete final independent reviews and resolve all Critical/Important findings**
 
 Invoke `superpowers:requesting-code-review`. The specification reviewer checks every approved-spec requirement. The code-quality reviewer checks SQL injection, `SECURITY DEFINER` search paths, grants/RLS, race behavior, error privacy, env preservation, compensation scope, tests, and documentation/version drift. Resolve all P0/P1 findings and rerun Step 6.
 
-- [ ] **Step 8: Commit Task 10 after Steps 3, 6, and 7 — BLOCKED**
+- [x] **Step 8: Parent commits Task 10 after final diff inspection**
 
 ```powershell
 git add database docs CODEX_FILE_INDEX.md README.md TASKS.md versions/manifest.json CHANGELOG.md scripts/README.md apps/api/README.md
@@ -1747,7 +1747,7 @@ Work stops and returns to the user before any of these changes:
 - `apps/api/.env` is ignored and preserved. If local credential provisioning fails, rerun it after reset; do not copy credentials into tracked files.
 - Official data has no row in this plan, so rollback cannot delete PM-approved official records.
 
-## Conditional completion state after D-031 is implemented and verified
+## Verified local/private completion state
 
 - DB-001 is Done with reproducible local evidence.
 - PostgreSQL and FastAPI both enforce the approved structural safety rules.
@@ -1756,9 +1756,12 @@ Work stops and returns to the user before any of these changes:
 - The next vertical slice is DATA-SEED-001 only after DATA-001 approval; READY-001 follows the seed, not this database baseline.
 - A-021/Q-SEC-003 default B keeps remote/public deployment, public admin/API, and public backend DB credentials blocked; no `00700` is created without a human decision.
 
-## Current blocked state
+## Current closeout state
 
-- DB-001 remains Blocked and `database_schema=0.2.0-draft` remains active.
-- `0.3.0-local` logical projection, report, and handoff are non-active candidate artifacts.
-- DATA-SEED-001, READY-001, LOG-001, and BACKUP-001 retain their `DB-001` dependencies.
-- Q-SEC-004=A/D-029 and Q-SEC-005=A/D-030 are recorded but neither met the actual IPv6 boundary. Q-SEC-006=A/D-031 selected the tooling path and its written spec and child execution plan are approved; runtime manifest, runner and actual full gate still forbid DB-001 completion or promotion.
+- DB-001 is Done for disposable local/private use and `database_schema=0.3.0-local` is active.
+- DATA-SEED-001, READY-001, LOG-001, and BACKUP-001 removed only the satisfied direct DB-001 dependency;
+  their remaining real blockers keep them Blocked.
+- Q-SEC-006=A/D-031 and Q-TOOL-001=A/D-032 produced the pinned patched runtime and actual full gate.
+- Runner descendant-cleanup finding is fixed by `73f300b`; focused/full tests, independent review 0/0/0 and
+  final-code DB gate passed. Final specification and quality docs reviews are also APPROVED 0/0/0,
+  full final verification passed, and the closeout commit is complete.

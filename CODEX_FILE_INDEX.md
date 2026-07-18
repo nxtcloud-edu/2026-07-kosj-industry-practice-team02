@@ -30,9 +30,9 @@
 | `docs/superpowers/specs/` | 구현계획 전에 사용자가 검토하는 기능·아키텍처 서면 설계 |
 | `docs/superpowers/plans/` | 승인된 명세를 TDD 실행 단위·명령·검증·commit으로 분해한 구현계획 |
 | `docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md` | 승인된 전체 실행계획과 단계별 gate |
-| `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~9 완료, Q-SEC-004/005 보정은 불충분했고 Task 10은 Q-SEC-006/A-024로 차단 |
-| `docs/superpowers/specs/2026-07-17-q-sec-006-patched-supabase-cli-design.md` | 승인된 exact source·Go·patch·binary hash·actual loopback 공급망 명세 |
-| `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` | 승인돼 실행 중인 5-task TDD/build/runtime/full-gate 계획; gate 전 승격 금지 |
+| `docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md` | 승인된 DB-001 상세 실행계획; Tasks 0~10와 bounded child-tree remediation·final-code DB gate 완료, final docs reviews 진행 중 |
+| `docs/superpowers/specs/2026-07-17-q-sec-006-patched-supabase-cli-design.md` | local에서 구현·검증된 exact source·Go·patch·binary hash·actual loopback 공급망 명세 |
+| `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` | 수정 계획 승인 뒤 Tasks 1~5 local gate와 code remediation까지 수행한 계획; final docs reviews 진행 중 |
 
 ## 모든 작업 후 갱신할 파일
 
@@ -49,9 +49,9 @@
 |---|---|
 | `contracts/` | OpenAPI 2.0.1-draft와 동기화 JSON Schema |
 | `supabase/migrations/`, `supabase/tests/database/` | DB-001 timestamp 실행 권위와 pgTAP |
-| `database/` | `0.3.0-local` 후보 논리 projection, 역순 disposable-local 보상, absence proof; manifest는 blocker로 `0.2.0-draft` 유지 |
-| `docs/test-reports/DB-001-LOCAL-BASELINE.md` | DB-001 후보의 과거 DB 증거와 현재 Q-SEC-006/A-024 explicit HostIP tooling 차단 상태 |
-| `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md` | 차단된 local DB 후보의 재개 조건·rollback/recovery·public-release blocker 인수인계 |
+| `database/` | verified `0.3.0-local` 논리 projection, 역순 disposable-local 보상, absence proof; 실행 권위는 timestamp migration |
+| `docs/test-reports/DB-001-LOCAL-BASELINE.md` | patched-only runtime의 fresh exact loopback·pgTAP 282·integration 8/8·cleanup local 검증 보고서 |
+| `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md` | 완료된 local/private DB 기준선의 재현·rollback/recovery와 별도 public-release blocker 인수인계 |
 | `docs/03_ARCHITECTURE.md` | 시스템 경계와 장애 전략 |
 | `docs/04_DOMAIN_AND_STATE_MODEL.md` | enum·상태·불변조건 |
 | `docs/05_API_AND_CONTRACTS.md` | API 관리 규칙 |

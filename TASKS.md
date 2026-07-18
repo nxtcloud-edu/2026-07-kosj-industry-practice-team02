@@ -17,7 +17,7 @@
 |---|---|---|---|---|---|---|
 | DEV-001 | P0 | Platform·FE·BE | 독립 Git·Node 24/pnpm·Python 3.12/uv 모노레포와 health | Done | PLAN-001 Approved | corrected fresh default·warm-offline 24/24와 actual API/Web smoke, final P0/P1/P2 0; DB·승인 seed 전 `/ready=503` 유지 |
 | DEV-002 | P0 | Platform·Security | 환경변수·비밀관리·local 수동 검증 gate | Done | DEV-001 | 예제 환경, 비밀 스캔, raw body logging off, synthetic/offline env 복원과 clean gate 통과 |
-| DB-001 | P0 | Backend·Data·Security | [Supabase SQL v1 migration·보상 rollback·권한](docs/discovery/DB_001_DISCOVERY_REPORT.md) | Blocked — Q-TOOL-001=A/D-032 resolved; revised Task 2C plan awaiting approval before implementation resumes | DEV-001 Done, approved [DB spec](docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md)·[parent plan](docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md), D-026~D-032, ADR-0012/0013/0014, [patched plan](docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md), [candidate report](docs/test-reports/DB-001-LOCAL-BASELINE.md), [handoff](docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md); Tasks 1/2/2A/2B reviewed; exact diagnostic build PASS; legacy partial tree quarantined; container 0·DB mutation 0; runtime/manifest 미생성; A-021/Q-SEC-003 separately blocks public release | 수정 계획 승인 → Task 2C short roots/path-budget TDD·review → source/toolchain/patch/binary hash → safe runtime exact single `127.0.0.1:54322` → full six-stage DB/root/static gate → independent review가 모두 통과할 때만 `0.3.0-local`/Done; 공식 seed 0·`/ready=503`; public/remote 금지 |
+| DB-001 | P0 | Backend·Data·Security | [Supabase SQL v1 migration·보상 rollback·권한](docs/discovery/DB_001_DISCOVERY_REPORT.md) | Done — disposable local/private baseline verified; production-ready 아님 | DEV-001 Done, approved [DB spec](docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md)·[parent plan](docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md), D-026~D-032, ADR-0012/0013/0014, [patched plan](docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md), [verified report](docs/test-reports/DB-001-LOCAL-BASELINE.md), [handoff](docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md), [Draft closeout note](docs/implementation-notes/IMP-20260718-004-patched-supabase-cli와-db-001-local-baseline-완료.md); A-021/Q-SEC-003 separately blocks public release | pinned source/patch/runtime hashes, patched-only runner, bounded child process trees, actual exact one `127.0.0.1:54322`, fresh pgTAP 282·integration 8/8·6단계 replay, final-code runner 50/50·patched 24/24, final container 0/0·volume delete 0; 공식 seed 0·`/ready=503`; public/remote 금지 |
 | CONTRACT-001 | P0 | FE·BE·QA | OpenAPI 2.0·공유 타입 생성 경로와 200/503·context 계약 | Done | DEV-001 | API 2.0.1-draft의 `/health`·ready-state `/ready` 200과 FALLBACK까지 fixture·생성 TypeScript·strict Pydantic drift 0, final P0/P1/P2 0 |
 
 ### Phase 1 실행 상세 — PLAN-20260715-002
@@ -38,8 +38,8 @@
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
 | DATA-001 | P0 | AI/Data·Backend 작성, PM 승인 | 공식 KB 20건·기관 3건·지역×민원 매핑 10~12건 작성·전수 승인 | Blocked | PLAN-001 Approved | 2026-07-20까지 출처·확인일·작성자·별도 승인자·매핑 검수 누락 0, 승인 전 staging |
-| DATA-SEED-001 | P0 | Backend·Data | 승인 공식 데이터의 버전 seed·lineage | Blocked | DB-001, DATA-001 | ACTIVE seed 20·office 3+·mapping 10~12, mock 혼입 0, 재현 import/rollback |
-| READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DB-001, DATA-SEED-001, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
+| DATA-SEED-001 | P0 | Backend·Data | 승인 공식 데이터의 버전 seed·lineage | Blocked | DATA-001 | ACTIVE seed 20·office 3+·mapping 10~12, mock 혼입 0, 재현 import/rollback |
+| READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DATA-SEED-001, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-001 | 표본 단위 테스트, provider payload/DB/log 원문 0, ACTIVE 전용 검색, PII 100%·성공률 동시 측정 |
 | LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |
 | API-CHAT-001 | P0 | Backend·QA | `/api/v1/chat`·signed context와 공통 오류 계약 | Blocked | CONTRACT-001, AI-001, LLM-001 | SUCCESS/FOLLOWUP/FALLBACK 200, 안전 대체 없는 503, 900초 token/tamper reset/current request 우선/source 결합·token persistence 0 |
@@ -50,7 +50,7 @@
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| LOG-001 | P0 | Backend·Security·Data | 비식별 이벤트·실패 질문 저장과 30일 텍스트 파기 | Blocked | API-CHAT-001, DB-001 | 원문 0, OUT_OF_SCOPE/FOLLOWUP 실패행 0, NULL purge·FK 보존·복구 테스트 |
+| LOG-001 | P0 | Backend·Security·Data | 비식별 이벤트·실패 질문 저장과 30일 텍스트 파기 | Blocked | API-CHAT-001 | 원문 0, OUT_OF_SCOPE/FOLLOWUP 실패행 0, NULL purge·FK 보존·복구 테스트 |
 | ADMIN-001 | P0 | FE·BE·Security | local/private 실패 질문 확인·사유 정정 | Blocked | LOG-001 | 목록/필터/상세/만료 빈 상태, public route 차단 |
 | ADMIN-002 | P0 | FE·BE·PM·Security | KB 후보 작성·제출·별도 승인·반려·재작성 | Blocked | ADMIN-001 | 작성자 자기 승인·PII 후보·미승인 ACTIVE 각각 0, 반려 comment와 재작성 경로 동작 |
 | REG-001 | P0 | 전체·QA | 침대 프레임 개선 전후 회귀 | Blocked | ADMIN-002 | 승인 전 폴백→승인 후 공식 출처 답변 완주 |
@@ -64,8 +64,8 @@
 | PERF-001 | P1 | Backend·QA | 평균/p95·100명 제한 스모크 | Blocked | API-CHAT-001 | deterministic 경로 결과와 실제 LLM 한계 분리 기록 |
 | ADMIN-QUALITY-001 | P1 | FE·BE·QA·Security | 품질 카드·최소 감사 이력 | Blocked | ADMIN-002, QA-001 | EVENT/EVALUATION/MOCK 배지 항상 표시·비합산; action/actor/target/old-new status/changed fields와 질문·답변 snapshot 0 |
 | DEMO-001 | P1 | PM·Platform·QA | local live→template fallback 데모 리허설 | Blocked | REG-001, PERF-001 | 인터넷/provider 장애에도 승인 KB 흐름 완주; 공개 URL·녹화는 별도 승인 항목 |
-| BACKUP-001 | P1 | Platform·Backend·Security | local RPO/RTO·dump 보관·restore/purge drill | Blocked | DB-001, LOG-001 | RPO24h/RTO60m, daily/pre-risk gitignored dump, 30일 삭제, restore 후 service-open 전 purge 1회 |
-| DEPLOY-001 | P1 | Platform·Security·PM | 조건부 Vercel/Render/Supabase 공개 demo | Blocked | DEV-002, A-021/Q-SEC-003 해결, D-031 구현·검증, 별도 공개 배포 승인 | privileged function/public port hardening 뒤 계정·리전·CORS·비밀·로그·비용·admin gate 승인 시에만 URL/health/rollback |
+| BACKUP-001 | P1 | Platform·Backend·Security | local RPO/RTO·dump 보관·restore/purge drill | Blocked | LOG-001 | RPO24h/RTO60m, daily/pre-risk gitignored dump, 30일 삭제, restore 후 service-open 전 purge 1회 |
+| DEPLOY-001 | P1 | Platform·Security·PM | 조건부 Vercel/Render/Supabase 공개 demo | Blocked | DEV-002, A-021/Q-SEC-003 해결, 별도 공개 배포 승인 | privileged function/public port hardening 뒤 계정·리전·CORS·비밀·로그·비용·admin gate 승인 시에만 URL/health/rollback |
 | HANDOFF-001 | P1 | 전체·Docs | local-first 인수인계·운영 런북 | Blocked | ADMIN-QUALITY-001, DEMO-001, BACKUP-001 | 신규 개발자 clean local 재현·backup/restore 성공; 단일 PC 위험과 public 배포 선택 조건 분리 |
 
 ## P2 — 명시적 범위 변경 전 백로그 미생성

@@ -35,7 +35,7 @@
 - Supabase empty DB reset/replay와 명시적 보상 rollback/replay
 - office mapping
 
-DB-001 local baseline 후보는 다음 영구 gate를 요구한다.
+DB-001 local baseline은 다음 영구 gate를 요구한다.
 
 - pgTAP 6 files / 282 assertions
 - real backend integration 8/8, DB URL 부재 환경 exact 8 skips(`local DB gate only`)
@@ -47,9 +47,17 @@ DB-001 local baseline 후보는 다음 영구 gate를 요구한다.
 - tooling `LocalDatabaseToolingContractTests` 전체, Ruff/Mypy, root/Web/API/contract/secret/package/diff gate
 - no-seed `/health=200`, `/ready=503`
 
-과거 DB 증거만으로는 현재 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
-Q-SEC-006=A/D-031의 explicit HostIP 공급망, exact loopback, fresh full gate가 모두 통과해야 하며, 공개 운영의 보안·용량·
-백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로 사용하지 않는다.
+과거 DB 증거만으로는 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
+2026-07-18 fresh run은 patched `-VerifyOnly` 10.033s, full disposable DB gate 90.508s, exact one
+`127.0.0.1:54322`, 두 pgTAP phase exit 0(현재 6 files/282), backend integration 8/8, 6개
+compensation/absence/reset/replay, final container 0/0을 증명했다. 이어 root gate 956.658s,
+package·secret·protected diff, combined patched/runner tooling 73/73가 모두 PASS했다. 이 결과는
+공개 운영의 보안·용량·백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로
+사용하지 않는다.
+
+`73f300b` remediation은 focused descendant cleanup 1/1(15.700s), full runner 50/50(318.556s),
+patched tooling 24/24(262.368s), AST error 0·secret·protected gate와 독립 review 0/0/0을 통과했다.
+이 code HEAD의 actual DB runner도 102.746s에 PASS해 exact loopback과 final container 0/0을 재확인했다.
 
 ### E2E
 

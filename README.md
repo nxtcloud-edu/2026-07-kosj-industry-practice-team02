@@ -47,7 +47,7 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
 - 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
-- DB-001 local/private 후보는 pinned Supabase CLI 2.109.1, PostgreSQL 17.6,
+- DB-001 disposable local/private 기준선은 patched Supabase CLI 2.109.1, PostgreSQL 17.6,
   6개 forward/compensation, 7 enum·8 table, forced RLS/capability, pgTAP 282와 backend
   integration 8/8을 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
   `database/schema-v1.draft.sql`이다.
@@ -56,11 +56,11 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   `/ready=503`은 의도한 정상 상태다.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
 - `contracts/`의 API spec revision은 2.0.1-draft다. DB executable authority는 timestamp
-  migrations이며 `database/`의 `0.3.0-local` projection은 후보 참고용이다. 실제 manifest는
-  host-port blocker 때문에 `database_schema=0.2.0-draft`를 유지한다.
+  migrations이며 `database/`의 `0.3.0-local` projection은 실제 검증된 local 기준선의 읽기용
+  투영이다. 공개·원격 DB 기준선이나 production readiness를 뜻하지 않는다.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
-- A-021/Q-SEC-003의 기본값 B가 활성이다. A-024가 해결돼 DB 후보가 local baseline으로
+- A-021/Q-SEC-003의 기본값 B가 활성이다. A-024/A-025가 해결돼 DB 기준선이 local baseline으로
   승격되더라도 local/private 전용이며 privileged function 21개의 public hardening 전에는
   remote/public 배포, public admin/API, public backend DB credential 사용과 `00700` 생성을
   금지한다.
@@ -95,6 +95,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offl
 Docker Desktop이 실행 중일 때 DB 기준선은 별도 gate로 검증한다.
 
 ```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -VerifyOnly
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
 ```
@@ -102,11 +103,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 이 gate의 reset/compensation은 disposable local DB 전용이다. remote project, 실제 데이터,
 Docker volume에는 실행하지 않는다.
 
-Q-SEC-004=A의 `default-local-port-binding`과 Q-SEC-005=A의 `local-only-port-binding`을 각각
-적용·재시작했지만 HostIP 미지정 actual probe는 모두 `127.0.0.1`과 IPv6 wildcard `::`를 함께
-만들었다. explicit `127.0.0.1` control만 단일 loopback이었다. 모든 probe는 제거됐고 runner는
-계속 reset 전에 fail-closed한다. Q-SEC-006/A-024 해결 전에는 DB
-gate를 우회하거나 DB-001을 완료로 표시하지 않는다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
+Q-SEC-004/005의 Docker 전역 보정만으로는 IPv6 wildcard가 남았으므로, D-031/D-032의 tracked
+source/runtime manifest와 project-local patched binary를 DB 실행 권위로 사용한다. 2026-07-18
+fresh gate에서 actual binding이 정확히 하나의 `127.0.0.1:54322`였고 pgTAP 282, backend integration
+8/8, 역순 보상·absence·reset/replay, final container 0/0이 모두 PASS했다. runner는 여전히 actual
+binding을 reset 전에 검사하며 stock/PATH fallback과 `db diff`를 허용하지 않는다. 공식 seed가
+0이므로 `/ready=503`은 유지되고 A-021/Q-SEC-003 때문에 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
+
+`73f300b`는 DB child를 bounded process tree로 실행·종료·dispose하도록 보정했다. focused 1/1,
+runner 50/50, patched 24/24와 독립 review 0/0/0 뒤 final-code DB gate도 102.746s에 PASS했고 exact
+loopback·stop·container 0/0·volume/prune 0을 재확인했다.
 
 다른 현재 디렉터리에서 실행할 때는 `-File`에 이 저장소의 `scripts/verify.ps1` 절대 경로를 전달한다. 러너는 호출된 파일 위치를 기준으로 저장소 루트를 찾는다.
 

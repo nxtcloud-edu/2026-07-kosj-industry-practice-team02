@@ -100,9 +100,16 @@ raw request in memory
 - local stack의 기본 개발 credential, TLS/rate-limit 부재를 전제로 runner가 actual single
   `127.0.0.1:54322`를 검증한 경우에만 사용한다. Docker/PostgreSQL port를 외부 interface에
   공개하거나 public credential로 재사용하지 않는다. Q-SEC-004=A와 Q-SEC-005=A의 두 보정도
-  actual `127.0.0.1`+`::`로 판정됐다. Q-SEC-006=A/D-031의 project-local patched CLI가
-  서면 설계·계획·source/toolchain/binary hash·actual exact gate를 모두 통과하기 전까지
-  fail-closed다.
+  actual `127.0.0.1`+`::`로 판정됐다. Q-SEC-006=A/D-031의 project-local patched CLI는 source
+  manifest `c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657`, patch
+  `109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d`, runtime
+  `751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c`로 고정됐다. 2026-07-18
+  actual inspect는 두 Docker port view 모두 exact one `127.0.0.1:54322`였고 종료 뒤 project/all
+  container는 0/0이었다. volume delete·prune은 0회다.
+- 이 성공은 disposable local/private DB gate다. 개발 credential, production TLS/rate limit,
+  공개 admin 보호와 원격 credential 안전성을 증명하지 않는다.
+- `73f300b`는 DB child process tree를 bounded timeout으로 관리하고 descendant 종료·dispose를
+  mutation tests로 고정했다. 명령 argument·child output·credential은 여전히 parent 출력에 노출하지 않는다.
 - A-021 감사에서 privileged execution graph 22개 중 `00600` validator만 exact
   `search_path=pg_catalog, pg_temp`로 보정됐고 21개는 public hardening 미완료다.
   Q-SEC-003 무응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB

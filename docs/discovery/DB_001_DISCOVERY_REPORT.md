@@ -2,8 +2,9 @@
 
 - 기준 commit: 2a4e26b
 - 감사일: 2026-07-16 KST
-- 상태: Discovery complete; Q-DB-002=A resolved, 서면 설계 명세 Approved, 실행계획 사용자 승인 대기
-- 범위: 문서·논리 SQL·로컬 도구 상태의 읽기 전용 감사
+- 현재 상태: Q-DB-002/Q-SEC-006/Q-TOOL-001과 수정 계획 승인 완료; DB-001 구현·검증 완료,
+  `database_schema=0.3.0-local` disposable local/private 기준선 활성. A-021/Q-SEC-003은 별도 public-release blocker
+- 역사적 감사 범위: 2026-07-16 문서·논리 SQL·로컬 도구 상태의 읽기 전용 감사. 이후 결과는 10~14절에 append-only 기록
 
 ## 1. 결론
 
@@ -179,3 +180,28 @@ Win32 extended-length delete, Docker/WSL build, global Git setting, sparse check
 partial tree는 runtime authority가 아니며 새 bootstrap이 checkout/build input으로 사용하거나 자동 삭제하지 않는다. 수정 계획 승인,
 Task 2C TDD와 독립 review 뒤에만 Task 3을 재개한다. API/DB schema/migration/data/privacy/dependency,
 containers 0/0, `/ready=503`, A-021 public blocker는 변하지 않는다.
+
+## 14. Patched runtime과 fresh local 기준선 검증 — 2026-07-18 KST
+
+사용자는 수정 계획을 `수정 계획 승인, 구현 시작`으로 승인했다. 이후 short checkout/path-budget,
+source/patch/runtime manifest 분리, 두 독립 build의 동일 SHA-256, patched-only DB runner를 구현했다.
+tracked source manifest SHA-256은
+`c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657`, 1,824-byte patch는
+`109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d`, 103,027,200-byte runtime은
+`751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c`다. stock CLI와 legacy
+partial tree는 입력·삭제 대상으로 사용하지 않았다.
+
+2026-07-18 fresh disposable gate는 Docker Engine 29.2.1에서 `NetworkSettings.Ports`와
+`HostConfig.PortBindings` 모두 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`를 확인했다.
+첫 reset/pgTAP, 6개 compensation newest-first, absence proof, 두 번째 reset/replay/pgTAP,
+backend integration 8/8이 통과했다. 현재 SQL suite는 6 files/282 assertions이며 final
+project/all container count는 0/0, volume delete/prune은 0회다. root gate, package validator,
+secret scan, combined tooling 73/73와 protected-path diff도 통과했다.
+
+따라서 DB-001은 `database_schema=0.3.0-local`의 disposable local/private 기준선으로 완료됐다.
+이 승격은 새 migration/schema/data/API/dependency 변화가 아니라 기존 six-migration executable
+authority의 actual local 검증 결과다. 공식/mock seed는 0이고 `/ready=503`이 정상이다.
+A-021/Q-SEC-003 기본값 B, remote/public/admin/API/backend credential/`00700` 차단은 그대로다.
+이후 runner descendant cleanup finding은 `73f300b`에서 bounded process tree로 보정됐다. focused
+1/1, runner 50/50, patched 24/24, 독립 review 0/0/0과 102.746s final-code DB gate가 통과했고 exact
+loopback·container 0/0·volume/prune 0을 재확인했다. 최종 closeout docs reviews는 진행 중이다.

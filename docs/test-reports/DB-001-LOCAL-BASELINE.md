@@ -1,25 +1,24 @@
 # DB-001 Local Baseline Verification Report
 
-- Date: 2026-07-17 KST
+- Date: 2026-07-18 KST
 - Branch: `codex/db-001-layered-enforcement`
-- Evidence baseline HEAD: `85067d04c3f498303d13426bf275e4196e8d5bdf`
-- Current semantic version: `database_schema=0.2.0-draft`; `0.3.0-local`은 미승격 후보
-- Scope: disposable local/private Supabase PostgreSQL candidate only
-- Verdict: BLOCKED — Q-SEC-006=A/D-031 approved; patched tooling specification, plan, build, and actual full gate pending
+- Final-code evidence HEAD: `73f300b9a90ad386ece555db3dc14fe1d18e6ba6`
+- Current semantic version: `database_schema=0.3.0-local`
+- Scope: disposable local/private Supabase PostgreSQL baseline only
+- Verdict: PASS — verified disposable local/private baseline; production/public readiness 아님
 
 ## 결론
 
-DB-001의 executable candidate는 6개 forward migration, 6개 matching compensation,
+DB-001의 executable baseline은 6개 forward migration, 6개 matching compensation,
 7 enum, 8 table, forced RLS/capability boundary, 원자 후보 workflow, ACTIVE+OFFICIAL 시민 read,
 30일 text-only purge와 lazy typed FastAPI repository를 재현했다. 공식/mock persistent seed는
 0이며 `/health=200`, `/ready=503`이 정상이다.
 
-그러나 이 결과는 안전한 final local baseline이 아니다. Task 10 quality review에서 기존 runtime의
-wildcard host publish를 발견했다. 보정 runner는 Docker Engine 28+, 고정 optioned network와
-container identity, HostConfig 요청과 actual `NetworkSettings.Ports`를 reset/status/env 전에
-검증한다. Docker Desktop 4.62.0/Engine 29.2.1에서 stock CLI 2.109.1은 HostIP를 생략했고 actual
-binding은 wildcard 두 종류로 판정돼 runner가 중단했다. reset/status/credential handling은
-실행되지 않았고 stack stop 뒤 project container count 0을 확인했다.
+기존 stock runtime의 wildcard host publish 때문에 한때 차단됐지만, D-031/D-032의 patched CLI는
+DB start HostIP만 explicit `127.0.0.1`로 지정하고 source/runtime hash를 분리 고정한다. runner는
+stock/PATH fallback 없이 이 artifact만 검증하며 actual binding을 reset/status/env 전에 검사한다.
+2026-07-18 fresh run에서 두 Docker inspect view가 모두 exact one
+`127.0.0.1:54322 -> 5432/tcp`였고 전체 DB gate가 exit 0으로 완료됐다.
 
 이 보고서는 production readiness 또는 public release 승인이 아니다. A-021/Q-SEC-003은
 미해결 B/High public-release blocker이며 무응답 기본값 B를 적용한다. `00600` validator 외
@@ -39,6 +38,17 @@ public backend DB credential을 금지하고 `00700`을 만들지 않는다.
 credential·DSN은 runner process memory/environment에서 사용하지만 값과 Supabase status 원문을
 표시·로그·별도 영구 복사하지 않았다. Provisioning은 원자 `DATABASE_URL` 교체를 위해 `.env`
 전체 bytes를 읽지만 provider/non-target 값을 파싱하지 않고 byte-identical하게 보존한다.
+
+## Patched CLI 공급망
+
+| 잠금 대상 | 실제 값 |
+|---|---|
+| source manifest SHA-256 | `c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657` |
+| patch SHA-256 / bytes | `109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d` / 1,824 |
+| runtime SHA-256 / bytes | `751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c` / 103,027,200 |
+| upstream tag object / commit | `9d25ff8b5b0fba3c6f0ef000e7dd658c8d710c38` / `6d4c19870ed213ba7f682f117d0345c8a40bfa94` |
+| Go archive SHA-256 | `b7401f1b41517428e537493316256fb7cf03c66a130a0103ab07f3a2152e2112` |
+| runtime path | `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe` |
 
 ## Forward migration SHA-256
 
@@ -62,7 +72,7 @@ credential·DSN은 runner process memory/environment에서 사용하지만 값�
 | `20260716000500_indexes_and_read_interfaces.rollback.sql` | `44b38bc0d6cd53e211828db43723f320beb727b225ef42fdc870fe9624cd3e28` |
 | `20260717000600_deferred_active_question_trigger_security.rollback.sql` | `727ba5e28660e6507b9a98af5d7fe1745f97f644039a9c948b30bcbfa6e6d2d4` |
 
-## 과거 DB gate 결과 — 현재 완료 증거 아님
+## DB schema와 동작 증거
 
 | 검증 | 실제 결과 |
 |---|---|
@@ -80,6 +90,19 @@ Full runner는 두 번의 reset을 수행한다. 첫 reset 뒤 pgTAP, local logi
 `00600`부터 `00100`까지 compensation과 absence proof를 실행하고, 두 번째 reset으로 6개
 forward migration을 replay한 뒤 pgTAP과 backend integration을 다시 실행했다.
 
+## 2026-07-18 fresh actual gate
+
+| 검증 | 실제 결과 |
+|---|---|
+| preflight | Git clean, Desktop running, Engine 29.2.1, all/project container 0/0 |
+| patched `-VerifyOnly` | exit 0, 10.033s |
+| full `scripts/verify_database.ps1` | exit 0, 90.508s; 모든 15 stable phase PASS |
+| actual binding | 두 inspect payload 모두 exact one `127.0.0.1:54322 -> 5432/tcp`; wildcard/null/multiple/extra 0 |
+| pgTAP | reset 1과 reset/replay 2 모두 exit 0; current suite 6 files/282 assertions |
+| compensation/replay | `00600→00500→00400→00300→00200→00100`, absence proof, reset/replay PASS |
+| backend integration | current 8 definitions, fresh phase exit 0 (8/8) |
+| stop/cleanup | patched stop exit 0, 3.211s; final project/all 0/0; volume delete/prune 0 |
+
 ## 상태·동시성·보관 증거
 
 - 두 연결 사유 확인은 한 번만 `NEW→REASON_CONFIRMED`에 성공하고 event의 최초 자동 reason을
@@ -92,20 +115,55 @@ forward migration을 replay한 뒤 pgTAP과 backend integration을 다시 실행
   event/candidate FK를 보존했다.
 - OUT_OF_SCOPE text와 FOLLOWUP failed row, raw 질문/답변/transcript/token/IP/device column은 0이다.
 
-## 비DB 검증
+## Fresh 비DB 검증
 
 | 검증 | 실제 결과 |
 |---|---|
-| local DB tooling contract | 31/31 PASS, 176.911s; partial-start cleanup·stopped inventory 포함 |
-| Ruff format/check | PASS |
-| strict Mypy | PASS |
-| API pytest without DB URLs | 156 passed, 8 skipped; main import 4 subtests PASS |
-| root/Web/API/contract gate | PASS |
-| secret scan | finding 0, secret value output 0 |
-| package validation / `PACKAGE_MANIFEST.json` | PASS / byte-for-byte unchanged |
-| JSON/version validation | PASS |
-| `git diff --check` | whitespace error 0 |
+| root/Web/API/contract gate | PASS, exit 0, 956.658s |
+| package validator | PASS, exit 0; required 12 files, 0.656s |
+| secret scan | PASS, finding 0, value output 0, 7.708s |
+| patched + runner/stock tooling | 73/73 PASS (`24 + 49`), 657.506s unittest |
+| protected product/contract/schema/data/dependency diff | PASS, exit 0 |
+| `git diff --check` | PASS, whitespace error 0 |
 | health/readiness | `/health=200`, `/ready=503` |
+
+## Post-remediation final-code evidence
+
+Runner child process tree timeout/cleanup을 `73f300b fix(db): bound database child process trees`에서
+보정했다. 독립 specification/quality review는 Critical/Important/Minor `0/0/0`으로 APPROVED다.
+
+| 검증 | 실제 결과 |
+|---|---|
+| focused descendant cleanup regression | 1/1 PASS, 15.700s |
+| full runner tooling | 50/50 PASS, 318.556s |
+| patched tooling | 24/24 PASS, 262.368s |
+| parser/AST·secret·protected boundary | PASS; AST error 0, secret finding 0, protected diff 0 |
+| patched verify/final-code preflight | PASS; verify 7.728s, complete 13.894s, Engine 29.2.1, container 0/0 |
+| final-code DB runner | exit 0, all 15 stable phases PASS, 102.746s |
+| final-code actual binding | 두 inspect view 모두 exact one `127.0.0.1:54322 -> 5432/tcp` |
+| final-code stop/cleanup | stop exit 0, 2.512s; capture/stop 5.859s; final project/all 0/0; volume/prune 0 |
+
+Post-remediation의 역사적 evidence snapshot은 196-line
+`.superpowers/sdd/qsec006-task-5-db-evidence.md`, SHA-256
+`89D00A9BDB3E6A01961F66977A29A811C964ECAF3623D65FD51D0EC6054713F2`다. 이 focused final-code
+revalidation은 이미 dirty인 승인된 closeout 문서를 변경·stage하지 않았고 root/full combined tooling을
+다시 실행하지 않았다. 아래 final verification이 이를 이어 받아 전체 gate를 닫았다.
+
+## Final verification evidence
+
+| 검증 | 실제 결과 |
+|---|---|
+| patched `-VerifyOnly` | PASS, exit 0, 8.528s |
+| root `scripts/verify.ps1` | PASS, exit 0, 866.976s |
+| package validator / secret scan | PASS; required 12 / finding 0, 1.075s / 5.652s |
+| combined tooling | 74/74 PASS (`24 + 50`), unittest 602.877s / wrapper 603.617s |
+| JSON / diff | PASS, exit 0, 0.557s / 0.347s |
+| protected product paths + scripts | diff 0 |
+| final dirty set / Docker cleanup | authorized 21 modified + IMP-004 note 1; project/all container 0/0 |
+
+최종 evidence authority는 234-line `.superpowers/sdd/qsec006-task-5-db-evidence.md`, SHA-256
+`9EE2AC549A983921CC928892D803E46F713E311103928A25B5E47A901764DBFB`다. 이 보고서와 note를
+포함하는 closeout commit까지 완료됐으며 실제 SHA는 Git 이력을 권위로 확인한다.
 
 ## Commits와 review
 
@@ -114,18 +172,24 @@ forward migration을 replay한 뒤 pgTAP과 backend integration을 다시 실행
 - `228d8cb` — integration cleanup/evidence hardening
 - `290d8d3` — A-021 privileged-function search-path audit
 - `85067d0` — Task 9 documentation closeout
+- `6520b0c` + focused guard commits — short-root/path-budget and legacy deny-only boundary
+- `b7a22e7` — reproducible patched runtime manifest pin
+- `1a31be4`, `f8d4f9b` — patched-only DB runner and discovery-escape regression closure
+- `73f300b` — bounded database child process trees and descendant cleanup regression
 - final Task 9 specification review: Critical/Important/Minor `0/0/0`
 - final Task 9 quality review: Critical/Important/Minor `0/0/0`
 - initial Task 10 spec review: Critical/Important/Minor `0/1/1`
 - initial Task 10 quality review: Critical/Important/Minor `1/4/0`; actual port finding reproduced,
   fail-closed runner implemented, Q-SEC-004/A-022 opened
-- runner remediation 뒤 fresh non-DB root/tooling/static gate: PASS; actual safe runtime/full DB gate와
-  independent completion review는 D-031 구현·검증 뒤 pending
+- patched runner 뒤 fresh non-DB root/tooling/static와 actual safe runtime/full DB gate: PASS
 - Q-SEC-004=A/D-029 실제 재검증: `default-local-port-binding` 적용·완전 재시작 뒤 HostIP 미지정
   probe는 `127.0.0.1`+`::`, explicit `127.0.0.1` probe는 단일 loopback. 두 probe 제거, DB mutation 0.
 - Q-SEC-005=A/D-030 실제 재검증: `local-only-port-binding` 적용·재시작 뒤 HostIP 미지정 probe는
   다시 `127.0.0.1`+`::`, explicit `127.0.0.1` control은 단일 loopback. 두 probe 제거,
-  running/all/project container `0/0/0`, DB mutation 0. 현재 local Go toolchain 없음.
+  running/all/project container `0/0/0`, DB mutation 0. 이 두 결과는 역사적 대조 근거다.
+- `73f300b` remediation specification/quality review: APPROVED, Critical/Important/Minor `0/0/0`
+- final cumulative specification review: APPROVED, Critical/Important/Minor `0/0/0`
+- final quality documentation re-review: APPROVED, Critical/Important/Minor `0/0/0`
 
 ## 명령
 
@@ -133,19 +197,18 @@ forward migration을 replay한 뒤 pgTAP과 backend integration을 다시 실행
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 apps/api/.venv/Scripts/python.exe -B scripts/validate_codex_package.py
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1
+apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling scripts.tests.test_supabase_tooling -v
 git diff --check
 ```
 
-Q-SEC-006=A 결정만으로 `verify_database.ps1`이나 direct Supabase start를 실행하지 않는다.
-서면 patched CLI 명세와 별도 실행계획 승인 뒤 exact pinned binary가 준비돼야 한다.
+DB gate 전 `scripts/bootstrap_patched_supabase.ps1 -VerifyOnly`를 실행한다. direct stock `db start`,
+PATH fallback, `db diff`, remote link/push는 승인된 경로가 아니다.
 
 ## 해석 제한과 다음 gate
 
 - 공식 KB/기관 seed는 PM 승인 목표 2026-07-20 전까지 0이다.
-- Q-SEC-006=A/D-031의 explicit HostIP 공급망 검증, exact single loopback binding과 fresh full DB gate 전
-  manifest를 `0.3.0-local`로 승격하지 않는다.
-- 이 보고서의 282/282·8/8·rollback/replay는 port finding 전 역사적 기능 증거이며 현재 active
-  local baseline이나 후속 dependency 해제 근거가 아니다.
+- 이 보고서는 disposable local/private 기준선 근거이며 production/public readiness가 아니다.
+- `0.3.0-local` 승격은 실제 loopback/full gate의 결과이며 새 migration/data/API 변경이 아니다.
 - DATA-SEED-001은 DATA-001 승인 뒤 시작하고 READY-001은 그 뒤 `/ready=200` 전환을 검증한다.
 - A-021/Q-SEC-003 답변 전에는 선택지 B를 유지한다. public 경계를 열려면 별도 인간 결정,
   reviewed forward migration/compensation/pgTAP/behavior replay, 배포·CORS·credential·backup

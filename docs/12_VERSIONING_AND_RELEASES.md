@@ -47,25 +47,22 @@ After
 
 Git commit가 아직 없으면 `uncommitted`라고 기록하고, 현재 HEAD를 함께 적는다.
 
-## 현재 local DB 후보와 manifest
+## 현재 local DB 기준선과 manifest
 
-DB-001 Task 10은 host port security blocker로 완료되지 않았다. 현재 manifest 축은 승격 전
-값을 유지한다.
+DB-001 Task 10은 2026-07-18 disposable actual gate를 통과해 local/private 기준선으로 승격됐다.
 
 ```text
-repo_guidance: 1.4.0
-database_schema: 0.2.0-draft
-test_suite: 0.4.2-readiness-contract
-documentation: 2.3.23
+repo_guidance: 1.5.0
+database_schema: 0.3.0-local
+test_suite: 0.5.0-db-baseline
+documentation: 2.4.0
 ```
 
-`0.3.0-local`은 6개 timestamp forward migration뿐 아니라 exact loopback runtime, full DB/root
-gate와 independent review가 모두 통과한 뒤에만 사용할 후보다. Q-SEC-004=A의
-`default-local-port-binding`과 Q-SEC-005=A의 `local-only-port-binding`도 actual IPv6 wildcard
-`::`를 남겼다. Q-SEC-006=A/D-031의 patched CLI source/toolchain/binary와 actual full gate 전에는
-승격하지 않는다. Q-TOOL-001=A/D-032는 source checkout을 `.tools/s/{a,b}`로 줄이는 수정 계획을
-확정했지만 Task 2C와 runtime/full gate는 아직 실행하지 않았다. 공식
-데이터·mock 데이터는 모두 `0.0.0-not-populated`이고 A-021/Q-SEC-003은 별도 public blocker다.
+승격 근거는 6개 timestamp forward/compensation, pinned patched runtime, actual exact one
+`127.0.0.1:54322`, fresh pgTAP 282, integration 8/8, compensation/absence/replay와 static/root gate다.
+제품·API·shared contracts·official/mock data·prompt 축은 바뀌지 않았다. 공식 데이터·mock 데이터는
+모두 `0.0.0-not-populated`이고 `/ready=503`이 정상이다. `local` suffix는 공개·원격·production
+release가 아님을 명시한다. A-021/Q-SEC-003은 계속 별도 public blocker다.
 
 ## 릴리스 체크
 

@@ -55,11 +55,12 @@ local/private 합성 MVP의 기본 복구 목표는 RPO 24시간, RTO 60분이�
 ## DB-001 local 운영 절차
 
 1. Docker Desktop을 실행한다.
-2. `scripts/bootstrap_supabase.ps1 -VerifyOnly`로 pinned CLI `2.109.1`을 확인한다.
+2. `scripts/bootstrap_patched_supabase.ps1 -VerifyOnly`로 source/runtime manifest와 patched CLI
+   `2.109.1` hash를 확인한다.
 3. `scripts/verify_database.ps1`로 PostgreSQL-only start, reset, credential rotation,
    pgTAP, 6단계 보상/부재, replay, integration을 실행한다.
 4. 이미 DB가 실행 중일 때만 `scripts/verify_database.ps1 -SkipStart`를 사용한다.
-5. 필요하면 `.\.tools\supabase\v2.109.1\supabase.exe stop`으로 정상 종료한다.
+5. 필요하면 `.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe stop`으로 정상 종료한다.
 
 `supabase db reset --local`과 compensation은 disposable local DB에만 허용된다. remote DB,
 실제 데이터, Docker volume에 실행하지 않는다. 공식 seed가 0이므로 검증 뒤에도
@@ -69,13 +70,21 @@ local stack에는 개발용 기본 credential이 있고 production TLS/rate limi
 없다. 따라서 runner가 Engine 28+와 actual single `127.0.0.1:54322`를 증명하지 못하면 reset
 전에 중단한다. Q-SEC-004=A의 `default-local-port-binding`과 Q-SEC-005=A의
 `local-only-port-binding`을 적용했지만 actual probe는 모두 `127.0.0.1`과 IPv6 wildcard `::`를
-함께 생성했다. Q-SEC-006=A/D-031의 patched CLI 설계·계획·검증이 끝날 때까지 DB-001이 Blocked다.
+함께 생성했다. Q-SEC-006=A/D-031의 patched CLI는 2026-07-18 actual gate에서 exact one
+`127.0.0.1:54322`, pgTAP 282, integration 8/8과 cleanup 0/0을 통과해 DB-001 local/private
+기준선이 됐다. direct stock `db start`, PATH fallback과 `db diff`는 승인된 운영 경로가 아니다.
 A-021/Q-SEC-003 기본값 B에 따라 기존 privileged
 function 21개가 보정되기 전에는 remote/public deployment, public admin/API, public backend DB
 credential 사용이 금지되며 local baseline을 production-ready라고 부르지 않는다.
 
 Q-SEC-004=A/D-029와 Q-SEC-005=A/D-030은 적용됐으나 exact local을 달성하지 못했다.
-Q-SEC-006=A/D-031은 explicit HostIP를 넣는 project-local patched CLI의 새 Go
-toolchain·source/diff/binary pin 공급망을 승인했다. 서면 설계와 별도 실행계획 승인,
-source/toolchain/binary/actual gate 전에는 runtime을 더 시작하지 않는다.
+Q-SEC-006=A/D-031과 Q-TOOL-001=A/D-032가 explicit HostIP, short checkout, source/patch/runtime
+pin을 구현했다. binary가 없거나 `-VerifyOnly`가 실패하면 DB mutation 없이 중단하고 tracked
+manifest로 재빌드한다. unsafe runtime은 runner-owned cleanup으로 container 0을 확인하며 volume
+삭제나 prune은 하지 않는다. local schema 복구는 patched runner의 `db reset --local`이고,
+6개 compensation은 문서화된 disposable local replay에만 사용한다.
+
+DB child가 timeout/실패하면 `73f300b`의 bounded process-tree cleanup이 descendant까지 종료·dispose한
+뒤 runner-owned container cleanup을 수행한다. 재시작 전 project/all container 0/0을 확인하며
+임의 process kill, stock fallback, volume delete/prune으로 우회하지 않는다.
 [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)

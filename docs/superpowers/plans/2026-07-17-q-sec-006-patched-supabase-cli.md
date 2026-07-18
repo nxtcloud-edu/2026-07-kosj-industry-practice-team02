@@ -8,10 +8,11 @@
 
 **Tech Stack:** Windows PowerShell 5.1, Git, official Go 1.25.11 Windows AMD64, Supabase CLI Go source v2.109.1, Python 3.12 standard-library unittest, Docker Desktop 4.62.0/Engine 29.2.1, PostgreSQL 17.6, pgTAP.
 
-**Implementation status (2026-07-18):** Tasks 1/2/2A/2B are implemented and independently reviewed.
-Q-TOOL-001=A/D-032/ADR-0014 resolves A-025 by selecting `.tools/s/a`, `.tools/s/b` and a pre-checkout
-path-budget gate. The revised Task 2C plan awaits user approval. Do not edit tooling or resume Task 3 until
-that approval; the old `.tools/supabase-source/...` partial tree remains quarantined and must not be deleted.
+**Implementation status (2026-07-18):** Tasks 1~5, remediation, review and final verification are complete.
+The user approved the amendment with `수정 계획 승인, 구현 시작`. Short-root/path-budget, reproducible
+runtime pin, patched-only runner, exact loopback/full DB/root/static gates passed. Final closeout reviews are
+APPROVED 0/0/0, full final verification passed, and the closeout commit is complete. The old `.tools/supabase-source/...`
+partial tree remains quarantined and untouched. `73f300b` bounded child process trees and passed code review 0/0/0.
 
 ## Global Constraints
 
@@ -43,9 +44,9 @@ that approval; the old `.tools/supabase-source/...` partial tree remains quarant
 ## Plan governance
 
 - Plan ID: `DB-001-T10-QSEC006-PLAN`
-- Status: Revised after Q-TOOL-001=A; awaiting user approval before Task 2C
+- Status: Completed — disposable local/private implementation, remediation, actual gate, reviews, final verification and closeout commit complete
 - User approval: `계획 승인, 구현 시작` on 2026-07-17 KST
-- Amendment decision: `Q-TOOL-001: A` on 2026-07-18 KST; implementation approval for this revision not yet received
+- Amendment decision: `Q-TOOL-001: A`; implementation approval `수정 계획 승인, 구현 시작` on 2026-07-18 KST
 - Date: 2026-07-17 KST
 - Branch: `codex/db-001-layered-enforcement`
 - Worktree: `.worktrees/db-001-layered-enforcement`
@@ -64,7 +65,7 @@ Create during implementation:
 - `scripts/supabase-cli.local-patch.runtime.json` — exact binary output/version/hash lock, added only after reproducible builds agree.
 - `scripts/bootstrap_patched_supabase.ps1` — verify-only, candidate-build and install workflow with stable output.
 - `scripts/tests/test_patched_supabase_tooling.py` — source/patch/bootstrap/runtime contract and behavior tests.
-- `docs/implementation-notes/IMP-20260717-012-...md` — implementation/full-gate evidence generated during Task 5.
+- [IMP-20260718-004 patched Supabase CLI와 DB-001 local baseline 완료](../../implementation-notes/IMP-20260718-004-patched-supabase-cli와-db-001-local-baseline-완료.md) — Task 5 implementation/full-gate/final-verification evidence; Done and included in the closeout commit.
 
 Modify during implementation:
 
@@ -132,7 +133,7 @@ Parent output uses stable uppercase step identifiers; the candidate success line
 - Consumes: D-031 exact upstream/Go/build values.
 - Produces: patch SHA-256 `109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d`, 1,824 LF-normalized UTF-8 bytes, and the source manifest consumed by Task 2.
 
-- [ ] **Step 1: Write the failing source-lock tests**
+- [x] **Step 1: Write the failing source-lock tests**
 
 Create `scripts/tests/test_patched_supabase_tooling.py` with this initial content:
 
@@ -229,7 +230,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -239,7 +240,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supa
 
 Expected: two failures because the source manifest and patch do not exist. No `.tools/` path is created.
 
-- [ ] **Step 3: Add the exact upstream patch**
+- [x] **Step 3: Add the exact upstream patch**
 
 Create `scripts/patches/supabase-cli-v2.109.1-db-loopback.patch` with `apply_patch`. The block below is
 a whitespace-safe byte recipe: replace every literal `<SP>` with one ASCII space (U+0020) and every
@@ -294,13 +295,13 @@ diff --git a/apps/cli-go/internal/db/start/start.go b/apps/cli-go/internal/db/st
 <SP><TAB><TAB><TAB>utils.DbId + ":/var/lib/postgresql/data",
 ```
 
-- [ ] **Step 4: Add the exact source manifest**
+- [x] **Step 4: Add the exact source manifest**
 
 Create `scripts/supabase-cli.local-patch.source.json` with the exact JSON represented by
 `EXPECTED_SOURCE`, preserving its property order and adding one final newline. Do not add a runtime
 manifest in this task.
 
-- [ ] **Step 5: Verify GREEN and patch applicability**
+- [x] **Step 5: Verify GREEN and patch applicability**
 
 Run with a fresh exact checkout:
 
@@ -321,7 +322,7 @@ Remove-Item -LiteralPath $resolvedCheckRoot -Recurse -Force
 Expected: 2/2 tests pass; `git apply --check` exits 0; the patch hash is
 `109C096480E8185D761E9CE8FBA10E93EFC55190C42EAB978F769A6993833F7D`; diff check passes.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```powershell
 git add scripts/tests/test_patched_supabase_tooling.py scripts/patches/supabase-cli-v2.109.1-db-loopback.patch scripts/supabase-cli.local-patch.source.json
@@ -340,7 +341,7 @@ git commit -m "test(tooling): pin patched Supabase source contract"
 - Consumes: Task 1 source manifest and patch.
 - Produces: `-BuildCandidate`, `-Install`, `-VerifyOnly`, optional approved `-GoArchivePath`, stable output, two independent source/build artifacts, and no tracked mutation.
 
-- [ ] **Step 1: Add failing bootstrap contract and behavior tests**
+- [x] **Step 1: Add failing bootstrap contract and behavior tests**
 
 Extend the test module imports with `contextmanager`, `os`, `shutil`, `subprocess`, and `tempfile`. Add this
 fixture helper, which copies the bootstrap, source manifest and patch into a temporary repository-shaped
@@ -521,7 +522,7 @@ class PatchedBootstrapContractTests(unittest.TestCase):
                     self.assertFalse((root / ".tools").exists())
 ```
 
-- [ ] **Step 2: Run bootstrap tests and verify RED**
+- [x] **Step 2: Run bootstrap tests and verify RED**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling.PatchedBootstrapContractTests -v
@@ -529,7 +530,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supa
 
 Expected: failures because `scripts/bootstrap_patched_supabase.ps1` does not exist.
 
-- [ ] **Step 3: Implement exact argument, manifest and child-process boundaries**
+- [x] **Step 3: Implement exact argument, manifest and child-process boundaries**
 
 Create `scripts/bootstrap_patched_supabase.ps1` with PowerShell 5.1-compatible functions:
 
@@ -605,7 +606,7 @@ INSTALL-PATCHED-SUPABASE                      install only
 VERIFY-PATCHED-SUPABASE-BINARY                install final
 ```
 
-- [ ] **Step 4: Run focused and existing tooling tests**
+- [x] **Step 4: Run focused and existing tooling tests**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling -v
@@ -616,7 +617,7 @@ git diff --check
 
 Expected: new tests pass; stock bootstrap tests remain unchanged and pass; secret/diff checks pass.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```powershell
 git add scripts/bootstrap_patched_supabase.ps1 scripts/tests/test_patched_supabase_tooling.py
@@ -635,7 +636,7 @@ returns two PATH applications. Reading `.Source` from the unbounded result produ
 PowerShell coerces into one space-joined scalar application path. `CreateProcess` therefore fails before
 the first `git init` with stable `operational code=2`. Do not work around this by changing PATH.
 
-- [ ] **Step 1: Add the focused multiple-Git RED**
+- [x] **Step 1: Add the focused multiple-Git RED**
 
 Add `test_multiple_git_applications_select_first_path_without_array_coercion`. The test must extract and
 execute the production Git-discovery function in a temporary harness whose PATH contains two real
@@ -644,7 +645,7 @@ returns exactly the first application's absolute path, never an array or space-j
 
 Run only the new test and confirm RED against the current unbounded `.Source` assignment.
 
-- [ ] **Step 2: Implement the single root-cause fix**
+- [x] **Step 2: Implement the single root-cause fix**
 
 Extract Git discovery into `Get-PatchedGitExecutable`. Collect the command results as an array, require at
 least one result, select index zero (normal PATH precedence), require a non-empty absolute existing leaf,
@@ -652,7 +653,7 @@ and return one scalar full path. Replace only the current lines 1819–1821 disc
 helper call. Preserve Git arguments, network allowlist, checkout verification, stable failures, and all
 other build behavior.
 
-- [ ] **Step 3: Verify the regression and full Task 2 boundary**
+- [x] **Step 3: Verify the regression and full Task 2 boundary**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling -v
@@ -664,7 +665,7 @@ git diff --check
 Expected: the multiple-Git test and full patched/stock tooling suites pass; no network build or DB action
 is required for this correction.
 
-- [ ] **Step 4: Review exact scope and commit Task 2A**
+- [x] **Step 4: Review exact scope and commit Task 2A**
 
 Review the two-file unstaged diff, stage exactly the bootstrap and its test, verify the cached path set and
 cached diff/check, then commit `fix(tooling): select one Git application path`. Obtain a fresh Task 2A
@@ -682,7 +683,7 @@ tag object and peeled commit, then detached checkout failed with `Filename too l
 had no local `core.longpaths` value and no `HEAD`. Do not shorten the workspace, change global Git config, or
 skip files as a workaround.
 
-- [ ] **Step 1: Add the focused checkout-configuration RED**
+- [x] **Step 1: Add the focused checkout-configuration RED**
 
 Add `test_checkout_sets_local_longpaths_before_fetch_and_checkout`. Extract the production
 `New-VerifiedSupabaseCheckout` function into a temporary PowerShell harness with controlled stubs for path
@@ -692,7 +693,7 @@ autocrlf and before remote/fetch/checkout. Also assert that no `--global`, `--sy
 exclusion or changed upstream command exists. Run the new test and confirm RED specifically because the local
 longpaths call is absent.
 
-- [ ] **Step 2: Implement the single repository-local fix**
+- [x] **Step 2: Implement the single repository-local fix**
 
 Immediately after local `core.autocrlf=false`, add only:
 
@@ -703,13 +704,13 @@ $null = Invoke-VerifiedGit @("config", "--local", "core.longpaths", "true") $che
 Preserve exact Git selection, init, origin, fetch, tag/commit verification, detached checkout, timeouts,
 network allowlist, stable failures and every build/install behavior.
 
-- [ ] **Step 3: Verify the regression and full Task 2 boundary**
+- [x] **Step 3: Verify the regression and full Task 2 boundary**
 
 Run the focused RED/GREEN, the full patched tooling suite, stock bootstrap behavior suite, secret scanner,
 PowerShell 5.1 parser and diff check. No `-BuildCandidate`, network, Docker, DB or remote operation belongs in
 Task 2B.
 
-- [ ] **Step 4: Review exact scope and commit Task 2B**
+- [x] **Step 4: Review exact scope and commit Task 2B**
 
 Review the exact two-file diff, stage only the bootstrap and its test, assert the cached path set is exactly
 those two files, review cached diff/check, and commit `fix(tooling): enable local Git long paths`. Obtain a
@@ -730,7 +731,7 @@ fresh specification/quality review before the next Task 3 retry.
 - Produces: exact source-manifest `workspace` contract, `.tools/s/a` and `.tools/s/b`, fail-closed
   projected path validation before any checkout mutation, and no legacy checkout/build/delete path.
 
-- [ ] **Step 1: Add source-workspace and production-path RED tests**
+- [x] **Step 1: Add source-workspace and production-path RED tests**
 
 Extend `EXPECTED_SOURCE` in `scripts/tests/test_patched_supabase_tooling.py` with this exact peer of
 `patch` and `build`:
@@ -830,7 +831,7 @@ Expected: 8 methods are RED only for the absent manifest workspace, short-root/s
 deny-only contract, and missing new `s` archive-override boundary. No repository `.tools` mutation, Go
 download/extraction, network, Docker or DB action.
 
-- [ ] **Step 2: Pin the exact workspace contract in the source manifest and validator**
+- [x] **Step 2: Pin the exact workspace contract in the source manifest and validator**
 
 Add this exact object to `scripts/supabase-cli.local-patch.source.json` between `patch` and `build`:
 
@@ -852,7 +853,7 @@ Run the exact manifest test again.
 
 Expected: `test_source_manifest_is_exact` passes; the other production signature/behavior/archive-boundary tests remain RED.
 
-- [ ] **Step 3: Add the fail-closed path-budget helper before any checkout mutation**
+- [x] **Step 3: Add the fail-closed path-budget helper before any checkout mutation**
 
 Add this helper after `Remove-OwnedPath`:
 
@@ -911,7 +912,7 @@ Add `"s"` to the existing mutable-child rejection list used by `-GoArchivePath`;
 Do not change `Remove-OwnedPath`, add Win32 deletion, touch the legacy long root, or alter Git/source/build
 arguments. The approved current-worktree projections must be exactly 244 for both roots.
 
-- [ ] **Step 4: Prove the pre-written workspace tests GREEN and run full boundaries**
+- [x] **Step 4: Prove the pre-written workspace tests GREEN and run full boundaries**
 
 Before the focused tests, remeasure the exact approved worktree projections without touching `.tools`:
 
@@ -957,7 +958,7 @@ partial tree; 249 calls cleanup zero times; short-root junction targets stay unt
 `.tools/s` archive overrides fail invalid; secret scan/diff check exit 0 and parser errors 0. Do not run
 `-BuildCandidate`, Docker or DB in Task 2C.
 
-- [ ] **Step 5: Review exact three-file scope and commit Task 2C**
+- [x] **Step 5: Review exact three-file scope and commit Task 2C**
 
 Review the literal workspace contract and every legacy-root use, then stage and verify exactly three files:
 
@@ -995,7 +996,7 @@ may Task 3 preflight begin.
 - Consumes: Task 2 candidate builder plus Task 2C short-root/path-budget contract and its independent approval.
 - Produces: a reviewed literal binary SHA-256 and installed exact runtime accepted by Task 4.
 
-- [ ] **Step 1: Preflight clean external state**
+- [x] **Step 1: Preflight clean external state**
 
 ```powershell
 git status --short
@@ -1021,7 +1022,7 @@ Expected: Git clean; Desktop running; Engine `29.2.1`; both container queries em
 exists, the Engine is below 28, the final patched binary/short checkout already exists, or the exact
 deny-only legacy-root test fails. The legacy ignored tree may remain on disk and must not be deleted.
 
-- [ ] **Step 2: Build the candidate twice and capture the agreed hash**
+- [x] **Step 2: Build the candidate twice and capture the agreed hash**
 
 ```powershell
 $candidateOutput = powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -BuildCandidate
@@ -1036,7 +1037,7 @@ $candidateSha256
 Expected: all source/test/module/build steps pass and exactly one lowercase 64-character hash is printed.
 The script itself has already compared independent build A/B hashes. No final binary path is installed.
 
-- [ ] **Step 3: Add the runtime contract test and runtime manifest**
+- [x] **Step 3: Add the runtime contract test and runtime manifest**
 
 Add this test:
 
@@ -1091,7 +1092,7 @@ $runtimeRedOutput
 
 Expected: the runtime contract fails with exit code `1` specifically because the final binary is absent.
 
-- [ ] **Step 4: Install only the pinned build and verify GREEN**
+- [x] **Step 4: Install only the pinned build and verify GREEN**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -Install
@@ -1102,7 +1103,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supa
 
 Expected: install and verify-only pass; runtime test passes; version output is exactly `2.109.1`.
 
-- [ ] **Step 5: Review artifact isolation and commit the runtime pin**
+- [x] **Step 5: Review artifact isolation and commit the runtime pin**
 
 ```powershell
 git status --short --ignored
@@ -1140,7 +1141,7 @@ full two-file diff are reviewed; exactly the runtime manifest and runtime test a
 - Consumes: Task 3 runtime manifest and binary.
 - Produces: no stock/PATH fallback; existing actual Docker inspection remains the authority before reset.
 
-- [ ] **Step 0: Require a clean tracked/untracked start**
+- [x] **Step 0: Require a clean tracked/untracked start**
 
 ```powershell
 if (
@@ -1152,7 +1153,7 @@ if (
 
 Ignored Task 3 `.tools/` artifacts are allowed; tracked and ordinary untracked state must be clean.
 
-- [ ] **Step 1: Write failing runner-selection tests**
+- [x] **Step 1: Write failing runner-selection tests**
 
 Add `PATCHED_BOOTSTRAP_PATH` and exact assertions that the runner source contains:
 
@@ -1206,7 +1207,7 @@ Add behavior tests that prove:
 - source contains no `Get-Command`/`where`/`$env:PATH` Supabase discovery and each exact patched assignment
   and `-VerifyOnly` literal occurs once.
 
-- [ ] **Step 2: Run focused runner tests and verify RED**
+- [x] **Step 2: Run focused runner tests and verify RED**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_tooling.PatchedDatabaseRunnerSelectionTests -v
@@ -1215,7 +1216,7 @@ apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_supabase_too
 Expected: failures are specifically the current stock path/bootstrap selection and missing patched behavior;
 the actual-binding-before-reset ordering test continues to pass. Do not accept a fixture/setup-only RED.
 
-- [ ] **Step 3: Change exactly the runner binary and bootstrap paths**
+- [x] **Step 3: Change exactly the runner binary and bootstrap paths**
 
 In `scripts/verify_database.ps1`, replace only:
 
@@ -1227,7 +1228,7 @@ $bootstrapScript = Join-Path $scriptDirectory "bootstrap_patched_supabase.ps1"
 Do not change `Ensure-LocalDatabaseNetwork`, `Assert-LocalDatabaseRuntime`, owned-runtime cleanup,
 start/reset/status/test command arguments, compensation order, credential handling, or integration phases.
 
-- [ ] **Step 4: Document exact local commands**
+- [x] **Step 4: Document exact local commands**
 
 Update `scripts/README.md` to distinguish:
 
@@ -1247,7 +1248,7 @@ paragraph as historical rationale: Task 4 pins/selects the artifact, but actual 
 remains Task 5 and DB-001 must not be called complete yet. Preserve the remote/public blocker and state that
 API, schema, data, dependencies and readiness are unchanged.
 
-- [ ] **Step 5: Run runner and bootstrap regressions**
+- [x] **Step 5: Run runner and bootstrap regressions**
 
 ```powershell
 apps/api/.venv/Scripts/python.exe -B -m unittest scripts.tests.test_patched_supabase_tooling -v
@@ -1260,7 +1261,7 @@ git diff --check
 Expected: all tooling tests pass, including unsafe binding and owned-runtime cleanup mutation tests;
 verify-only passes without network; secret/diff checks pass.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```powershell
 git diff -- scripts/verify_database.ps1 scripts/tests/test_supabase_tooling.py scripts/README.md
@@ -1311,7 +1312,7 @@ there is no other state except approved ignored `.tools/` artifacts.
 - Consumes: Tasks 1–4 exact tooling and the existing DB-001 six-stage gate.
 - Produces: actual single `127.0.0.1:54322`, fresh pgTAP 282, integration 8/8, replay/cleanup evidence, DB-001 Done, and local/private version promotion only.
 
-- [ ] **Step 1: Reconfirm preconditions and verify-only**
+- [x] **Step 1: Reconfirm preconditions and verify-only**
 
 ```powershell
 git status --short
@@ -1325,7 +1326,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patche
 Expected: Git clean; Docker running/29.2.1; container counts 0/0; patched verify-only passes. Stop without
 DB mutation on any difference.
 
-- [ ] **Step 2: Run the full disposable DB gate once**
+- [x] **Step 2: Run the full disposable DB gate once**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
@@ -1343,7 +1344,7 @@ Expected phase evidence:
 On any start/inspect failure, confirm runner-owned cleanup returns project containers to zero and do not
 continue to versions or documentation.
 
-- [ ] **Step 3: Capture actual runtime evidence and stop cleanly**
+- [x] **Step 3: Capture actual runtime evidence and stop cleanly**
 
 ```powershell
 $dbId = docker ps -q --filter 'name=^/supabase_db_sejong-ai-local$'
@@ -1358,7 +1359,7 @@ if (@(docker ps -aq).Count -ne 0) { throw "unexpected containers remain" }
 Expected: both inspect payloads show only IPv4 loopback for DB 5432; stop succeeds; final counts 0/0.
 Do not delete volumes.
 
-- [ ] **Step 4: Run all non-DB and static gates**
+- [x] **Step 4: Run all non-DB and static gates**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
@@ -1372,7 +1373,7 @@ git diff --check
 Expected: root/tooling/package/secret tests pass; protected product/contract/schema/data/dependency paths
 have no diff.
 
-- [ ] **Step 5: Update versions and active status only after every gate passes**
+- [x] **Step 5: Update versions and active status only after every gate passes**
 
 Set `versions/manifest.json` to these exact version axes, using the actual current KST time for
 `updated_at`:
@@ -1402,7 +1403,7 @@ remote/public/admin/API/backend-credential/`00700` deployment blocked. Update RE
 security/ops/version docs, test report and handoff with the actual binary/source/patch hashes, commands,
 test totals, binding, final container zero and rollback.
 
-- [ ] **Step 6: Create the implementation note**
+- [x] **Step 6: Create the implementation note**
 
 ```powershell
 python scripts/new_implementation_note.py --title "patched Supabase CLI와 DB-001 local baseline 완료" --task-id "DB-001-T10-QSEC006" --type "security/implementation/verification"
@@ -1413,7 +1414,7 @@ security/privacy/accessibility/performance, official/mock distinction, migration
 remaining A-021 risk, human-required knowledge and AI-internal details. Update INDEX to Done only after
 fresh verification.
 
-- [ ] **Step 7: Perform separate specification and quality reviews**
+- [x] **Step 7: Perform separate specification and quality reviews**
 
 Specification review checks every approved design section against Tasks 1–5, including source/runtime
 manifest separation, direct Go CLI, two independent hashes, test-first patch, actual runner order, stock
@@ -1426,7 +1427,7 @@ specificity, atomic install, fixture fidelity, actual binding/cleanup and docume
 Fix every Critical/Important issue with focused tests and a separate commit. Record reviewer counts and
 agent-capacity limitations in the implementation note.
 
-- [ ] **Step 8: Run verification-before-completion and commit closeout**
+- [x] **Step 8: Run verification-before-completion and commit closeout**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -VerifyOnly
@@ -1466,13 +1467,13 @@ git commit -m "docs(db): complete safe local baseline"
 
 ## Final acceptance checklist
 
-- [ ] Exact source/tag object/commit/Go archive/patch/build inputs are tracked and validated.
-- [ ] Patch changes only the approved test and local DB start files; focused test proves RED then GREEN.
-- [ ] Two independent builds have identical SHA-256; runtime manifest and installed file match it.
-- [ ] Stock CLI is preserved; DB runner has no PATH/stock fallback.
-- [ ] Actual runtime is one `127.0.0.1:54322` binding with no IPv6/IPv4 wildcard.
-- [ ] Fresh pgTAP 282, integration 8/8, six-stage compensation/absence/replay pass.
-- [ ] Final project/all container counts are zero and no volume is deleted.
-- [ ] Product/API/schema/data/dependency/privacy/readiness behavior is unchanged.
-- [ ] DB-001/version promotion occurs only after evidence and reviews; public-release blocker remains.
-- [ ] Implementation note, INDEX, reports, handoff and active source-of-truth are synchronized.
+- [x] Exact source/tag object/commit/Go archive/patch/build inputs are tracked and validated.
+- [x] Patch changes only the approved test and local DB start files; focused test proves RED then GREEN.
+- [x] Two independent builds have identical SHA-256; runtime manifest and installed file match it.
+- [x] Stock CLI is preserved; DB runner has no PATH/stock fallback.
+- [x] Actual runtime is one `127.0.0.1:54322` binding with no IPv6/IPv4 wildcard.
+- [x] Fresh pgTAP 282, integration 8/8, six-stage compensation/absence/replay pass.
+- [x] Final project/all container counts are zero and no volume is deleted.
+- [x] Product/API/schema/data/dependency/privacy/readiness behavior is unchanged.
+- [x] DB-001/version promotion occurs only after evidence and reviews; public-release blocker remains.
+- [x] Implementation note, INDEX, reports, handoff and active source-of-truth are synchronized.

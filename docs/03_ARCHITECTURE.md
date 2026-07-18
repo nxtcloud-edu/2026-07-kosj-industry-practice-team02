@@ -136,11 +136,15 @@ NEW
 - 시민 read는 `ACTIVE + OFFICIAL` KB와 `OFFICIAL` 기관만 반환한다.
 - executable authority는 forward migration 6개이며 disposable-local compensation은
   `00600 → 00500 → 00400 → 00300 → 00200 → 00100`이다.
-- `database/schema-v1.draft.sql`은 `0.3.0-local` 후보의 읽기 전용 논리 투영이며 권한·함수·trigger
+- `database/schema-v1.draft.sql`은 검증된 `0.3.0-local`의 읽기 전용 논리 투영이며 권한·함수·trigger
   실행 근거가 아니다.
-- manifest는 Q-SEC-006=A/D-031의 patched tooling 설계·계획·검증 gate가 남아
-  `0.2.0-draft`를 유지한다. exact loopback과 full gate 전에는 후보 shape를 완료 기준선으로
-  부르지 않는다.
-- A-021/Q-SEC-003 기본값 B에 따라 D-031 구현 뒤 승격 가능한 기준선도 local/private에
+- tracked source manifest와 runtime manifest는 build input과 binary authority를 분리한다. runner는
+  `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`만 허용하고 stock/PATH fallback을 두지 않는다.
+- 2026-07-18 actual gate는 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`, fresh pgTAP 282,
+  backend integration 8/8, 6단계 compensation/absence/reset/replay와 final container 0/0을 증명했다.
+  이로써 manifest `database_schema=0.3.0-local`은 disposable local/private 기준선으로 활성화됐다.
+- `73f300b`는 DB child와 descendant를 bounded process tree로 실행해 timeout/failure/success 모두에서
+  종료·dispose·환경 복원을 보장한다. runner 50/50, patched 24/24와 final-code DB gate가 재검증했다.
+- A-021/Q-SEC-003 기본값 B에 따라 이 기준선은 local/private에
   한정한다. 기존 privileged function 21개의 search-path hardening 전에는 remote/public 배포,
   public admin/API, public backend DB credential 사용을 차단하고 `00700`을 임의로 만들지 않는다.

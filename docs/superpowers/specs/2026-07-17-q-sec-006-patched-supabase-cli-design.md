@@ -1,6 +1,6 @@
 # Q-SEC-006 project-local patched Supabase CLI 설계
 
-- Status: Approved by user on 2026-07-17; amended by Q-TOOL-001=A on 2026-07-18; revised implementation plan awaiting approval
+- Status: Completed for disposable local/private use; implementation, remediation, actual gate, final reviews 0/0/0, final verification and closeout commit complete
 - Date: 2026-07-17
 - Decision: Q-SEC-006=A / D-031 / ADR-0013; Q-TOOL-001=A / D-032 / ADR-0014
 - Scope: DB-001 Task 10의 local/private 개발 환경만
@@ -159,7 +159,7 @@ container 0을 재검증한다. 이 gate 뒤에만 reset, credential, pgTAP, int
 
 ## 6. 테스트와 인수 기준
 
-구현 승인 후 최소 다음 증거가 필요하다.
+승인된 구현은 다음 증거를 만들었다.
 
 - repository tooling test의 source/runtime manifest schema/allowlisted-host/path/hash/verify-only RED→GREEN
 - short checkout exact path, 두 root의 pre-toolchain/pre-mutation ordering, synthetic 244/248 accept와
@@ -173,7 +173,8 @@ container 0을 재검증한다. 이 gate 뒤에만 reset, credential, pgTAP, int
 - root/API/web/contract/secret/package/diff 검증과 container 0 cleanup
 - public API/DB migration/data/version에 승인되지 않은 변화가 없음
 
-모든 증거 전에는 `database_schema=0.2.0-draft`, `/ready=503`, DB-001 Blocked를 유지한다.
+모든 local 증거가 통과해 `database_schema=0.3.0-local`과 DB-001 local/private Done을 기록했다.
+공식 seed가 없으므로 `/ready=503`은 유지하며 public/remote 경계는 열지 않는다.
 
 ## 7. 대안과 트레이드오프
 
@@ -206,6 +207,8 @@ commit revert로 철회한다. DB migration/data 삭제는 없다.
 기존 failed `.tools/supabase-source/...` tree는 short-root rollback이나 bootstrap cleanup에 포함하지
 않는다. 별도 삭제가 필요하면 absolute target과 reparse 경계를 다시 확인하고 인간 승인을 받는다.
 
-사용자가 원 설계와 실행계획을 승인한 뒤 구현을 시작했고, 2026-07-18 Q-TOOL-001=A로 workspace
-amendment를 승인했다. 수정된 `PLANS.md` 형식 실행계획이 다시 승인되기 전에는 Task 2C, source
-build, actual DB start/reset 또는 제품 코드 변경을 재개하지 않는다.
+사용자가 원 설계와 실행계획을 승인한 뒤 구현을 시작했고, 2026-07-18 Q-TOOL-001=A와
+`수정 계획 승인, 구현 시작`으로 workspace amendment 실행을 승인했다. Task 2C, reproducible
+source build/runtime pin, patched-only runner와 actual full DB gate가 완료됐다. runner cleanup은
+`73f300b`, tests와 independent review 0/0/0, final-code DB gate로 해결됐다. Final cumulative
+specification과 quality docs re-review도 각각 0/0/0이고 full final verification과 closeout commit도 완료됐다. 실제 SHA는 Git 이력을 권위로 확인한다.

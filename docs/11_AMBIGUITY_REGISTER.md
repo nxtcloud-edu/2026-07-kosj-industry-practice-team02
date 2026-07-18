@@ -27,8 +27,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-021 | B | 기존 DB function 보안 | Open / Deferred — local Task 9 blocker 아님, public release blocker | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. data-type shadow DoS는 high-confidence plausible, privilege escalation은 conservative medium-confidence inference이며 exploit은 재현하지 않았다. | Q-SEC-003 A 추천: exact 22 signatures에 새 `00700` property-only migration. B/default: local-only 완료는 허용하되 remote/public 배포·public admin/API·public backend DB credential은 해결 전 차단 |
 | A-022 | A | local Docker port 보안 1차 결정 | Resolved decision / remediation insufficient | Q-SEC-004=A로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용·재시작했다. 빈 HostIP probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었고 explicit `127.0.0.1` probe만 단일 loopback이었다. | D-029; 승인 결정은 기록하되 exact local 완료 근거로 사용하지 않음 |
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
-| A-024 | A | local Supabase CLI port 공급망 | Resolved decision / implementation in progress | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin한다. 서면 명세와 실행계획은 승인됐다. | D-031 / ADR-0013; 구현·검증 전 DB runtime/manifest 승격 차단 |
-| A-025 | A | Windows patched CLI build workspace | Resolved decision / revised plan awaiting approval | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout만 `.tools/s/{a,b}`로 줄이고 pinned relative max 134자·absolute cap 248자를 pre-checkout gate로 강제한다. 기존 장경로 partial artifact는 자동 삭제하지 않는다. | D-032 / ADR-0014; Task 2C TDD·독립 review와 수정 계획 승인 전 Task 3/DB-001 중단 |
+| A-024 | A | local Supabase CLI port 공급망 | Resolved / implemented and verified locally | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin했고 actual gate를 통과했다. | D-031 / ADR-0013; local/private DB authority, public readiness 아님 |
+| A-025 | A | Windows patched CLI build workspace | Resolved / implemented and verified locally | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout `.tools/s/{a,b}`, pinned relative max 134자·absolute cap 248자 pre-checkout gate와 legacy deny-only 경계를 구현·검증했다. | D-032 / ADR-0014; 기존 장경로 partial artifact 자동 삭제 없음 |
 
 ## 우선도 정의
 
@@ -42,11 +42,10 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
 publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 남겼으므로 DB-001은
-`0.3.0-local` 후보를 아직 승격하지 않는다. A-024는 D-031/ADR-0013으로 결정되고 서면
-명세도 승인됐지만 Task 1/2/2A/2B 뒤 실제 Task 3 재실행에서 PowerShell 5.1 장경로 cleanup이
-부분 실패했다. A-025는 Q-TOOL-001=A/D-032/ADR-0014로 해결됐고 수정 계획 승인과 Task 2C
-TDD·독립 review·실제 검증 gate가 남아 local 완료는 계속 차단된다. A-021은 B/High
-public-release blocker다.
+`0.3.0-local` 승격을 차단했었다. 이후 사용자는 수정 계획을 `수정 계획 승인, 구현 시작`으로
+승인했고 A-024/A-025는 short-root TDD, reproducible runtime pin, patched-only runner와 2026-07-18
+fresh exact loopback/full DB/root/static gate를 통해 local에서 구현·검증됐다. DB-001은
+disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High public-release blocker다.
 
 ## 열린 인터뷰 질문
 
@@ -65,14 +64,14 @@ Q-TOOL-001. Windows에서 patched CLI의 재현 build checkout을 어떤 방식�
 - 선택: checkout만 `.tools/s/a`, `.tools/s/b`로 줄인다. source manifest에 `s/a`, `s/b`, pinned
   relative max 134자, absolute cap 248자를 고정하고 checkout cleanup·생성·Go archive
   download/extraction·network 전에 projected path를 검증한다. 현재 exact worktree 투영값은 244자다.
-- 영향: 기존 PowerShell 5.1 safe-child/reparse cleanup과 exact source/toolchain/patch/hash 공급망을
-  유지한다. 기존 ignored `.tools/supabase-source/...` partial tree는 자동 삭제하지 않는다. 수정
-  계획 승인·Task 2C TDD/review 전 Task 3은 재개하지 않으며 API·DB schema/data·privacy·dependency·deployment는 변하지 않는다.
+- 결과: 기존 PowerShell 5.1 safe-child/reparse cleanup과 exact source/toolchain/patch/hash 공급망을
+  유지했다. 기존 ignored `.tools/supabase-source/...` partial tree는 자동 삭제하지 않았고 수정
+  계획 승인 뒤 Task 2C TDD/review와 runtime/full gate를 통과했다. API·migration/data·privacy·dependency·deployment는 변하지 않았다.
 
 Q-SEC-006. stock Supabase CLI의 DB publish 요청을 project-scoped explicit IPv4 loopback으로 바꿀 것인가
 - 결정: A / D-031 / ADR-0013. 사용자가 2026-07-17 `Q-SEC-006: A`라고 명시했다.
 - 선택: official v2.109.1 exact source에서 local DB start HostIP만 `127.0.0.1`로 지정하고 source/tag/commit, patch, Go 1.25.11 archive, clean-build binary SHA-256을 project-local manifest로 pin한다.
-- 영향: exact port gate와 stock CLI를 유지한다. 서면 설계는 승인됐으며 별도 실행계획 승인, TDD/build/actual full gate 전에는 DB runtime·schema version 승격을 시작하거나 완료로 부르지 않는다. 공개 API·migration·data·production dependency는 변하지 않는다.
+- 결과: exact port gate와 stock CLI를 보존하면서 patched-only runner와 actual full gate를 통과해 local schema version을 승격했다. 공개 API·migration·data·production dependency는 변하지 않았다.
 
 Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하는 더 강한 전역 정책을 승인할 것인가
 - 결정: A / D-030. 사용자가 2026-07-17 `Q-SEC-005: A`라고 명시했다.

@@ -1,21 +1,25 @@
-# Handoff — DB-001 Local/Private Candidate (Blocked)
+# Handoff — DB-001 Completed Local/Private Baseline
 
-- Date: 2026-07-17 KST
-- Branch/commit: `codex/db-001-layered-enforcement` / functional evidence baseline `85067d0`,
-  blocked-security checkpoint `8a2abe4`; Q-SEC-006=A/D-031 design sync pending commit
-- Current manifest: repo guidance `1.4.0`, database `0.2.0-draft`, tests
-  `0.4.2-readiness-contract`, docs `2.3.16`; `0.3.0-local`은 미승격 후보
-- Scope: local PostgreSQL candidate; D-031 patched CLI spec/plan/build/actual gate 전 runtime 사용 금지
+- Date: 2026-07-18 KST
+- Branch/final-code evidence HEAD: `codex/db-001-layered-enforcement` /
+  `73f300b9a90ad386ece555db3dc14fe1d18e6ba6`
+- Current manifest: repo guidance `1.5.0`, database `0.3.0-local`, tests
+  `0.5.0-db-baseline`, docs `2.4.0`
+- Scope: disposable local/private PostgreSQL baseline; production/public readiness 아님
 
-## 구현된 후보 범위
+## 구현·검증된 범위
 
-- pinned project-local Supabase CLI `2.109.1`과 PostgreSQL-only Docker local config
+- source/runtime hash가 분리 고정된 patched project-local Supabase CLI `2.109.1`과
+  PostgreSQL-only Docker local config; DB runner에는 stock/PATH fallback 없음
 - timestamp forward migration 6개와 matching disposable-local compensation 6개
 - `app_private` 7 enum·8 table, forced RLS/owner-only policy, backend capability role
 - privacy/event/retention, 사유 확인, 후보 작성·제출·별도 승인/반려, ACTIVE+OFFICIAL read
 - deferred ACTIVE-question validator의 제한된 `00600` posture correction
 - lazy typed FastAPI DB boundary와 fixed SQL 9개; public route 연결 없음
 - pgTAP 282, backend integration 8/8, exact 6-stage compensation/absence/reset/replay
+- actual exact one `127.0.0.1:54322`, final project/all container 0/0, volume delete 0
+- bounded child process-tree timeout/termination/disposal와 descendant cleanup regression; remediation
+  independent review Critical/Important/Minor 0/0/0
 - 공식/mock persistent seed 0; `/health=200`, `/ready=503`
 
 ## 요구 환경
@@ -31,26 +35,25 @@
 저장소 루트에서 Docker Desktop을 실행한 뒤 다음을 수행한다.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_supabase.ps1
-.\.tools\supabase\v2.109.1\supabase.exe --version
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -VerifyOnly
+.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe --version
 .\.tools\uv\uv.exe sync --project apps/api --frozen
 corepack.cmd pnpm install --frozen-lockfile --ignore-scripts
 ```
 
-CLI bootstrap은 official asset byte count와 SHA-256을 확인해 `.tools/`에만 설치한다. `.tools/`,
-`.env`, Supabase temp/branch state와 Docker state는 commit하지 않는다. 이 Setup은 도구 준비만
-설명하며 D-031의 별도 실행계획 승인과 exact patched binary 준비 전 DB container start/reset
-권한을 주지 않는다.
+patched binary가 없는 새 PC에서는 tracked source/runtime manifest를 권위로
+`scripts/bootstrap_patched_supabase.ps1 -Install`을 실행하고 다시 `-VerifyOnly` 한다. build는 exact
+upstream/tag/commit, Go archive, patch, 두 clean build의 동일 hash를 강제하므로 네트워크와 긴 시간이
+필요하다. `.tools/`, `.env`, Supabase temp/branch state와 Docker state는 commit하지 않는다.
 
 ## 실행/테스트 명령
 
 전체 DB gate는 start→reset→login rotation→pgTAP→6단계 compensation→absence→reset/replay→
 pgTAP→backend integration 순서다.
 
-현재는 아래 DB 명령을 실행하지 않는다. Q-SEC-004=A의 `default-local`과 Q-SEC-005=A의
-`local-only` 전역 binding 변경은 모두 IPv6 wildcard를 남겼다. Q-SEC-006=A/D-031은 explicit
-HostIP를 넣는 project-local CLI/toolchain 공급망을 승인했다. 서면 명세와 별도 실행계획 승인,
-source/diff/hash/probe 검증 뒤에만 runner를 재실행한다.
+아래 DB gate는 pinned patched runtime의 hash와 actual binding을 먼저 검증한 뒤에만 reset과
+credential 처리를 진행한다. Q-SEC-004/005 전역 보정은 IPv6 wildcard를 남겼던 역사적 대조이고,
+DB 실행 권위는 D-031/D-032의 patched-only 경로다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
@@ -62,9 +65,20 @@ git diff --check
 ```
 
 `-SkipStart`도 actual runtime 검증을 우회하지 않는다. `-SkipRollbackReplay`는 진단용이며 완료
-gate가 아니다. 성공 기준은 actual single `127.0.0.1:54322` 뒤 [DB-001 report](../test-reports/DB-001-LOCAL-BASELINE.md)의
-historical `Files=6, Tests=282`, real integration 8/8을 fresh 재검증하고 synthetic tooling/root/static
-gate와 independent review까지 모두 통과하는 것이다.
+gate가 아니다. 2026-07-18 기준 actual single `127.0.0.1:54322`, current `Files=6, Tests=282`,
+real integration 8/8, 6단계 replay, root/static gate가 fresh PASS했다. 상세는
+[DB-001 report](../test-reports/DB-001-LOCAL-BASELINE.md)를 따른다.
+
+`73f300b` remediation 뒤 final-code DB runner도 102.746s에 exit 0으로 통과했다. 두 inspect
+payload는 다시 exact one loopback이었고 stop exit 0, final container 0/0, volume/prune 0이었다.
+focused descendant 1/1, full runner 50/50, patched 24/24와 독립 review 0/0/0도 통과했다.
+
+최종 verification에서는 patched `-VerifyOnly` 8.528s, root gate 866.976s, package/secret PASS,
+combined tooling 74/74 (`24 + 50`), JSON/diff/protected+scripts PASS와 project/all container 0/0을
+확인했다. 최종 evidence authority는 234-line `.superpowers/sdd/qsec006-task-5-db-evidence.md`,
+SHA-256 `9EE2AC549A983921CC928892D803E46F713E311103928A25B5E47A901764DBFB`다. Final specification과
+quality documentation review도 각각 APPROVED 0/0/0이다. 이 handoff/note를 포함하는 parent
+closeout commit까지 완료됐으며 실제 SHA는 Git 이력을 권위로 확인한다.
 
 API를 수동 실행할 때는 다음을 사용한다.
 
@@ -94,8 +108,8 @@ API 전체 예제 이름은 `apps/api/.env.example`을 따른다. 특히 `DEEPSE
 현재 local data를 재생성하므로 disposable DB에서만 실행한다.
 
 ```powershell
-.\.tools\supabase\v2.109.1\supabase.exe db reset --local
-.\.tools\supabase\v2.109.1\supabase.exe test db
+.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe db reset --local
+.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe test db
 ```
 
 ### Seed
@@ -128,7 +142,7 @@ migration으로 보정한다.
 정상 local stop:
 
 ```powershell
-.\.tools\supabase\v2.109.1\supabase.exe stop
+.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe stop
 ```
 
 Docker volume 삭제·prune은 하지 않는다. provisioning이 DB password commit 뒤 `.env` 교체에서
@@ -150,36 +164,36 @@ backup은 없고 단일 PC 손실 위험이 남는다.
 - Q-SEC-003 무응답 기본값 B: D-031 구현이 완료돼도 local/private 범위만 허용한다.
   remote/public 배포, public admin/API, public backend DB credential과 `00700`은 차단한다.
 - local stack은 개발용 기본 credential을 포함하고 production TLS/rate limit/admin protection이
-  없다. 현재 stock CLI runtime은 wildcard로 판정됐고 runner가 reset 전에 중단했다. stack은
-  중지했으며 project container count 0이다.
+  없다. patched runtime의 fresh actual gate는 loopback-only였고 정상 stop 뒤 project/all container
+  count 0/0이다. 이는 공개 exposure를 승인하지 않는다.
 - 공식 seed 0, `/ready=503`, `/chat`·`/admin` public route 미구현이다.
 - parent KB DELETE와 child question DELETE 동시 잠금 경로는 삭제 API가 없는 현재 P2 위험이다.
 - pinned Starlette/httpx TestClient deprecation warning 1건은 non-failing이다.
 
 ## 인간이 알아야 하는 결정
 
-- D-018/D-025/D-026/D-027/D-028/D-029/D-030과 ADR-0008/0011/0012가 local DB 경계를 고정한다.
+- D-018/D-025/D-026/D-027/D-028/D-029/D-030/D-031/D-032와
+  ADR-0008/0011/0012/0013/0014가 local DB 경계를 고정한다.
 - remote/public DB, public admin, data deletion, official seed, backup, CORS/domain, 새 production
   dependency는 이 handoff로 승인되지 않는다.
 - Q-SEC-003을 A로 결정하면 별도 reviewed `00700` property-only migration 계획과 전체 replay가
   필요하다. 현재는 B가 기본이며 인간 답변을 가장하지 않는다.
-- Q-SEC-004=A/D-029는 적용됐지만 HostIP 미지정 probe가 `127.0.0.1`+`::`를 생성해 불충분했다.
-  Q-SEC-005=A/D-030의 `local-only-port-binding`도 동일하게 불충분했다. Q-SEC-006=A/D-031은
-  explicit HostIP를 넣는 checksum-pinned project-local CLI/Go toolchain을 선택했다. 구현 전
-  서면 명세·실행계획 승인이 남았다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)
+- Q-SEC-004=A/D-029와 Q-SEC-005=A/D-030은 불충분했다. Q-SEC-006=A/D-031과
+  Q-TOOL-001=A/D-032는 checksum-pinned patched CLI/short workspace를 구현·검증해 local gate를
+  닫았다. tracked source manifest hash는
+  `c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657`, patch는
+  `109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d`, runtime은
+  `751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c`다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)
 
 ## 다음 작업과 Acceptance Criteria
 
-1. Q-SEC-006=A/D-031 서면 명세 승인 → project-local CLI 실행계획 승인 → source/diff/toolchain/hash/safe exact runtime gate.
-2. D-031의 safe runtime/full gate와 independent reviews가 모두 통과한 뒤에만 DB-001을
-   `0.3.0-local`/Done으로 승격하고 후속 DB 의존성을 해제한다.
-3. DATA-001: AI/Data·Backend가 공식 KB 20·기관 3+·매핑 10~12를 작성하고 PM이 출처·확인일·
+1. DATA-001: AI/Data·Backend가 공식 KB 20·기관 3+·매핑 10~12를 작성하고 PM이 출처·확인일·
    표현·origin·승인자를 2026-07-20 목표로 전수 승인한다.
-4. DATA-SEED-001: 승인 data만 versioned seed로 import하고 ACTIVE 20, office 3+, mapping 10~12,
+2. DATA-SEED-001: 승인 data만 versioned seed로 import하고 ACTIVE 20, office 3+, mapping 10~12,
    mock 혼입 0, 재현 import/rollback을 증명한다.
-5. READY-001: DB 연결과 필수 승인 seed가 모두 있을 때만 `/ready=200`, 결손/장애는 503으로
+3. READY-001: DB 연결과 필수 승인 seed가 모두 있을 때만 `/ready=200`, 결손/장애는 503으로
    유지한다.
-6. Public release 전에 Q-SEC-003/A-021을 인간이 결정하고 보안 회귀·배포/credential/CORS/
+4. Public release 전에 Q-SEC-003/A-021을 인간이 결정하고 보안 회귀·배포/credential/CORS/
    backup gate를 별도로 승인한다.
 
 ## 최근 구현 노트/ADR/계획 링크
