@@ -25,7 +25,12 @@
 - 승인 전 canonical authoring: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON 3종
 - PM 승인 증거: artifact SHA-256·count·레코드별 결정·comment를 가진 별도 approval manifest
 - 승인 record 승격: DATA-SEED-001에서만 immutable `data/official/releases/<data-version>/` 생성
-- 초기 release: ACTIVE KB 19건·기관 3건·매핑 10~12건; `KB-WASTE-03`은 회귀 뒤 최종 20번째 ACTIVE
+- PM 최종 승인 증거: reviewer `PM-LOCAL-001`, confirmation
+  `2026-07-19T02:06:19+09:00`, 35개 current recommendation 전부 채택
+- 초기 release projection: ACTIVE KB 19건·기관 3건·매핑 10건;
+  `KB-WASTE-03`과 거절 매핑 2건은 제외하고, WASTE-03은 회귀 뒤 최종 20번째 ACTIVE
+- DATA-SEED architecture: initial version `0.1.0-initial.1`의 immutable filesystem release와
+  기존 schema용 empty-local transactional seed. 서면 명세·계획 승인 전 release/seed/DB 변경 금지
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -60,6 +65,8 @@
 - DB/Search: Supabase PostgreSQL + Supabase CLI 버전 SQL migration + 키워드·메타데이터 검색; MVP embedding off
 - LLM: 사용자 기존 DeepSeek API 잔액, local/private 합성 fixture 전용, 정확히 `deepseek-v4-flash`, thinking off, max output 1024, concurrency 1, retry 최대 1회, run당 외부 전송 시도 총 30회; provider adapter와 disabled/template fallback 필수
 - 초기 실행: local-first, 외부 인프라 예산 0원
+- 현재 웹 진입: `/`의 CTA는 입력·저장·API 호출 없는 정적 `/chat` 준비 화면으로 연결한다.
+  실제 질문 입력·공식 KB 답변은 API-CHAT/WEB-CHAT/READY gate 이후에만 활성화한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
 - 저장소: 원본 원격 없는 새 독립 Git 저장소, 기본 브랜치 `main`, 작업 브랜치 `codex/<task-id>-<slug>`
@@ -102,4 +109,4 @@
 - 대표 연락처: [직접 입력]
 - 제출일: [직접 입력]
 - 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.2
+- 문서 버전: v2.2.1

@@ -84,8 +84,27 @@ Q-CHAT-001: A
 Q-DATA-002: A
 ```
 
+## Batch 5 — 2026-07-19 KST
+
+- Scope: PM 승인 증거, DATA-SEED architecture, static `/chat` destination
+
+| Q-ID | Question summary | User answer | Interpretation | Decision/ADR | Status |
+|---|---|---|---|---|---|
+| Q-DATA-003 | PM 검수 결과 materialization | `A — PM-LOCAL-001 ... 권고안 그대로 ... 이 답변 시각` | reviewer `PM-LOCAL-001`, current 35 recommendations, final confirmation `2026-07-19T02:06:19+09:00`을 canonical approval evidence로 사용한다. official release/seed 승인은 아님. | D-035 / ADR-0015 | Resolved — materialized/verified |
+| Q-SEED-001 | approved record release/import 구조 | `A` | immutable filesystem release + existing-schema transactional seed; empty disposable local DB만 compensation. Initial version/projection AI default는 `0.1.0-initial.1`/19·3·10. | D-036 / ADR-0016 | Architecture resolved — written spec reviewed, user approval pending |
+| Q-WEB-001 | chat pipeline 전 home CTA destination | `A` | 입력·저장·fetch가 없는 accessible static `/chat` preparation route를 만들고 홈 CTA를 연결한다. | D-037 / PLAN-001 | Resolved — implementation authorized |
+
+## Batch 5 답변 원문
+
+```text
+Q-DATA-003: A — PM-LOCAL-001을 reviewer ID로 확인, 권고안 그대로 확정, 이 답변 시각을 final confirmation 시각으로 사용
+Q-SEED-001: A
+Q-WEB-001: A
+그리고 이제부터 다시 멈추지 말고, 계속해서 ㄱㄱ. 7시간 동안 루프 ㄱㄱ. 너가 할수있는거 다 해줘. 사람이 해야하는건 따로 남겨두고.
+```
+
 ## 남은 구현 차단 조건
 
-- 인간 결정형 A/Blocker: 없음
-- 제품 구현 gate: 이 결정을 반영한 최종 실행계획과 명시된 초기 프로덕션 의존성 목록에 대한 사용자의 명시적 `진행`/`구현 시작`
-- 별도 미래 승인: 공개 배포, 실제 시민 입력의 외부 LLM 전송, 원격 저장소/CI, 실제 사용자 데이터, 파괴적 DB 변경
+- DATA-SEED-001: written specification의 명시적 `명세 승인`, 그 뒤 실행계획의 `계획 승인, 구현 시작`.
+- public release: A-021/Q-SEC-003 해결과 별도 공개 배포 승인.
+- 별도 미래 승인: 실제 시민 입력의 외부 LLM 전송, 원격 저장소/CI, 실제 사용자 데이터, 파괴적 DB 변경.

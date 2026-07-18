@@ -29,10 +29,10 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
 | A-024 | A | local Supabase CLI port 공급망 | Resolved / implemented and verified locally | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin했고 actual gate를 통과했다. | D-031 / ADR-0013; local/private DB authority, public readiness 아님 |
 | A-025 | A | Windows patched CLI build workspace | Resolved / implemented and verified locally | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout `.tools/s/{a,b}`, pinned relative max 134자·absolute cap 248자 pre-checkout gate와 legacy deny-only 경계를 구현·검증했다. | D-032 / ADR-0014; 기존 장경로 partial artifact 자동 삭제 없음 |
-| A-026 | B | 공식 데이터 staging·승인 artifact | Resolved / AI scope complete / Review evidence pending | Q-DATA-002=A: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound approval manifest를 canonical authoring/approval evidence로 사용하고, 승인 record만 후속 immutable official release로 승격 | D-033 / ADR-0015 / DATA-001 plan; 사용자의 PM 완료 진술은 접수했으나 canonical manifest는 PENDING·35건 결정/코멘트 미기록 |
-| A-027 | A | PM 승인 증거 | Open / Blocker / KEEP | 사용자 `pm 검수 다 완료` 진술을 35건의 최종 disposition·독립 reviewer·시각·코멘트로 어떻게 materialize할지 미확정 | Q-DATA-003 A 추천; 답이 없으면 PENDING 유지·official 승격 금지 |
-| A-028 | A | official release·seed | Open / Blocker / KEEP | 승인 record를 immutable release와 DB seed/import로 승격하는 DATA-SEED-001 구조·별도 계획 승인 필요 | Q-SEED-001 A 추천; 기존 schema+filesystem release+transactional seed, 미응답 시 생성 금지 |
-| A-029 | B | 홈→채팅 진입 | Open / High / KEEP | WEB-HOME 완료 기준은 `/chat` CTA이나 현재 `/chat` route가 없어 404·준비중 shell·보류 중 사용자 동작 결정 필요 | Q-WEB-001 A 추천; 미응답 시 dead link 없이 현 상태 유지 |
+| A-026 | B | 공식 데이터 staging·승인 artifact | Resolved / PM evidence complete | Q-DATA-002=A: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound approval manifest를 canonical authoring/approval evidence로 사용하고, 승인 record만 후속 immutable official release로 승격 | D-033/D-035 / ADR-0015 / DATA-001 plan; canonical manifest APPROVED, 35 comments, final 19/3/10, 63-test/hash review PASS |
+| A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
+| A-028 | A | official release·seed | Architecture resolved / written spec reviewed / human approval blocker | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/ADR-0016; `0.1.0-initial.1` 19/3/10 final spec review 0/0/0, 사용자 `명세 승인` 뒤 plan approval 필요 |
+| A-029 | B | 홈→채팅 진입 | Resolved / implementation in progress | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/PLAN-001; API/DB/LLM/data unchanged |
 
 ## 우선도 정의
 
@@ -41,7 +41,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 A-027/Q-DATA-003과 A-028/Q-SEED-001이다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+현재 인간 결정형 A/Blocker는 A-028의 DATA-SEED written specification/plan 승인이다. Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
@@ -51,37 +51,12 @@ publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 
 fresh exact loopback/full DB/root/static gate를 통해 local에서 구현·검증됐다. DB-001은
 disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High public-release blocker다.
 
-Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 이는 승인 전 staging
-artifact 경계만 확정했다. 2026-07-19 사용자는 `pm 검수 다 완료`라고 보고했으나 canonical
-manifest에는 reviewer metadata와 35건의 decision/comment가 기록되지 않았다. 이 진술을 감사
-증거로 위조하지 않고 A-027/Q-DATA-003으로 이관한다. official release·seed는 A-028/Q-SEED-001의
-별도 설계/계획 승인이 필요하며, WEB-HOME의 `/chat` 동작은 A-029/Q-WEB-001에서 KEEP한다.
+Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 2026-07-19 사용자는
+Q-DATA-003=A로 exact reviewer/disposition/final-confirmation 시각을 확정해 A-027을 해소했다.
+Q-SEED-001=A는 A-028의 architecture를 해결했지만 written specification과 실행계획 승인 gate는
+남는다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell 구현이 허용됐다.
 
 ## 열린 인터뷰 질문
-
-Q-DATA-003. PM 검수 결과를 canonical approval manifest에 어떤 방식으로 확정할 것인가
-- 왜 지금 필요한가: 사용자 진술만으로는 35건의 승인/보류/반려 집합과 독립 검토자, 시각, 코멘트를 재현할 수 없다. 이를 추정하면 공식 데이터 승인 이력을 AI가 위조하게 된다.
-- 선택지 A / 장점 / 단점: 현재 PM review package 권고안(19 KB 승인, KB-WASTE-03 보류, 기관 3 승인, 매핑 10 승인·2 반려)을 최종 결정으로 채택하고 stable local reviewer ID와 레코드별 권고 근거를 PM 확인 코멘트로 materialize한다 / 가장 빠르지만 PM이 권고안을 그대로 채택했다는 명시 확인이 필요하다.
-- 선택지 B / 장점 / 단점: PM이 수정한 35건의 최종 disposition·코멘트와 reviewer ID를 제공한다 / 실제 의도를 가장 정확히 보존하지만 입력·재검증 시간이 더 든다.
-- 당신의 추천안: A. PM이 `PM-LOCAL-001`을 자신의 stable local reviewer ID로 명시 확인하고, 실제 final disposition 확정 시각을 KST ISO-8601로 제공·확인한다. 이 답변이 final confirmation이면 `이 답변 시각`이라고 명시할 수 있다.
-- 답을 받지 못할 때 사용할 기본값: `PENDING_PM_REVIEW` 유지, official release/seed 생성 금지.
-- 영향을 받는 파일·계약·데이터·배포: approval manifest, review report, lineage/status, DATA-SEED 입력; DB/API/dependency/public 배포는 아직 변하지 않는다.
-
-Q-SEED-001. 승인 레코드를 어떤 release/import 구조로 승격할 것인가
-- 왜 지금 필요한가: TASKS와 ADR-0015가 DATA-SEED-001을 별도 계획·승인 경계로 두며, 선택에 따라 새 DB migration, rollback, lineage와 readiness가 달라진다.
-- 선택지 A / 장점 / 단점: immutable filesystem release와 기존 schema용 결정론적 transactional seed를 생성하고, 참조 row가 없는 초기 빈 disposable local DB에만 compensation을 허용한다 / 새 migration 없이 재현·감사·복구가 가능하지만 non-empty DB는 delete rollback 대신 새 release가 필요하다.
-- 선택지 B / 장점 / 단점: release ledger table과 import function을 next unused versioned migration으로 추가한다 / DB 조회는 쉽지만 migration·보안 표면·회귀 범위가 커지고 Q-SEC-003 migration과 순서를 조정해야 한다.
-- 당신의 추천안: A. 0원 local-first에 필요한 최소 구조로 기존 승인 경계를 보존한다.
-- 답을 받지 못할 때 사용할 기본값: release/seed를 만들지 않고 DATA-SEED-001 Blocked 유지.
-- 영향을 받는 파일·계약·데이터·배포: official release, seed/import/rollback, lineage/version, DB rows, `/ready`; B이면 migration/ADR/DB version도 변경된다.
-
-Q-WEB-001. `/chat` 기능이 아직 없을 때 홈의 채팅 시작 CTA를 어떻게 동작시킬 것인가
-- 왜 지금 필요한가: WEB-HOME 완료 기준은 `/chat` 진입을 요구하지만 현재 route가 없다. 404 링크, 준비중 화면, CTA 보류는 시민이 보는 동작이 다르다.
-- 선택지 A / 장점 / 단점: 입력·저장 없는 접근 가능한 최소 `/chat` 준비중 화면을 만들고 홈 CTA를 연결한다 / 오류 없는 navigation을 검증할 수 있지만 임시 화면이 생긴다.
-- 선택지 B / 장점 / 단점: 실제 WEB-CHAT까지 현재 CTA를 유지하고 WEB-HOME 완료를 보류한다 / 임시 화면은 없지만 홈 수직 흐름 완료가 늦어진다.
-- 당신의 추천안: A. 지원 범위·개인조회 불가·데이터 미준비를 명확히 표시하는 static shell.
-- 답을 받지 못할 때 사용할 기본값: B. dead link 없이 현 상태 유지.
-- 영향을 받는 파일·계약·데이터·배포: `/`, 새 `/chat` route/test, responsive/accessibility 검증; API/DB/LLM/개인정보 저장은 변하지 않는다.
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.
@@ -93,6 +68,25 @@ Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전
 
 ## 해결된 인터뷰 질문
 
+Q-WEB-001. 실제 chat pipeline 전 홈 CTA의 목적지는 무엇인가
+- 결정: A / D-037. 입력·저장·cookie·API/LLM 호출이 없는 접근 가능한 정적 `/chat` 준비 화면을
+  만들고 `/` CTA를 연결한다.
+- 결과 경계: 실제 질문 입력, 공식 KB 답변, 출처 카드, 대화 문맥은 WEB-CHAT/API-CHAT/READY
+  gate 이후 별도 수직 흐름에서만 구현한다. 공개 배포는 A-021/Q-SEC-003으로 계속 차단된다.
+
+Q-SEED-001. approved record의 official release/import 구조는 무엇인가
+- 결정: A / D-036 / ADR-0016. initial `0.1.0-initial.1` immutable filesystem release와 기존
+  schema용 empty-local transactional seed를 선택한다.
+- 결과 경계: architecture만 확정됐다. 동시 capability write를 차단하는 8-table exclusive lock,
+  exact local role/session assertion, full semantic projection hash와 two-phase prepare/activation을
+  명세에 반영했다. 사용자의 서면 `명세 승인`, 이후 계획 승인이 없으면 구현하지 않는다.
+
+Q-DATA-003. PM 검수 완료 진술을 canonical approval evidence로 어떻게 확정할 것인가
+- 결정: A / D-035. reviewer `PM-LOCAL-001`, confirmation
+  `2026-07-19T02:06:19+09:00`, current recommendation 35건을 모두 채택한다.
+- 결과 경계: DATA-001 approval manifest materialization만 허용한다. official release, DB seed,
+  ACTIVE 검색, readiness는 Q-SEED-001의 별도 명세/계획 승인 전 활성화하지 않는다.
+
 Q-DATA-002. 승인 전 공식 데이터 artifact를 어떤 방식으로 저장하고 승인할 것인가
 - 결정: A / D-033 / ADR-0015. 사용자가 2026-07-18 `Q-DATA-002: A`라고 명시했다.
 - 선택: `data/staging/data-001/<draft-version>/`의 `kb_records.json`, `offices.json`,
@@ -100,7 +94,7 @@ Q-DATA-002. 승인 전 공식 데이터 artifact를 어떤 방식으로 저장�
   사용한다. manifest는 artifact SHA-256·count·record decision·별도 PM reviewer/comment를 묶는다.
 - 결과 경계: DATA-001은 staging/validation/PM approval evidence까지만 소유한다. 승인 record의
   immutable official release와 seed/import는 별도 DATA-SEED-001 계획이 소유한다. 초기 release는
-  KB 19+office 3+mapping 10~12이며 KB-WASTE-03은 REG-001 뒤 최종 20번째 ACTIVE가 된다.
+  KB 19+office 3+mapping 10이며 KB-WASTE-03은 REG-001 뒤 최종 20번째 ACTIVE가 된다.
 - 영향: documentation/ADR/TASK traceability만 변경한다. official/mock data, DB, public API,
   readiness, dependency, deployment와 비용은 아직 변하지 않는다.
 

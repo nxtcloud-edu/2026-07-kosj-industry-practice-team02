@@ -3,7 +3,7 @@
 > **최종 제품**: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터  
 > **프로젝트 기간**: 2026-07-06 ~ 2026-07-31  
 > **팀 규모**: 4명  
-> **문서 버전**: v2.2  
+> **문서 버전**: v2.2.1
 > **팀명·팀원·연락처·제출일**: 제출 전 직접 입력
 
 ## 1. 프로젝트 정의
@@ -120,7 +120,7 @@
 | --- | --- | --- | --- |
 | 공식 KB | 20건 | 실제·공식 데이터 | AI/Data·Backend 작성, PM 전수 승인 |
 | 공식 기관 | 3개 이상 | 실제·공개 데이터 | Backend 작성, PM 전수 승인 |
-| 지역×민원 매핑 | 10~12건 | 팀 규칙 | Backend 작성, PM 전수 검수 |
+| 지역×민원 매핑 | 초기 승인 10건, staging 12건 | 팀 규칙 | Backend 작성, PM 전수 검수 |
 | 표본 질문 | 20개 | 사람 확정 평가셋 | AI/Data+PM |
 | 회귀 테스트 | 1개 | 개선 전후 통합 테스트 | 전체 |
 | 실패 질문 mock | 20~30건 | 시연용 샘플 | AI/Data |
@@ -133,7 +133,7 @@
 | --- | --- |
 | AI/Data | 공식 KB 작성, 형식 관리, 표본 질문 초안 |
 | Backend | 공식 KB·기관 데이터 작성, 스키마·로그 필드 검증 |
-| PM | 공식 KB 20건·기관 3건의 출처·표현·확인일·승인 상태와 지역×민원 매핑 10~12건을 전수 검수 및 승인 |
+| PM | 공식 KB 20건·기관 3건의 출처·표현·확인일·승인 상태와 staging 지역×민원 매핑 12건을 전수 검수하고, 초기 release 10건을 승인 |
 | Frontend | 승인 데이터의 기관 표시·출처 카드 표시 QA; 공식 내용 작성·승인 권한 없음 |
 
 완료 목표는 2026-07-20이다. PM 승인 전 레코드는 staging이며 시민 답변 검색 대상이 아니다.
@@ -142,8 +142,16 @@ Q-DATA-002=A에 따라 staging의 canonical 경로는
 `data/staging/data-001/<draft-version>/`이며 KB·기관·매핑 JSON과 artifact hash에 묶인 PM
 approval manifest를 분리한다. DATA-001은 authoring·validation·approval evidence까지만
 소유하며, 승인 record의 immutable official release와 DB seed/import는 DATA-SEED-001에서만
-수행한다. 초기 release는 KB 19건·기관 3건·매핑 10~12건이고 `KB-WASTE-03`은 개선 전후
+수행한다. Q-DATA-003=A의 PM 최종 확인은 reviewer `PM-LOCAL-001`, confirmation
+`2026-07-19T02:06:19+09:00`, current recommendation 35건 전부 채택이다. 초기 release projection은
+KB 19건·기관 3건·매핑 10건이고 `KB-WASTE-03`과 거절 매핑 2건은 제외한다. WASTE-03은 개선 전후
 회귀에서 별도 승인된 뒤 최종 20번째 ACTIVE가 된다.
+
+Q-SEED-001=A에 따라 initial official version은 `0.1.0-initial.1`이며 immutable filesystem
+release와 기존 schema용 empty-local transactional seed를 사용한다. release 준비와 local dispatcher
+activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확인과 8개 table exclusive lock,
+정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세와 실행계획
+승인 전에는 release/seed/DB/official-data version을 변경하지 않는다.
 
 ## 7. 시스템 설계
 

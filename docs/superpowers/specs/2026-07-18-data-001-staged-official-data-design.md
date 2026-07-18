@@ -187,8 +187,8 @@ DATA-001 완료는 승인 manifest와 검수 누락 0을 뜻하지만, DB seed �
 | Gate | KB | Office | Mapping | WASTE-03 |
 |---|---:|---:|---:|---|
 | staging 작성 완료 | 20 | 3 | 12 | DRAFT |
-| initial PM approval | 19 | 3 | 10~12 | `WITHHOLD_FOR_REGRESSION` |
-| DATA-SEED initial release | 19 | 3 | 10~12 | 포함 금지 |
+| initial PM approval | 19 | 3 | 10 | `WITHHOLD_FOR_REGRESSION` |
+| DATA-SEED initial release | 19 | 3 | 10 | 포함 금지 |
 | REG-001 이후 최종 상태 | 20 ACTIVE | 3+ | 10~12 | 관리자 후보→별도 승인으로 ACTIVE |
 
 초기 release 준비 상태를 20 ACTIVE로 검사하지 않는다. 최종 DAR-001 20 ACTIVE는 REG-001 이후
@@ -232,7 +232,7 @@ Validator는 다음 중 하나라도 발견하면 non-zero로 종료하고 manif
 5. Determinism: repeated validation produces byte-identical normalized output/report and hashes.
 6. Repository boundary: staging path를 seed/readiness/citizen code가 참조하지 않음을 정적 검사.
 7. Source registry: 20 IDs exact set, canonical URL/date/provider/writer/reviewer completeness report.
-8. Promotion handoff fixture: initial approved set is KB 19, office 3, mapping 10~12, WASTE-03 0.
+8. Promotion handoff fixture: initial approved set is KB 19, office 3, mapping 10, WASTE-03 0.
 
 No new production dependency is authorized. Existing Ajv dependency or Python standard library may be used;
 the implementation plan must select one exact validator path and test it TDD-first.
