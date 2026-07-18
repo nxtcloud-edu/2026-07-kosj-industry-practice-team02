@@ -7,9 +7,9 @@
     "withheld_kb": 1
   },
   "artifact_hashes": {
-    "kb_records.json": "fbaa92741aea241c446a5d0b0b5cb0ea23276278b4cb1ff545a2cac10a0f3050",
-    "office_service_mappings.json": "3fd35c0cdf069e83e487d94463602bb049b2e1e4862d3dfba69093205521c9d5",
-    "offices.json": "ac9a36f34b10044fb3ac1893775b052f10eca2aa3d67756f48ca6dc747271259"
+    "kb_records.json": "38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365",
+    "office_service_mappings.json": "a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b",
+    "offices.json": "fe942ce476c7d78f5b17deb10fd3b53e5b673f3ae36cf67a042823ccd51a7af0"
   },
   "counts": {
     "kb": 20,
