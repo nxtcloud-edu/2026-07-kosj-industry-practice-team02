@@ -1,5 +1,11 @@
 {
-  "approval_projection": null,
+  "approval_projection": {
+    "initial_kb": 19,
+    "initial_mapping": 10,
+    "initial_office": 3,
+    "rejected_mapping": 2,
+    "withheld_kb": 1
+  },
   "artifact_hashes": {
     "kb_records.json": "38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365",
     "office_service_mappings.json": "a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b",
@@ -12,16 +18,8 @@
   },
   "draft_version": "0.1.0-draft.1",
   "issues": [],
-  "recommendation_projection": {
-    "initial_kb": 19,
-    "initial_mapping": 10,
-    "initial_office": 3,
-    "rejected_mapping": 2,
-    "withheld_kb": 1
-  },
+  "recommendation_projection": null,
   "schema_version": 1,
   "valid": true,
-  "warnings": [
-    "PM_REVIEW_REQUIRED"
-  ]
+  "warnings": []
 }

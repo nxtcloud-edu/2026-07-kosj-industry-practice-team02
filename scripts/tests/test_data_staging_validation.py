@@ -1557,6 +1557,73 @@ class DataStagingFinalRemediationTests(unittest.TestCase):
         self.assertNotIn("VALIDATE-DATA-001 staging-absent", verify)
         self.assertIn("DATA-001 canonical marker/schema", verify)
 
+    def test_canonical_pm_approval_materialization_contract(self) -> None:
+        """The canonical manifest records the exact PM-confirmed disposition."""
+        draft = Path("data/staging/data-001/0.1.0-draft.1")
+        manifest = load_json_object(draft / "approval_manifest.json")
+
+        self.assertEqual("APPROVED_FOR_INITIAL_RELEASE", manifest["state"])
+        self.assertEqual("PM-LOCAL-001", manifest["reviewed_by"])
+        self.assertEqual("2026-07-19T02:06:19+09:00", manifest["reviewed_at"])
+        self.assertEqual(
+            "PM은 검토 패키지의 AI 권고안을 전수 검토 후 최종 결정으로 확인했습니다.",
+            manifest["review_comment"],
+        )
+        self.assertEqual(
+            {
+                "kb_records.json": "38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365",
+                "offices.json": "fe942ce476c7d78f5b17deb10fd3b53e5b673f3ae36cf67a042823ccd51a7af0",
+                "office_service_mappings.json": "a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b",
+            },
+            {
+                entry["path"]: entry["sha256"]
+                for entry in manifest["artifacts"]
+            },
+        )
+
+        decisions = manifest["decisions"]
+        assert isinstance(decisions, list)
+        self.assertEqual(35, len(decisions))
+        for entry in decisions:
+            assert isinstance(entry, dict)
+            record_id = entry["record_id"]
+            decision = entry["decision"]
+            if decision == "APPROVE_INITIAL_RELEASE":
+                expected_comment = (
+                    f"PM은 {record_id}의 제출 출처, 안전 범위, 표현 및 초기 릴리스 포함이 "
+                    "검토 패킷과 일치함을 확인했습니다."
+                )
+            elif decision == "WITHHOLD_FOR_REGRESSION":
+                expected_comment = (
+                    f"PM은 {record_id}이 REG-001 전까지 초기 릴리스에서 제외됨을 확인했습니다."
+                )
+            else:
+                expected_comment = (
+                    f"PM은 {record_id} 매핑에 직접 책임 근거가 충분하지 않아 초기 릴리스에서 "
+                    "제외됨을 확인했습니다."
+                )
+            self.assertEqual(entry["recommended_decision"], decision)
+            self.assertEqual(expected_comment, entry["comment"])
+
+        report = validate_staging(
+            draft,
+            SCHEMA_DIR,
+            Path("data/official/kb_source_registry.csv"),
+        )
+        self.assertTrue(report["valid"], report["issues"])
+        self.assertEqual(
+            {
+                "initial_kb": 19,
+                "initial_office": 3,
+                "initial_mapping": 10,
+                "withheld_kb": 1,
+                "rejected_mapping": 2,
+            },
+            report["approval_projection"],
+        )
+        self.assertIsNone(report["recommendation_projection"])
+        self.assertEqual([], report["warnings"])
+
 
 if __name__ == "__main__":
     unittest.main()
