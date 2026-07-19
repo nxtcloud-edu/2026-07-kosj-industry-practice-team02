@@ -10,6 +10,8 @@ from contextlib import redirect_stdout
 from datetime import date, datetime, timezone
 from io import StringIO
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 import tempfile
 from typing import cast
@@ -22,6 +24,41 @@ from scripts import test_data_seed_concurrency as concurrency
 
 RELEASE_VERSION = "0.1.0-initial.1"
 SECRET_DSN = "postgresql://postgres:" + "synthetic-secret@127.0.0.1:54322/postgres"
+
+
+class DirectEntrypointTests(unittest.TestCase):
+    def assert_stable_direct_failure(
+        self, script_name: str, expected_step: str
+    ) -> None:
+        repository_root = Path(__file__).resolve().parents[2]
+        result = subprocess.run(
+            [sys.executable, "-B", str(repository_root / "scripts" / script_name)],
+            cwd=repository_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            f"[FAIL] step={expected_step} reason=CLI_ARGUMENTS_INVALID issues=1\n",
+            result.stdout,
+        )
+        self.assertEqual("", result.stderr)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+        self.assertNotIn("ModuleNotFoundError", result.stdout + result.stderr)
+
+    def test_direct_database_verifier_reaches_stable_cli_failure(self) -> None:
+        self.assert_stable_direct_failure(
+            "verify_data_seed_db.py",
+            "VERIFY-DATA-SEED-CLI",
+        )
+
+    def test_direct_concurrency_probe_reaches_stable_cli_failure(self) -> None:
+        self.assert_stable_direct_failure(
+            "test_data_seed_concurrency.py",
+            "VERIFY-DATA-SEED-CONCURRENCY",
+        )
 
 
 class _RowsConnection:

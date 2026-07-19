@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from queue import Queue
 import sys
 import threading
@@ -10,6 +11,9 @@ import time
 from typing import Any, Sequence
 
 import psycopg
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.data_seed_release import RELEASE_VERSION
 from scripts.verify_data_seed_db import (

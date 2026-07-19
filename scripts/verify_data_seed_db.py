@@ -19,6 +19,9 @@ from typing import Any, Mapping, Protocol, Sequence, cast
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_RELATIVE_PATH,
     CANONICAL_RELEASE_RELATIVE_PATH,

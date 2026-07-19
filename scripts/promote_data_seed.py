@@ -13,6 +13,9 @@ import tempfile
 from pathlib import Path
 from typing import Mapping, Sequence
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_RELATIVE_PATH,
     CANONICAL_DRAFT_TOKEN,

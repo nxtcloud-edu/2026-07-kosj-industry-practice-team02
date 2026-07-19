@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -35,6 +36,30 @@ EXPECTED_FILES = {
     "release_manifest.json",
     "seed.sql",
 }
+
+
+class DirectEntrypointTests(unittest.TestCase):
+    def test_direct_promote_script_reaches_stable_cli_failure(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(REPOSITORY_ROOT / "scripts/promote_data_seed.py"),
+            ],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            "[FAIL] step=DATA-SEED-CLI reason=CLI_ARGUMENTS_INVALID issues=1\n",
+            result.stdout,
+        )
+        self.assertEqual("", result.stderr)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+        self.assertNotIn("ModuleNotFoundError", result.stdout + result.stderr)
 
 
 class PromoteDataSeedTests(unittest.TestCase):
