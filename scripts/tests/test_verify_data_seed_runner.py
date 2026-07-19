@@ -134,13 +134,18 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
         self.assertIn("Restore-DataSeedEnvironment", source)
         self.assertIn("finally", source)
         self.assertIn('"SEJONG_ADMIN_DATABASE_URL"', source)
+        self.assertIn("Get-DataSeedLibpqEnvironmentNames", source)
+        self.assertIn("Clear-DataSeedEnvironment", source)
         self.assertNotIn("Write-Output $adminDsn", source)
         self.assertNotIn("Write-Host $adminDsn", source)
 
     def test_database_evidence_is_allowlisted_before_relay(self) -> None:
         source = read_runner()
+        main = source.split(MAIN_MARKER, 1)[1]
+        normalized_main = re.sub(r"\s+", " ", main.replace("`", ""))
 
         self.assertIn("Write-DataSeedEvidence", source)
+        self.assertIn("Invoke-DataSeedEvidenceStep", source)
         for step in (
             "VERIFY-DATA-SEED-IDENTITY",
             "VERIFY-DATA-SEED-FAILURE-ROLLBACK",
@@ -150,7 +155,11 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
             "VERIFY-DATA-SEED-FINAL",
         ):
             with self.subTest(step=step):
-                self.assertIn(f'Write-DataSeedEvidence -Step "{step}"', source)
+                self.assertIn(
+                    f'Invoke-DataSeedEvidenceStep -Step "{step}"',
+                    normalized_main,
+                )
+                self.assertNotIn(f'Write-DataSeedEvidence -Step "{step}"', main)
         self.assertIn("semantic_sha256=[0-9a-f]{64}", source)
 
     def test_forbids_manual_sql_stock_seed_and_scope_expansion(self) -> None:
@@ -194,6 +203,82 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
 
 
 class VerifyDataSeedRunnerStubTests(unittest.TestCase):
+    def test_invalid_zero_exit_evidence_child_has_no_generic_pass_or_payload(
+        self,
+    ) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        with tempfile.TemporaryDirectory(prefix="sejong evidence child ") as directory:
+            child = Path(directory) / "invalid-evidence.cmd"
+            stdout_sentinel = "synthetic-invalid-evidence-stdout"
+            stderr_sentinel = "synthetic-invalid-evidence-stderr"
+            child.write_text(
+                "@echo off\r\n"
+                f"echo {stdout_sentinel}\r\n"
+                f"echo {stderr_sentinel} 1>&2\r\n"
+                "exit /b 0\r\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+            environment["SEJONG_DATA_SEED_EVIDENCE_CHILD"] = str(child)
+            command = r"""
+$child=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_CHILD')
+try {
+  Invoke-DataSeedEvidenceStep -Step 'VERIFY-DATA-SEED-IDENTITY' -FilePath $child -Arguments @() -WorkingDirectory (Get-Location).Path -TimeoutMilliseconds 5000
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'invalid'){exit 99}
+  Write-Output '[PASS] step=STUB-EVIDENCE-SEQUENCE-REJECTED'
+  exit 0
+}
+exit 100
+"""
+            result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[START] step=VERIFY-DATA-SEED-IDENTITY", combined)
+        self.assertIn("[PASS] step=STUB-EVIDENCE-SEQUENCE-REJECTED", combined)
+        self.assertNotIn("[PASS] step=VERIFY-DATA-SEED-IDENTITY\n", combined)
+        self.assertNotIn(stdout_sentinel, combined)
+        self.assertNotIn(stderr_sentinel, combined)
+
+    def test_dynamic_pg_environment_is_saved_cleared_and_restored(self) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["PGHOSTADDR"] = "synthetic-host-address"
+        environment["PGSERVICE"] = "synthetic-service"
+        environment["PGSERVICEFILE"] = "synthetic-service-file"
+        environment["PGOPTIONS"] = "synthetic-options"
+        command = r"""
+$names=@(Get-DataSeedLibpqEnvironmentNames)
+$saved=Save-DataSeedEnvironment -Names (@('SEJONG_ADMIN_DATABASE_URL')+$names)
+try {
+  Clear-DataSeedEnvironment -Names $names
+  foreach($name in $names) {
+    if(Test-Path -LiteralPath ('Env:\'+$name)){exit 96}
+  }
+}
+finally { Restore-DataSeedEnvironment -Saved $saved }
+foreach($name in @('PGHOSTADDR','PGSERVICE','PGSERVICEFILE','PGOPTIONS')) {
+  if(-not (Test-Path -LiteralPath ('Env:\'+$name))){exit 97}
+  if([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name,'Process'))){exit 98}
+}
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        for sentinel in (
+            "synthetic-host-address",
+            "synthetic-service",
+            "synthetic-service-file",
+            "synthetic-options",
+        ):
+            self.assertNotIn(sentinel, combined)
+
     def test_evidence_relay_accepts_exact_line_and_rejects_extra_content(self) -> None:
         environment = os.environ.copy()
         environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)

@@ -22,6 +22,7 @@ from scripts.verify_data_seed_db import (
     _open_connection,
     _rollback_quietly,
     _stable_reason,
+    assert_no_ambient_libpq_environment,
     load_verified_release,
     parse_and_validate_dsn,
 )
@@ -50,9 +51,15 @@ FROM app_api.record_interaction(
 """.strip()
 _SEED_PREFLIGHT_MARKER = b"\n\nDO $data_seed_empty_guard$"
 LOCK_WAIT_QUERY = """
-SELECT pg_catalog.coalesce(pg_catalog.bool_or(NOT locks.granted), false)
+SELECT
+  pg_catalog.pg_blocking_pids(%s),
+  locks.locktype,
+  locks.relation::pg_catalog.regclass::text,
+  locks.mode,
+  locks.granted
 FROM pg_catalog.pg_locks AS locks
 WHERE locks.pid = %s
+  AND NOT locks.granted
 """.strip()
 
 
@@ -119,13 +126,30 @@ def _scenario_capability_before_seed(
 
 def _wait_until_lock_blocked(
     connection: psycopg.Connection[Any],
-    backend_pid: int,
+    worker_backend_pid: int,
 ) -> None:
+    seed_backend_pid = connection.info.backend_pid
+    if type(seed_backend_pid) is not int or seed_backend_pid <= 0:
+        raise ValueError("SEED_BACKEND_PID_INVALID")
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
-        row = connection.execute(LOCK_WAIT_QUERY, (backend_pid,)).fetchone()
-        if row == (True,):
-            return
+        rows = connection.execute(
+            LOCK_WAIT_QUERY,
+            (worker_backend_pid, worker_backend_pid),
+        ).fetchall()
+        for row in rows:
+            if len(row) != 5:
+                continue
+            blockers, locktype, relation, mode, granted = row
+            if (
+                isinstance(blockers, (list, tuple))
+                and seed_backend_pid in blockers
+                and locktype == "relation"
+                and relation == "app_private.interaction_events"
+                and mode == "RowExclusiveLock"
+                and granted is False
+            ):
+                return
         time.sleep(0.05)
     raise ValueError("CAPABILITY_WRITE_DID_NOT_BLOCK")
 
@@ -192,9 +216,10 @@ def cli(argv: Sequence[str]) -> int:
     scenario = ""
     try:
         scenario, version = _parse_cli(argv)
-        release = load_verified_release(REPOSITORY_ROOT, version)
         dsn = os.environ.get(ADMIN_DSN_ENVIRONMENT, "")
         parse_and_validate_dsn(dsn)
+        assert_no_ambient_libpq_environment(os.environ)
+        release = load_verified_release(REPOSITORY_ROOT, version)
         if scenario == CAPABILITY_BEFORE_SEED:
             _scenario_capability_before_seed(dsn, release)
             detail = "ordering=capability-before-lock seed_rows=0 capability_rows=1"

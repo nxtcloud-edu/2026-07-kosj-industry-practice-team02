@@ -166,7 +166,8 @@ function Invoke-DataSeedStep {
         [string]$FilePath,
         [string[]]$Arguments,
         [string]$WorkingDirectory,
-        [int]$TimeoutMilliseconds = 900000
+        [int]$TimeoutMilliseconds = 900000,
+        [switch]$SuppressPass
     )
 
     [Console]::Out.WriteLine("[START] step=" + $Step)
@@ -193,7 +194,9 @@ function Invoke-DataSeedStep {
         }
         Throw-DataSeedFailure -Step $Step -Reason "child" -Code $childCode
     }
-    [Console]::Out.WriteLine("[PASS] step=" + $Step)
+    if (-not $SuppressPass) {
+        [Console]::Out.WriteLine("[PASS] step=" + $Step)
+    }
     return $result
 }
 
@@ -208,6 +211,25 @@ function Save-DataSeedEnvironment {
         }
     }
     return $saved
+}
+
+function Get-DataSeedLibpqEnvironmentNames {
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($key in [Environment]::GetEnvironmentVariables("Process").Keys) {
+        $name = [string]$key
+        if ($name.StartsWith("PG", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $names.Add($name)
+        }
+    }
+    return @($names | Sort-Object -Unique)
+}
+
+function Clear-DataSeedEnvironment {
+    param([string[]]$Names)
+
+    foreach ($name in $Names) {
+        [Environment]::SetEnvironmentVariable($name, $null, "Process")
+    }
 }
 
 function Restore-DataSeedEnvironment {
@@ -273,6 +295,25 @@ function Write-DataSeedEvidence {
         Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
     }
     [Console]::Out.WriteLine($lines[0])
+}
+
+function Invoke-DataSeedEvidenceStep {
+    param(
+        [string]$Step,
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$WorkingDirectory,
+        [int]$TimeoutMilliseconds
+    )
+
+    $result = Invoke-DataSeedStep `
+        -Step $Step `
+        -FilePath $FilePath `
+        -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory `
+        -TimeoutMilliseconds $TimeoutMilliseconds `
+        -SuppressPass
+    Write-DataSeedEvidence -Step $Step -Output $result.Output
 }
 
 function Assert-DataSeedPatchedRuntime {
@@ -347,9 +388,14 @@ function Assert-DataSeedPatchedRuntime {
 # DATA-SEED-RUNNER-MAIN
 
 $exitCode = 0
-$savedEnvironment = Save-DataSeedEnvironment -Names @("SEJONG_ADMIN_DATABASE_URL")
+$savedEnvironment = $null
 
 try {
+    $libpqEnvironmentNames = @(Get-DataSeedLibpqEnvironmentNames)
+    $savedEnvironment = Save-DataSeedEnvironment `
+        -Names (@("SEJONG_ADMIN_DATABASE_URL") + $libpqEnvironmentNames)
+    Clear-DataSeedEnvironment -Names $libpqEnvironmentNames
+
     if ($ReleaseVersion -cne "0.1.0-initial.1") {
         Throw-DataSeedFailure -Step "VALIDATE-DATA-SEED-ARGUMENTS" -Reason "RELEASE-VERSION-INVALID" -Code 2
     }
@@ -424,13 +470,12 @@ try {
     )
     [Console]::Out.WriteLine("[PASS] step=READ-LOCAL-DATABASE-STATUS")
 
-    $identityEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-IDENTITY" `
         -FilePath $pythonBinary `
         -Arguments @("-B", $databaseVerifier, "identity", "--release-version", $ReleaseVersion) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 30000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-IDENTITY" -Output $identityEvidence.Output
 
     $null = Invoke-DataSeedStep `
         -Step "RESET-BEFORE-FAILURE-ROLLBACK" `
@@ -438,13 +483,12 @@ try {
         -Arguments @("db", "reset", "--local") `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 300000
-    $failureEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-FAILURE-ROLLBACK" `
         -FilePath $pythonBinary `
         -Arguments @("-B", $databaseVerifier, "failure-rollback", "--release-version", $ReleaseVersion) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 60000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-FAILURE-ROLLBACK" -Output $failureEvidence.Output
 
     $null = Invoke-DataSeedStep `
         -Step "RESET-BEFORE-CONCURRENCY-A" `
@@ -452,7 +496,7 @@ try {
         -Arguments @("db", "reset", "--local") `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 300000
-    $concurrencyAEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-CONCURRENCY-A" `
         -FilePath $pythonBinary `
         -Arguments @(
@@ -465,7 +509,6 @@ try {
         ) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 60000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-CONCURRENCY-A" -Output $concurrencyAEvidence.Output
 
     $null = Invoke-DataSeedStep `
         -Step "RESET-BEFORE-CONCURRENCY-B" `
@@ -473,7 +516,7 @@ try {
         -Arguments @("db", "reset", "--local") `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 300000
-    $concurrencyBEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-CONCURRENCY-B" `
         -FilePath $pythonBinary `
         -Arguments @(
@@ -486,7 +529,6 @@ try {
         ) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 60000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-CONCURRENCY-B" -Output $concurrencyBEvidence.Output
 
     $null = Invoke-DataSeedStep `
         -Step "RESET-BEFORE-SEED-CYCLE" `
@@ -494,20 +536,18 @@ try {
         -Arguments @("db", "reset", "--local") `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 300000
-    $cycleEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-SEED-CYCLE" `
         -FilePath $pythonBinary `
         -Arguments @("-B", $databaseVerifier, "seed-cycle", "--release-version", $ReleaseVersion) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 120000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-SEED-CYCLE" -Output $cycleEvidence.Output
-    $finalEvidence = Invoke-DataSeedStep `
+    Invoke-DataSeedEvidenceStep `
         -Step "VERIFY-DATA-SEED-FINAL" `
         -FilePath $pythonBinary `
         -Arguments @("-B", $databaseVerifier, "verify-final", "--release-version", $ReleaseVersion) `
         -WorkingDirectory $repositoryRoot `
         -TimeoutMilliseconds 60000
-    Write-DataSeedEvidence -Step "VERIFY-DATA-SEED-FINAL" -Output $finalEvidence.Output
 }
 catch {
     $failure = $_.Exception
@@ -532,7 +572,9 @@ catch {
 }
 finally {
     try {
-        Restore-DataSeedEnvironment -Saved $savedEnvironment
+        if ($null -ne $savedEnvironment) {
+            Restore-DataSeedEnvironment -Saved $savedEnvironment
+        }
     }
     catch {
         if ($exitCode -eq 0) {

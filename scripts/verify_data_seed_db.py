@@ -38,6 +38,7 @@ from scripts.data_seed_release import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_DSN_ENVIRONMENT = "SEJONG_ADMIN_DATABASE_URL"
 EXPECTED_ADMIN_IDENTITY = ("postgres", "127.0.0.1", 54322, "postgres")
+ALLOWED_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})
 LOCK_TABLES = (
     "kb_documents",
     "kb_question_examples",
@@ -161,6 +162,13 @@ def parse_and_validate_dsn(value: str) -> AdminDsn:
         raise ValueError("ADMIN_DSN_IDENTITY_INVALID")
     try:
         values = conninfo_to_dict(value)
+        password = values.get("password")
+        if (
+            set(values) != ALLOWED_CONNINFO_KEYS
+            or not isinstance(password, str)
+            or not password
+        ):
+            raise ValueError
         port_value = values.get("port")
         if isinstance(port_value, str):
             if not port_value.isascii() or not port_value.isdecimal():
@@ -179,16 +187,19 @@ def parse_and_validate_dsn(value: str) -> AdminDsn:
     except (TypeError, ValueError, psycopg.Error):
         raise ValueError("ADMIN_DSN_IDENTITY_INVALID") from None
 
-    # service/servicefile and hostaddr can silently redirect a libpq connection
-    # while leaving the display identity looking acceptable.
-    if (
-        identity != EXPECTED_ADMIN_IDENTITY
-        or values.get("hostaddr") not in (None, "")
-        or values.get("service") not in (None, "")
-        or values.get("servicefile") not in (None, "")
-    ):
+    if identity != EXPECTED_ADMIN_IDENTITY:
         raise ValueError("ADMIN_DSN_IDENTITY_INVALID")
     return AdminDsn(identity=identity)
+
+
+def assert_no_ambient_libpq_environment(environment: Mapping[str, str]) -> None:
+    """Reject every non-empty ambient libpq namespace entry without retaining it."""
+
+    if any(
+        name.upper().startswith("PG") and value != ""
+        for name, value in environment.items()
+    ):
+        raise ValueError("AMBIENT_LIBPQ_ENVIRONMENT_INVALID")
 
 
 def load_verified_release(
@@ -264,9 +275,10 @@ def _canonical_database_value(value: object) -> object:
     if isinstance(value, datetime):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("DATABASE_TIMESTAMP_INVALID")
+        if value.microsecond != 0:
+            raise ValueError("TIMESTAMP_PRECISION_INVALID")
         return (
             value.astimezone(timezone.utc)
-            .replace(microsecond=0)
             .isoformat(timespec="seconds")
             .replace("+00:00", "Z")
         )
@@ -577,9 +589,10 @@ def cli(argv: Sequence[str]) -> int:
     step = _COMMAND_STEPS.get(command, "VERIFY-DATA-SEED-CLI")
     try:
         command, release_version = _parse_cli(argv)
-        release = load_verified_release(REPOSITORY_ROOT, release_version)
         dsn = os.environ.get(ADMIN_DSN_ENVIRONMENT, "")
         parse_and_validate_dsn(dsn)
+        assert_no_ambient_libpq_environment(os.environ)
+        release = load_verified_release(REPOSITORY_ROOT, release_version)
         with _open_connection(dsn) as connection:
             if command == "identity":
                 _assert_session_identity(connection)

@@ -48,24 +48,46 @@ class _RowsConnection:
         return self._current[0] if self._current else None
 
 
+class _LockProbeConnection:
+    """Expose the old opaque boolean and the desired exact lock rows."""
+
+    def __init__(self, rows: list[tuple[object, ...]], seed_pid: int = 701) -> None:
+        self.rows = rows
+        self.info = SimpleNamespace(backend_pid=seed_pid)
+        self.calls: list[tuple[str, tuple[object, ...]]] = []
+
+    def execute(
+        self,
+        statement: str,
+        parameters: tuple[object, ...],
+    ) -> _LockProbeConnection:
+        self.calls.append((statement, parameters))
+        return self
+
+    def fetchone(self) -> tuple[object, ...]:
+        return (True,)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        return list(self.rows)
+
+
 class AdminDsnIdentityTests(unittest.TestCase):
     def test_dsn_identity_requires_exact_local_admin(self) -> None:
-        accepted = verifier.parse_and_validate_dsn(
-            "user=postgres host=127.0.0.1 port=54322 dbname=postgres"
-        )
+        accepted = verifier.parse_and_validate_dsn(SECRET_DSN)
         self.assertEqual(
             ("postgres", "127.0.0.1", 54322, "postgres"),
             accepted.identity,
         )
 
         invalid = (
-            "user=other host=127.0.0.1 port=54322 dbname=postgres",
-            "user=postgres host=localhost port=54322 dbname=postgres",
-            "user=postgres host=127.0.0.1 port=54321 dbname=postgres",
-            "user=postgres host=127.0.0.1 port=54322 dbname=template1",
-            "user=postgres host=127.0.0.1 hostaddr=127.0.0.2 "
-            "port=54322 dbname=postgres",
-            "service=synthetic user=postgres host=127.0.0.1 port=54322 dbname=postgres",
+            SECRET_DSN.replace("postgres:", "other:", 1),
+            SECRET_DSN.replace("127.0.0.1", "localhost", 1),
+            SECRET_DSN.replace("54322", "54321", 1),
+            SECRET_DSN.replace("/postgres", "/template1", 1),
+            SECRET_DSN + "?hostaddr=127.0.0.2",
+            SECRET_DSN + "?service=synthetic",
+            SECRET_DSN + "?sslmode=disable",
+            SECRET_DSN + "?options=-csearch_path%3Dpublic",
         )
         for value in invalid:
             with self.subTest(value=value):
@@ -79,6 +101,100 @@ class AdminDsnIdentityTests(unittest.TestCase):
         self.assertNotIn("synthetic-secret", repr(parsed))
         self.assertNotIn(SECRET_DSN, repr(parsed))
 
+    def test_dsn_requires_password_and_rejects_every_extra_parsed_key(self) -> None:
+        without_password = "user=postgres host=127.0.0.1 port=54322 dbname=postgres"
+        empty_password = SECRET_DSN.replace("synthetic-secret", "", 1)
+        for value in (without_password, empty_password):
+            with self.subTest(value_present=bool(value)):
+                with self.assertRaisesRegex(ValueError, "ADMIN_DSN_IDENTITY_INVALID"):
+                    verifier.parse_and_validate_dsn(value)
+
+        parsed_with_extra = {
+            "user": "postgres",
+            "password": "synthetic-secret",
+            "host": "127.0.0.1",
+            "port": "54322",
+            "dbname": "postgres",
+            "application_name": "synthetic",
+        }
+        with mock.patch.object(
+            verifier,
+            "conninfo_to_dict",
+            return_value=parsed_with_extra,
+        ):
+            with self.assertRaisesRegex(ValueError, "ADMIN_DSN_IDENTITY_INVALID"):
+                verifier.parse_and_validate_dsn(SECRET_DSN)
+
+    def test_verifier_rejects_nonempty_ambient_pg_before_release_or_connect(
+        self,
+    ) -> None:
+        for name in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS"):
+            with self.subTest(name=name):
+                buffer = StringIO()
+                with (
+                    mock.patch.dict(
+                        verifier.os.environ,
+                        {
+                            "SEJONG_ADMIN_DATABASE_URL": SECRET_DSN,
+                            name: "synthetic-ambient-value",
+                        },
+                        clear=True,
+                    ),
+                    mock.patch.object(verifier, "load_verified_release") as load,
+                    mock.patch.object(verifier, "_open_connection") as connect,
+                    redirect_stdout(buffer),
+                ):
+                    code = verifier.cli(
+                        ["identity", "--release-version", RELEASE_VERSION]
+                    )
+
+                self.assertEqual(2, code)
+                self.assertEqual(
+                    "[FAIL] step=VERIFY-DATA-SEED-IDENTITY "
+                    "reason=AMBIENT_LIBPQ_ENVIRONMENT_INVALID issues=1\n",
+                    buffer.getvalue(),
+                )
+                self.assertNotIn("synthetic-ambient-value", buffer.getvalue())
+                load.assert_not_called()
+                connect.assert_not_called()
+
+    def test_concurrency_rejects_ambient_pg_before_release_or_connect(self) -> None:
+        buffer = StringIO()
+        with (
+            mock.patch.dict(
+                concurrency.os.environ,
+                {
+                    "SEJONG_ADMIN_DATABASE_URL": SECRET_DSN,
+                    "PGOPTIONS": "synthetic-ambient-value",
+                },
+                clear=True,
+            ),
+            mock.patch.object(concurrency, "load_verified_release") as load,
+            mock.patch.object(
+                concurrency,
+                "_scenario_capability_before_seed",
+            ) as scenario,
+            redirect_stdout(buffer),
+        ):
+            code = concurrency.cli(
+                [
+                    "--scenario",
+                    concurrency.CAPABILITY_BEFORE_SEED,
+                    "--release-version",
+                    RELEASE_VERSION,
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertEqual(
+            "[FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-A "
+            "reason=AMBIENT_LIBPQ_ENVIRONMENT_INVALID issues=1\n",
+            buffer.getvalue(),
+        )
+        self.assertNotIn("synthetic-ambient-value", buffer.getvalue())
+        load.assert_not_called()
+        scenario.assert_not_called()
+
     def test_malformed_or_blank_dsn_has_one_stable_error(self) -> None:
         for value in ("", "   ", "not-a-valid-conninfo"):
             with self.subTest(value=value):
@@ -91,8 +207,62 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
         self,
     ) -> None:
         self.assertIn("pg_catalog.pg_locks", concurrency.LOCK_WAIT_QUERY)
+        self.assertIn("pg_catalog.pg_blocking_pids", concurrency.LOCK_WAIT_QUERY)
         self.assertIn("NOT locks.granted", concurrency.LOCK_WAIT_QUERY)
+        self.assertIn("locks.locktype", concurrency.LOCK_WAIT_QUERY)
+        self.assertIn(
+            "locks.relation::pg_catalog.regclass::text", concurrency.LOCK_WAIT_QUERY
+        )
+        self.assertIn("locks.mode", concurrency.LOCK_WAIT_QUERY)
         self.assertNotIn("pg_stat_activity", concurrency.LOCK_WAIT_QUERY)
+
+    def test_concurrency_wait_rejects_wrong_blocker_relation_or_mode(self) -> None:
+        unrelated_rows = (
+            (
+                [999],
+                "relation",
+                "app_private.interaction_events",
+                "RowExclusiveLock",
+                False,
+            ),
+            ([701], "relation", "app_private.audit_logs", "RowExclusiveLock", False),
+            ([701], "relation", "app_private.interaction_events", "ShareLock", False),
+            ([701], "advisory", None, "ExclusiveLock", False),
+        )
+        for row in unrelated_rows:
+            with self.subTest(row=row):
+                connection = _LockProbeConnection([row])
+                with (
+                    mock.patch.object(
+                        concurrency.time,
+                        "monotonic",
+                        side_effect=[0.0, 1.0, 6.0],
+                    ),
+                    mock.patch.object(concurrency.time, "sleep"),
+                ):
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "CAPABILITY_WRITE_DID_NOT_BLOCK",
+                    ):
+                        concurrency._wait_until_lock_blocked(connection, 702)
+
+    def test_concurrency_wait_accepts_only_direct_seed_relation_lock(self) -> None:
+        connection = _LockProbeConnection(
+            [
+                (
+                    [701],
+                    "relation",
+                    "app_private.interaction_events",
+                    "RowExclusiveLock",
+                    False,
+                )
+            ]
+        )
+        with mock.patch.object(concurrency.time, "monotonic", side_effect=[0.0, 1.0]):
+            concurrency._wait_until_lock_blocked(connection, 702)
+
+        self.assertEqual(1, len(connection.calls))
+        self.assertEqual((702, 702), connection.calls[0][1])
 
     def test_projection_queries_select_only_seed_owned_fields(self) -> None:
         self.assertEqual(
@@ -137,6 +307,21 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
             normalized["kb_documents"][0]["approved_at"],
         )
         self.assertEqual(["a", "b"], normalized["kb_documents"][0]["procedure_steps"])
+
+    def test_database_timestamp_rejects_nonzero_microseconds(self) -> None:
+        changed = datetime(
+            2026,
+            7,
+            18,
+            17,
+            6,
+            19,
+            1,
+            tzinfo=timezone.utc,
+        )
+
+        with self.assertRaisesRegex(ValueError, "^TIMESTAMP_PRECISION_INVALID$"):
+            verifier._canonical_database_value(changed)
 
     def test_query_projection_uses_exact_python_codepoint_order(self) -> None:
         rows = {
