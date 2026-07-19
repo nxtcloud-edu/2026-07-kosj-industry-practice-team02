@@ -341,7 +341,7 @@ SELECT
   current_user,
   current_database(),
   pg_catalog.count(*)::integer,
-  pg_catalog.coalesce(
+  COALESCE(
     pg_catalog.bool_and(
       memberships.admin_option
       AND memberships.inherit_option

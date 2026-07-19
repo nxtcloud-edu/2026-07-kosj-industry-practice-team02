@@ -109,6 +109,21 @@ class _LockProbeConnection:
 
 
 class AdminDsnIdentityTests(unittest.TestCase):
+    def test_session_identity_uses_unqualified_coalesce_special_form(self) -> None:
+        connection = _RowsConnection(
+            {
+                "FROM pg_catalog.pg_auth_members": [
+                    ("postgres", "postgres", "postgres", 1, True)
+                ]
+            }
+        )
+
+        verifier._assert_session_identity(connection)
+
+        statement = connection.statements[0]
+        self.assertIn("COALESCE(", statement)
+        self.assertNotIn("pg_catalog.coalesce", statement.lower())
+
     def test_dsn_identity_requires_exact_local_admin(self) -> None:
         accepted = verifier.parse_and_validate_dsn(SECRET_DSN)
         self.assertEqual(
