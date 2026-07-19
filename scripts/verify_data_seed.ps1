@@ -340,10 +340,12 @@ function Assert-DataSeedPatchedRuntime {
             "relative_path",
             "sha256"
         )
-        $propertyDiff = Compare-Object `
-            -ReferenceObject $expectedProperties `
-            -DifferenceObject $properties `
-            -CaseSensitive
+        $propertyDiff = @(
+            Compare-Object `
+                -ReferenceObject $expectedProperties `
+                -DifferenceObject $properties `
+                -CaseSensitive
+        )
         if (
             $properties.Count -ne $expectedProperties.Count -or
             $propertyDiff.Count -ne 0 -or

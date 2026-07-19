@@ -203,6 +203,28 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
 
 
 class VerifyDataSeedRunnerStubTests(unittest.TestCase):
+    def test_patched_runtime_accepts_exact_manifest_when_property_diff_is_empty(
+        self,
+    ) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["SEJONG_DATA_SEED_REPOSITORY_ROOT"] = str(ROOT)
+        command = r"""
+$root=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_REPOSITORY_ROOT')
+$manifest=Join-Path $root 'scripts\supabase-cli.local-patch.runtime.json'
+$binary=Join-Path $root '.tools\supabase\v2.109.1-sejong-loopback\supabase.exe'
+try {
+  Assert-DataSeedPatchedRuntime -RepositoryRoot $root -RuntimeManifestPath $manifest -SupabaseBinary $binary
+}
+catch { exit 89 }
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=VERIFY-DATA-SEED-PATCHED-RUNTIME", combined)
+
     def test_invalid_zero_exit_evidence_child_has_no_generic_pass_or_payload(
         self,
     ) -> None:
