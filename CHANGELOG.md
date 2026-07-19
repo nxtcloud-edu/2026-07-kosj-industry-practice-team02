@@ -105,6 +105,11 @@
 
 ### Pending
 
+- Audited the next DB-independent PII masking core slice. No new human A/B decision was found;
+  the recommended design is a standard-library deterministic rule engine that returns no text and
+  permits metadata-only handling when PII cannot be safely resolved. Product/API/DB/data code remains
+  unchanged pending explicit design review.
+
 - A-030/Q-SEED-002 human decision. Recommended/default A is a separately PM/technically approved
   immutable `0.1.0-initial.2` with the same 19/3/10 data and corrected effective-union guard; B is a
   new versioned DB migration that normalizes grantor-specific memberships. Neither option is
