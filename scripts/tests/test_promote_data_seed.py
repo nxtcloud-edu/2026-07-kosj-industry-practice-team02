@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
+import errno
 import hashlib
 import io
 import json
@@ -12,6 +13,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from scripts import promote_data_seed
 from scripts.promote_data_seed import cli
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_TOKEN,
@@ -223,8 +225,19 @@ class PromoteDataSeedTests(unittest.TestCase):
     def test_prepare_rename_failure_leaves_release_absent_and_cleans_owned_temp(
         self,
     ) -> None:
+        real_rename = promote_data_seed._rename_create_once
+        first_call = True
+
+        def fail_publish_once(source: Path, target: Path) -> None:
+            nonlocal first_call
+            if first_call:
+                first_call = False
+                raise OSError("injected")
+            real_rename(source, target)
+
         with mock.patch(
-            "scripts.promote_data_seed.os.rename", side_effect=OSError("injected")
+            "scripts.promote_data_seed._rename_create_once",
+            side_effect=fail_publish_once,
         ):
             result, output = self.run_cli(self.prepare_args())
 
@@ -235,11 +248,17 @@ class PromoteDataSeedTests(unittest.TestCase):
 
     def test_prepare_publish_race_never_overwrites_new_release_target(self) -> None:
         sentinel = b"concurrent-release-sentinel"
+        real_rename = promote_data_seed._rename_create_once
+        first_call = True
 
-        def create_target_then_fail(_source: Path, target: Path) -> None:
-            target.mkdir()
-            (target / "sentinel.bin").write_bytes(sentinel)
-            raise FileExistsError("injected publish race")
+        def create_target_then_fail(source: Path, target: Path) -> None:
+            nonlocal first_call
+            if first_call:
+                first_call = False
+                target.mkdir()
+                (target / "sentinel.bin").write_bytes(sentinel)
+                raise FileExistsError("injected publish race")
+            real_rename(source, target)
 
         with mock.patch(
             "scripts.promote_data_seed._rename_create_once",
@@ -251,6 +270,90 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assert_stable_failure(output, "PREPARE-DATA-SEED")
         self.assertEqual(sentinel, (self.release / "sentinel.bin").read_bytes())
         self.assertFalse(self.prepare_temp.exists())
+
+    def test_prepare_mutation_during_publish_is_rejected_and_owned_release_removed(
+        self,
+    ) -> None:
+        real_rename = promote_data_seed._rename_create_once
+        first_call = True
+
+        def mutate_then_rename(source: Path, target: Path) -> None:
+            nonlocal first_call
+            if first_call:
+                first_call = False
+                (source / "seed.sql").write_bytes(b"post-verify-release-mutation")
+            real_rename(source, target)
+
+        with mock.patch(
+            "scripts.promote_data_seed._rename_create_once",
+            side_effect=mutate_then_rename,
+        ):
+            result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "PREPARE-DATA-SEED")
+        self.assertFalse(self.release.exists())
+        self.assertFalse(self.prepare_temp.exists())
+
+    def test_owned_temp_cleanup_never_deletes_replacement_after_identity_check(
+        self,
+    ) -> None:
+        directory = self.root / "owned-temp"
+        directory.mkdir()
+        (directory / "release_manifest.json").write_bytes(b"owned")
+        identity = promote_data_seed._path_identity(directory)
+        displaced = directory.with_name("owned-temp-displaced")
+        sentinel = b"replacement-must-survive-cleanup"
+        real_rename = promote_data_seed._rename_create_once
+
+        def replace_then_rename(source: Path, target: Path) -> None:
+            if source == directory:
+                os.rename(source, displaced)
+                source.mkdir()
+                (source / "release_manifest.json").write_bytes(sentinel)
+                os.rename(source, target)
+            else:
+                real_rename(source, target)
+
+        with mock.patch(
+            "scripts.promote_data_seed._rename_create_once",
+            side_effect=replace_then_rename,
+        ) as rename:
+            cleaned = promote_data_seed._cleanup_owned_directory(directory, identity)
+
+        self.assertFalse(cleaned)
+        self.assertEqual(2, rename.call_count)
+        self.assertEqual(sentinel, (directory / "release_manifest.json").read_bytes())
+        self.assertEqual(b"owned", (displaced / "release_manifest.json").read_bytes())
+
+    def test_owned_dispatcher_temp_cleanup_never_deletes_replacement_after_check(
+        self,
+    ) -> None:
+        path = self.root / "owned-dispatcher.tmp"
+        path.write_bytes(b"owned")
+        identity = promote_data_seed._path_identity(path)
+        displaced = path.with_name("owned-dispatcher-displaced.tmp")
+        sentinel = b"replacement-dispatcher-temp-must-survive"
+        real_rename = promote_data_seed._rename_create_once
+
+        def replace_then_rename(source: Path, target: Path) -> None:
+            if source == path:
+                os.rename(source, displaced)
+                source.write_bytes(sentinel)
+                os.rename(source, target)
+            else:
+                real_rename(source, target)
+
+        with mock.patch(
+            "scripts.promote_data_seed._rename_create_once",
+            side_effect=replace_then_rename,
+        ) as rename:
+            removed = promote_data_seed._remove_owned_file(path, identity)
+
+        self.assertFalse(removed)
+        self.assertEqual(2, rename.call_count)
+        self.assertEqual(sentinel, path.read_bytes())
+        self.assertEqual(b"owned", displaced.read_bytes())
 
     def test_prepare_preserves_raw_tokens_and_rejects_aliases_before_writes(
         self,
@@ -569,8 +672,23 @@ class PromoteDataSeedTests(unittest.TestCase):
     ) -> None:
         self.prepare_valid_release()
         prior = self.dispatcher.read_bytes()
+        real_rename = promote_data_seed._rename_create_once
+        injected = False
+
+        def fail_new_dispatcher_publish_once(source: Path, target: Path) -> None:
+            nonlocal injected
+            if (
+                target == self.dispatcher
+                and ".activate." in source.name
+                and not injected
+            ):
+                injected = True
+                raise OSError("injected")
+            real_rename(source, target)
+
         with mock.patch(
-            "scripts.promote_data_seed.os.replace", side_effect=OSError("injected")
+            "scripts.promote_data_seed._rename_create_once",
+            side_effect=fail_new_dispatcher_publish_once,
         ):
             result, output = self.run_cli(self.release_args("activate-local-seed"))
 
@@ -584,10 +702,7 @@ class PromoteDataSeedTests(unittest.TestCase):
     ) -> None:
         self.prepare_valid_release()
         prior = self.dispatcher.read_bytes()
-        real_replace = os.replace
-        with mock.patch(
-            "scripts.promote_data_seed.os.replace", wraps=real_replace
-        ) as replace_spy:
+        with mock.patch("scripts.promote_data_seed.os.replace") as replace_spy:
             with mock.patch(
                 "scripts.promote_data_seed._dispatcher_matches",
                 side_effect=[False, True],
@@ -595,10 +710,94 @@ class PromoteDataSeedTests(unittest.TestCase):
                 result, output = self.run_cli(self.release_args("activate-local-seed"))
 
         self.assertEqual(2, result)
-        self.assertEqual(2, replace_spy.call_count)
+        replace_spy.assert_not_called()
         self.assertEqual(prior, self.dispatcher.read_bytes())
         self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
         self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
+
+    def test_activation_refuses_dispatcher_changed_before_replace(self) -> None:
+        self.prepare_valid_release()
+        sentinel = b"concurrent-dispatcher-change-before-replace"
+        real_write = promote_data_seed._write_dispatcher_temp
+
+        def write_then_drift(
+            dispatcher: Path, payload: bytes, tag: str
+        ) -> tuple[Path, tuple[int, int, int]]:
+            temporary = real_write(dispatcher, payload, tag)
+            dispatcher.write_bytes(sentinel)
+            return temporary
+
+        with mock.patch(
+            "scripts.promote_data_seed._write_dispatcher_temp",
+            side_effect=write_then_drift,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(sentinel, self.dispatcher.read_bytes())
+        self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
+
+    def test_activation_never_overwrites_drift_after_final_identity_check(
+        self,
+    ) -> None:
+        self.prepare_valid_release()
+        prior = self.dispatcher.read_bytes()
+        sentinel = b"concurrent-drift-after-final-identity-check"
+        injected = False
+        real_match = promote_data_seed._trusted_file_matches
+
+        def match_then_drift(
+            path: Path,
+            identity: tuple[int, int, int],
+            expected: bytes,
+        ) -> bool:
+            nonlocal injected
+            matches = real_match(path, identity, expected)
+            if (
+                path == self.dispatcher
+                and expected == prior
+                and matches
+                and not injected
+            ):
+                injected = True
+                path.write_bytes(sentinel)
+            return matches
+
+        with mock.patch(
+            "scripts.promote_data_seed._trusted_file_matches",
+            side_effect=match_then_drift,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(sentinel, self.dispatcher.read_bytes())
+        self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
+
+    def test_restore_does_not_overwrite_dispatcher_changed_after_replace(self) -> None:
+        self.prepare_valid_release()
+        desired = (self.release / "seed.sql").read_bytes()
+        conflict = b"concurrent-dispatcher-change-before-restore"
+        injected = False
+
+        def fail_post_check(dispatcher: Path, expected: bytes) -> bool:
+            nonlocal injected
+            if expected == desired and not injected:
+                injected = True
+                dispatcher.write_bytes(conflict)
+                return False
+            return dispatcher.read_bytes() == expected
+
+        with mock.patch(
+            "scripts.promote_data_seed._dispatcher_matches",
+            side_effect=fail_post_check,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(conflict, self.dispatcher.read_bytes())
 
     def test_activation_temp_write_failure_does_not_change_dispatcher(self) -> None:
         self.prepare_valid_release()
@@ -612,6 +811,41 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assertEqual(2, result)
         self.assertEqual(prior, self.dispatcher.read_bytes())
         self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+
+    def test_activation_never_deletes_temp_replaced_before_capture(self) -> None:
+        self.prepare_valid_release()
+        sentinel = b"replacement-temp-must-survive-capture"
+        real_write = promote_data_seed._write_dispatcher_temp
+        displaced: Path | None = None
+        replacement: Path | None = None
+
+        def write_then_replace(
+            dispatcher: Path, payload: bytes, tag: str
+        ) -> tuple[Path, tuple[int, int, int]]:
+            nonlocal displaced, replacement
+            temporary, identity = real_write(dispatcher, payload, tag)
+            displaced = temporary.with_name(f"{temporary.name}.displaced")
+            temporary.rename(displaced)
+            temporary.write_bytes(sentinel)
+            replacement = temporary
+            return temporary, identity
+
+        with mock.patch(
+            "scripts.promote_data_seed._write_dispatcher_temp",
+            side_effect=write_then_replace,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertIsNotNone(replacement)
+        self.assertIsNotNone(displaced)
+        assert replacement is not None
+        assert displaced is not None
+        self.assertEqual(sentinel, replacement.read_bytes())
+        self.assertEqual(
+            (self.release / "seed.sql").read_bytes(), displaced.read_bytes()
+        )
 
     def test_dispatcher_reparse_component_is_rejected_without_outside_write(
         self,
@@ -639,10 +873,65 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assertEqual(self.initial_dispatcher, self.dispatcher.read_bytes())
         self.assert_stable_failure(output, "VERIFY-LOCAL-SEED")
 
+    def test_prepare_post_publish_flush_failure_rolls_back_owned_release(self) -> None:
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=[
+                None,
+                OSError(errno.EIO, "injected post-publish flush"),
+                None,
+            ],
+        ) as flush:
+            result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "PREPARE-DATA-SEED")
+        self.assertEqual(3, flush.call_count)
+        self.assertFalse(self.release.exists())
+        self.assertFalse(self.prepare_temp.exists())
+
+    def test_activation_post_replace_flush_failure_restores_previous_dispatcher(
+        self,
+    ) -> None:
+        self.prepare_valid_release()
+        prior = self.dispatcher.read_bytes()
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=[
+                OSError(errno.EIO, "injected activation flush"),
+                None,
+                None,
+            ],
+        ) as flush:
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(3, flush.call_count)
+        self.assertEqual(prior, self.dispatcher.read_bytes())
+
+    def test_restore_flush_is_required_after_post_check_rollback(self) -> None:
+        self.prepare_valid_release()
+        prior = self.dispatcher.read_bytes()
+        with mock.patch(
+            "scripts.promote_data_seed._dispatcher_matches",
+            side_effect=[False, True],
+        ):
+            with mock.patch(
+                "scripts.promote_data_seed._flush_directory_if_supported",
+                side_effect=[None, OSError(errno.EIO, "injected restore flush")],
+            ) as flush:
+                result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(2, flush.call_count)
+        self.assertEqual(prior, self.dispatcher.read_bytes())
+
     def test_parser_rejects_missing_extra_duplicate_and_unknown_arguments_safely(
         self,
     ) -> None:
-        cases = (
+        cases: tuple[tuple[list[str], str], ...] = (
             ([], "DATA-SEED-CLI"),
             (["unknown"], "DATA-SEED-CLI"),
             (["prepare"], "PREPARE-DATA-SEED"),
@@ -680,6 +969,121 @@ class PromoteDataSeedTests(unittest.TestCase):
             output,
         )
         self.assertNotIn("DO-NOT-LEAK", output)
+
+
+class PromoteDataSeedAtomicPrimitiveTests(unittest.TestCase):
+    def test_directory_flush_propagates_io_error(self) -> None:
+        with mock.patch.object(promote_data_seed.os, "O_DIRECTORY", 0, create=True):
+            with mock.patch("scripts.promote_data_seed.os.open", return_value=71):
+                with mock.patch(
+                    "scripts.promote_data_seed.os.fsync",
+                    side_effect=OSError(errno.EIO, "injected fsync"),
+                ):
+                    with mock.patch("scripts.promote_data_seed.os.close"):
+                        with self.assertRaises(OSError) as caught:
+                            promote_data_seed._flush_directory_if_supported(Path("."))
+        self.assertEqual(errno.EIO, caught.exception.errno)
+
+    def test_directory_flush_ignores_only_explicit_unsupported_error(self) -> None:
+        unsupported = getattr(errno, "ENOTSUP", errno.EOPNOTSUPP)
+        with mock.patch.object(promote_data_seed.os, "O_DIRECTORY", 0, create=True):
+            with mock.patch("scripts.promote_data_seed.os.open", return_value=71):
+                with mock.patch(
+                    "scripts.promote_data_seed.os.fsync",
+                    side_effect=OSError(unsupported, "unsupported"),
+                ):
+                    with mock.patch("scripts.promote_data_seed.os.close"):
+                        promote_data_seed._flush_directory_if_supported(Path("."))
+
+    def test_windows_create_once_uses_os_rename(self) -> None:
+        with mock.patch.object(promote_data_seed.os, "name", "nt"):
+            with mock.patch("scripts.promote_data_seed.os.rename") as rename:
+                promote_data_seed._rename_create_once(Path("source"), Path("target"))
+        rename.assert_called_once_with(Path("source"), Path("target"))
+
+    def test_windows_create_once_propagates_target_collision(self) -> None:
+        collision = FileExistsError(errno.EEXIST, "target exists")
+        with mock.patch.object(promote_data_seed.os, "name", "nt"):
+            with mock.patch(
+                "scripts.promote_data_seed.os.rename", side_effect=collision
+            ):
+                with self.assertRaises(FileExistsError) as caught:
+                    promote_data_seed._rename_create_once(
+                        Path("source"), Path("target")
+                    )
+        self.assertIs(collision, caught.exception)
+
+    def test_linux_create_once_uses_renameat2_noreplace(self) -> None:
+        library = mock.Mock()
+        library.renameat2 = mock.Mock(return_value=0)
+        with mock.patch.object(promote_data_seed.os, "name", "posix"):
+            with mock.patch.object(promote_data_seed.sys, "platform", "linux"):
+                with mock.patch(
+                    "scripts.promote_data_seed.ctypes.CDLL", return_value=library
+                ):
+                    promote_data_seed._rename_create_once(
+                        Path("source"), Path("target")
+                    )
+        self.assertEqual(1, library.renameat2.call_args.args[-1])
+
+    def test_linux_create_once_propagates_renameat2_errno(self) -> None:
+        library = mock.Mock()
+        library.renameat2 = mock.Mock(return_value=-1)
+        with mock.patch.object(promote_data_seed.os, "name", "posix"):
+            with mock.patch.object(promote_data_seed.sys, "platform", "linux"):
+                with mock.patch(
+                    "scripts.promote_data_seed.ctypes.CDLL", return_value=library
+                ):
+                    with mock.patch(
+                        "scripts.promote_data_seed.ctypes.get_errno",
+                        return_value=errno.ENOTSUP,
+                    ):
+                        with self.assertRaises(OSError) as caught:
+                            promote_data_seed._rename_create_once(
+                                Path("source"), Path("target")
+                            )
+        self.assertEqual(errno.ENOTSUP, caught.exception.errno)
+
+    def test_macos_create_once_uses_renamex_np_exclusive(self) -> None:
+        library = mock.Mock()
+        library.renamex_np = mock.Mock(return_value=0)
+        with mock.patch.object(promote_data_seed.os, "name", "posix"):
+            with mock.patch.object(promote_data_seed.sys, "platform", "darwin"):
+                with mock.patch(
+                    "scripts.promote_data_seed.ctypes.CDLL", return_value=library
+                ):
+                    promote_data_seed._rename_create_once(
+                        Path("source"), Path("target")
+                    )
+        self.assertEqual(4, library.renamex_np.call_args.args[-1])
+
+    def test_macos_create_once_propagates_renamex_np_collision(self) -> None:
+        library = mock.Mock()
+        library.renamex_np = mock.Mock(return_value=-1)
+        with mock.patch.object(promote_data_seed.os, "name", "posix"):
+            with mock.patch.object(promote_data_seed.sys, "platform", "darwin"):
+                with mock.patch(
+                    "scripts.promote_data_seed.ctypes.CDLL", return_value=library
+                ):
+                    with mock.patch(
+                        "scripts.promote_data_seed.ctypes.get_errno",
+                        return_value=errno.EEXIST,
+                    ):
+                        with self.assertRaises(OSError) as caught:
+                            promote_data_seed._rename_create_once(
+                                Path("source"), Path("target")
+                            )
+        self.assertEqual(errno.EEXIST, caught.exception.errno)
+
+    def test_unsupported_platform_fails_closed(self) -> None:
+        with mock.patch.object(promote_data_seed.os, "name", "posix"):
+            with mock.patch.object(promote_data_seed.sys, "platform", "freebsd"):
+                with mock.patch("scripts.promote_data_seed.ctypes.CDLL"):
+                    with self.assertRaises(OSError) as caught:
+                        promote_data_seed._rename_create_once(
+                            Path("source"), Path("target")
+                        )
+        self.assertEqual(errno.ENOTSUP, caught.exception.errno)
 
 
 if __name__ == "__main__":

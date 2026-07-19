@@ -6,10 +6,11 @@ import ctypes
 import errno
 import hashlib
 import os
-from pathlib import Path
+import secrets
 import stat
 import sys
 import tempfile
+from pathlib import Path
 from typing import Mapping, Sequence
 
 from scripts.data_seed_release import (
@@ -182,14 +183,24 @@ def _prepare(root: Path) -> None:
     if identity is None or not _is_trusted_directory(temporary):
         raise _CliFailure("PREPARE_TEMP_INVALID")
 
+    published = False
     try:
         _write_bundle(temporary, bundle)
         _verify_release_contents(root, temporary, bundle)
+        if not _directory_has_identity(temporary, identity):
+            raise _CliFailure("PREPARE_TEMP_OWNERSHIP_LOST")
         if _path_entry_exists(release):
             raise _CliFailure("RELEASE_ALREADY_EXISTS")
         _rename_create_once(temporary, release)
+        published = True
+        _verify_owned_release(root, release, identity, bundle)
+        _flush_directory_if_supported(releases)
+        _verify_owned_release(root, release, identity, bundle)
     except Exception as error:
-        cleaned = _cleanup_owned_directory(temporary, identity)
+        cleanup_path = release if published else temporary
+        if not published and _path_identity(release) == identity:
+            cleanup_path = release
+        cleaned = _cleanup_owned_directory(cleanup_path, identity)
         if not cleaned:
             raise _CliFailure("PREPARE_TEMP_OWNERSHIP_LOST") from error
         if isinstance(error, ReleaseVerificationError):
@@ -197,6 +208,19 @@ def _prepare(root: Path) -> None:
         if isinstance(error, _CliFailure):
             raise error
         raise _CliFailure("PREPARE_PUBLICATION_FAILED") from error
+
+
+def _verify_owned_release(
+    root: Path,
+    release: Path,
+    identity: tuple[int, int, int],
+    bundle: ReleaseBundle,
+) -> None:
+    if not _directory_has_identity(release, identity):
+        raise _CliFailure("RELEASE_OWNERSHIP_LOST")
+    _verify_release_contents(root, release, bundle)
+    if not _directory_has_identity(release, identity):
+        raise _CliFailure("RELEASE_OWNERSHIP_LOST")
 
 
 def _ensure_release_parent(root: Path) -> Path:
@@ -274,15 +298,33 @@ def _flush_directory_if_supported(directory: Path) -> None:
     directory_flag = getattr(os, "O_DIRECTORY", None)
     if directory_flag is None:
         return
-    descriptor: int | None = None
     try:
         descriptor = os.open(directory, os.O_RDONLY | directory_flag)
-        os.fsync(descriptor)
-    except OSError:
-        return
+    except OSError as error:
+        if _is_unsupported_directory_flush(error):
+            return
+        raise
+    try:
+        try:
+            os.fsync(descriptor)
+        except OSError as error:
+            if not _is_unsupported_directory_flush(error):
+                raise
     finally:
-        if descriptor is not None:
-            os.close(descriptor)
+        os.close(descriptor)
+
+
+def _is_unsupported_directory_flush(error: OSError) -> bool:
+    unsupported = {
+        value
+        for value in (
+            getattr(errno, "ENOTSUP", None),
+            getattr(errno, "EOPNOTSUPP", None),
+            getattr(errno, "EINVAL", None),
+        )
+        if value is not None
+    }
+    return error.errno in unsupported
 
 
 def _activate_local_seed(root: Path) -> int:
@@ -291,25 +333,82 @@ def _activate_local_seed(root: Path) -> int:
     if not isinstance(desired, bytes):
         raise _CliFailure("VERIFIED_RELEASE_SEED_INVALID")
     dispatcher = root / "supabase" / "seed.sql"
-    previous = _read_trusted_bytes(dispatcher, "DISPATCHER_PATH_INVALID")
+    previous, previous_identity = _capture_trusted_file(
+        dispatcher, "DISPATCHER_PATH_INVALID"
+    )
     if previous == desired:
         return 0
     if previous != INITIAL_DISPATCHER_BYTES:
         raise _CliFailure("DISPATCHER_DRIFT")
 
-    temporary = _write_dispatcher_temp(dispatcher, desired, "activate")
-    identity = _path_identity(temporary)
+    temporary, created_temporary_identity = _write_dispatcher_temp(
+        dispatcher, desired, "activate"
+    )
     try:
-        os.replace(temporary, dispatcher)
+        temporary_payload, temporary_identity = _capture_trusted_file(
+            temporary, "DISPATCHER_TEMP_INVALID"
+        )
+    except _CliFailure:
+        _remove_owned_file(temporary, created_temporary_identity)
+        raise
+    if temporary_identity != created_temporary_identity or temporary_payload != desired:
+        if not _remove_owned_file(temporary, created_temporary_identity):
+            raise _CliFailure("DISPATCHER_TEMP_OWNERSHIP_LOST")
+        raise _CliFailure("DISPATCHER_TEMP_INVALID")
+    if not _trusted_file_matches(dispatcher, previous_identity, previous):
+        if not _remove_owned_file(temporary, temporary_identity):
+            raise _CliFailure("DISPATCHER_TEMP_OWNERSHIP_LOST")
+        raise _CliFailure("DISPATCHER_DRIFT")
+
+    previous_quarantine = _unused_quarantine_path(dispatcher, "previous")
+    try:
+        _rename_create_once(dispatcher, previous_quarantine)
     except OSError as error:
-        _remove_owned_file(temporary, identity)
-        if not _dispatcher_matches(dispatcher, previous):
-            _restore_dispatcher(dispatcher, previous)
+        _remove_owned_file(temporary, temporary_identity)
+        if _trusted_file_matches(dispatcher, previous_identity, previous):
+            raise _CliFailure("DISPATCHER_REPLACE_FAILED") from error
+        raise _CliFailure("DISPATCHER_DRIFT") from error
+
+    if not _trusted_file_matches(previous_quarantine, previous_identity, previous):
+        restored = _restore_quarantined_entry(previous_quarantine, dispatcher)
+        removed = _remove_owned_file(temporary, temporary_identity)
+        if not restored or not removed:
+            raise _CliFailure("DISPATCHER_RESTORE_CONFLICT")
+        raise _CliFailure("DISPATCHER_DRIFT")
+
+    try:
+        _rename_create_once(temporary, dispatcher)
+    except OSError as error:
+        removed = _remove_owned_file(temporary, temporary_identity)
+        restored = _restore_quarantined_entry(previous_quarantine, dispatcher)
+        if not removed or not restored:
+            raise _CliFailure("DISPATCHER_RESTORE_CONFLICT") from error
         raise _CliFailure("DISPATCHER_REPLACE_FAILED") from error
 
-    if not _dispatcher_matches(dispatcher, desired):
-        _restore_dispatcher(dispatcher, previous)
-        raise _CliFailure("DISPATCHER_POSTCHECK_FAILED")
+    try:
+        _flush_directory_if_supported(dispatcher.parent)
+        if not _trusted_file_matches(
+            dispatcher, temporary_identity, desired
+        ) or not _dispatcher_matches(dispatcher, desired):
+            raise _CliFailure("DISPATCHER_POSTCHECK_FAILED")
+    except Exception as error:
+        _restore_dispatcher(
+            dispatcher,
+            temporary_identity,
+            desired,
+            previous_quarantine,
+            previous_identity,
+            previous,
+        )
+        if isinstance(error, _CliFailure):
+            raise error
+        raise _CliFailure("DISPATCHER_POSTCHECK_FAILED") from error
+    if not _remove_owned_file(
+        previous_quarantine,
+        previous_identity,
+        expected_payload=previous,
+    ):
+        raise _CliFailure("DISPATCHER_BACKUP_CLEANUP_FAILED")
     return 1
 
 
@@ -323,7 +422,9 @@ def _verify_local_seed(root: Path) -> None:
         raise _CliFailure("LOCAL_SEED_INACTIVE")
 
 
-def _write_dispatcher_temp(dispatcher: Path, payload: bytes, tag: str) -> Path:
+def _write_dispatcher_temp(
+    dispatcher: Path, payload: bytes, tag: str
+) -> tuple[Path, tuple[int, int, int]]:
     parent = dispatcher.parent
     if not _is_trusted_directory(parent):
         raise OSError("untrusted dispatcher parent")
@@ -331,88 +432,231 @@ def _write_dispatcher_temp(dispatcher: Path, payload: bytes, tag: str) -> Path:
         prefix=f".{dispatcher.name}.{tag}.", suffix=".tmp", dir=parent
     )
     path = Path(raw_path)
+    identity = _path_identity(path)
+    if identity is None:
+        os.close(descriptor)
+        raise OSError("dispatcher temp identity unavailable")
     try:
         with os.fdopen(descriptor, "wb") as target:
             target.write(payload)
             target.flush()
             os.fsync(target.fileno())
     except Exception:
-        try:
-            path.unlink()
-        except OSError:
-            pass
+        _remove_owned_file(path, identity)
         raise
-    return path
+    return path, identity
 
 
-def _restore_dispatcher(dispatcher: Path, previous: bytes) -> None:
-    temporary: Path | None = None
-    identity: tuple[int, int, int] | None = None
+def _restore_dispatcher(
+    dispatcher: Path,
+    current_identity: tuple[int, int, int],
+    current_payload: bytes,
+    previous_quarantine: Path,
+    previous_identity: tuple[int, int, int],
+    previous_payload: bytes,
+) -> None:
+    current_quarantine = _unused_quarantine_path(dispatcher, "rollback")
     try:
-        temporary = _write_dispatcher_temp(dispatcher, previous, "restore")
-        identity = _path_identity(temporary)
-        os.replace(temporary, dispatcher)
-        if not _dispatcher_matches(dispatcher, previous):
+        _rename_create_once(dispatcher, current_quarantine)
+    except OSError as error:
+        raise _CliFailure("DISPATCHER_RESTORE_CONFLICT") from error
+    if not _trusted_file_matches(current_quarantine, current_identity, current_payload):
+        _restore_quarantined_entry(current_quarantine, dispatcher)
+        raise _CliFailure("DISPATCHER_RESTORE_CONFLICT")
+    if not _trusted_file_matches(
+        previous_quarantine, previous_identity, previous_payload
+    ):
+        if not _restore_quarantined_entry(current_quarantine, dispatcher):
+            raise _CliFailure("DISPATCHER_RESTORE_CONFLICT")
+        raise _CliFailure("DISPATCHER_RESTORE_FAILED")
+    try:
+        _rename_create_once(previous_quarantine, dispatcher)
+        _flush_directory_if_supported(dispatcher.parent)
+        if not _trusted_file_matches(
+            dispatcher, previous_identity, previous_payload
+        ) or not _dispatcher_matches(dispatcher, previous_payload):
             raise OSError("dispatcher restore verification failed")
     except OSError as error:
-        if temporary is not None:
-            _remove_owned_file(temporary, identity)
-        raise _CliFailure("DISPATCHER_RESTORE_FAILED") from error
+        if _trusted_file_matches(dispatcher, previous_identity, previous_payload):
+            _remove_owned_file(
+                current_quarantine,
+                current_identity,
+                expected_payload=current_payload,
+                flush_parent=False,
+            )
+            raise _CliFailure("DISPATCHER_RESTORE_FAILED") from error
+        if _path_entry_exists(dispatcher):
+            _remove_owned_file(
+                current_quarantine,
+                current_identity,
+                expected_payload=current_payload,
+                flush_parent=False,
+            )
+            raise _CliFailure("DISPATCHER_RESTORE_CONFLICT") from error
+        if _restore_quarantined_entry(current_quarantine, dispatcher):
+            raise _CliFailure("DISPATCHER_RESTORE_FAILED") from error
+        raise _CliFailure("DISPATCHER_RESTORE_CONFLICT") from error
+    if not _remove_owned_file(
+        current_quarantine,
+        current_identity,
+        expected_payload=current_payload,
+    ):
+        raise _CliFailure("DISPATCHER_RESTORE_FAILED")
 
 
-def _read_trusted_bytes(path: Path, reason: str) -> bytes:
-    if not _is_trusted_file(path):
+def _capture_trusted_file(
+    path: Path, reason: str
+) -> tuple[bytes, tuple[int, int, int]]:
+    identity = _path_identity(path)
+    if identity is None or not _is_trusted_file(path):
         raise _CliFailure(reason)
     try:
-        return path.read_bytes()
+        payload = path.read_bytes()
     except OSError as error:
         raise _CliFailure(reason) from error
+    if _path_identity(path) != identity or not _is_trusted_file(path):
+        raise _CliFailure(reason)
+    return payload, identity
 
 
-def _dispatcher_matches(dispatcher: Path, expected: bytes) -> bool:
+def _trusted_file_matches(
+    path: Path,
+    identity: tuple[int, int, int],
+    expected: bytes,
+) -> bool:
     try:
-        if not _is_trusted_file(dispatcher):
+        if _path_identity(path) != identity or not _is_trusted_file(path):
             return False
-        actual = dispatcher.read_bytes()
+        actual = path.read_bytes()
         return (
-            hashlib.sha256(actual).digest() == hashlib.sha256(expected).digest()
+            _path_identity(path) == identity
+            and _is_trusted_file(path)
+            and hashlib.sha256(actual).digest() == hashlib.sha256(expected).digest()
             and actual == expected
         )
     except OSError:
         return False
 
 
+def _dispatcher_matches(dispatcher: Path, expected: bytes) -> bool:
+    try:
+        actual, identity = _capture_trusted_file(dispatcher, "DISPATCHER_PATH_INVALID")
+        return (
+            _trusted_file_matches(dispatcher, identity, expected) and actual == expected
+        )
+    except _CliFailure:
+        return False
+
+
+def _directory_has_identity(directory: Path, identity: tuple[int, int, int]) -> bool:
+    return (
+        _path_identity(directory) == identity
+        and _is_trusted_directory(directory)
+        and _path_identity(directory) == identity
+    )
+
+
 def _cleanup_owned_directory(
     directory: Path, identity: tuple[int, int, int] | None
 ) -> bool:
-    if identity is None or _path_identity(directory) != identity:
+    if identity is None:
         return False
-    if not _is_trusted_directory(directory):
+    quarantine = _unused_quarantine_path(directory, "cleanup")
+    try:
+        _rename_create_once(directory, quarantine)
+    except OSError:
+        return False
+    if not _directory_has_identity(quarantine, identity):
+        _restore_quarantined_entry(quarantine, directory)
         return False
     try:
-        entries = tuple(directory.iterdir())
+        entries = tuple(quarantine.iterdir())
     except OSError:
+        _restore_quarantined_entry(quarantine, directory)
         return False
     if any(entry.name not in RELEASE_ARTIFACTS for entry in entries):
+        _restore_quarantined_entry(quarantine, directory)
         return False
-    if any(not _is_trusted_file(entry) for entry in entries):
+    entry_identities = {entry: _path_identity(entry) for entry in entries}
+    if any(
+        entry_identity is None or not _is_trusted_file(entry)
+        for entry, entry_identity in entry_identities.items()
+    ):
+        _restore_quarantined_entry(quarantine, directory)
+        return False
+    for entry, entry_identity in entry_identities.items():
+        if not _remove_owned_file(entry, entry_identity, flush_parent=False):
+            _restore_quarantined_entry(quarantine, directory)
+            return False
+    if not _directory_has_identity(quarantine, identity):
+        _restore_quarantined_entry(quarantine, directory)
         return False
     try:
-        for entry in entries:
-            entry.unlink()
-        directory.rmdir()
+        quarantine.rmdir()
+        _flush_directory_if_supported(directory.parent)
     except OSError:
+        if _path_entry_exists(quarantine):
+            _restore_quarantined_entry(quarantine, directory)
         return False
     return True
 
 
-def _remove_owned_file(path: Path, identity: tuple[int, int, int] | None) -> bool:
-    if identity is None or _path_identity(path) != identity:
-        return not _path_entry_exists(path)
-    if not _is_trusted_file(path):
+def _remove_owned_file(
+    path: Path,
+    identity: tuple[int, int, int] | None,
+    *,
+    expected_payload: bytes | None = None,
+    flush_parent: bool = True,
+) -> bool:
+    if identity is None:
+        return False
+    quarantine = _unused_quarantine_path(path, "cleanup")
+    try:
+        _rename_create_once(path, quarantine)
+    except OSError:
+        return False
+    if expected_payload is None:
+        owned = _trusted_file_identity(quarantine, identity)
+    else:
+        owned = _trusted_file_matches(quarantine, identity, expected_payload)
+    if not owned:
+        _restore_quarantined_entry(quarantine, path)
         return False
     try:
-        path.unlink()
+        quarantine.unlink()
+        if flush_parent:
+            _flush_directory_if_supported(path.parent)
+    except OSError:
+        if _path_entry_exists(quarantine):
+            _restore_quarantined_entry(quarantine, path)
+        return False
+    return True
+
+
+def _trusted_file_identity(path: Path, identity: tuple[int, int, int]) -> bool:
+    return (
+        _path_identity(path) == identity
+        and _is_trusted_file(path)
+        and _path_identity(path) == identity
+    )
+
+
+def _unused_quarantine_path(path: Path, tag: str) -> Path:
+    for _ in range(32):
+        candidate = path.with_name(
+            f".{path.name}.{tag}.{secrets.token_hex(16)}.quarantine"
+        )
+        if not _path_entry_exists(candidate):
+            return candidate
+    raise OSError("unable to allocate quarantine path")
+
+
+def _restore_quarantined_entry(quarantine: Path, original: Path) -> bool:
+    if not _path_entry_exists(quarantine) or _path_entry_exists(original):
+        return False
+    try:
+        _rename_create_once(quarantine, original)
+        _flush_directory_if_supported(original.parent)
     except OSError:
         return False
     return True
