@@ -148,12 +148,18 @@ Q-SEC-006. stock Supabase CLI의 DB publish 요청을 project-scoped explicit IP
 Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하는 더 강한 전역 정책을 승인할 것인가
 - 결정: A / D-030. 사용자가 2026-07-17 `Q-SEC-005: A`라고 명시했다.
 - 적용 결과: `PortBindingBehavior=local-only-port-binding`을 저장하고 Docker Desktop을 재시작했다. HostIP 생략 probe는 다시 `127.0.0.1`과 `::` 두 binding이었고 explicit `127.0.0.1` control은 단일 loopback이었다. 두 probe를 제거했고 Supabase DB start/reset/status/credential/SQL은 실행하지 않았다.
-- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. A-024/Q-SEC-006이 후속 local 완료 blocker다.
+- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시에는
+  A-024/Q-SEC-006이 후속 local 완료 blocker였으나 이후 D-031/ADR-0013으로 구현·검증돼
+  해결됐다. 현재 DATA-SEED blocker는 A-030/Q-SEED-002고 A-021/Q-SEC-003은 별도 public
+  release blocker다.
 
 Q-SEC-004. Docker Desktop의 향후 모든 새 container 기본 port binding을 loopback으로 바꿀 것인가
 - 결정: A / D-029. 사용자가 2026-07-17 `ㅇㅇ 승인할게. 계속 ㄱㄱ`라고 명시했다.
 - 적용 결과: `PortBindingBehavior=default-local-port-binding`을 저장하고 Docker Desktop을 완전 재시작했다. 빈 HostIP probe의 실제 결과는 `127.0.0.1`과 `::` 두 binding이어서 exact local 기준에는 실패했다. explicit `127.0.0.1` probe는 단일 loopback이었다. 두 probe는 제거했고 DB reset/status/credential 처리는 실행하지 않았다.
-- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시 A-023/Q-SEC-005로 이관했고, 그 보정도 실패해 현재 blocker는 A-024/Q-SEC-006이다.
+- 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시
+  A-023/Q-SEC-005, 이어 A-024/Q-SEC-006으로 이관했고 A-024는 이후 D-031/ADR-0013으로
+  구현·검증돼 해결됐다. 현재 DATA-SEED blocker는 A-030/Q-SEED-002고 A-021/Q-SEC-003은
+  별도 public release blocker다.
 
 Q-DB-003. backend 승인 commit에서 deferred ACTIVE-question trigger를 어떤 권한으로 실행할 것인가
 - 결정: A / D-028 / ADR-0012. 사용자는 문자 `A`를 직접 입력하지 않았고, 직전 추천안 뒤 `이거 끝나면 계속해서 진행해줘. 5시간 동안 루프 ㄱㄱ`라고 지시했다. 이를 추천안 A의 실행 승인으로 투명하게 해석했다.

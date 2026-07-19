@@ -105,7 +105,7 @@
 |---|---|---|---|---|
 | Q-SEED-001 | data architecture/rollback | official release·seed 방식 | Resolved | A / D-036 / ADR-0016 |
 | DATA-SEED-SPEC | public data/DB | written specification 승인 | Resolved | 2026-07-19T09:20:31+09:00 승인 |
-| DATA-SEED-PLAN | implementation/data mutation | 이 실행계획으로 release/DB 작업 시작 | Resolved / In Progress | 2026-07-19T09:52:08+09:00 전체 승인; D-039 |
+| DATA-SEED-PLAN | implementation/data mutation | 이 실행계획으로 release/DB 작업 시작 | Approved / execution Blocked at Task 6 | 2026-07-19T09:52:08+09:00 전체 승인; D-039 Blocked outcome; A-030/Q-SEED-002 결정 대기 |
 | Q-SEC-003 | public deployment | privileged function hardening | Open but out of scope | default B; public/remote 금지 |
 | RELEASE-TIME | lineage | `released_at` literal | Resolved default | written specification 승인 시각 `2026-07-19T09:20:31+09:00`; ambient clock 사용 금지 |
 

@@ -35,7 +35,7 @@
 ### Task 5/7 actual completion boundary
 
 - Task 5는 immutable filesystem release `.1` 19/3/10을 게시·검증하고 dispatcher를 byte-active로
-  바꿨다. `[db.seed].enabled=false`는 그대다.
+  바꿨다. `[db.seed].enabled=false`는 그대로다.
 - Task 7A는 active-release-compatible offline/root gate를 구현·검증했다. 이는 filesystem
   근거이지 actual DB 근거가 아니다.
 - Task 7B는 lineage·source-of-truth·ADR·decision·backlog·version을 actual Blocked 상태로
@@ -166,7 +166,7 @@
 | Task 7B DATA-001/release/dispatcher read-only validation | PASS | staging PASS, release issues 0, dispatcher active=1 | Task 7B terminal/report |
 | package + JSON/version invariant | PASS | 12 required files; 3 JSON parse; official unchanged, tests 0.8.1, docs 2.7.4 | package validator/Task 7B report |
 | Markdown/evidence link·path·reference check | PASS after helper correction | 17 active files, missing 0; first helper did not handle root-file empty parent and was corrected without repository change | Task 7B terminal/report |
-| stale state / D-040 / RFP check | PASS | active stale claims 0; D-040 row 0; RFP diff 0 | `rg`/Git read-only checks |
+| stale state / D-040 / RFP check | PASS after independent-review correction | 초기 pattern이 놓친 Q-SEC-004/005의 역사적 A-024 표현과 plan decision-table `In Progress`를 정정한 뒤 expanded current-state scan 0; D-040 row 0; RFP diff 0 | `rg`/Git read-only checks |
 | immutable hash/protected diff/scope check | PASS after helper correction | 7 release hashes+dispatcher exact; protected diff 0; 17 visible docs/version paths + ignored Task 7B report. Initial scope regex mishandled quoted/nonterminal docs paths and was corrected without repository change | Task 7B terminal/report |
 | `git diff --check` + secret scan | PASS | issues 0 | Task 7B terminal/report |
 | plan checkbox/status consistency | PASS | Task 0–5 complete; Task 6 one explicit unreached; Task 7 pre-commit boundary; Task 8 parent-owned pending | approved plan |

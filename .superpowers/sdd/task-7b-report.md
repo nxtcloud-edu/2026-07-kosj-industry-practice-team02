@@ -68,9 +68,11 @@ admin/API, and public backend DB credentials.
 - Supabase seed-config invariant: PASS, disabled plus exact `./seed.sql` path.
 - Markdown link/path check: PASS across 17 active edited/reference documents; required evidence
   paths and `A-030/Q-SEED-002`/D-039/A-021 references exist.
-- Stale-state `rg` scan: no current-state release-0, data-free dispatcher, unresolved Q-SEC-006,
-  no-local-blocker, or DATA-SEED In-Progress claim remains. Matches retained in the Task 0/start-state
-  sections are explicitly historical and required for reproduction.
+- Expanded stale-state `rg` scan after independent-review correction: current-state matches 0. The
+  initial scan pattern missed two historical-impact sentences that still called A-024/Q-SEC-006 the
+  current blocker and the plan decision-table `In Progress` value. Those are corrected to historical
+  resolved/verified and current Task 6 Blocked wording. Explicit Task 0/start-state action text remains
+  as historical reproduction evidence.
 - Protected product/DB/release/config diff: PASS, zero changes.
 - `git diff --check`: PASS.
 - Secret scanner: PASS.
