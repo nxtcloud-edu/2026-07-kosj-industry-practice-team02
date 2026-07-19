@@ -1,6 +1,6 @@
 # ADR-0016 — Immutable filesystem official release and empty-local transactional seed
 
-- Status: Accepted architecture / implementation pending written spec and plan approval
+- Status: Accepted architecture and written specification / implementation pending plan approval
 - Date: 2026-07-19
 - Related: Q-SEED-001, D-036, A-028, ADR-0015, DATA-SEED-001
 

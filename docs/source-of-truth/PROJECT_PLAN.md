@@ -150,8 +150,9 @@ KB 19건·기관 3건·매핑 10건이고 `KB-WASTE-03`과 거절 매핑 2건은
 Q-SEED-001=A에 따라 initial official version은 `0.1.0-initial.1`이며 immutable filesystem
 release와 기존 schema용 empty-local transactional seed를 사용한다. release 준비와 local dispatcher
 activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확인과 8개 table exclusive lock,
-정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세와 실행계획
-승인 전에는 release/seed/DB/official-data version을 변경하지 않는다.
+정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세는
+`2026-07-19T09:20:31+09:00` 승인됐으며 실행계획 승인 전에는 release/seed/DB/official-data version을
+변경하지 않는다.
 
 ## 7. 시스템 설계
 

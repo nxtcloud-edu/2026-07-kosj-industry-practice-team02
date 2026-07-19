@@ -30,7 +30,8 @@
 - 초기 release projection: ACTIVE KB 19건·기관 3건·매핑 10건;
   `KB-WASTE-03`과 거절 매핑 2건은 제외하고, WASTE-03은 회귀 뒤 최종 20번째 ACTIVE
 - DATA-SEED architecture: initial version `0.1.0-initial.1`의 immutable filesystem release와
-  기존 schema용 empty-local transactional seed. 서면 명세·계획 승인 전 release/seed/DB 변경 금지
+  기존 schema용 empty-local transactional seed. written specification은
+  `2026-07-19T09:20:31+09:00` 승인됐고 실행계획 승인 전 release/seed/DB 변경 금지
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용

@@ -89,7 +89,7 @@
 
 ### Pending
 
-- Immutable official KB/office release, disposable-local seed, and readiness activation after DATA-SEED-001 written specification and execution-plan approval
+- Immutable official KB/office release and disposable-local seed after DATA-SEED-001 execution-plan approval; written specification approved 2026-07-19
 - Deployment accounts and URLs
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;

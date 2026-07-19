@@ -1,6 +1,6 @@
 # DATA-SEED-001 immutable official release and local seed design
 
-- Status: Review — Q-SEED-001=A architecture approved; written specification approval pending
+- Status: Approved — written specification approved 2026-07-19T09:20:31+09:00; implementation plan approval pending
 - Date: 2026-07-19
 - Owner: Backend·Data·Security
 - Related: D-036, A-028, ADR-0015, ADR-0016, DATA-001 `0.1.0-draft.1`
@@ -337,13 +337,14 @@ separately approved migration/data transition, never by this compensation file.
 
 ## 14. Human approval gate
 
-Q-SEED-001=A approves the architecture in this document, but repository policy separately requires
-review of the written specification and then review of its executable implementation plan. Until the
-user explicitly says `명세 승인`, do not write the DATA-SEED implementation plan, release directory,
-seed SQL, compensation SQL, DB rows or official-data version change.
+Q-SEED-001=A approved the architecture, and the user's `ㅇㅋ 승인` in direct response to the
+DATA-SEED written-specification approval request approved this specification at
+`2026-07-19T09:20:31+09:00`. The executable TDD plan is
+`docs/superpowers/plans/2026-07-19-data-seed-immutable-release-and-local-verification.md`.
 
-After written-spec approval, invoke `superpowers:writing-plans` and present a task-by-task TDD plan.
-Only an explicit `계획 승인, 구현 시작` or equivalent authorizes promotion/import implementation.
+The written-specification gate is resolved. Only an explicit `계획 승인, 구현 시작` or equivalent
+authorizes release generation, dispatcher activation, DB seed/compensation/replay or official-data
+version change.
 
 ## 15. AI-internal details
 

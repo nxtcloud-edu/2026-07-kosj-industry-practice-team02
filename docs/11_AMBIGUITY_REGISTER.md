@@ -31,8 +31,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-025 | A | Windows patched CLI build workspace | Resolved / implemented and verified locally | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout `.tools/s/{a,b}`, pinned relative max 134자·absolute cap 248자 pre-checkout gate와 legacy deny-only 경계를 구현·검증했다. | D-032 / ADR-0014; 기존 장경로 partial artifact 자동 삭제 없음 |
 | A-026 | B | 공식 데이터 staging·승인 artifact | Resolved / PM evidence complete | Q-DATA-002=A: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound approval manifest를 canonical authoring/approval evidence로 사용하고, 승인 record만 후속 immutable official release로 승격 | D-033/D-035 / ADR-0015 / DATA-001 plan; canonical manifest APPROVED, 35 comments, final 19/3/10, 63-test/hash review PASS |
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
-| A-028 | A | official release·seed | Architecture resolved / written spec reviewed / human approval blocker | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/ADR-0016; `0.1.0-initial.1` 19/3/10 final spec review 0/0/0, 사용자 `명세 승인` 뒤 plan approval 필요 |
-| A-029 | B | 홈→채팅 진입 | Resolved / implementation in progress | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/PLAN-001; API/DB/LLM/data unchanged |
+| A-028 | A | official release·seed | Architecture and written spec resolved / execution-plan human blocker | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/ADR-0016; `0.1.0-initial.1` 19/3/10 spec approved `2026-07-19T09:20:31+09:00`, plan approval 필요 |
+| A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
 
 ## 우선도 정의
 
@@ -41,7 +41,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 인간 결정형 A/Blocker는 A-028의 DATA-SEED written specification/plan 승인이다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+현재 인간 결정형 A/Blocker는 A-028의 DATA-SEED 실행계획 승인이다. written specification은
+2026-07-19T09:20:31+09:00 승인됐다. Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
@@ -53,8 +54,8 @@ disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High 
 
 Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 2026-07-19 사용자는
 Q-DATA-003=A로 exact reviewer/disposition/final-confirmation 시각을 확정해 A-027을 해소했다.
-Q-SEED-001=A는 A-028의 architecture를 해결했지만 written specification과 실행계획 승인 gate는
-남는다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell 구현이 허용됐다.
+Q-SEED-001=A와 D-038은 A-028의 architecture/written specification을 해결했지만 실행계획 승인 gate는
+남는다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell은 구현·검증 완료됐다.
 
 ## 열린 인터뷰 질문
 
@@ -77,9 +78,9 @@ Q-WEB-001. 실제 chat pipeline 전 홈 CTA의 목적지는 무엇인가
 Q-SEED-001. approved record의 official release/import 구조는 무엇인가
 - 결정: A / D-036 / ADR-0016. initial `0.1.0-initial.1` immutable filesystem release와 기존
   schema용 empty-local transactional seed를 선택한다.
-- 결과 경계: architecture만 확정됐다. 동시 capability write를 차단하는 8-table exclusive lock,
-  exact local role/session assertion, full semantic projection hash와 two-phase prepare/activation을
-  명세에 반영했다. 사용자의 서면 `명세 승인`, 이후 계획 승인이 없으면 구현하지 않는다.
+- 결과 경계: architecture와 written specification이 확정됐다. 동시 capability write를 차단하는
+  8-table exclusive lock, exact local role/session assertion, full semantic projection hash와 two-phase
+  prepare/activation을 승인 명세와 실행계획에 반영했다. 계획 승인이 없으면 구현하지 않는다.
 
 Q-DATA-003. PM 검수 완료 진술을 canonical approval evidence로 어떻게 확정할 것인가
 - 결정: A / D-035. reviewer `PM-LOCAL-001`, confirmation
