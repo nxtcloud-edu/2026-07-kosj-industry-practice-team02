@@ -1052,6 +1052,39 @@ class PromoteDataSeedTests(unittest.TestCase):
             flushed,
         )
 
+    def test_retry_after_initial_parent_flush_failure_reflushes_official_before_writes(
+        self,
+    ) -> None:
+        releases = self.root / "data" / "official" / "releases"
+        official = releases.parent
+        self.assertFalse(releases.exists())
+
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=OSError(errno.EIO, "injected initial parent flush"),
+        ) as first_flush:
+            result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "PREPARE-DATA-SEED")
+        first_flush.assert_called_once_with(official)
+        self.assertTrue(releases.is_dir())
+        self.assertFalse(self.release.exists())
+        self.assertFalse(self.prepare_temp.exists())
+
+        retry_flushes: list[Path] = []
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=retry_flushes.append,
+        ):
+            result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(0, result, output)
+        self.assertEqual(
+            [official, self.prepare_temp, releases],
+            retry_flushes,
+        )
+
     def test_activation_post_replace_flush_failure_restores_previous_dispatcher(
         self,
     ) -> None:

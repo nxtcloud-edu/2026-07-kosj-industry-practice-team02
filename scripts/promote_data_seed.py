@@ -231,13 +231,16 @@ def _ensure_release_parent(root: Path) -> Path:
     if not _path_entry_exists(releases):
         try:
             releases.mkdir()
-            _flush_directory_if_supported(official)
         except FileExistsError:
             pass
         except OSError as error:
             raise _CliFailure("RELEASE_PARENT_INVALID") from error
     if not _is_trusted_directory(releases):
         raise _CliFailure("RELEASE_PARENT_INVALID")
+    try:
+        _flush_directory_if_supported(official)
+    except OSError as error:
+        raise _CliFailure("RELEASE_PARENT_INVALID") from error
     return releases
 
 
