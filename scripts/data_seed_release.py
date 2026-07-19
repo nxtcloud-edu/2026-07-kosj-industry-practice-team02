@@ -104,12 +104,18 @@ def validate_approved_input(
     """
     issues: list[ReleaseIssue] = []
     root = Path(repository_root)
-    draft = Path(draft_dir)
-    expected_draft = root / CANONICAL_DRAFT_RELATIVE_PATH
+    try:
+        draft_token = os.fspath(draft_dir)
+    except TypeError:
+        draft_token = None
+    if draft_token != os.fspath(CANONICAL_DRAFT_RELATIVE_PATH):
+        _issue(issues, "CANONICAL_DRAFT_PATH_INVALID", "approval_manifest.json", None, None)
+        return _normalized(issues)
+    draft = root / CANONICAL_DRAFT_RELATIVE_PATH
     if not _is_trusted_directory(root):
         _issue(issues, "REPOSITORY_ROOT_INVALID", "repository", None, None)
         return _normalized(issues)
-    if not _is_exact_path(draft, expected_draft) or not _is_trusted_directory(draft):
+    if not _is_trusted_directory(draft):
         _issue(issues, "CANONICAL_DRAFT_PATH_INVALID", "approval_manifest.json", None, None)
         return _normalized(issues)
 
@@ -301,24 +307,6 @@ def _expected_decisions() -> tuple[tuple[str, str, str], ...]:
         ("OFFICE", office_id, "APPROVE_INITIAL_RELEASE") for office_id in OFFICE_IDS
     )
     return tuple(expected)
-
-
-def _is_exact_path(candidate: Path, expected: Path) -> bool:
-    try:
-        candidate_absolute = candidate.absolute()
-        expected_absolute = expected.absolute()
-    except OSError:
-        return False
-    if os.path.normcase(str(candidate_absolute)) != os.path.normcase(str(expected_absolute)):
-        return False
-    if _has_reparse_component(candidate):
-        return False
-    try:
-        return os.path.normcase(str(candidate.resolve(strict=True))) == os.path.normcase(
-            str(expected.resolve(strict=True))
-        )
-    except OSError:
-        return False
 
 
 def _is_trusted_directory(path: Path) -> bool:
