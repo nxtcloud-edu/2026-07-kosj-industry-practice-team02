@@ -326,6 +326,41 @@ try {
     Invoke-NativeStep -StepId "VALIDATE-DATA-001" -Executable $apiPython -Arguments @(
         "-B", "scripts/validate_data_staging.py", "validate", "--draft-dir", $data001DraftDirectory
     )
+
+    Invoke-NativeStep -StepId "TEST-DATA-SEED" -Executable $apiPython -Arguments @(
+        "-B", "-m", "unittest", "-v",
+        "scripts.tests.test_data_seed_release",
+        "scripts.tests.test_promote_data_seed",
+        "scripts.tests.test_verify_data_seed_db",
+        "scripts.tests.test_verify_data_seed_runner"
+    )
+
+    $dataSeedReleaseToken = "data/official/releases/0.1.0-initial.1"
+    $dataSeedReleaseDirectory = Join-Path $repoRoot "data\official\releases\0.1.0-initial.1"
+    $dataSeedReleaseMarker = Join-Path $dataSeedReleaseDirectory "release_manifest.json"
+    $dataSeedReleaseSchema = Join-Path $repoRoot "data\schemas\data-seed\v1\release-manifest.schema.json"
+    if (
+        -not (Test-Path -LiteralPath $dataSeedReleaseMarker -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $dataSeedReleaseSchema -PathType Leaf)
+    ) {
+        $script:CurrentStep = "VERIFY-DATA-SEED-RELEASE"
+        throw "VERIFY_DATA_SEED_RELEASE_ARTIFACT_MISSING"
+    }
+    Invoke-NativeStep -StepId "VERIFY-DATA-SEED-RELEASE" -Executable $apiPython -Arguments @(
+        "-B", "scripts/promote_data_seed.py", "verify-release",
+        "--release-dir", $dataSeedReleaseToken
+    )
+
+    $dataSeedDispatcher = Join-Path $repoRoot "supabase\seed.sql"
+    if (-not (Test-Path -LiteralPath $dataSeedDispatcher -PathType Leaf)) {
+        $script:CurrentStep = "VERIFY-LOCAL-SEED"
+        throw "VERIFY_LOCAL_SEED_DISPATCHER_MISSING"
+    }
+    Invoke-NativeStep -StepId "VERIFY-LOCAL-SEED" -Executable $apiPython -Arguments @(
+        "-B", "scripts/promote_data_seed.py", "verify-local-seed",
+        "--release-dir", $dataSeedReleaseToken
+    )
+
     Invoke-NativeStep -StepId "LINT-WEB" -Executable "corepack.cmd" -Arguments @(
         "pnpm", "--filter", "@sejong-ai/web", "lint"
     )

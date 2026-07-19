@@ -27,6 +27,9 @@ PATCHED_RUNTIME_RELATIVE = Path(
 )
 CONFIG_PATH = ROOT / "supabase" / "config.toml"
 SEED_PATH = ROOT / "supabase" / "seed.sql"
+RELEASE_SEED_PATH = (
+    ROOT / "data" / "official" / "releases" / "0.1.0-initial.1" / "seed.sql"
+)
 PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
 SQL_RUNNER_PATH = ROOT / "scripts" / "run_database_sql.py"
 DATABASE_RUNNER_PATH = ROOT / "scripts" / "verify_database.ps1"
@@ -985,15 +988,12 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertNotIn("app_private", exposed)
         self.assertNotIn("app_api", exposed)
 
-    def test_seed_is_intentionally_empty_and_names_data_owners(self) -> None:
-        seed = SEED_PATH.read_text(encoding="utf-8")
+    def test_seed_dispatcher_matches_active_release_and_stays_db_disabled(self) -> None:
+        config = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(
-            seed,
-            "-- DB-001 deliberately contains no official or mock seed.\n"
-            "-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.\n"
-            "-- An empty approved-data set must keep /ready at HTTP 503.\n",
-        )
+        self.assertEqual(RELEASE_SEED_PATH.read_bytes(), SEED_PATH.read_bytes())
+        self.assertFalse(config["db"]["seed"]["enabled"])
+        self.assertEqual(["./seed.sql"], config["db"]["seed"]["sql_paths"])
 
     def test_env_update_preserves_every_non_target_byte(self) -> None:
         module = load_module(PROVISION_PATH, "provision_local_database_login_test")

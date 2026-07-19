@@ -770,7 +770,12 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         bundles: list[ReleaseBundle] = []
         for suffix in ("one", "two"):
             root = Path(self.temporary_directory.name) / suffix
-            shutil.copytree(REPOSITORY_ROOT / "data", root / "data")
+            shutil.copytree(
+                REPOSITORY_ROOT / "data",
+                root / "data",
+                ignore=shutil.ignore_patterns("releases"),
+            )
+            self.assertFalse((root / "data" / "official" / "releases").exists())
             bundles.append(
                 build_release_bundle(
                     root,

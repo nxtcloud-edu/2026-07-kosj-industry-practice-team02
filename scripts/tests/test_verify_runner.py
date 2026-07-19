@@ -22,6 +22,10 @@ STAGE_IDS = (
     "SYNC-API",
     "PREFLIGHT-API-PYTHON",
     "TEST-ROOT",
+    "VALIDATE-DATA-001",
+    "TEST-DATA-SEED",
+    "VERIFY-DATA-SEED-RELEASE",
+    "VERIFY-LOCAL-SEED",
     "LINT-WEB",
     "TYPECHECK-WEB",
     "TEST-WEB",
@@ -123,6 +127,10 @@ class VerifyRunnerStructureTest(unittest.TestCase):
             '$apiPython = Join-Path $repoRoot "apps\\api\\.venv\\Scripts\\python.exe"',
             '-StepId "PREFLIGHT-API-PYTHON" -Executable $apiPython',
             '-StepId "TEST-ROOT" -Executable $apiPython',
+            '-StepId "VALIDATE-DATA-001" -Executable $apiPython',
+            '-StepId "TEST-DATA-SEED" -Executable $apiPython',
+            '-StepId "VERIFY-DATA-SEED-RELEASE" -Executable $apiPython',
+            '-StepId "VERIFY-LOCAL-SEED" -Executable $apiPython',
             '-StepId "LINT-WEB" -Executable "corepack.cmd"',
             '-StepId "TYPECHECK-WEB" -Executable "corepack.cmd"',
             '-StepId "TEST-WEB" -Executable "corepack.cmd"',
@@ -152,6 +160,52 @@ class VerifyRunnerStructureTest(unittest.TestCase):
             source.find('Invoke-NativeStep -StepId "PREFLIGHT-NODE"'),
         )
         self.assertGreater(source.rfind("Exit-RunnerEnvironment"), source.rfind('StepId "CHECK-DIFF"'))
+
+    def test_runs_focused_data_seed_gate_after_data001_without_db_or_mutation(self) -> None:
+        source = read_verify()
+        compact = re.sub(r"\s+", " ", source)
+
+        focused_arguments = (
+            '"-B", "-m", "unittest", "-v", '
+            '"scripts.tests.test_data_seed_release", '
+            '"scripts.tests.test_promote_data_seed", '
+            '"scripts.tests.test_verify_data_seed_db", '
+            '"scripts.tests.test_verify_data_seed_runner"'
+        )
+        self.assertIn(focused_arguments, compact)
+        self.assertIn(
+            '"-B", "scripts/promote_data_seed.py", "verify-release", '
+            '"--release-dir", $dataSeedReleaseToken',
+            compact,
+        )
+        self.assertIn(
+            '"-B", "scripts/promote_data_seed.py", "verify-local-seed", '
+            '"--release-dir", $dataSeedReleaseToken',
+            compact,
+        )
+        self.assertIn(
+            '$dataSeedReleaseToken = "data/official/releases/0.1.0-initial.1"',
+            source,
+        )
+        self.assertIn('"release_manifest.json"', source)
+        self.assertIn(
+            '"data\\schemas\\data-seed\\v1\\release-manifest.schema.json"',
+            source,
+        )
+        self.assertIn('"supabase\\seed.sql"', source)
+        self.assertLess(
+            source.find('-StepId "VALIDATE-DATA-001"'),
+            source.find('-StepId "TEST-DATA-SEED"'),
+        )
+        for forbidden in (
+            "verify_data_seed.ps1",
+            "verify_data_seed_db.py",
+            "test_data_seed_concurrency.py",
+            '"prepare"',
+            "activate-local-seed",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
 
     def test_has_all_stable_stage_ids_in_the_required_order(self) -> None:
         source = read_verify()

@@ -27,6 +27,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_DRAFT = CANONICAL_DRAFT_TOKEN
 CANONICAL_RELEASE = "data/official/releases/0.1.0-initial.1"
 RELEASED_AT = "2026-07-19T09:20:31+09:00"
+INITIAL_DISPATCHER_BYTES = (
+    b"-- DB-001 deliberately contains no official or mock seed.\n"
+    b"-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.\n"
+    b"-- An empty approved-data set must keep /ready at HTTP 503.\n"
+)
 EXPECTED_FILES = {
     "approval_manifest.json",
     "compensation.sql",
@@ -67,12 +72,13 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.root = Path(self.temporary_directory.name) / "repository"
-        shutil.copytree(REPOSITORY_ROOT / "data", self.root / "data")
-        (self.root / "supabase").mkdir(parents=True)
-        shutil.copy2(
-            REPOSITORY_ROOT / "supabase" / "seed.sql",
-            self.root / "supabase" / "seed.sql",
+        shutil.copytree(
+            REPOSITORY_ROOT / "data",
+            self.root / "data",
+            ignore=shutil.ignore_patterns("releases"),
         )
+        (self.root / "supabase").mkdir(parents=True)
+        (self.root / "supabase" / "seed.sql").write_bytes(INITIAL_DISPATCHER_BYTES)
         shutil.copy2(
             REPOSITORY_ROOT / "supabase" / "config.toml",
             self.root / "supabase" / "config.toml",
