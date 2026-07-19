@@ -14,7 +14,7 @@ from pathlib import Path
 import stat
 from typing import Mapping, Sequence
 
-from scripts.data_staging_validation import validate_staging
+from scripts.data_staging_validation import validate_schema, validate_staging
 
 
 CANONICAL_DRAFT_TOKEN = "data/staging/data-001/0.1.0-draft.1"
@@ -67,6 +67,25 @@ RELEASE_ID = "sejong-official-0.1.0-initial.1"
 SOURCE_DRAFT_VERSION = "0.1.0-draft.1"
 GENERATOR_ID = "data-seed-release-v1"
 GOVERNANCE_RELEASED_AT_UTC = "2026-07-19T00:20:31Z"
+GOVERNANCE_RELEASED_AT = "2026-07-19T09:20:31+09:00"
+CANONICAL_RELEASE_TOKEN = "data/official/releases/0.1.0-initial.1"
+CANONICAL_RELEASE_RELATIVE_PATH = Path(CANONICAL_RELEASE_TOKEN)
+CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH = Path("data/schemas/data-seed/v1")
+RELEASE_ARTIFACTS = (
+    "approval_manifest.json",
+    "compensation.sql",
+    "kb_records.json",
+    "office_service_mappings.json",
+    "offices.json",
+    "release_manifest.json",
+    "seed.sql",
+)
+RELEASE_JSON_SCHEMAS = {
+    "release_manifest.json": "release-manifest.schema.json",
+    "kb_records.json": "kb-records.schema.json",
+    "offices.json": "offices.schema.json",
+    "office_service_mappings.json": "office-service-mappings.schema.json",
+}
 
 KB_RELEASE_FIELDS = (
     "id",
@@ -185,6 +204,20 @@ class ReleaseBundle:
     seed_sql_bytes: bytes
     compensation_sql_bytes: bytes
     seed_semantic_sha256: str
+
+
+class ReleaseVerificationError(ValueError):
+    """A content-free release verification failure for the publication CLI."""
+
+    def __init__(self, issues: Sequence[ReleaseIssue]) -> None:
+        normalized = _normalized(list(issues))
+        if not normalized:
+            normalized = (
+                ReleaseIssue("RELEASE_VERIFICATION_FAILED", "release", None, None),
+            )
+        self.issues = normalized
+        self.reason = normalized[0].code
+        super().__init__(self.reason)
 
 
 @dataclass(frozen=True)
@@ -419,6 +452,165 @@ def build_release_bundle(
         compensation_sql_bytes=compensation_bytes,
         seed_semantic_sha256=semantic_hash,
     )
+
+
+def release_bundle_files(bundle: ReleaseBundle) -> dict[str, bytes]:
+    """Return the exact seven immutable release artifact byte strings."""
+
+    return {
+        "approval_manifest.json": bundle.approval_manifest_bytes,
+        "compensation.sql": bundle.compensation_sql_bytes,
+        "kb_records.json": bundle.kb_records_bytes,
+        "office_service_mappings.json": bundle.office_service_mappings_bytes,
+        "offices.json": bundle.offices_bytes,
+        "release_manifest.json": _release_json_bytes(bundle.manifest),
+        "seed.sql": bundle.seed_sql_bytes,
+    }
+
+
+def verify_release_directory(
+    repository_root: Path,
+    release_dir: Path,
+) -> dict[str, object]:
+    """Verify the exact canonical initial release or raise a stable failure."""
+
+    root = Path(repository_root).absolute()
+    canonical_release = (root / CANONICAL_RELEASE_RELATIVE_PATH).absolute()
+    candidate = Path(release_dir).absolute()
+    if candidate != canonical_release or not _is_trusted_directory(root):
+        raise ReleaseVerificationError(
+            (ReleaseIssue("RELEASE_PATH_INVALID", "release", None, None),)
+        )
+    return _verify_release_contents(root, candidate)
+
+
+def _verify_release_contents(
+    repository_root: Path,
+    release_dir: Path,
+    expected_bundle: ReleaseBundle | None = None,
+) -> dict[str, object]:
+    """Verify one trusted release directory from a single captured byte snapshot."""
+
+    root = Path(repository_root).absolute()
+    directory = Path(release_dir).absolute()
+    if not _is_trusted_directory(root) or not _is_trusted_directory(directory):
+        raise ReleaseVerificationError(
+            (ReleaseIssue("RELEASE_PATH_INVALID", "release", None, None),)
+        )
+
+    try:
+        entries = tuple(directory.iterdir())
+    except OSError as error:
+        raise ReleaseVerificationError(
+            (ReleaseIssue("RELEASE_FILE_SET_INVALID", "release", None, None),)
+        ) from error
+    by_name = {entry.name: entry for entry in entries}
+    if set(by_name) != set(RELEASE_ARTIFACTS) or len(entries) != len(RELEASE_ARTIFACTS):
+        raise ReleaseVerificationError(
+            (ReleaseIssue("RELEASE_FILE_SET_INVALID", "release", None, None),)
+        )
+
+    payloads: dict[str, bytes] = {}
+    issues: list[ReleaseIssue] = []
+    for artifact in RELEASE_ARTIFACTS:
+        path = by_name[artifact]
+        if not _is_trusted_file(path):
+            _issue(issues, "RELEASE_ARTIFACT_INVALID", artifact, None, None)
+            continue
+        try:
+            payloads[artifact] = _read_artifact_bytes_once(path)
+        except OSError:
+            _issue(issues, "RELEASE_ARTIFACT_INVALID", artifact, None, None)
+
+    if issues:
+        raise ReleaseVerificationError(issues)
+
+    parsed: dict[str, dict[str, object]] = {}
+    for artifact in (*RELEASE_JSON_SCHEMAS, APPROVAL_ARTIFACT):
+        try:
+            parsed[artifact] = _load_json_object_strict_bytes(payloads[artifact])
+        except ValueError:
+            _issue(issues, "RELEASE_JSON_INVALID", artifact, None, None)
+
+    schema_dir = root / CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH
+    if not _is_trusted_directory(schema_dir):
+        _issue(issues, "RELEASE_SCHEMA_INVALID", "release-schema", None, None)
+    else:
+        for artifact, schema_name in RELEASE_JSON_SCHEMAS.items():
+            schema_path = schema_dir / schema_name
+            if not _is_trusted_file(schema_path):
+                _issue(issues, "RELEASE_SCHEMA_INVALID", artifact, None, None)
+                continue
+            try:
+                schema = _load_json_object_strict_bytes(
+                    _read_artifact_bytes_once(schema_path)
+                )
+            except (OSError, ValueError):
+                _issue(issues, "RELEASE_SCHEMA_INVALID", artifact, None, None)
+                continue
+            instance = parsed.get(artifact)
+            if instance is None:
+                continue
+            schema_issues = validate_schema(instance, schema, artifact)
+            for schema_issue in schema_issues:
+                _issue(
+                    issues,
+                    "RELEASE_SCHEMA_INVALID",
+                    artifact,
+                    schema_issue.record_id,
+                    schema_issue.field,
+                )
+
+    bundle = expected_bundle
+    if bundle is None:
+        try:
+            bundle = build_release_bundle(
+                root,
+                root / CANONICAL_DRAFT_RELATIVE_PATH,
+                RELEASE_VERSION,
+                GOVERNANCE_RELEASED_AT,
+            )
+        except (OSError, ValueError):
+            _issue(
+                issues,
+                "RELEASE_REGENERATION_INVALID",
+                "release",
+                None,
+                None,
+            )
+
+    expected_payloads = release_bundle_files(bundle) if bundle is not None else {}
+    for artifact in RELEASE_ARTIFACTS:
+        if payloads.get(artifact) != expected_payloads.get(artifact):
+            _issue(issues, "RELEASE_BYTES_INVALID", artifact, None, None)
+
+    if issues:
+        raise ReleaseVerificationError(issues)
+    assert bundle is not None
+    projection = bundle.manifest.get("projection")
+    if not isinstance(projection, dict):
+        raise ReleaseVerificationError(
+            (
+                ReleaseIssue(
+                    "RELEASE_MANIFEST_INVALID",
+                    "release_manifest.json",
+                    None,
+                    "projection",
+                ),
+            )
+        )
+    return {
+        "release_version": RELEASE_VERSION,
+        "release_id": RELEASE_ID,
+        "counts": {
+            "kb": projection.get("kb"),
+            "office": projection.get("office"),
+            "mapping": projection.get("mapping"),
+        },
+        "seed_semantic_sha256": bundle.seed_semantic_sha256,
+        "seed_sql_bytes": payloads["seed.sql"],
+        "compensation_sql_bytes": payloads["compensation.sql"],
+    }
 
 
 def _capture_approved_snapshot(
