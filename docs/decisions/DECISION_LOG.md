@@ -40,7 +40,7 @@
 | D-036 | 2026-07-19 | Q-SEED-001=A: approved record를 immutable filesystem release와 기존 schema용 deterministic transactional seed로 승격하고, compensation은 참조 row 없는 빈 disposable local DB에만 허용 | Architecture confirmed; ADR-0016 accepted. Initial `0.1.0-initial.1`/19·3·10 written spec은 3차 독립 review 0/0/0까지 완료됐으며 사용자 `명세 승인`과 후속 plan 승인 전 구현 금지 | Q-SEED-001, A-028, ADR-0016, DATA-SEED design, IMP-20260719-006 | 사용자 |
 | D-037 | 2026-07-19 | Q-WEB-001=A: 실제 chat pipeline 전에 입력·저장·API 호출이 없는 접근 가능한 정적 `/chat` 준비 화면을 만들고 홈 CTA를 연결 | Confirmed for local/private; 기존 PLAN-001과 사용자의 연속 구현 지시 아래 WEB-HOME narrow plan/TDD 실행 허용. API/DB/LLM/data/dependency/public 배포 변경 없음 | Q-WEB-001, A-029, PLAN-001, WEB-HOME plan | 사용자 |
 | D-038 | 2026-07-19 | 사용자의 `ㅇㅋ 승인`을 직전 DATA-SEED-001 written specification 승인 요청에 대한 동등한 명시적 승인으로 기록하고, initial release governance `released_at`은 이 승인 처리 시각 `2026-07-19T09:20:31+09:00`으로 고정 | Written specification Approved; executable TDD plan 작성 완료. 실행계획 승인 전 release/dispatcher/DB/official-data version 변경은 계속 금지 | A-028, ADR-0016, DATA-SEED spec/plan, IMP-20260719-007 | 사용자 |
-| D-039 | 2026-07-19 | 사용자의 `ㅇㅋ 전체 승인 구현 ㄱㄱ`를 DATA-SEED-001 실행계획 전체와 disposable local DB reset·seed·compensation·replay에 대한 명시적 승인으로 기록 | Approved / In Progress at `2026-07-19T09:52:08+09:00`; fixed governance `released_at=2026-07-19T09:20:31+09:00` 유지. 범위는 `0.1.0-initial.1` 19/3/10 local release이며 public/remote, migration/API/readiness, successor release는 미승인 | A-028, ADR-0016, DATA-SEED spec/plan, IMP-20260719-008 | 사용자 |
+| D-039 | 2026-07-19 | 사용자의 `ㅇㅋ 전체 승인 구현 ㄱㄱ`를 DATA-SEED-001 실행계획 전체와 disposable local DB reset·seed·compensation·replay에 대한 명시적 승인으로 기록 | Approved scope executed / **Blocked outcome**. `.1` filesystem 19/3/10 release·byte-identical dispatcher는 게시·검증됐고 auto-seed는 disabled. Actual DB는 seed write 전 authoritative grantor-option union과 immutable single-row guard 충돌로 중단; ACTIVE/READY/official-data 승격 없음. A-030/Q-SEED-002 인간 결정 전 successor/migration 미구현 | A-028, A-030/Q-SEED-002, ADR-0016, DATA-SEED plan/report/lineage, IMP-20260719-008 | 사용자 승인 + 실행 결과 |
 
 새 결정은 기존 값을 덮어쓰지 않고 새 행과 ADR/노트 링크를 추가한다.
 Q-SEC-004/A-022와 Q-SEC-005/A-023은 각각 D-029/D-030으로 결정됐지만 실제 보정이 불충분했다.
@@ -48,7 +48,10 @@ A-024/Q-SEC-006은 D-031/ADR-0013, A-025/Q-TOOL-001은 D-032/ADR-0014로 해결�
 수정 계획 승인 뒤 runtime/full gate까지 local에서 구현·검증됐다. Q-DATA-002/A-026은
 D-033/ADR-0015로 해결되고 DRAFT 20/3/12를 거쳐 D-035의 exact reviewer/disposition/time과
 canonical APPROVED 19/3/10 evidence까지 materialize·검증됐다. D-036/D-038로 DATA-SEED architecture와
-written specification은 확정됐고 D-039로 실행계획까지 승인되어 local 구현을 시작했다. D-037의 static WEB-HOME/chat shell은
-구현·검증 완료됐다.
+written specification은 확정됐고 D-039로 실행계획까지 승인됐다. 실행 결과 Task 5
+filesystem release/dispatcher와 Task 7A offline gate는 완료됐지만 Task 6 actual DB import는 seed write 전
+grantor-option union 대 `.1` single-row guard 충돌로 Blocked다. A-030/Q-SEED-002가 새 인간 결정
+경계며 미응답 시 추천 A를 구현하지 않고 DATA-SEED/READY/AI를 차단한다. 아직 확정된
+선택이 없으므로 D-040을 추가하지 않았다. D-037의 static WEB-HOME/chat shell은 구현·검증 완료됐다.
 DB-001은 disposable `0.3.0-local`로 완료됐지만 A-021/Q-SEC-003 기본값 B는 public release를
 계속 차단한다.

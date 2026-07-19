@@ -4,6 +4,9 @@
 
 ## 현재 보고서
 
-- [DB-001 local baseline candidate — blocked](DB-001-LOCAL-BASELINE.md) — Supabase/PostgreSQL 환경,
+- [DB-001 local baseline — local verified / public blocked](DB-001-LOCAL-BASELINE.md) — Supabase/PostgreSQL 환경,
   6+6 lineage hash, 과거 pgTAP 282·integration 8/8·rollback/replay와 현재 D-031 구현 local/
   A-021 public-release block
+- [DATA-SEED-001 actual disposable DB — blocked](DATA-SEED-001-LOCAL-VERIFICATION.md) — `.1`
+  filesystem release/dispatcher는 verified, actual PostgreSQL은 seed write 전 grantor-option union 대
+  immutable single-row guard 충돌로 Blocked; A-030/Q-SEED-002 인간 결정 필요

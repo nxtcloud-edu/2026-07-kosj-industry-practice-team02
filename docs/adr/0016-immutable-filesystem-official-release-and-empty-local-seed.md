@@ -1,6 +1,6 @@
 # ADR-0016 — Immutable filesystem official release and empty-local transactional seed
 
-- Status: Accepted architecture and written specification / implementation pending plan approval
+- Status: Accepted and partially delivered / actual DB import Blocked by A-030/Q-SEED-002
 - Date: 2026-07-19
 - Related: Q-SEED-001, D-036, A-028, ADR-0015, DATA-SEED-001
 
@@ -59,10 +59,37 @@ history.
 - Negative: empty-only import/compensation is intentionally unsuitable for a live database. A future
   operational deployment needs a separately approved data-transition architecture.
 
+## 2026-07-20 actual outcome addendum
+
+- Task 5 published and independently verified immutable filesystem release `0.1.0-initial.1` with
+  exactly 19 KB, 3 offices and 10 mappings. `supabase/seed.sql` is byte-identical to its `seed.sql`;
+  `[db.seed].enabled=false` remains unchanged.
+- Task 7A added and passed the no-Docker release/dispatcher root gate. This proves release bytes and
+  filesystem semantics, not a PostgreSQL import.
+- Task 6 attempted the supported actual runner three times. Two bounded runner/query defects were
+  fixed and independently approved, but the final attempt stopped before seed writes.
+- The authoritative migration/pgTAP contract accepts the effective PostgreSQL 17
+  ADMIN/INHERIT/SET option union across grantor-specific membership rows. Immutable `.1` seed and
+  compensation instead require exactly one row with all three options. Actual safe metadata used two
+  grantor-specific rows, so the `.1` guard rejected it before mutation.
+- Consequently there is no actual 19/3/10 PostgreSQL count, compensation/replay, final DB semantic
+  hash, citizen-read, READY or AI promotion evidence. `official_data=0.0.0-not-populated` and
+  `/ready=503` remain authoritative. Cleanup ended with repo-owned container 0 and port 54322
+  listener 0.
+- Released `.1` bytes remain immutable and must not be edited or deleted. A-030/Q-SEED-002 now owns
+  the human decision. Option A (recommended/default, not implemented) keeps migration/pgTAP union
+  authority and creates separately approved immutable `0.1.0-initial.2` with the same PM-approved
+  19/3/10 data, corrected guard, new manifest and full rerun. Option B creates a versioned DB
+  migration that normalizes grantor-specific memberships to one row and therefore expands the
+  platform security/schema review. Without an answer, neither option is implemented and
+  DATA-SEED/READY/AI remain Blocked.
+
 ## Safety and rollback
 
 Release preparation is create-once and uses a same-parent publish; dispatcher activation is a separate
 recoverable atomic replacement. Seed runs in one transaction and fails before writes on a non-empty DB.
 Exclusive table locks prevent capability-write races. Compensation fails before delete when operational
 or altered data exists. Immutable release correction uses a separately approved successor design,
-never destructive in-place rollback.
+never destructive in-place rollback. The actual `.1` failure produced no application rows, so no
+compensation was run; runtime cleanup stopped only the exact repo-owned container and preserved the
+owned volumes/network.

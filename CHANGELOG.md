@@ -4,6 +4,13 @@
 
 ### Added
 
+- Immutable filesystem official release `0.1.0-initial.1` with approved 19 KB·3 offices·10
+  mappings, approval/artifact/semantic hashes, excluded KB 1 and rejected mappings 2, deterministic
+  seed/compensation SQL, and a byte-identical local dispatcher while `[db.seed].enabled=false`
+- DATA-SEED active-release-compatible no-Docker root stages for focused unit/static tests,
+  `verify-release`, and `verify-local-seed`; Task 7A root and independent review passed
+- DATA-SEED `.1` lineage with the Task 5 publication evidence, Task 6 actual attempts/fixes/blocker,
+  cleanup boundary, immutable correction policy, and A-030/Q-SEED-002 successor decision gate
 - WEB-HOME-001 static `/chat` preparation shell, navigable home CTA, explicit no-input/no-storage/request allowlist browser guard, 390/430/desktop accessibility checks, and actual Chrome UI 200% zoom verification
 - Standalone exact-locked `tools/web-e2e` Playwright test project and a permanent production dependency/deploy gate that keeps Playwright out of the citizen Web runtime graph
 - DATA-001 internal staging schemas, dependency-free fail-closed validator, canonical DRAFT KB 20·office 3·mapping 12, hash-bound `PENDING_PM_REVIEW` manifest, deterministic validation report, lineage, and PM review packet; all remain non-ACTIVE and outside citizen reads, seed, and readiness
@@ -41,7 +48,7 @@
 
 ### Changed
 
-- Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged and `official_data` remains `0.0.0-not-populated`; release, seed, DB rows, ACTIVE reads, and readiness are still pending their separately approved transition.
+- Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged. The `.1` filesystem release and dispatcher are now published/verified, but actual DB rows, ACTIVE reads, readiness and `official_data` promotion remain blocked.
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
 - Clarified local-first/zero-infrastructure-budget as the active target and managed hosting as separately approved future work
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain
@@ -86,10 +93,19 @@
   disposable local/private use only
 - Bounded DB child process trees in `73f300b`; focused descendant cleanup 1/1, full runner 50/50,
   patched tooling 24/24, independent review 0/0/0 and final-code DB revalidation PASS
+- Recorded DATA-SEED Task 6 as Blocked rather than promoted: the authoritative PostgreSQL 17
+  grantor-specific ADMIN/INHERIT/SET effective union conflicts with immutable `.1` seed/compensation
+  exactly-one-row membership guards. The runner stopped before writes after two reviewed bounded
+  fixes; no role/grant/migration/release byte changed, and cleanup ended at container 0/port listener 0
 
 ### Pending
 
-- Immutable official KB/office release and disposable-local seed after DATA-SEED-001 execution-plan approval; written specification approved 2026-07-19
+- A-030/Q-SEED-002 human decision. Recommended/default A is a separately PM/technically approved
+  immutable `0.1.0-initial.2` with the same 19/3/10 data and corrected effective-union guard; B is a
+  new versioned DB migration that normalizes grantor-specific memberships. Neither option is
+  implemented without an answer; DATA-SEED/READY/AI remain Blocked
+- Full actual disposable PostgreSQL seed/rollback/concurrency/compensation/replay/citizen-read cycle;
+  `official_data` remains `0.0.0-not-populated` until every gate passes
 - Deployment accounts and URLs
 - Official seed/readiness/chat/admin vertical slices
 - Q-SEC-003/A-021 privileged-function search-path hardening before any public release;

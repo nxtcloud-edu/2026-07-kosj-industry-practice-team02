@@ -31,8 +31,9 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-025 | A | Windows patched CLI build workspace | Resolved / implemented and verified locally | 사용자가 2026-07-18 Q-TOOL-001=A를 명시했다. 두 checkout `.tools/s/{a,b}`, pinned relative max 134자·absolute cap 248자 pre-checkout gate와 legacy deny-only 경계를 구현·검증했다. | D-032 / ADR-0014; 기존 장경로 partial artifact 자동 삭제 없음 |
 | A-026 | B | 공식 데이터 staging·승인 artifact | Resolved / PM evidence complete | Q-DATA-002=A: `data/staging/data-001/<draft-version>/`의 KB·기관·매핑 JSON과 hash-bound approval manifest를 canonical authoring/approval evidence로 사용하고, 승인 record만 후속 immutable official release로 승격 | D-033/D-035 / ADR-0015 / DATA-001 plan; canonical manifest APPROVED, 35 comments, final 19/3/10, 63-test/hash review PASS |
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
-| A-028 | A | official release·seed | Resolved / implementation authorized and in progress | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; spec `2026-07-19T09:20:31+09:00`, plan `2026-07-19T09:52:08+09:00` 승인 |
+| A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
+| A-030 | A / Blocker | official seed correction | Open / Blocked | Q-SEED-002: PostgreSQL 17 grantor-specific effective option union과 immutable `.1` single-row membership guard 충돌을 어떻게 보정할 것인가 | A 추천/default: migration/pgTAP union 권위를 유지하고 별도 승인된 immutable `0.1.0-initial.2`를 생성·전체 actual cycle 재실행; 답 전에는 아무 방안도 구현하지 않음 |
 
 ## 우선도 정의
 
@@ -41,8 +42,13 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 local 구현을 막는 인간 결정형 A/Blocker는 없다. A-028의 written specification은
-2026-07-19T09:20:31+09:00, 실행계획은 2026-07-19T09:52:08+09:00 승인됐다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+현재 DATA-SEED/READY/AI local 진행을 막는 인간 결정형 A/Blocker는 A-030/Q-SEED-002다.
+A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
+2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
+byte-active dispatcher를 완료했지만 `[db.seed].enabled=false`다. Task 6 actual DB cycle은 seed write
+전 grantor별 effective-option union 권위와 `.1` single-row guard 충돌로 Blocked다. 인간 결정 전
+`.1`·role/grant·migration을 바꾸지 않고 `official_data=0.0.0-not-populated`, `/ready=503`을
+유지한다. Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
@@ -55,9 +61,34 @@ disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High 
 Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 2026-07-19 사용자는
 Q-DATA-003=A로 exact reviewer/disposition/final-confirmation 시각을 확정해 A-027을 해소했다.
 Q-SEED-001=A와 D-038은 A-028의 architecture/written specification을 해결했고 D-039가 실행계획과
-disposable local DB cycle을 승인했다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell은 구현·검증 완료됐다.
+disposable local DB cycle을 승인했다. 실제 실행 결과 filesystem release는 완료됐지만 DB import는
+A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell은 구현·검증
+완료됐다.
 
 ## 열린 인터뷰 질문
+
+Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게 보정할 것인가
+- 왜 지금 필요한가: Task 5의 immutable `.1` filesystem release와 dispatcher는 게시·검증됐지만,
+  Task 6 actual PostgreSQL 17은 seed write 전 identity에서 중단됐다. migration/pgTAP은
+  grantor별 row의 ADMIN/INHERIT/SET effective union을 인정하고 `.1` seed/compensation은 하나의
+  row에 세 option이 모두 있어야 한다. 인간이 권위와 보정 방식을 결정하기 전에는 actual
+  cycle, `official_data`, READY, AI를 진행할 수 없다.
+- 선택지 A / 장점 / 단점: 기존 migration/pgTAP effective-union 권위를 유지하고, 같은 PM 승인
+  19/3/10 data에 corrected membership guard를 적용한 successor immutable `0.1.0-initial.2`를 새
+  manifest·technical approval로 만든 뒤 전체 actual cycle을 재실행한다 / 이미 검증된 DB
+  권위와 글로벌 privilege state를 유지하고 변경을 versioned release에 한정한다 / 새 release,
+  manifest, PM/technical approval, 전체 actual 검증이 필요하다.
+- 선택지 B / 장점 / 단점: 새 versioned DB migration으로 grantor-specific membership를 하나의 row로
+  정규화한다 / `.1` guard 형태와 맞출 수 있다 / 플랫폼 특정 grantor·글로벌 role
+  membership를 바꾸는 보안/스키마 변경이므로 별도 migration, rollback, replay, 배포 검토가
+  필요하다.
+- 당신의 추천안: A. 권위 계약을 하나로 유지하고 immutable correction 정책을 지킨다.
+- 답을 받지 못할 때 사용할 기본값: A를 추천만 유지하되 A·B 모두 구현하지 않는다.
+  DATA-SEED-001, READY-001, AI-001은 Blocked다.
+- 영향 범위: A는 successor official release/schema/manifest/generator/dispatcher·actual test·lineage/version 승인에,
+  B는 그에 더해 DB migration/compensation/pgTAP/role security/deployment에 영향을 준다. 두 선택 모두
+  `.1` byte, public API, citizen 답변, READY 활성을 자동 변경하지 않는다.
+- 결정 기록 경계: 아직 확정된 사용자 선택이 없으므로 D-040을 작성하지 않는다.
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.
@@ -78,15 +109,16 @@ Q-WEB-001. 실제 chat pipeline 전 홈 CTA의 목적지는 무엇인가
 Q-SEED-001. approved record의 official release/import 구조는 무엇인가
 - 결정: A / D-036 / ADR-0016. initial `0.1.0-initial.1` immutable filesystem release와 기존
   schema용 empty-local transactional seed를 선택한다.
-- 결과 경계: architecture와 written specification이 확정됐다. 동시 capability write를 차단하는
-  8-table exclusive lock, exact local role/session assertion, full semantic projection hash와 two-phase
-  prepare/activation을 승인 명세와 실행계획에 반영했다. 계획 승인이 없으면 구현하지 않는다.
+- 결과 경계: architecture, written specification, 실행계획은 승인됐고 `.1` filesystem
+  release/dispatcher까지 게시·검증됐다. Actual DB는 seed write 전 membership contract 충돌로
+  Blocked이며 후속 보정은 A-030/Q-SEED-002가 소유한다.
 
 Q-DATA-003. PM 검수 완료 진술을 canonical approval evidence로 어떻게 확정할 것인가
 - 결정: A / D-035. reviewer `PM-LOCAL-001`, confirmation
   `2026-07-19T02:06:19+09:00`, current recommendation 35건을 모두 채택한다.
-- 결과 경계: DATA-001 approval manifest materialization만 허용한다. official release, DB seed,
-  ACTIVE 검색, readiness는 Q-SEED-001의 별도 명세/계획 승인 전 활성화하지 않는다.
+- 결과 경계: 이 결정은 DATA-001 approval manifest materialization만 허용했다. 이후 별도
+  Q-SEED-001 승인으로 `.1` filesystem release는 게시됐지만 DB seed·ACTIVE 검색·readiness는
+  A-030/Q-SEED-002로 계속 Blocked다.
 
 Q-DATA-002. 승인 전 공식 데이터 artifact를 어떤 방식으로 저장하고 승인할 것인가
 - 결정: A / D-033 / ADR-0015. 사용자가 2026-07-18 `Q-DATA-002: A`라고 명시했다.

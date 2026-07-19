@@ -31,7 +31,14 @@
   `KB-WASTE-03`과 거절 매핑 2건은 제외하고, WASTE-03은 회귀 뒤 최종 20번째 ACTIVE
 - DATA-SEED architecture: initial version `0.1.0-initial.1`의 immutable filesystem release와
   기존 schema용 empty-local transactional seed. written specification은
-  `2026-07-19T09:20:31+09:00` 승인됐고 실행계획 승인 전 release/seed/DB 변경 금지
+  `2026-07-19T09:20:31+09:00`, 실행계획은 `2026-07-19T09:52:08+09:00` 승인됐다.
+- DATA-SEED actual status: `.1` filesystem release는 19/3/10으로 게시·검증됐고
+  `supabase/seed.sql`은 release seed와 byte-identical이며 `[db.seed].enabled=false`다. 2026-07-20
+  actual DB cycle은 seed write 전, PostgreSQL 17 grantor별 membership option을 효과적 union으로
+  인정하는 migration/pgTAP 권위와 불변 `.1` single-row guard 충돌로 Blocked다.
+  citizen-visible ACTIVE data·READY·AI 승격은 없고 `official_data=0.0.0-not-populated`다.
+  런타임은 container 0·port 54322 listener 0으로 정리됐다. `.1` byte는 수정·삭제하지
+  않으며 A-030/Q-SEED-002의 후속 선택 전에 DATA-SEED/READY/AI는 Blocked다.
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -80,13 +87,15 @@
 - 승인 comment: 공개 OpenAPI가 승인·반려 모두 `review_comment`를 요구하므로 내부 승인 capability도 `approve_kb_candidate(uuid,text,text,text)`를 사용해 승인 comment를 후보와 metadata audit에 저장한다. 공개 wire 계약은 바뀌지 않는다.
 - 적용된 migration은 불변이다. 이미 commit된 `00100~00500`을 수정하지 않고 deferred ACTIVE-question trigger 권한 보정은 새 `00600`에 추가하며 compensation은 `00600 → 00500 → 00400 → 00300 → 00200 → 00100` 순서다.
 - deferred ACTIVE-question trigger 실행: `app_private.validate_active_kb_question()` 하나만 새 `00600`에서 제한된 SECURITY DEFINER로 전환한다. `sejong_schema_owner`, `search_path=pg_catalog, pg_temp`(공식 PostgreSQL 17 SECURITY DEFINER 지침에 따라 임시 스키마를 마지막에 명시), PUBLIC·anon·authenticated·backend 직접 EXECUTE revoke를 재확인하며 backend private schema/table grant와 repository/admin-DSN 우회는 금지한다. 사용자의 직전 추천안 뒤 계속 진행 지시는 Q-DB-003=A 승인으로 해석했고 문자 A를 직접 입력했다고 기록하지 않는다.
-- DB local 기준선: forward/compensation 각 6개, 7 enum·8 table, pgTAP 282와 backend integration
+- DB local schema 기준선: forward/compensation 각 6개, 7 enum·8 table, pgTAP 282와 backend integration
   8/8을 갖춘 disposable `0.3.0-local` 기준선이다. Q-SEC-006=A/D-031과 Q-TOOL-001=A/D-032의
   patched CLI는 source/patch/runtime hash를 분리 고정하고 runner가 stock/PATH fallback 없이
   patched binary만 사용한다. 2026-07-18 actual gate는 exact one `127.0.0.1:54322`, fresh pgTAP
   282, integration 8/8, 6단계 compensation/absence/reset/replay, final container 0/0·volume delete 0을
   통과했다. `73f300b` bounded child process-tree remediation과 독립 review 0/0/0, final-code DB
-  revalidation도 통과했다. 공식/mock seed는 0이고 `/ready=503`을 유지한다. production-ready 표현은 금지한다.
+  revalidation도 통과했다. 이는 DB schema 기준선 근거다. 현재 filesystem dispatcher는
+  `.1` seed byte를 담고 있지만 자동 seed는 disabled고 actual import는 DATA-SEED blocker로 미도달이다.
+  공식/mock DB row는 0이고 `/ready=503`을 유지한다. production-ready 표현은 금지한다.
 - DB local port 경계: Docker Engine 28+와 actual single `127.0.0.1:54322` binding이 필수다.
   Q-SEC-004=A/D-029의 `default-local-port-binding`과 Q-SEC-005=A/D-030의
   `local-only-port-binding`을 각각 적용·재시작했지만 HostIP 미지정 probe는 모두 IPv4

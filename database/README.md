@@ -14,8 +14,10 @@ credential 사용이 금지된다. 답변이 없을 때의 현재 기본값은 Q
 - 보상: `database/rollbacks/`를 timestamp 역순으로 실행하며 disposable local DB에만 쓴다.
 - 논리 투영: `database/schema-v1.draft.sql`은 7 enum·8 table·5 index를 읽기 쉽게 보여주는
   참고본일 뿐 직접 실행하지 않는다.
-- 공식 seed 권위: 아직 비어 있다. DATA-001 PM 승인 19/3/10 projection과 DATA-SEED written
-  specification은 완료됐지만 실행계획 승인 전 release/seed/import는 금지된다.
+- 공식 filesystem release 권위: `data/official/releases/0.1.0-initial.1/`의 불변 19/3/10
+  release가 게시·검증됐다. `supabase/seed.sql`은 release seed와 byte-identical이지만
+  `[db.seed].enabled=false`다. Actual DB import는 seed write 전 membership guard 계약 충돌로
+  Blocked이며 공식/mock persistent row와 `official_data` 승격은 없다.
 
 Forward migration과 matching compensation은 각각 6개다. 적용·commit된 migration은
 수정하지 않고 보정이 필요하면 새 reviewed forward migration을 추가한다. 현재 local 전체
@@ -65,10 +67,19 @@ provider 설정은 보존한다. DSN, password, status 원문을 문서·로그�
 
 ## 데이터와 readiness
 
-`supabase/seed.sql`은 현재 의도적으로 data-free다. PM은 DATA-001의 35개 disposition과 initial
-19/3/10 projection을 승인했지만 DATA-SEED 실행계획 승인·release/import actual gate 전이므로
-공식/mock persistent row는 0이고 `/ready=503`이 정상이다. DB migration이나 향후 seed 성공만으로
-`/ready=200`으로 바꾸지 않으며 READY-001이 별도로 소유한다.
+`supabase/seed.sql`은 현재 `.1` release `seed.sql`과 byte-identical이다. 단 Supabase reset의
+자동 seed는 `[db.seed].enabled=false`로 비활성이다. 2026-07-20 actual runner는 baseline,
+patched runtime, status까지 통과한 뒤 identity에서 중단되었다. PostgreSQL 17의 grantor별
+membership row에 대한 migration/pgTAP effective ADMIN/INHERIT/SET union 권위와 불변 `.1`
+seed/compensation의 exactly-one-row guard가 충돌한다. seed write는 도달하지 않았다.
+
+따라서 공식/mock persistent row, citizen-visible ACTIVE data, final DB semantic hash 근거는 0이고
+`official_data=0.0.0-not-populated`, `/ready=503`이 정상이다. READY-001이 별도로
+`/ready=200`을 소유한다. A-030/Q-SEED-002의 후속 아키텍처가 승인되기 전에는
+`.1` release·dispatcher, role/grant, migration을 수정하지 않고 actual runner를 재실행하지
+않는다. 상세는
+[`DATA-SEED-001-0.1.0-initial.1`](../docs/data-lineage/DATA-SEED-001-0.1.0-initial.1.md)을
+따른다.
 
 현재 근거는 [ADR-0008](../docs/adr/0008-supabase-cli-sql-migrations.md),
 [ADR-0011](../docs/adr/0011-layered-database-and-backend-enforcement.md),

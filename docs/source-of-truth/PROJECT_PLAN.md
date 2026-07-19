@@ -151,8 +151,23 @@ Q-SEED-001=A에 따라 initial official version은 `0.1.0-initial.1`이며 immut
 release와 기존 schema용 empty-local transactional seed를 사용한다. release 준비와 local dispatcher
 activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확인과 8개 table exclusive lock,
 정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세는
-`2026-07-19T09:20:31+09:00` 승인됐으며 실행계획 승인 전에는 release/seed/DB/official-data version을
-변경하지 않는다.
+`2026-07-19T09:20:31+09:00`, 실행계획은 `2026-07-19T09:52:08+09:00` 승인됐다.
+
+Task 5는 `.1` filesystem release 19/3/10을 게시·검증하고 byte-identical local
+dispatcher를 활성화했다. `[db.seed].enabled=false`는 유지된다. Task 6 actual disposable
+PostgreSQL 17 cycle은 seed write 전 identity guard에서 Blocked다. migration/pgTAP은 grantor별 row의
+ADMIN/INHERIT/SET effective union을 권위로 삼지만 불변 `.1` seed/compensation은 모든
+option을 가진 단일 row만 인정하기 때문이다. 따라서 PostgreSQL에 승인 row가 삽입된
+근거, citizen-visible ACTIVE data, READY/AI 승격은 없고 `official_data`는
+`0.0.0-not-populated`다. runtime은 container 0·port 54322 listener 0으로 정리됐다.
+
+A-030/Q-SEED-002가 후속 아키텍처를 인간 결정으로 열어 둔다. 추천·미응답 기본값은
+기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected guard·new
+manifest·technical approval에 묶은 successor immutable `0.1.0-initial.2`로 새로 게시한 뒤
+actual cycle 전체를 재실행하는 A다. B는 새 versioned DB migration으로 grantor별
+membership를 한 row로 정규화하는 방식이며 글로벌 권한/스키마 변경이다. 답이 없으면
+A를 추천만 유지하고 둘 다 구현하지 않으며 DATA-SEED/READY/AI는 Blocked다.
+`.1` release byte는 수정·삭제하지 않는다.
 
 ## 7. 시스템 설계
 

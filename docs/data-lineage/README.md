@@ -11,3 +11,9 @@
 - validator/reviewer
 - affected KB/tests
 - rollback artifact
+
+## 현재 lineage
+
+- [`DATA-SEED-001 / 0.1.0-initial.1`](DATA-SEED-001-0.1.0-initial.1.md) — filesystem release
+  19/3/10 published/verified; actual PostgreSQL import Blocked before seed, `official_data` not
+  promoted, A-030/Q-SEED-002 open
