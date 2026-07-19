@@ -33,9 +33,9 @@
 ## 상태
 
 - Plan ID: `DATA-SEED-001-PLAN`
-- 상태: Draft — written specification approved; execution approval pending
+- 상태: Approved / In Progress — written specification과 실행계획 전체 승인 완료
 - 명세 승인: 2026-07-19T09:20:31+09:00, 사용자의 직전 승인 요청에 대한 `ㅇㅋ 승인`
-- 실행 승인 gate: 사용자 `계획 승인, 구현 시작` 또는 동등한 명시적 표현
+- 실행 승인: 2026-07-19T09:52:08+09:00, 사용자 `ㅇㅋ 전체 승인 구현 ㄱㄱ`
 - 승인 명세: `docs/superpowers/specs/2026-07-19-data-seed-immutable-release-design.md`
 - 결정/ADR: D-036, D-038, A-028, ADR-0015, ADR-0016
 - 실행 방식: 사용자의 기존 병렬 에이전트 선호에 따라 `superpowers:subagent-driven-development`; task별 구현자와 별도 spec/code reviewer
@@ -97,7 +97,7 @@
 |---|---|---|---|---|
 | Q-SEED-001 | data architecture/rollback | official release·seed 방식 | Resolved | A / D-036 / ADR-0016 |
 | DATA-SEED-SPEC | public data/DB | written specification 승인 | Resolved | 2026-07-19T09:20:31+09:00 승인 |
-| DATA-SEED-PLAN | implementation/data mutation | 이 실행계획으로 release/DB 작업 시작 | Blocked | 사용자 계획 승인 필요 |
+| DATA-SEED-PLAN | implementation/data mutation | 이 실행계획으로 release/DB 작업 시작 | Resolved / In Progress | 2026-07-19T09:52:08+09:00 전체 승인; D-039 |
 | Q-SEC-003 | public deployment | privileged function hardening | Open but out of scope | default B; public/remote 금지 |
 | RELEASE-TIME | lineage | `released_at` literal | Resolved default | written specification 승인 시각 `2026-07-19T09:20:31+09:00`; ambient clock 사용 금지 |
 
@@ -176,11 +176,11 @@ verify-local-seed   -> [PASS] step=VERIFY-LOCAL-SEED release=0.1.0-initial.1 act
 
 **Interfaces:** Consumes user plan approval. Produces an isolated branch/worktree and clean baseline; release timestamp is already fixed by governance approval.
 
-- [ ] **Step 1: 계획 승인 metadata를 기록한다**
+- [x] **Step 1: 계획 승인 metadata를 기록한다**
 
 계획 `상태`를 `Approved / In Progress`로 바꾸고 승인 문구·시각을 진행 기록에 남긴다. Task 5의 `--released-at`은 이미 고정된 `2026-07-19T09:20:31+09:00`만 사용한다.
 
-- [ ] **Step 2: 실행용 구현 노트를 생성한다**
+- [x] **Step 2: 실행용 구현 노트를 생성한다**
 
 ```powershell
 python scripts/new_implementation_note.py --title "DATA-SEED-001 불변 공식 release와 local seed 검증" --task-id DATA-SEED-001 --type implementation-data-security
@@ -657,7 +657,7 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
 | Mock data | 0.0.0-not-populated | unchanged | mock 미사용 |
 | Prompt | 0.0.2-deepseek-v4-flash-selected | unchanged | LLM 미호출 |
 | Test suite | 0.8.0-web-browser-gate | 0.9.0-data-seed-release | focused/root/actual gates |
-| Documentation | 2.7.2 planning | 2.8.0 | lineage/report/closeout |
+| Documentation | 2.7.3 implementation start | 2.8.0 | approval record, lineage/report/closeout |
 
 ## 위험과 롤백
 
@@ -691,7 +691,7 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
 
 - 2026-07-19T09:20:31+09:00: 사용자가 written specification을 승인했다.
 - 2026-07-19: source-of-truth, ADR-0015/0016, schema/migration/tooling과 current Git을 재감사하고 이 실행계획을 작성했다.
-- 구현 시작 전: 사용자 plan approval과 release authorization literal 기록 대기.
+- 2026-07-19T09:52:08+09:00: 사용자가 `ㅇㅋ 전체 승인 구현 ㄱㄱ`로 실행계획 전체와 disposable local DB reset/seed/compensation/replay를 승인했다. 고정 release governance timestamp는 변경하지 않는다.
 
 ## 자체 검토
 
