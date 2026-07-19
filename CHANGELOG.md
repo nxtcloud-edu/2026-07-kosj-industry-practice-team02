@@ -97,6 +97,11 @@
   grantor-specific ADMIN/INHERIT/SET effective union conflicts with immutable `.1` seed/compensation
   exactly-one-row membership guards. The runner stopped before writes after two reviewed bounded
   fixes; no role/grant/migration/release byte changed, and cleanup ended at container 0/port listener 0
+- Hardened DATA-SEED prepare rollback so any cleanup failure after owned-directory quarantine keeps
+  the canonical release absent, leaves any residual only at a noncanonical path, and permits
+  a safe retry. Added the exact partial-delete regression and a true post-staging-validation snapshot
+  mutation guard; published `.1` bytes, dispatcher, DB, migration, API and official-data version stay
+  unchanged
 
 ### Pending
 

@@ -138,7 +138,7 @@
 | `ReleaseIssue` | frozen/orderable dataclass: `code`, `artifact`, optional `record_id`, optional `field` |
 | `ReleaseBundle` | frozen dataclass: manifest dict, approval/KB/office/mapping/seed/compensation bytes, semantic SHA-256 |
 | `load_json_object_strict(path: Path)` | `dict[str, object]`; duplicate/non-object/invalid UTF-8를 stable error로 거부 |
-| `validate_approved_input(repository_root: Path, draft_dir: Path)` | immutable `Sequence[ReleaseIssue]` |
+| `validate_approved_input(repository_root: Path, draft_token: str)` | exact raw `CANONICAL_DRAFT_TOKEN`을 요구하는 immutable `Sequence[ReleaseIssue]` |
 | `build_seed_projection(draft_dir: Path, release_version: str)` | four-array `dict[str, object]` |
 | `canonical_json_bytes(value: object, trailing_newline: bool)` | canonical UTF-8 `bytes` |
 | `semantic_sha256(projection: Mapping[str, object])` | lower-case 64-char SHA-256 `str` |
@@ -238,13 +238,19 @@ def test_duplicate_json_member_is_rejected(self) -> None:
 def test_noncanonical_or_stale_approval_is_rejected(self) -> None:
     draft = self.copy_canonical_draft()
     self.mutate_manifest(draft, state="PENDING_PM_REVIEW")
-    codes = {issue.code for issue in validate_approved_input(self.root, draft)}
+    codes = {
+        issue.code
+        for issue in validate_approved_input(self.root, CANONICAL_DRAFT_TOKEN)
+    }
     self.assertIn("APPROVAL_STATE_INVALID", codes)
 
 def test_exact_projection_and_exclusions_are_required(self) -> None:
     draft = self.copy_canonical_draft()
     self.approve_waste_03(draft)
-    codes = {issue.code for issue in validate_approved_input(self.root, draft)}
+    codes = {
+        issue.code
+        for issue in validate_approved_input(self.root, CANONICAL_DRAFT_TOKEN)
+    }
     self.assertIn("APPROVED_PROJECTION_INVALID", codes)
 ```
 
@@ -671,8 +677,8 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
 | Official data | 0.0.0-not-populated | unchanged | actual DB full cycle 미도달; filesystem release를 DB/ACTIVE 승격으로 간주하지 않음 |
 | Mock data | 0.0.0-not-populated | unchanged | mock 미사용 |
 | Prompt | 0.0.2-deepseek-v4-flash-selected | unchanged | LLM 미호출 |
-| Test suite | 0.8.0-web-browser-gate | 0.8.1-data-seed-filesystem-gate | Task 7A filesystem/no-Docker gate PASS만 반영 |
-| Documentation | 2.7.3 | 2.7.4 | Blocked lineage, status, A-030/Q-SEED-002 동기화 |
+| Test suite | 0.8.0-web-browser-gate | 0.8.2-data-seed-filesystem-gate | Task 7A gate와 Task 8 partial-cleanup/post-validation 회귀 반영 |
+| Documentation | 2.7.3 | 2.7.5 | Blocked lineage와 Task 8 final-review remediation 동기화 |
 
 ## 위험과 롤백
 
@@ -721,6 +727,10 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
   독립 review 0/0/0을 받았다.
 - 2026-07-20 Task 7B: lineage/source-of-truth/backlog/ADR/decision/note/version을 Blocked actual에
   맞게 동기화하고 A-030/Q-SEED-002를 열었다. 선택지는 구현하지 않았다.
+- 2026-07-20 Task 8 review remediation: post-publication cleanup의 partial-delete canonical 복원
+  결함을 RED→GREEN으로 보정하고, true post-staging-validation snapshot 회귀와 validator raw-token
+  signature 정정을 추가했다. immutable `.1`/dispatcher/DB/migration과 Q-SEED-002 선택지는 변경하지
+  않았다.
 
 ## 자체 검토
 

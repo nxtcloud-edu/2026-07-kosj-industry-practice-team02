@@ -1063,6 +1063,68 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assertFalse(self.release.exists())
         self.assertFalse(self.prepare_temp.exists())
 
+    def test_post_publish_partial_cleanup_failure_keeps_canonical_absent_for_retry(
+        self,
+    ) -> None:
+        real_remove = promote_data_seed._remove_owned_file
+        cleanup_calls = 0
+
+        def fail_second_cleanup(
+            path: Path,
+            identity: tuple[int, int, int] | None,
+            *,
+            expected_payload: bytes | None = None,
+            flush_parent: bool = True,
+        ) -> bool:
+            nonlocal cleanup_calls
+            cleanup_calls += 1
+            if cleanup_calls == 2:
+                return False
+            return real_remove(
+                path,
+                identity,
+                expected_payload=expected_payload,
+                flush_parent=flush_parent,
+            )
+
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=[
+                None,
+                None,
+                OSError(errno.EIO, "injected post-publish flush"),
+                None,
+            ],
+        ):
+            with mock.patch(
+                "scripts.promote_data_seed._remove_owned_file",
+                side_effect=fail_second_cleanup,
+            ):
+                result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(2, result)
+        self.assertEqual(
+            "[FAIL] step=PREPARE-DATA-SEED "
+            "reason=PREPARE_TEMP_OWNERSHIP_LOST issues=1\n",
+            output,
+        )
+        self.assertEqual(2, cleanup_calls)
+        self.assertFalse(self.release.exists())
+        self.assertFalse(self.prepare_temp.exists())
+        quarantines = list(
+            self.release.parent.glob(f".{RELEASE_VERSION}.cleanup.*.quarantine")
+        )
+        self.assertEqual(1, len(quarantines))
+        remaining = {path.name for path in quarantines[0].iterdir()}
+        self.assertEqual(len(EXPECTED_FILES) - 1, len(remaining))
+        self.assertLess(remaining, EXPECTED_FILES)
+
+        self.prepare_valid_release()
+
+        self.assertEqual(EXPECTED_FILES, {path.name for path in self.release.iterdir()})
+        self.assertTrue(quarantines[0].is_dir())
+        self.assertEqual(remaining, {path.name for path in quarantines[0].iterdir()})
+
     def test_first_releases_directory_creation_flushes_official_parent_in_order(
         self,
     ) -> None:

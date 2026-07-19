@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import scripts.data_seed_release as data_seed_release
 import scripts.data_staging_validation as staging_validation
 from scripts.data_seed_release import (
     ReleaseBundle,
@@ -672,6 +673,47 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
                 str(original_summary).encode("utf-8"), bundle.kb_records_bytes
             )
             self.assertNotIn(mutated_summary.encode("utf-8"), bundle.kb_records_bytes)
+
+    def test_bundle_keeps_snapshot_when_source_changes_after_staging_validation(
+        self,
+    ) -> None:
+        original_summary = self.projection["kb_documents"][0]["answer_summary"]
+        mutated_summary = "POST-VALIDATION-MUTATION-MUST-NOT-BE-RELEASED"
+        kb_path = self.draft / "kb_records.json"
+        real_validate = data_seed_release._validate_current_staging
+        validation_calls = 0
+
+        def validate_then_mutate(
+            draft: Path,
+            stage_schema_dir: Path,
+            source_registry: Path,
+            issues: list[data_seed_release.ReleaseIssue],
+        ) -> None:
+            nonlocal validation_calls
+            real_validate(draft, stage_schema_dir, source_registry, issues)
+            validation_calls += 1
+            kb = json.loads(kb_path.read_text(encoding="utf-8"))
+            kb["records"][0]["answer_summary"] = mutated_summary
+            kb_path.write_text(
+                json.dumps(kb, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+        with mock.patch(
+            "scripts.data_seed_release._validate_current_staging",
+            side_effect=validate_then_mutate,
+        ):
+            bundle = build_release_bundle(
+                self.root,
+                self.draft,
+                RELEASE_VERSION,
+                RELEASED_AT,
+            )
+
+        self.assertEqual(1, validation_calls)
+        self.assertIn(mutated_summary.encode("utf-8"), kb_path.read_bytes())
+        self.assertIn(str(original_summary).encode("utf-8"), bundle.kb_records_bytes)
+        self.assertNotIn(mutated_summary.encode("utf-8"), bundle.kb_records_bytes)
 
     def test_seed_sql_has_fixed_principal_lock_order_preflight_and_guards(self) -> None:
         sql = render_seed_sql(self.projection).decode("utf-8")

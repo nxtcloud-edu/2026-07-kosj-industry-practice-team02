@@ -624,34 +624,29 @@ def _cleanup_owned_directory(
     if not _directory_has_identity(quarantine, identity):
         _restore_quarantined_entry(quarantine, directory)
         return False
+    # Once the owned directory is quarantined, cleanup may mutate it.  Keep
+    # every later failure noncanonical so partial contents are never restored.
     try:
         entries = tuple(quarantine.iterdir())
     except OSError:
-        _restore_quarantined_entry(quarantine, directory)
         return False
     if any(entry.name not in RELEASE_ARTIFACTS for entry in entries):
-        _restore_quarantined_entry(quarantine, directory)
         return False
     entry_identities = {entry: _path_identity(entry) for entry in entries}
     if any(
         entry_identity is None or not _is_trusted_file(entry)
         for entry, entry_identity in entry_identities.items()
     ):
-        _restore_quarantined_entry(quarantine, directory)
         return False
     for entry, entry_identity in entry_identities.items():
         if not _remove_owned_file(entry, entry_identity, flush_parent=False):
-            _restore_quarantined_entry(quarantine, directory)
             return False
     if not _directory_has_identity(quarantine, identity):
-        _restore_quarantined_entry(quarantine, directory)
         return False
     try:
         quarantine.rmdir()
         _flush_directory_if_supported(directory.parent)
     except OSError:
-        if _path_entry_exists(quarantine):
-            _restore_quarantined_entry(quarantine, directory)
         return False
     return True
 

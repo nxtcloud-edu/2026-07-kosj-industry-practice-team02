@@ -1,12 +1,13 @@
 # IMP-20260719-008 — DATA-SEED-001 불변 공식 release와 local seed 검증
 
-- Date/Time (KST): 2026-07-19T09:52:17+09:00 ~ 2026-07-20 Task 7B closeout
+- Date/Time (KST): 2026-07-19T09:52:17+09:00 ~ 2026-07-20T02:43:52+09:00 Task 8 review remediation
 - Task ID: DATA-SEED-001
 - Type: implementation-data-security
-- Status: Blocked
-- Author/Agent: primary architect/controller + task별 구현·검토 subagent + Task 6 actual runner/diagnostician
+- Status: Blocked — final-review Important remediation implemented; A-030/Q-SEED-002 remains open
+- Author/Agent: primary architect/controller + task별 구현·검토 subagent + Task 6 actual runner/diagnostician + final reviewer/remediation agent
 - Branch: main → `codex/data-seed-001-initial-release` isolated worktree
 - Base commit: c312488
+- Task 8 remediation base: f55d5c690a8bea960f495ab4f6d8d60303e8edca
 - Related plan/ADR/RFP: DATA-SEED-001 plan, approved DATA-SEED design, ADR-0015/0016, D-033/D-035/D-036/D-038/D-039, DAR-001/DAR-002/SER-001/SER-003/COR-001
 
 ## 1. 사용자 요청과 완료 기준
@@ -23,6 +24,10 @@
 - release/dispatcher hash, empty-local transactional seed, second-seed rejection, rollback, compensation, replay, concurrency를 검증한다.
 - migration/API/readiness/UI/LLM/public/remote/new dependency를 변경하지 않는다.
 - task별 TDD·독립 review, 전체 Sol review, root gate, lineage/version/docs 동기화를 모두 통과한다.
+- Final review I1의 partial-delete 후 canonical release 복원을 실제 CLI RED로 고정하고,
+  cleanup 실패 시 canonical 부재·noncanonical residual·safe retry를 보장한다.
+- M2-01은 `_validate_current_staging` 성공 직후 mutation을 주입하는 snapshot regression으로
+  닫고, 계획의 validator signature를 raw `str` token 계약과 맞춘다.
 
 ### Task 6 actual status
 
@@ -32,7 +37,7 @@
 - 따라서 19/3/10 seed, rollback, concurrency, compensation, replay, final citizen 19는
   실제 PASS 근거가 아니며 `official_data`를 올리지 않았다.
 
-### Task 5/7 actual completion boundary
+### Task 5/7/8 actual completion boundary
 
 - Task 5는 immutable filesystem release `.1` 19/3/10을 게시·검증하고 dispatcher를 byte-active로
   바꿨다. `[db.seed].enabled=false`는 그대로다.
@@ -40,6 +45,9 @@
   근거이지 actual DB 근거가 아니다.
 - Task 7B는 lineage·source-of-truth·ADR·decision·backlog·version을 actual Blocked 상태로
   동기화하고 A-030/Q-SEED-002를 새 인간 결정 blocker로 열었다.
+- Task 8 final review의 Important 1건은 temp-only RED로 재현했다. owned quarantine이
+  확인된 뒤 cleanup이 실패하면 canonical을 복원하지 않고 residual을 비정규 경로에
+  남겨 즉시 재시도를 허용하도록 수정했다. 게시된 `.1`·dispatcher byte는 변경하지 않았다.
 
 ## 2. 육하원칙(6W1H)
 
@@ -100,6 +108,10 @@
 | `scripts/verify.ps1`, active-release test fixtures | Task 7A no-Docker DATA-SEED root stages | 게시 후 release/dispatcher drift를 지속 검증 |
 | `docs/data-lineage/DATA-SEED-001-0.1.0-initial.1.md` | approval/release/artifact/semantic hash, exclusions, Task 5/6/7 경계, correction policy | filesystem 성공과 DB 실패 혼동 방지 |
 | source-of-truth/ADR/decision/backlog/readmes/changelog/versions | Blocked actual status와 A-030/Q-SEED-002 동기화 | stale release-0/data-free/in-progress 표현 제거 |
+| `scripts/promote_data_seed.py` | verified owned quarantine 이후 cleanup 실패에서 canonical restore 금지 | partial release 재노출 차단·safe retry |
+| `scripts/tests/test_promote_data_seed.py` | post-publish flush + 두 번째 artifact delete 실패 RED/GREEN | canonical 부재·residual quarantine·retry 계약 |
+| `scripts/tests/test_data_seed_release.py` | staging validator 성공 직후 source mutation 주입 | M2-01의 실제 race window snapshot 고정 |
+| DATA-SEED plan | `validate_approved_input(Path, str)` raw token signature/example | 구현·테스트와 승인 계획 정합 |
 
 ### 데이터 흐름/상태 변화
 
@@ -107,6 +119,8 @@
 - Task 6에서 DB write 전 role identity guard가 차단했으므로 application row 상태 변화는 0이다.
 - Task 7A는 filesystem 검증만 root gate에 영구 추가했고, Task 7B는 문서·버전만
   actual Blocked 상태로 동기화했다. 새 공식 데이터나 DB row는 만들지 않았다.
+- Task 8 remediation은 테스트 임시 저장소에서만 실패 release/quarantine를 만들었다.
+  tracked immutable `.1`, dispatcher, staging approval bytes, DB row와 official-data version은 변경 0이다.
 
 ### 오류·빈 상태·롤백
 
@@ -116,6 +130,10 @@
   처음부터 재실행했다. baseline/runtime/status는 PASS, identity에서 중단됐다.
 - syntax fix 후 actual catalog의 grantor-specific 2개 row와 immutable SQL의 count=1 조건이
   충돌했다. role/grant/release를 변경하지 않고 Blocked로 마감했다.
+- Task 8 cleanup은 initial no-replace rename으로 owned directory를 randomized quarantine으로
+  옮긴다. 소유권 불일치는 artifact 삭제 전에만 원위치로 복원해 경쟁 replacement를
+  보존하고, 소유권 확인 후 열거·신뢰·삭제·rmdir 실패는 canonical을 빈 경로로
+  유지하며 residual quarantine을 자동 삭제하지 않는다.
 
 ## 7. 버전 전후
 
@@ -135,15 +153,18 @@
 
 | 축 | Before | After | 변경 이유 |
 |---|---|---|---|
-| Application | 0.2.0 | unchanged | runtime 범위 아님 |
+| Application | 0.2.0 | unchanged | 시민 runtime/API 동작이 아닌 repository release tooling patch |
 | Web | 0.2.0-static-chat-shell | unchanged | UI 범위 아님 |
 | API | 2.0.1-draft / shared 0.2.1 | unchanged | 공개 계약 변경 금지 |
 | DB schema | 0.3.0-local | unchanged | migration/role/grant 변경 금지 |
 | Official data | 0.0.0-not-populated | 0.0.0-not-populated | actual full DB cycle이 identity 전에서 차단되어 미승격 |
 | Mock data | 0.0.0-not-populated | unchanged | mock 미사용 |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | unchanged | LLM 미호출 |
-| Test suite | 0.8.0-web-browser-gate | 0.8.1-data-seed-filesystem-gate | Task 7A filesystem/no-Docker gate PASS만 반영; actual DB success 과장 금지 |
-| Docs | note 생성 2.7.2; Task 7B 직전 2.7.3 | 2.7.4 | Task 5/6/7 lineage, Blocked status, A-030/Q-SEED-002 동기화 |
+| Test suite | 0.8.0-web-browser-gate | 0.8.2-data-seed-filesystem-gate | Task 7A gate + Task 8 cleanup/M2-01 regression patch |
+| Docs | note 생성 2.7.2; Task 7B 직전 2.7.3 | 2.7.5 | Task 5/6/7 lineage + Task 8 final-review remediation |
+
+Task 8 patch 경계는 `test_suite` 0.8.1→0.8.2, `documentation` 2.7.4→2.7.5이며
+다른 version axis는 모두 그대로다.
 
 ## 8. 명령과 테스트 증거
 
@@ -170,6 +191,17 @@
 | immutable hash/protected diff/scope check | PASS after helper correction | 7 release hashes+dispatcher exact; protected diff 0; 17 visible docs/version paths + ignored Task 7B report. Initial scope regex mishandled quoted/nonterminal docs paths and was corrected without repository change | Task 7B terminal/report |
 | `git diff --check` + secret scan | PASS | issues 0 | Task 7B terminal/report |
 | plan checkbox/status consistency | PASS | Task 0–5 complete; Task 6 one explicit unreached; Task 7 pre-commit boundary; Task 8 parent-owned pending | approved plan |
+| I1 focused RED | EXPECTED FAIL | 1 test, 0.579s; `AssertionError: True is not false` at canonical-absence assertion | Task 8 terminal evidence |
+| I1 focused GREEN | PASS | 1/1, 0.936s | Task 8 terminal evidence |
+| cleanup ownership boundary regressions | PASS | 4/4, 1.119s | Task 8 terminal evidence |
+| full publication/activation suite | PASS | 49/49, 34.624s | `scripts.tests.test_promote_data_seed` |
+| full release/projection suite | PASS | 31/31, 16.204s | `scripts.tests.test_data_seed_release` |
+| DB verifier/runner static suite | PASS | 35/35, 7.455s | `scripts.tests.test_verify_data_seed_db`, `test_verify_data_seed_runner` |
+| unified relevant no-DB suite | PASS | 195/195, 68.113s | staging/release/promotion/DB-static/root-static 6 modules |
+| direct staging/release/local/package | PASS | staging PASS; release issues=0; local active=1; package 12 required files | production CLIs/package validator |
+| Ruff format/lint + root-runner static | PASS | 3 files formatted; issues 0; root-runner 17/17 | project Ruff, `test_verify_runner` |
+| secret/diff/immutable/protected/version/count invariants | PASS | secret 0; diff issues 0; protected changes 0; official version unchanged; 19/3/10 | repository scanners/read-only scripts |
+| initial staging-suite invocation | INCONCLUSIVE, recovered | stdout/stderr 없이 exit 1 한 번; class별 18+29+16 및 full 63/63, unified 195/195 재실행 PASS | non-reproduced runner anomaly; repository change 0 |
 
 ### 미실행 검증과 이유
 
@@ -182,11 +214,15 @@
 - Task 7B는 문서/manifest-only이므로 Docker/DB/full root를 재실행하지 않았다. Task 7A의
   current-code root PASS와 Task 6 actual Blocked report를 근거로 사용하고 release/dispatcher만 새로
   read-only 검증했다.
+- Task 8의 commit-SHA 기준 독립 final review는 controller가 이 remediation commit 직후 수행한다.
+  이 note 시점에는 그 결과를 선반영하지 않았다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: 시민 질문/PII/transcript/provider payload를 읽거나 저장하지 않는다.
 - Security: exact canonical path/reparse·secret-free output·exact local DSN/role/lock/empty guards를 fail closed로 유지했다. grantor union 충돌을 이유로 role/grant를 변경하지 않았다.
+- Security: verified quarantine 이후 부분 삭제된 release를 canonical로 재노출하지 않는다.
+  unrelated replacement 보존을 위한 pre-mutation ownership-mismatch restore와 file/dispatcher rollback은 유지했다.
 - Accessibility: UI 변경 0; 기존 회귀만 유지한다.
 - Performance/cost: local 19/3/10 규모, 외부 API 0, 새 dependency 0, 비용 0원.
 
@@ -209,6 +245,10 @@
   한 row로 정규화하는 플랫폼 권한/스키마 변경이다.
 - 답이 없으면 A를 추천만 유지하고 A/B 모두 구현하지 않는다. D-040을 확정 선택으로
   작성하지 않으며 DATA-SEED/READY/AI는 Blocked다.
+- Final review M1은 지우거나 거짓 PASS로 바꾸지 않았다. `.1`과 적용 migration/pgTAP은
+  모두 immutable이고 compatibility test의 정답은 Q-SEED-002 A/B 선택에 따라 달라진다.
+  현재 불호환은 actual runner의 fail-closed evidence와 A-030 blocker로 명시하고,
+  사람이 successor 또는 migration 권위를 승인하기 전에는 자동 compatibility PASS guard를 추가하지 않았다.
 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
 
@@ -229,6 +269,9 @@ exact runner를 처음부터 실행한다.
 Task 5 후 release bytes는 수정·삭제하지 않고 new successor 절차를 사용한다. 이 actual
 시도는 seed 전에 차단됐으므로 application row compensation을 실행하지 않았다.
 pinned CLI로 repo-owned runtime만 정지했고 volume/network를 보존했다.
+Task 8 코드 rollback은 remediation commit을 역패치하되 immutable release는 건드리지 않는다.
+실제 실패에서 남은 randomized cleanup quarantine은 자동 삭제·canonical 복원하지 말고
+소유권·reparse를 수동 확인한 뒤 별도 운영 절차로 정리한다.
 
 ### 다음 개발자 시작점
 
@@ -241,12 +284,14 @@ A-030/Q-SEED-002 인간 결정부터 재개한다. 선택 A가 확정되기 전�
 
 - Q-SEC-003/A-021은 public release blocker로 남는다.
 - A-030/Q-SEED-002: authoritative grantor-specific membership union과 immutable `.1` single-row guard 충돌.
+- M1 compatibility regression은 Q-SEED-002 인간 결정에 묶여 있다. 사람이 선택한 권위에 맞는
+  successor pre-publication guard를 새 승인 계획에서 먼저 RED로 추가해야 한다.
 - 다음 한 단계: 인간이 A successor immutable `.2`(추천)와 B grantor normalization migration 중
   하나를 명시적으로 선택한다. 그전까지 아무 방안도 구현하지 않는다.
 
 ## 15. 자체 리뷰
 
-- [x] 요청 충족 — Task 7B 문서/계보/버전 동기화 완료; actual DB acceptance는 정확히 Blocked로 유지
+- [x] 요청 충족 — Task 8 Important cleanup fix·M2-01·plan signature 반영; actual DB acceptance는 정확히 Blocked로 유지
 - [x] 테스트/검증 — 도달한 경계와 미실행 항목을 구분해 기록
 - [x] source-of-truth/계약/버전 동기화 — 공개 contract/DB 무변경, docs/test manifest만 actual에 맞게 갱신
 - [x] 개인정보 원문 노출 없음
