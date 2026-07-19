@@ -745,6 +745,6 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
   Actual DB import는 seed write 전 membership contract 충돌로 Blocked이며 DB/ACTIVE/READY/AI
   승격 근거는 없다.
 - 계획과 달라진 점: Task 7의 success promotion values는 적용하지 않았다. actual은
-  official data 유지, tests 0.8.1, docs 2.7.4다.
+  official data 유지, tests 0.8.2, docs 2.7.5다.
 - 다음 단계: 인간이 A-030/Q-SEED-002를 결정한 뒤 별도로 승인된 선택지만 구현하고
   actual cycle 전체를 처음부터 재실행한다. 그전까지 READY-001·AI-001로 진행하지 않는다.
