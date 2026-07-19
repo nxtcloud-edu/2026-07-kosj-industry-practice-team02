@@ -20,7 +20,8 @@ from scripts.data_seed_release import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-CANONICAL_DRAFT_RELATIVE = Path("data/staging/data-001/0.1.0-draft.1")
+CANONICAL_DRAFT_TOKEN = "data/staging/data-001/0.1.0-draft.1"
+CANONICAL_DRAFT_RELATIVE = Path(CANONICAL_DRAFT_TOKEN)
 EXPECTED_RUNTIME_ALLOWLIST = frozenset({
     "scripts/data_seed_release.py",
     "scripts/data_staging_validation.py",
@@ -47,7 +48,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
         return self.root / CANONICAL_DRAFT_RELATIVE
 
     def validate(self) -> tuple[ReleaseIssue, ...]:
-        return tuple(validate_approved_input(self.root, CANONICAL_DRAFT_RELATIVE))
+        return tuple(validate_approved_input(self.root, CANONICAL_DRAFT_TOKEN))
 
     def read_json(self, relative_path: str) -> dict[str, object]:
         path = self.copy_canonical_draft() / relative_path
@@ -105,25 +106,33 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
         codes = {issue.code for issue in self.validate()}
         self.assertIn("APPROVED_PROJECTION_INVALID", codes)
 
-    def test_only_exact_repository_relative_draft_token_is_accepted(self) -> None:
-        canonical_token = os.fspath(CANONICAL_DRAFT_RELATIVE)
-        alternate_separator = "/" if os.sep == "\\" else "\\"
-        cases: dict[str, object] = {
-            "absolute": self.copy_canonical_draft(),
-            "dot_alias": f".{os.sep}{canonical_token}",
-            "parent_alias": str(
-                Path("data/staging/data-001/alias") / ".." / "0.1.0-draft.1"
-            ),
-            "alternate_separator": canonical_token.replace(os.sep, alternate_separator),
-            "wrong_case": canonical_token.upper(),
-            "wrong_spelling": canonical_token.replace("data-001", "data-01"),
-            "outside_repository": self.root.parent / "0.1.0-draft.1",
+    def test_only_exact_raw_repository_relative_draft_token_is_accepted(self) -> None:
+        cases = {
+            "absolute": str(self.copy_canonical_draft()),
+            "dot_alias": f"./{CANONICAL_DRAFT_TOKEN}",
+            "parent_alias": "data/staging/data-001/alias/../0.1.0-draft.1",
+            "alternate_separator": CANONICAL_DRAFT_TOKEN.replace("/", "\\"),
+            "trailing_separator": f"{CANONICAL_DRAFT_TOKEN}/",
+            "wrong_case": CANONICAL_DRAFT_TOKEN.upper(),
+            "wrong_spelling": CANONICAL_DRAFT_TOKEN.replace("data-001", "data-01"),
+            "outside_repository": "../0.1.0-draft.1",
         }
         for name, candidate in cases.items():
             with self.subTest(name=name):
                 codes = {
                     issue.code
-                    for issue in validate_approved_input(self.root, candidate)  # type: ignore[arg-type]
+                    for issue in validate_approved_input(self.root, candidate)
+                }
+                self.assertIn("CANONICAL_DRAFT_PATH_INVALID", codes)
+
+    def test_path_and_other_non_string_tokens_fail_closed(self) -> None:
+        normalized_dot_alias = Path(f".{os.sep}{CANONICAL_DRAFT_TOKEN}")
+        self.assertEqual(CANONICAL_DRAFT_RELATIVE, normalized_dot_alias)
+        for candidate in (normalized_dot_alias, Path(CANONICAL_DRAFT_TOKEN), b"data/staging"):
+            with self.subTest(candidate_type=type(candidate).__name__):
+                codes = {
+                    issue.code
+                    for issue in validate_approved_input(self.root, candidate)
                 }
                 self.assertIn("CANONICAL_DRAFT_PATH_INVALID", codes)
 
@@ -148,7 +157,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
                     )
                     codes = {
                         issue.code
-                        for issue in validate_approved_input(root, CANONICAL_DRAFT_RELATIVE)
+                        for issue in validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
                     }
                     self.assertIn(expected_code, codes)
 
@@ -170,7 +179,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
             )
             codes = {
                 issue.code
-                for issue in validate_approved_input(root, CANONICAL_DRAFT_RELATIVE)
+                for issue in validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
             }
             self.assertIn("APPROVAL_DECISIONS_INVALID", codes)
 
@@ -195,7 +204,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
             )
             codes = {
                 issue.code
-                for issue in validate_approved_input(root, CANONICAL_DRAFT_RELATIVE)
+                for issue in validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
             }
             self.assertIn("CANONICAL_CONTENT_HASH_INVALID", codes)
 
@@ -230,7 +239,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
                     )
                     codes = {
                         issue.code
-                        for issue in validate_approved_input(root, CANONICAL_DRAFT_RELATIVE)
+                        for issue in validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
                     }
                     self.assertIn("APPROVED_PROJECTION_INVALID", codes)
 
@@ -264,7 +273,7 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
                     )
                     codes = {
                         issue.code
-                        for issue in validate_approved_input(root, CANONICAL_DRAFT_RELATIVE)
+                        for issue in validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
                     }
                     self.assertIn("APPROVAL_DECISIONS_INVALID", codes)
 

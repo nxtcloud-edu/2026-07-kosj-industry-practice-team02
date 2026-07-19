@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
-import os
 from pathlib import Path
 import stat
 from typing import Mapping, Sequence
@@ -18,7 +17,8 @@ from typing import Mapping, Sequence
 from scripts.data_staging_validation import validate_staging
 
 
-CANONICAL_DRAFT_RELATIVE_PATH = Path("data/staging/data-001/0.1.0-draft.1")
+CANONICAL_DRAFT_TOKEN = "data/staging/data-001/0.1.0-draft.1"
+CANONICAL_DRAFT_RELATIVE_PATH = Path(CANONICAL_DRAFT_TOKEN)
 CANONICAL_STAGE_SCHEMA_RELATIVE_PATH = Path("data/schemas/data-001/v1")
 CANONICAL_SOURCE_REGISTRY_RELATIVE_PATH = Path("data/official/kb_source_registry.csv")
 CONTENT_ARTIFACTS = (
@@ -95,20 +95,16 @@ def load_json_object_strict(path: Path) -> dict[str, object]:
 
 
 def validate_approved_input(
-    repository_root: Path, draft_dir: Path,
+    repository_root: Path, draft_token: str,
 ) -> Sequence[ReleaseIssue]:
-    """Fail closed unless ``draft_dir`` is the exact approved DATA-001 input.
+    """Fail closed unless ``draft_token`` is the exact approved DATA-001 input.
 
     Findings intentionally carry only stable codes and structural locations so
     callers cannot accidentally emit approval comments or authored content.
     """
     issues: list[ReleaseIssue] = []
     root = Path(repository_root)
-    try:
-        draft_token = os.fspath(draft_dir)
-    except TypeError:
-        draft_token = None
-    if draft_token != os.fspath(CANONICAL_DRAFT_RELATIVE_PATH):
+    if not isinstance(draft_token, str) or draft_token != CANONICAL_DRAFT_TOKEN:
         _issue(issues, "CANONICAL_DRAFT_PATH_INVALID", "approval_manifest.json", None, None)
         return _normalized(issues)
     draft = root / CANONICAL_DRAFT_RELATIVE_PATH
