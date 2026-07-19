@@ -219,7 +219,8 @@ SELECT pg_catalog.pg_advisory_xact_lock({ADVISORY_LOCK_KEY});
 
 DO $data_seed_assert_principal$
 DECLARE
-  v_exact_memberships integer;
+  v_total_memberships integer;
+  v_membership_options_valid boolean;
 BEGIN
   IF NOT (
     session_user = 'postgres'
@@ -229,20 +230,26 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'DATA_SEED_PRINCIPAL_INVALID';
   END IF;
 
-  SELECT pg_catalog.count(*)
-  INTO v_exact_memberships
+  SELECT
+    pg_catalog.count(*),
+    COALESCE(
+      pg_catalog.bool_and(
+        memberships.admin_option
+        AND memberships.inherit_option
+        AND memberships.set_option
+      ),
+      false
+    )
+  INTO v_total_memberships, v_membership_options_valid
   FROM pg_catalog.pg_auth_members AS memberships
   JOIN pg_catalog.pg_roles AS granted_role
     ON granted_role.oid = memberships.roleid
   JOIN pg_catalog.pg_roles AS member_role
     ON member_role.oid = memberships.member
   WHERE granted_role.rolname = 'sejong_schema_owner'
-    AND member_role.rolname = 'postgres'
-    AND memberships.admin_option
-    AND memberships.inherit_option
-    AND memberships.set_option;
+    AND member_role.rolname = 'postgres';
 
-  IF v_exact_memberships <> 1 THEN
+  IF v_total_memberships <> 1 OR NOT v_membership_options_valid THEN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'DATA_SEED_MEMBERSHIP_INVALID';
   END IF;
 END;

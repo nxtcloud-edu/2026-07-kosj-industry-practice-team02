@@ -187,8 +187,28 @@ class ReleaseBundle:
     seed_semantic_sha256: str
 
 
+@dataclass(frozen=True)
+class _ApprovedInputSnapshot:
+    """The exact staging bytes and strict-parsed objects used for generation."""
+
+    approval_manifest_bytes: bytes
+    kb_records_bytes: bytes
+    offices_bytes: bytes
+    office_service_mappings_bytes: bytes
+    approval_manifest: dict[str, object]
+    kb_records: dict[str, object]
+    offices: dict[str, object]
+    office_service_mappings: dict[str, object]
+
+
 def load_json_object_strict(path: Path) -> dict[str, object]:
     """Load a UTF-8 JSON object while rejecting duplicate object members."""
+
+    return _load_json_object_strict_bytes(path.read_bytes())
+
+
+def _load_json_object_strict_bytes(payload: bytes) -> dict[str, object]:
+    """Strict-parse one already captured artifact byte string."""
 
     def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -199,11 +219,11 @@ def load_json_object_strict(path: Path) -> dict[str, object]:
         return result
 
     try:
-        payload = path.read_text(encoding="utf-8")
+        text = payload.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ValueError("JSON_UTF8_INVALID") from error
     try:
-        value = json.loads(payload, object_pairs_hook=reject_duplicates)
+        value = json.loads(text, object_pairs_hook=reject_duplicates)
     except json.JSONDecodeError as error:
         raise ValueError("JSON_INVALID") from error
     if not isinstance(value, dict):
@@ -293,10 +313,11 @@ def build_seed_projection(draft_dir: Path, release_version: str) -> dict[str, ob
 
     repository_root = _repository_root_for_canonical_draft(draft_dir)
     _require_release_version(release_version)
-    issues = validate_approved_input(repository_root, CANONICAL_DRAFT_TOKEN)
-    if issues:
-        raise ValueError("APPROVED_INPUT_INVALID")
-    _, _, _, projection = _build_projected_records(Path(draft_dir), release_version)
+    snapshot = _capture_approved_snapshot(
+        repository_root,
+        Path(draft_dir),
+    )
+    _, _, _, projection = _build_projected_records(snapshot, release_version)
     return projection
 
 
@@ -313,17 +334,15 @@ def build_release_bundle(
     if root != derived_root:
         raise ValueError("REPOSITORY_ROOT_MISMATCH")
     _require_release_version(release_version)
-    issues = validate_approved_input(root, CANONICAL_DRAFT_TOKEN)
-    if issues:
-        raise ValueError("APPROVED_INPUT_INVALID")
+    snapshot = _capture_approved_snapshot(root, Path(draft_dir))
 
     normalized_released_at = _normalize_timestamp(released_at)
     if normalized_released_at != GOVERNANCE_RELEASED_AT_UTC:
         raise ValueError("RELEASE_TIMESTAMP_INVALID")
     kb_records, offices, mappings, projection = _build_projected_records(
-        Path(draft_dir), release_version
+        snapshot, release_version
     )
-    approval_bytes = (Path(draft_dir) / APPROVAL_ARTIFACT).read_bytes()
+    approval_bytes = snapshot.approval_manifest_bytes
     kb_bytes = _release_json_bytes(
         {
             "schema_version": 1,
@@ -402,8 +421,158 @@ def build_release_bundle(
     )
 
 
+def _capture_approved_snapshot(
+    repository_root: Path,
+    draft: Path,
+) -> _ApprovedInputSnapshot:
+    """Read each approved artifact once, then validate and retain those exact bytes."""
+
+    issues: list[ReleaseIssue] = []
+    root = Path(repository_root).absolute()
+    canonical_draft = root / CANONICAL_DRAFT_RELATIVE_PATH
+    if draft.absolute() != canonical_draft or not _is_trusted_directory(root):
+        raise ValueError("APPROVED_INPUT_INVALID")
+    if not _is_trusted_directory(canonical_draft):
+        raise ValueError("APPROVED_INPUT_INVALID")
+
+    stage_schema_dir = root / CANONICAL_STAGE_SCHEMA_RELATIVE_PATH
+    source_registry = root / CANONICAL_SOURCE_REGISTRY_RELATIVE_PATH
+    if not _is_trusted_directory(stage_schema_dir) or not _is_trusted_file(
+        source_registry
+    ):
+        raise ValueError("APPROVED_INPUT_INVALID")
+
+    captured_bytes: dict[str, bytes] = {}
+    captured_objects: dict[str, dict[str, object]] = {}
+    for artifact in (*CONTENT_ARTIFACTS, APPROVAL_ARTIFACT):
+        path = canonical_draft / artifact
+        if not _is_trusted_file(path):
+            raise ValueError("APPROVED_INPUT_INVALID")
+        try:
+            payload = _read_artifact_bytes_once(path)
+            parsed = _load_json_object_strict_bytes(payload)
+        except (OSError, ValueError):
+            raise ValueError("APPROVED_INPUT_INVALID") from None
+        captured_bytes[artifact] = payload
+        captured_objects[artifact] = parsed
+
+    snapshot = _ApprovedInputSnapshot(
+        approval_manifest_bytes=captured_bytes[APPROVAL_ARTIFACT],
+        kb_records_bytes=captured_bytes["kb_records.json"],
+        offices_bytes=captured_bytes["offices.json"],
+        office_service_mappings_bytes=captured_bytes["office_service_mappings.json"],
+        approval_manifest=captured_objects[APPROVAL_ARTIFACT],
+        kb_records=captured_objects["kb_records.json"],
+        offices=captured_objects["offices.json"],
+        office_service_mappings=captured_objects["office_service_mappings.json"],
+    )
+    _validate_approved_snapshot(snapshot, issues)
+
+    # The DATA-001 business/schema/privacy validator still gates the current
+    # repository.  It may observe a concurrent path change after capture and
+    # fail closed; generation below never reopens the captured artifacts.
+    _validate_current_staging(
+        canonical_draft,
+        stage_schema_dir,
+        source_registry,
+        issues,
+    )
+    if issues:
+        raise ValueError("APPROVED_INPUT_INVALID")
+    return snapshot
+
+
+def _read_artifact_bytes_once(path: Path) -> bytes:
+    """Single source read seam used by the snapshot race regression."""
+
+    return path.read_bytes()
+
+
+def _validate_approved_snapshot(
+    snapshot: _ApprovedInputSnapshot,
+    issues: list[ReleaseIssue],
+) -> None:
+    content_bytes = {
+        "kb_records.json": snapshot.kb_records_bytes,
+        "offices.json": snapshot.offices_bytes,
+        "office_service_mappings.json": snapshot.office_service_mappings_bytes,
+    }
+    content_hashes = {
+        artifact: hashlib.sha256(payload).hexdigest()
+        for artifact, payload in content_bytes.items()
+    }
+    for artifact in CONTENT_ARTIFACTS:
+        if content_hashes[artifact] != CANONICAL_CONTENT_HASHES[artifact]:
+            _issue(
+                issues,
+                "CANONICAL_CONTENT_HASH_INVALID",
+                artifact,
+                None,
+                "sha256",
+            )
+
+    manifest = snapshot.approval_manifest
+    artifact = APPROVAL_ARTIFACT
+    if manifest.get("state") != "APPROVED_FOR_INITIAL_RELEASE":
+        _issue(issues, "APPROVAL_STATE_INVALID", artifact, None, "state")
+    if manifest.get("created_by") != AUTHOR:
+        _issue(issues, "APPROVAL_AUTHOR_INVALID", artifact, None, "created_by")
+    if manifest.get("reviewed_by") != REVIEWER:
+        _issue(issues, "APPROVAL_REVIEWER_INVALID", artifact, None, "reviewed_by")
+    if manifest.get("reviewed_at") != REVIEWED_AT or not _is_timezone_aware_datetime(
+        manifest.get("reviewed_at")
+    ):
+        _issue(issues, "APPROVAL_TIMESTAMP_INVALID", artifact, None, "reviewed_at")
+    if not _nonempty_string(manifest.get("review_comment")):
+        _issue(issues, "APPROVAL_COMMENT_INVALID", artifact, None, "review_comment")
+    if (
+        hashlib.sha256(snapshot.approval_manifest_bytes).hexdigest()
+        != CANONICAL_APPROVAL_SHA256
+    ):
+        _issue(issues, "APPROVAL_MANIFEST_HASH_INVALID", artifact, None, "sha256")
+    _validate_snapshot_manifest_artifacts(
+        manifest.get("artifacts"),
+        content_hashes,
+        issues,
+    )
+    _validate_decisions(manifest.get("decisions"), issues)
+
+
+def _validate_snapshot_manifest_artifacts(
+    entries: object,
+    content_hashes: Mapping[str, str],
+    issues: list[ReleaseIssue],
+) -> None:
+    artifact = APPROVAL_ARTIFACT
+    if not isinstance(entries, list) or len(entries) != len(CONTENT_ARTIFACTS):
+        _issue(issues, "APPROVAL_ARTIFACTS_INVALID", artifact, None, "artifacts")
+        return
+    by_path: dict[str, Mapping[str, object]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            _issue(issues, "APPROVAL_ARTIFACTS_INVALID", artifact, None, "artifacts")
+            return
+        path = entry["path"]
+        if path in by_path:
+            _issue(issues, "APPROVAL_ARTIFACTS_INVALID", artifact, None, "artifacts")
+            return
+        by_path[path] = entry
+    if set(by_path) != set(CONTENT_ARTIFACTS):
+        _issue(issues, "APPROVAL_ARTIFACTS_INVALID", artifact, None, "artifacts")
+        return
+    for path in CONTENT_ARTIFACTS:
+        entry = by_path[path]
+        if (
+            entry.get("record_count") != CANONICAL_CONTENT_COUNTS[path]
+            or entry.get("sha256") != CANONICAL_CONTENT_HASHES[path]
+            or content_hashes[path] != entry.get("sha256")
+        ):
+            _issue(issues, "APPROVAL_ARTIFACTS_INVALID", artifact, None, "artifacts")
+            return
+
+
 def _build_projected_records(
-    draft_dir: Path,
+    snapshot: _ApprovedInputSnapshot,
     release_version: str,
 ) -> tuple[
     list[dict[str, object]],
@@ -411,7 +580,7 @@ def _build_projected_records(
     list[dict[str, object]],
     dict[str, object],
 ]:
-    manifest = load_json_object_strict(draft_dir / APPROVAL_ARTIFACT)
+    manifest = snapshot.approval_manifest
     approved = {
         (decision["record_type"], decision["record_id"])
         for decision in _mapping_list(
@@ -421,7 +590,7 @@ def _build_projected_records(
     }
     approved_at = _normalize_timestamp(_required_string(manifest, "reviewed_at"))
 
-    kb_source = _record_list(draft_dir / "kb_records.json")
+    kb_source = _snapshot_records(snapshot.kb_records)
     kb_release: list[dict[str, object]] = []
     kb_projection: list[dict[str, object]] = []
     question_projection: list[dict[str, object]] = []
@@ -461,7 +630,7 @@ def _build_projected_records(
             for example in examples
         )
 
-    office_source = _record_list(draft_dir / "offices.json")
+    office_source = _snapshot_records(snapshot.offices)
     office_release: list[dict[str, object]] = []
     office_projection: list[dict[str, object]] = []
     for source in office_source:
@@ -480,7 +649,7 @@ def _build_projected_records(
         office_release.append(projected_release)
         office_projection.append(_allowlisted(projected_release, OFFICE_FIELDS))
 
-    mapping_source = _record_list(draft_dir / "office_service_mappings.json")
+    mapping_source = _snapshot_records(snapshot.office_service_mappings)
     mapping_release: list[dict[str, object]] = []
     mapping_projection: list[dict[str, object]] = []
     for source in mapping_source:
@@ -547,7 +716,9 @@ def _normalize_timestamp(value: object) -> str:
         raise ValueError("TIMESTAMP_INVALID") from error
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("TIMESTAMP_TIMEZONE_REQUIRED")
-    normalized = parsed.astimezone(timezone.utc).replace(microsecond=0)
+    if parsed.microsecond != 0:
+        raise ValueError("TIMESTAMP_PRECISION_INVALID")
+    normalized = parsed.astimezone(timezone.utc)
     return normalized.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
@@ -564,8 +735,7 @@ def _release_json_bytes(value: object) -> bytes:
     ).encode("utf-8")
 
 
-def _record_list(path: Path) -> list[Mapping[str, object]]:
-    artifact = load_json_object_strict(path)
+def _snapshot_records(artifact: Mapping[str, object]) -> list[Mapping[str, object]]:
     return _mapping_list(artifact.get("records"), "RECORDS_INVALID")
 
 

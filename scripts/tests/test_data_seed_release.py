@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import scripts.data_staging_validation as staging_validation
 from scripts.data_seed_release import (
@@ -611,6 +612,66 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
                 RELEASE_VERSION,
                 "2026-07-19T09:20:32+09:00",
             )
+        with self.assertRaisesRegex(ValueError, "TIMESTAMP_PRECISION_INVALID"):
+            build_release_bundle(
+                self.root,
+                self.draft,
+                RELEASE_VERSION,
+                "2026-07-19T09:20:31.999999+09:00",
+            )
+
+    def test_bundle_uses_the_single_validated_snapshot_when_source_path_changes(
+        self,
+    ) -> None:
+        original_summary = self.projection["kb_documents"][0]["answer_summary"]
+        mutated_summary = "SNAPSHOT-RACE-MUTATION-MUST-NOT-BE-RELEASED"
+        reads: list[str] = []
+
+        def read_once(path: Path) -> bytes:
+            payload = path.read_bytes()
+            reads.append(path.name)
+            if path.name == "kb_records.json":
+                kb = json.loads(payload.decode("utf-8"))
+                kb["records"][0]["answer_summary"] = mutated_summary
+                path.write_text(
+                    json.dumps(kb, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            return payload
+
+        bundle: ReleaseBundle | None = None
+        error: ValueError | None = None
+        with mock.patch(
+            "scripts.data_seed_release._read_artifact_bytes_once",
+            side_effect=read_once,
+        ):
+            try:
+                bundle = build_release_bundle(
+                    self.root,
+                    self.draft,
+                    RELEASE_VERSION,
+                    RELEASED_AT,
+                )
+            except ValueError as caught:
+                error = caught
+
+        self.assertEqual(
+            [
+                "kb_records.json",
+                "offices.json",
+                "office_service_mappings.json",
+                "approval_manifest.json",
+            ],
+            reads,
+        )
+        if error is not None:
+            self.assertEqual("APPROVED_INPUT_INVALID", str(error))
+        else:
+            assert bundle is not None
+            self.assertIn(
+                str(original_summary).encode("utf-8"), bundle.kb_records_bytes
+            )
+            self.assertNotIn(mutated_summary.encode("utf-8"), bundle.kb_records_bytes)
 
     def test_seed_sql_has_fixed_principal_lock_order_preflight_and_guards(self) -> None:
         sql = render_seed_sql(self.projection).decode("utf-8")
@@ -655,6 +716,24 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertNotIn("EXECUTE ", sql)
         self.assertNotIn("format(", sql)
         self.assertIn("KB-WASTE-03", sql)
+
+    def test_membership_guard_counts_the_pair_before_checking_all_options(self) -> None:
+        sql = render_seed_sql(self.projection).decode("utf-8")
+        query_start = sql.index("pg_catalog.count(*)")
+        query_end = sql.index("IF v_total_memberships", query_start)
+        membership_query = sql[query_start:query_end]
+        where_clause = membership_query.split("WHERE", maxsplit=1)[1]
+
+        self.assertIn("v_total_memberships", membership_query)
+        self.assertIn("v_membership_options_valid", membership_query)
+        self.assertIn("pg_catalog.bool_and", membership_query)
+        self.assertNotIn("memberships.admin_option", where_clause)
+        self.assertNotIn("memberships.inherit_option", where_clause)
+        self.assertNotIn("memberships.set_option", where_clause)
+        self.assertIn(
+            "IF v_total_memberships <> 1 OR NOT v_membership_options_valid THEN",
+            sql,
+        )
 
     def test_expected_rows_cover_every_seed_owned_column(self) -> None:
         expected = render_expected_rows(self.projection)
