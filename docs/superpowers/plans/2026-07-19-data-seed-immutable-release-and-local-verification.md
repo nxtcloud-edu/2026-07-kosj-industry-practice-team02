@@ -188,11 +188,11 @@ python scripts/new_implementation_note.py --title "DATA-SEED-001 불변 공식 r
 
 Expected: 새 note와 INDEX row 생성, 생성 시 version snapshot 기록.
 
-- [ ] **Step 3: worktree를 격리한다**
+- [x] **Step 3: worktree를 격리한다**
 
 `superpowers:using-git-worktrees`를 읽고 `codex/data-seed-001-initial-release`를 `.worktrees/data-seed-001-initial-release`에 만든다. `.worktrees` ignore, branch/head, clean status를 확인한다.
 
-- [ ] **Step 4: clean baseline을 실행한다**
+- [x] **Step 4: clean baseline을 실행한다**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
@@ -200,7 +200,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 Expected: exit 0, DATA-001 validator PASS, official release 0, data-free dispatcher, `/ready=503`.
 
-- [ ] **Step 5: 시작 상태를 commit한다**
+- [x] **Step 5: 시작 상태를 commit한다**
 
 ```powershell
 git add -- docs/superpowers/plans/2026-07-19-data-seed-immutable-release-and-local-verification.md docs/implementation-notes/IMP-20260719-008-data-seed-001-불변-공식-release와-local-seed-검증.md docs/implementation-notes/INDEX.md
@@ -692,6 +692,7 @@ main에서 root full gate와 release verify를 재실행한다. worktree가 clea
 - 2026-07-19T09:20:31+09:00: 사용자가 written specification을 승인했다.
 - 2026-07-19: source-of-truth, ADR-0015/0016, schema/migration/tooling과 current Git을 재감사하고 이 실행계획을 작성했다.
 - 2026-07-19T09:52:08+09:00: 사용자가 `ㅇㅋ 전체 승인 구현 ㄱㄱ`로 실행계획 전체와 disposable local DB reset/seed/compensation/replay를 승인했다. 고정 release governance timestamp는 변경하지 않는다.
+- 2026-07-19T10:09:48+09:00: 승인 기록 commit `eb84690`에서 `codex/data-seed-001-initial-release` worktree를 만들고 root baseline 전체를 PASS했다. official release/dispatcher/DB mutation은 아직 0이다.
 
 ## 자체 검토
 

@@ -111,8 +111,12 @@
 |---|---|---|---|
 | `git status --short --branch`, `git log -5 --oneline` | PASS | main clean, base c312488 | terminal evidence |
 | `python scripts/new_implementation_note.py ...` | PASS | 이 note와 INDEX 생성 | 이 파일/INDEX |
+| pinned ignored runtime copy + `uv sync --frozen` + frozen pnpm installs | PASS | uv 33, root 465, E2E 3 packages | isolated worktree |
+| `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1` | PASS | full baseline; TEST-ROOT, DATA-001, Web/API/contracts, secret/package/diff | isolated worktree at `eb84690` |
 
 ### 미실행 검증과 이유
+
+- DATA-SEED unit/release/DB actual 검증은 Task 1~6 구현 전이므로 아직 실행하지 않았다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
