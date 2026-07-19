@@ -355,6 +355,26 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assertEqual(sentinel, path.read_bytes())
         self.assertEqual(b"owned", displaced.read_bytes())
 
+    def test_owned_file_cleanup_flush_failure_restores_known_path(self) -> None:
+        path = self.root / "owned-backup.tmp"
+        payload = b"owned-backup-must-remain-rollback-capable"
+        path.write_bytes(payload)
+        identity = promote_data_seed._path_identity(path)
+
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=[OSError(errno.EIO, "injected cleanup flush"), None],
+        ) as flush:
+            removed = promote_data_seed._remove_owned_file(
+                path,
+                identity,
+                expected_payload=payload,
+            )
+
+        self.assertFalse(removed)
+        self.assertEqual(2, flush.call_count)
+        self.assertEqual(payload, path.read_bytes())
+
     def test_prepare_preserves_raw_tokens_and_rejects_aliases_before_writes(
         self,
     ) -> None:
@@ -715,6 +735,82 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
         self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
 
+    def test_activation_backup_cleanup_false_rolls_back_original_dispatcher(
+        self,
+    ) -> None:
+        self.prepare_valid_release()
+        prior = self.dispatcher.read_bytes()
+        foreign = self.dispatcher.parent / "foreign-state.bin"
+        sentinel = b"foreign-state-must-not-be-overwritten"
+        foreign.write_bytes(sentinel)
+        real_remove = promote_data_seed._remove_owned_file
+
+        def fail_backup_cleanup(
+            path: Path,
+            identity: tuple[int, int, int] | None,
+            *,
+            expected_payload: bytes | None = None,
+            flush_parent: bool = True,
+        ) -> bool:
+            if ".previous." in path.name:
+                return False
+            return real_remove(
+                path,
+                identity,
+                expected_payload=expected_payload,
+                flush_parent=flush_parent,
+            )
+
+        with mock.patch(
+            "scripts.promote_data_seed._remove_owned_file",
+            side_effect=fail_backup_cleanup,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(prior, self.dispatcher.read_bytes())
+        self.assertEqual(sentinel, foreign.read_bytes())
+        self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
+
+    def test_activation_backup_cleanup_exception_rolls_back_original_dispatcher(
+        self,
+    ) -> None:
+        self.prepare_valid_release()
+        prior = self.dispatcher.read_bytes()
+        foreign = self.dispatcher.parent / "foreign-state.bin"
+        sentinel = b"foreign-state-must-survive-cleanup-exception"
+        foreign.write_bytes(sentinel)
+        real_remove = promote_data_seed._remove_owned_file
+
+        def raise_backup_cleanup(
+            path: Path,
+            identity: tuple[int, int, int] | None,
+            *,
+            expected_payload: bytes | None = None,
+            flush_parent: bool = True,
+        ) -> bool:
+            if ".previous." in path.name:
+                raise OSError("injected backup cleanup exception")
+            return real_remove(
+                path,
+                identity,
+                expected_payload=expected_payload,
+                flush_parent=flush_parent,
+            )
+
+        with mock.patch(
+            "scripts.promote_data_seed._remove_owned_file",
+            side_effect=raise_backup_cleanup,
+        ):
+            result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(prior, self.dispatcher.read_bytes())
+        self.assertEqual(sentinel, foreign.read_bytes())
+        self.assertEqual([], list(self.dispatcher.parent.glob(".seed.sql.*")))
+
     def test_activation_refuses_dispatcher_changed_before_replace(self) -> None:
         self.prepare_valid_release()
         sentinel = b"concurrent-dispatcher-change-before-replace"
@@ -812,6 +908,51 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.assertEqual(prior, self.dispatcher.read_bytes())
         self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
 
+    def test_dispatcher_temp_identity_comes_from_open_mkstemp_descriptor(
+        self,
+    ) -> None:
+        payload = b"descriptor-owned-payload"
+        with mock.patch("scripts.promote_data_seed.os.fstat", wraps=os.fstat) as fstat:
+            temporary, identity = promote_data_seed._write_dispatcher_temp(
+                self.dispatcher, payload, "identity"
+            )
+        try:
+            self.assertGreaterEqual(fstat.call_count, 1)
+            self.assertEqual(identity, promote_data_seed._path_identity(temporary))
+            self.assertEqual(payload, temporary.read_bytes())
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def test_dispatcher_temp_rejects_mkstemp_path_replaced_before_fd_identity_check(
+        self,
+    ) -> None:
+        replacement = self.dispatcher.parent / ".seed.sql.replacement.tmp"
+        displaced = self.dispatcher.parent / ".seed.sql.displaced.tmp"
+        sentinel = b"foreign-pathname-replacement-must-survive"
+
+        def replaced_mkstemp(**_kwargs: object) -> tuple[int, str]:
+            descriptor = os.open(
+                displaced,
+                os.O_RDWR | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            replacement.write_bytes(sentinel)
+            return descriptor, str(replacement)
+
+        with mock.patch(
+            "scripts.promote_data_seed.tempfile.mkstemp",
+            side_effect=replaced_mkstemp,
+        ):
+            with self.assertRaises(OSError):
+                promote_data_seed._write_dispatcher_temp(
+                    self.dispatcher,
+                    b"must-not-be-written-through-displaced-descriptor",
+                    "activate",
+                )
+
+        self.assertEqual(sentinel, replacement.read_bytes())
+        self.assertEqual(b"", displaced.read_bytes())
+
     def test_activation_never_deletes_temp_replaced_before_capture(self) -> None:
         self.prepare_valid_release()
         sentinel = b"replacement-temp-must-survive-capture"
@@ -878,6 +1019,7 @@ class PromoteDataSeedTests(unittest.TestCase):
             "scripts.promote_data_seed._flush_directory_if_supported",
             side_effect=[
                 None,
+                None,
                 OSError(errno.EIO, "injected post-publish flush"),
                 None,
             ],
@@ -886,9 +1028,29 @@ class PromoteDataSeedTests(unittest.TestCase):
 
         self.assertEqual(2, result)
         self.assert_stable_failure(output, "PREPARE-DATA-SEED")
-        self.assertEqual(3, flush.call_count)
+        self.assertEqual(4, flush.call_count)
         self.assertFalse(self.release.exists())
         self.assertFalse(self.prepare_temp.exists())
+
+    def test_first_releases_directory_creation_flushes_official_parent_in_order(
+        self,
+    ) -> None:
+        releases = self.root / "data" / "official" / "releases"
+        official = releases.parent
+        self.assertFalse(releases.exists())
+        flushed: list[Path] = []
+
+        with mock.patch(
+            "scripts.promote_data_seed._flush_directory_if_supported",
+            side_effect=flushed.append,
+        ):
+            result, output = self.run_cli(self.prepare_args())
+
+        self.assertEqual(0, result, output)
+        self.assertEqual(
+            [official, self.prepare_temp, releases],
+            flushed,
+        )
 
     def test_activation_post_replace_flush_failure_restores_previous_dispatcher(
         self,

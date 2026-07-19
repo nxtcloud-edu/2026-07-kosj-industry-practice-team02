@@ -231,6 +231,7 @@ def _ensure_release_parent(root: Path) -> Path:
     if not _path_entry_exists(releases):
         try:
             releases.mkdir()
+            _flush_directory_if_supported(official)
         except FileExistsError:
             pass
         except OSError as error:
@@ -403,12 +404,31 @@ def _activate_local_seed(root: Path) -> int:
         if isinstance(error, _CliFailure):
             raise error
         raise _CliFailure("DISPATCHER_POSTCHECK_FAILED") from error
-    if not _remove_owned_file(
-        previous_quarantine,
-        previous_identity,
-        expected_payload=previous,
-    ):
-        raise _CliFailure("DISPATCHER_BACKUP_CLEANUP_FAILED")
+    try:
+        backup_removed = _remove_owned_file(
+            previous_quarantine,
+            previous_identity,
+            expected_payload=previous,
+        )
+    except Exception as error:
+        _rollback_after_backup_cleanup_failure(
+            dispatcher,
+            temporary_identity,
+            desired,
+            previous_quarantine,
+            previous_identity,
+            previous,
+            error,
+        )
+    if not backup_removed:
+        _rollback_after_backup_cleanup_failure(
+            dispatcher,
+            temporary_identity,
+            desired,
+            previous_quarantine,
+            previous_identity,
+            previous,
+        )
     return 1
 
 
@@ -432,18 +452,24 @@ def _write_dispatcher_temp(
         prefix=f".{dispatcher.name}.{tag}.", suffix=".tmp", dir=parent
     )
     path = Path(raw_path)
-    identity = _path_identity(path)
-    if identity is None:
+    try:
+        identity = _stat_identity(os.fstat(descriptor))
+    except OSError:
         os.close(descriptor)
         raise OSError("dispatcher temp identity unavailable")
+    if not _trusted_file_identity(path, identity):
+        os.close(descriptor)
+        raise OSError("dispatcher temp pathname ownership lost")
     try:
         with os.fdopen(descriptor, "wb") as target:
             target.write(payload)
             target.flush()
             os.fsync(target.fileno())
     except Exception:
-        _remove_owned_file(path, identity)
+        _remove_created_temp_if_owned(path, identity)
         raise
+    if not _trusted_file_identity(path, identity):
+        raise OSError("dispatcher temp pathname ownership lost")
     return path, identity
 
 
@@ -502,6 +528,29 @@ def _restore_dispatcher(
         expected_payload=current_payload,
     ):
         raise _CliFailure("DISPATCHER_RESTORE_FAILED")
+
+
+def _rollback_after_backup_cleanup_failure(
+    dispatcher: Path,
+    current_identity: tuple[int, int, int],
+    current_payload: bytes,
+    previous_quarantine: Path,
+    previous_identity: tuple[int, int, int],
+    previous_payload: bytes,
+    cleanup_error: Exception | None = None,
+) -> None:
+    try:
+        _restore_dispatcher(
+            dispatcher,
+            current_identity,
+            current_payload,
+            previous_quarantine,
+            previous_identity,
+            previous_payload,
+        )
+    except _CliFailure as restore_error:
+        raise _CliFailure("DISPATCHER_RESTORE_CONFLICT") from restore_error
+    raise _CliFailure("DISPATCHER_BACKUP_CLEANUP_FAILED") from cleanup_error
 
 
 def _capture_trusted_file(
@@ -623,9 +672,9 @@ def _remove_owned_file(
         _restore_quarantined_entry(quarantine, path)
         return False
     try:
-        quarantine.unlink()
         if flush_parent:
             _flush_directory_if_supported(path.parent)
+        quarantine.unlink()
     except OSError:
         if _path_entry_exists(quarantine):
             _restore_quarantined_entry(quarantine, path)
@@ -639,6 +688,12 @@ def _trusted_file_identity(path: Path, identity: tuple[int, int, int]) -> bool:
         and _is_trusted_file(path)
         and _path_identity(path) == identity
     )
+
+
+def _remove_created_temp_if_owned(path: Path, identity: tuple[int, int, int]) -> bool:
+    if not _trusted_file_identity(path, identity):
+        return False
+    return _remove_owned_file(path, identity)
 
 
 def _unused_quarantine_path(path: Path, tag: str) -> Path:
@@ -667,6 +722,10 @@ def _path_identity(path: Path) -> tuple[int, int, int] | None:
         metadata = path.lstat()
     except OSError:
         return None
+    return _stat_identity(metadata)
+
+
+def _stat_identity(metadata: os.stat_result) -> tuple[int, int, int]:
     return metadata.st_dev, metadata.st_ino, stat.S_IFMT(metadata.st_mode)
 
 
