@@ -118,7 +118,9 @@ _SUPPORTED_SCHEMA_KEYWORDS = frozenset({
     "properties", "required", "title", "type", "uniqueItems",
 })
 _RUNTIME_ALLOWLIST = frozenset({
+    "scripts/data_seed_release.py",
     "scripts/data_staging_validation.py",
+    "scripts/tests/test_data_seed_release.py",
     "scripts/tests/test_data_staging_validation.py",
     "scripts/validate_data_staging.py",
     "scripts/verify.ps1",
