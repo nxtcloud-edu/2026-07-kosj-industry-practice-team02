@@ -5,6 +5,14 @@
 ### Unit
 
 - 보수적 PII redaction patterns와 불확실 입력의 외부 호출 차단
+- AI-001A frozen synthetic v1 74건의 exact 전체 문자열 oracle: 13개 범주, Unicode 10건,
+  overlap 5건, negative 20건, Q-PII-003=A와 separator/context bypass를 함께 검증
+- AI-001A 직접 category-gap 회귀 254건과 전체 privacy 1,161건: 실제형 77건은 원문
+  fail-open 0(75건 마스킹·이름 모호성 2건 fail-closed), safe 219회는 오탐 0
+- 독립 누적 변형 gate: 위험값 insertion 6,272건, Unicode 1,940건, separator 252건에서
+  raw fail-open 0; final source SHA-256을 리뷰 전후 비교해 검증 중 소스 변경 0도 확인
+- PII 마스커의 입력 1~1000자·NFKC/zero-width/control/bidi 경계, 불변 value-free finding,
+  deterministic span 선택, 모호 이름·주소와 미분류 잔여 패턴의 `masked_text=None` fail-closed
 - intent/followup/fallback policy
 - candidate eligibility
 - ACTIVE-only retrieval
@@ -29,6 +37,8 @@
 - event without question text
 - failed question storage policy
 - DeepSeek server fixture allowlist와 자유 입력 차단
+- AI-001 consumer activation 시 provider/DB-writer spy로 raw sentinel 전달 0건,
+  unresolved 결과의 provider 호출 0건과 질문-text row 생성 0건을 함께 검증
 - provider timeout/empty/schema invalid의 200 안전 대체 또는 503 분기
 - DeepSeek exact model/thinking off/max 1024, hidden retry off, concurrency 1, run cap 28/29/30 경계
 - tampered/expired/unknown context token의 silent new-conversation 처리와 token/secret DB·로그 0건
@@ -103,3 +113,4 @@ patched tooling 24/24(262.368s), AST error 0·secret·protected gate와 독립 r
 - 원문 PII를 fixture로 사용
 - 클라이언트 `is_test` 값만 믿고 DeepSeek를 호출
 - context token을 인증·공식 사실로 신뢰하거나 브라우저 storage/로그에 보관
+- frozen PII oracle을 구현에 맞춰 삭제·완화하거나 실제 개인정보·공식 연락처를 fixture에 사용

@@ -3,7 +3,7 @@
 - 작성일: 2026-07-20
 - 설계 결정 상태: **Approved** — 사용자 `PII 설계 승인` (2026-07-20T10:08:44+09:00)
 - 정식 명세 상태: **Approved** — 사용자 `PII 명세 승인` (2026-07-20T10:22:13+09:00)
-- 구현 상태: **Plan approved / Ready** — Q-PII-003=A와 실행계획 승인 (2026-07-20T11:32:00+09:00)
+- 구현 상태: **Implemented/Verified** — pure core, frozen/security 회귀, 전체 API와 repository gate 완료
 - 관련 결정: D-017, D-041, D-042, D-043, ADR-0004
 - 관련 작업: AI-001A, AI-001
 
@@ -253,7 +253,7 @@ application-service 슬라이스의 activation gate다. 이번 core 슬라이스
 2. [완료] `superpowers:writing-plans`로 TDD 실행계획을 작성한다.
 3. [완료] A-032/Q-PII-003=A로 모든 phone-shaped value 마스킹을 확정한다.
 4. [완료] 사용자가 실행계획을 승인한다.
-5. [진행 가능] 승인된 격리 TDD 계획에 따라서만 제품 코드와 테스트를 작성한다.
+5. [완료] 승인된 격리 TDD 계획에 따라 pure core와 테스트를 작성·검증한다.
 
 A-030/Q-SEED-002와 A-021/Q-SEC-003은 별도 인간 결정으로 유지되며 이 명세 승인으로
 해결되지 않는다. A-032는 D-043으로 해결됐고 공식 연락처 제공은 후속 서버 결합 카드의 책임이다.

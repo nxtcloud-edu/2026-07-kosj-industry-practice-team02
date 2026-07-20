@@ -6,13 +6,27 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from sejong_ai_api import __version__
+
 API_ROOT = Path(__file__).resolve().parents[1]
+PRIVACY_SOURCE = API_ROOT / "src" / "sejong_ai_api" / "privacy" / "redaction.py"
 SOURCE_FILES = (
     API_ROOT / "src" / "sejong_ai_api" / "main.py",
     API_ROOT / "src" / "sejong_ai_api" / "api" / "health.py",
     API_ROOT / "src" / "sejong_ai_api" / "contracts" / "chat.py",
     API_ROOT / "src" / "sejong_ai_api" / "core" / "logging.py",
+    PRIVACY_SOURCE,
 )
+
+PRIVACY_ALLOWED_IMPORT_ROOTS = {
+    "__future__",
+    "collections",
+    "dataclasses",
+    "enum",
+    "re",
+    "typing",
+    "unicodedata",
+}
 
 APPROVED_RUNTIME_DEPENDENCIES = {
     "fastapi==0.139.0",
@@ -60,12 +74,28 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
+def test_privacy_module_is_stdlib_only_and_import_safe() -> None:
+    tree = ast.parse(PRIVACY_SOURCE.read_text(encoding="utf-8"), filename=str(PRIVACY_SOURCE))
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            roots.add(node.module.split(".", 1)[0])
+    assert roots <= PRIVACY_ALLOWED_IMPORT_ROOTS
+    source = PRIVACY_SOURCE.read_text(encoding="utf-8")
+    for forbidden in ("getenv", "environ", "logging", "open(", "httpx", "psycopg", "requests"):
+        assert forbidden not in source
+
+
 class ApiArchitectureTest(unittest.TestCase):
     def test_exact_approved_dependencies_and_tool_configuration(self) -> None:
         pyproject_path = API_ROOT / "pyproject.toml"
         self.assertTrue(pyproject_path.is_file(), "apps/api/pyproject.toml must exist")
 
         pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        self.assertEqual(pyproject["project"]["version"], "0.2.0")
+        self.assertEqual(__version__, "0.2.0")
         self.assertEqual(set(pyproject["project"]["dependencies"]), APPROVED_RUNTIME_DEPENDENCIES)
         self.assertEqual(
             set(pyproject["dependency-groups"]["dev"]), APPROVED_DEVELOPMENT_DEPENDENCIES

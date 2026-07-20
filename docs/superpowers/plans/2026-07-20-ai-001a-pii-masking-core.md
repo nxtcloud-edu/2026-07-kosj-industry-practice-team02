@@ -34,7 +34,7 @@
 
 ## 상태
 
-Approved — Q-PII-003=A and implementation start approved at 2026-07-20T11:32:00+09:00
+Done — pure core, frozen/security 회귀, 전체 API/repository gate와 독립 재리뷰 완료
 
 ## 목표와 비목표
 
@@ -53,7 +53,7 @@ Approved — Q-PII-003=A and implementation start approved at 2026-07-20T11:32:0
 
 ## 권위 근거
 
-- RFP/요구사항: P0-06, SEC-001, LOG-001
+- RFP/요구사항: P0-06, SER-001, SER-002; downstream task LOG-001
 - source-of-truth: `docs/source-of-truth/PRIVACY_POLICY.md`, `TEAM_DECISIONS.md`, `PROJECT_PLAN.md`
 - ADR/결정: ADR-0004, D-017, D-041, D-042
 - 명세: `docs/superpowers/specs/2026-07-20-ai-001-pii-masking-design.md`
@@ -185,7 +185,7 @@ Expected: 제품/fixture/API/DB/data diff 0, D-043 exactly 1, A-032 Resolved, �
 phone/oracle 의미 일치, product spec `2.2.3`, docs `2.7.9`, preflight commit 성공. 이 clean
 `$ExecutionBase`를 구현 누적 diff 기준으로 노트에 기록한 뒤에만 isolated worktree를 만든다.
 
-- [ ] **Step 4: Create the isolated worktree and persistent execution note**
+- [x] **Step 4: Create the isolated worktree and persistent execution note**
 
 `superpowers:using-git-worktrees` 절차로 방금 Task 0 commit에서 `codex/ai-001a-pii-core`를 만들고
 그 worktree 안에서 다음 명령을 실행한다.
@@ -223,7 +223,7 @@ if ($baseEvidence[0].Matches[0].Groups[1].Value -ne $ExecutionBase) {
 - Consumes: approved 13 `PiiCategory`, 5 `UnresolvedReason`, fixed token names from the spec
 - Produces: immutable v1 fixture contract and failing import of `redact_question`
 
-- [ ] **Step 1: Create the exact fixture schema and exhaustive case matrix**
+- [x] **Step 1: Create the exact fixture schema and exhaustive case matrix**
 
 각 JSON case는 다음 exact shape를 사용한다.
 
@@ -409,7 +409,7 @@ Task 1 RED commit 전에 fixture JSON을 이 74-row oracle과 대조하고, case
 `id,input,outcome,categories,tokens,expected_masked_text,unresolved_reason`으로 고정한다. 구현 중
 이 표를 바꾸지 않는다.
 
-- [ ] **Step 2: Write the fixture loader and failing public-contract tests**
+- [x] **Step 2: Write the fixture loader and failing public-contract tests**
 
 `test_redaction.py`의 첫 구현은 아래 loader와 assertions를 포함한다.
 
@@ -563,7 +563,7 @@ def test_pathological_1000_character_inputs_finish_within_two_seconds() -> None:
     assert time.perf_counter() - started < 2.0
 ```
 
-- [ ] **Step 3: Run the focused test and verify RED**
+- [x] **Step 3: Run the focused test and verify RED**
 
 Run:
 
@@ -580,7 +580,7 @@ Run:
 Expected: fixture parse command exit 0. 이어 focused pytest는 collection FAIL with
 `ModuleNotFoundError: No module named 'sejong_ai_api.privacy'`.
 
-- [ ] **Step 4: Freeze the RED fixture on the isolated branch**
+- [x] **Step 4: Freeze the RED fixture on the isolated branch**
 
 ```powershell
 git add apps/api/tests/privacy
@@ -603,7 +603,7 @@ Expected: one RED test/fixture commit on `codex/ai-001a-pii-core`; do not merge 
 - Consumes: fixture outcome vocabulary from Task 1
 - Produces: `PiiCategory`, `UnresolvedReason`, `RedactionFinding`, `RedactionResult`, `redact_question(str)`
 
-- [ ] **Step 1: Add focused failing tests for enum/type/input semantics**
+- [x] **Step 1: Add focused failing tests for enum/type/input semantics**
 
 ```python
 def test_enum_values_are_closed_and_exact() -> None:
@@ -669,7 +669,7 @@ Run:
 
 Expected: exit 1 during collection because `sejong_ai_api.privacy` symbols do not exist yet.
 
-- [ ] **Step 2: Implement the complete immutable type and normalization base**
+- [x] **Step 2: Implement the complete immutable type and normalization base**
 
 `redaction.py` starts with the following complete public contract and normalization helper.
 
@@ -850,7 +850,7 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 3: Run normalization tests GREEN and full fixture still RED**
+- [x] **Step 3: Run normalization tests GREEN and full fixture still RED**
 
 ```powershell
 .\.tools\uv\uv.exe run --directory apps/api --frozen pytest -q -p no:cacheprovider tests/privacy/test_redaction.py -k "enum_values or value_objects or invalid_input or unsafe_unicode or zero_width or bidi"
@@ -861,7 +861,7 @@ Expected: 첫 명령은 exit 0이고 선택된 enum/input/Unicode base test가 �
 collection error 없이 exit 1이며 아직 구현하지 않은 `MASKED` identifier/context fixture가 exact
 `expected_masked_text` 불일치로 FAIL한다. fixture 기대값을 완화하지 않는다.
 
-- [ ] **Step 4: Commit the independently reviewed normalization base**
+- [x] **Step 4: Commit the independently reviewed normalization base**
 
 ```powershell
 git add apps/api/src/sejong_ai_api/privacy apps/api/tests/privacy/test_redaction.py
@@ -881,7 +881,7 @@ git commit -m "feat(ai): add fail-closed PII value contract"
 - Consumes: normalized string and immutable result types from Task 2
 - Produces: value-free findings for RRN, ID/license, phone, email, account, card, auth, vehicle, case reference
 
-- [ ] **Step 1: Add focused exact-replacement and offset tests**
+- [x] **Step 1: Add focused exact-replacement and offset tests**
 
 ```python
 def test_exact_replacement_and_normalized_offsets() -> None:
@@ -1001,7 +1001,7 @@ Run:
 Expected: exit 1; exact replacement/multiple findings, selector contract, 6 identifier
 separator/suffix bypass와 Q-PII-003=A policy가 아직 구현되지 않아 FAIL한다.
 
-- [ ] **Step 2: Add immutable rule definitions and total-order selection**
+- [x] **Step 2: Add immutable rule definitions and total-order selection**
 
 `redaction.py`에 `_Rule`, `_RULES`, `_replacement`, `_collect_findings`,
 `_select_findings`, `_apply_findings`를 추가한다. rule regex는 모두 named `value` group을 사용한다.
@@ -1168,7 +1168,7 @@ Q-PII-003=A가 plan 승인과 함께 확정될 때만 공식 연락처라는 사
 안내 문구를 사용한다. B가 선택되면 이 계획을 구현하지 않고 함수 signature·공식 데이터
 주입 경계를 다시 설계한다.
 
-- [ ] **Step 3: Wire identifier findings into `redact_question` and run identifier/overlap tests**
+- [x] **Step 3: Wire identifier findings into `redact_question` and run identifier/overlap tests**
 
 ```python
 def redact_question(raw_question: str) -> RedactionResult:
@@ -1211,7 +1211,7 @@ with contextual name/address/health/location fixture cases still RED and no coll
 Expected: exit 0이고 12 adjacent priority pair, same-category longer/earlier tie와 6 identifier
 separator/suffix bypass, Q-PII-003=A policy test가 모두 PASS한다.
 
-- [ ] **Step 4: Commit the high-signal rules**
+- [x] **Step 4: Commit the high-signal rules**
 
 ```powershell
 git add apps/api/src/sejong_ai_api/privacy/redaction.py apps/api/tests/privacy/test_redaction.py
@@ -1231,7 +1231,7 @@ git commit -m "feat(ai): redact high-signal identifiers"
 - Consumes: deterministic identifier engine from Task 3
 - Produces: all 13 categories, ambiguity reasons, residual re-scan, full frozen v1 GREEN
 
-- [ ] **Step 1: Add RED ambiguity/residual tests**
+- [x] **Step 1: Add RED ambiguity/residual tests**
 
 ```python
 @pytest.mark.parametrize(
@@ -1373,7 +1373,7 @@ Expected: exit 1; ambiguity/residual, 명시적 미분류 3개, 독립·token/in
 4개 contextual 우회 test가 아직 구현되지 않아 FAIL한다. 다섯 standalone admin negative와
 masked-email+FAQ regression은 PASS 상태를 유지한다.
 
-- [ ] **Step 2: Add the four contextual categories and ambiguity patterns**
+- [x] **Step 2: Add the four contextual categories and ambiguity patterns**
 
 `_RULES`에 total order에 맞춰 다음 exact rules를 넣는다.
 
@@ -1472,7 +1472,7 @@ def _has_ambiguous_name(text: str) -> bool:
     return False
 ```
 
-- [ ] **Step 3: Implement ambiguity after masking and residual re-scan**
+- [x] **Step 3: Implement ambiguity after masking and residual re-scan**
 
 ```python
 if _has_uncovered_high_risk_span(normalized, findings):
@@ -1495,7 +1495,7 @@ Context 없는 정확히 3음절+서술격 입력은 Q-PRIV-002=A의 재현율 �
 제외한다. 이 allowlist의 확대나 3음절 규칙 완화는 성공률 80% 미달 증거와 인간 재승인 없이는
 금지한다.
 
-- [ ] **Step 4: Run the entire frozen v1 suite GREEN**
+- [x] **Step 4: Run the entire frozen v1 suite GREEN**
 
 Run:
 
@@ -1509,7 +1509,7 @@ Q-PII-003=A public-number policy와 direct boundary tests PASS; PII miss 0; raw 
 부분/과잉 마스킹은 PASS로 세지 않는다.
 If a frozen expectation is wrong, stop and obtain privacy-contract approval instead of deleting or weakening it.
 
-- [ ] **Step 5: Commit all contextual/fail-closed behavior**
+- [x] **Step 5: Commit all contextual/fail-closed behavior**
 
 ```powershell
 git add apps/api/src/sejong_ai_api/privacy/redaction.py apps/api/tests/privacy/test_redaction.py
@@ -1537,7 +1537,7 @@ git commit -m "feat(ai): close ambiguous PII inputs"
 - Consumes: complete pure core from Task 4
 - Produces: permanent no-I/O architecture gate, version lineage, reproducible completion evidence
 
-- [ ] **Step 1: Add RED architecture assertions**
+- [x] **Step 1: Add RED architecture assertions**
 
 `test_architecture.py`에 privacy source를 기존 boundary 목록에 추가하고 다음 exact test를 쓴다.
 
@@ -1574,7 +1574,7 @@ Expected: exit 1이고 import-root 또는 forbidden-source assertion이 `logging
 Expected: exit 0. `git diff -- apps/api/src/sejong_ai_api/privacy/redaction.py`로 임시 marker가 남지
 않았음을 확인하며 marker는 commit하지 않는다.
 
-- [ ] **Step 2: Run focused architecture, format, lint and mypy**
+- [x] **Step 2: Run focused architecture, format, lint and mypy**
 
 ```powershell
 .\.tools\uv\uv.exe run --directory apps/api --frozen pytest -q -p no:cacheprovider tests/test_architecture.py tests/privacy/test_redaction.py
@@ -1585,7 +1585,7 @@ Expected: exit 0. `git diff -- apps/api/src/sejong_ai_api/privacy/redaction.py`�
 
 Expected: all commands exit 0. If format check fails, run `ruff format` only on changed Python files, inspect the diff, then rerun all four.
 
-- [ ] **Step 3: Update package and repository versions without dependency drift**
+- [x] **Step 3: Update package and repository versions without dependency drift**
 
 - `apps/api/pyproject.toml project.version`: `0.1.0→0.2.0`
 - `sejong_ai_api.__version__`: `0.1.0→0.2.0`
@@ -1614,7 +1614,7 @@ assert pyproject["project"]["version"] == "0.2.0"
 assert __version__ == "0.2.0"
 ```
 
-- [ ] **Step 4: Run full API and repository gates**
+- [x] **Step 4: Run full API and repository gates**
 
 ```powershell
 .\.tools\uv\uv.exe run --directory apps/api --frozen pytest -q -p no:cacheprovider
@@ -1628,7 +1628,7 @@ git diff --check
 Expected: full API and every declared default/warm-offline root gate PASS, package/secret/diff exit 0. DB gate와
 Docker는 실행하지 않는다. 오래 걸리는 root `TEST-ROOT`를 조기 종료하지 않는다.
 
-- [ ] **Step 5: Perform privacy-specific evidence scans**
+- [x] **Step 5: Perform privacy-specific evidence scans**
 
 ```powershell
 $baseEvidence = @(Select-String -LiteralPath 'docs/implementation-notes/IMP-20260720-006-ai-001a-pii-마스킹-코어-구현.md' -Pattern '^- Execution base SHA: `([0-9a-f]{40})`$')
@@ -1657,7 +1657,7 @@ Expected: branch 전체에서 protected contract/DB/data path 0, uv.lock local v
 architecture test의 dependency exact set unchanged, privacy source forbidden import/use 0. `pyproject.toml` diff는
 project version 한 줄만 변경한다. String mentions in tests/docs do not count as runtime use.
 
-- [ ] **Step 6: Complete implementation note, self-review and independent code review**
+- [x] **Step 6: Complete implementation note, self-review and independent code review**
 
 Task 0에서 만든
 `docs/implementation-notes/IMP-20260720-006-ai-001a-pii-마스킹-코어-구현.md`에
@@ -1666,7 +1666,7 @@ execution base SHA, RED/GREEN commit, fixture
 Q-PII-002/Q-PII-003/A-030/A-021을 기록한다. `superpowers:requesting-code-review`로 spec compliance와
 code quality 두 단계 독립 리뷰를 요청한다. Critical/Important를 모두 고치고 관련 gate를 재실행한다.
 
-- [ ] **Step 7: Final verification and commit**
+- [x] **Step 7: Final verification and commit**
 
 `superpowers:verification-before-completion`을 읽고 최종 code HEAD에서 focused privacy, full API,
 Ruff/mypy, root offline gate, secret/package/diff/status를 fresh rerun한다.
@@ -1690,7 +1690,7 @@ Expected: final commit succeeds and worktree is clean. 그 뒤에만 AI-001A Don
 - E2E: 없음. `/chat` 입력은 계속 비활성.
 - 보안/PII: frozen 74 cases+direct tests, miss 0, unsafe text 0, raw repr/log 0, AST I/O/import 0.
 - 접근성: UI 없음.
-- 성능: worst-shaped 1000-char input 100회가 local gate에서 2초 미만.
+- 성능: worst-shaped 1000-char input 5종을 각 20회, 총 100회 local gate에서 2초 미만.
 
 ## 버전 변경 계획
 
@@ -1730,9 +1730,36 @@ Expected: final commit succeeds and worktree is clean. 그 뒤에만 AI-001A Don
   Critical 0 / Important 0. Q-PII-003 결정과 구현 승인 대기.
 - 2026-07-20T11:32:00+09:00: Q-PII-003=A와 계획 승인·구현 시작 확정. D-043/A-032,
   exact oracle, product spec 2.2.3/docs 2.7.9 preflight 동기화 시작.
+- 2026-07-20: isolated Task 1 RED `e9f9fbf`, Task 2 type/normalization `556e55e`, Task 3
+  high-signal `7b13878`+verification cleanup `a4b7446`, Task 4 contextual/fail-closed `8f02955`.
+  Task 1~4 independent reviews Critical/Important/Minor 0/0/0 after one clean-output fix.
+- 2026-07-20T13:01:58+09:00: privacy 153, full API 310+8 DB skips, root default/offline,
+  package/secret/diff/privacy evidence PASS. 첫 root run의 worktree-local ignored `.tools` 부재 4건은
+  검증된 main `.tools` junction 후 focused 4/4와 두 full gate PASS로 환경 원인을 확정했다.
+- 2026-07-20: whole-branch review가 fixed-token tail, Hangul explicit context, 1588 대표번호,
+  반복/탭/줄바꿈 separator fail-open과 safe 문자열 객체 identity를 발견했다. 동결 74건은 바꾸지
+  않고 13개 직접 회귀를 RED→GREEN으로 보정해 privacy 166건을 통과했다. 문서 closeout과
+  후속 consumer spy gate 누락도 함께 보정했다.
+- 2026-07-20T14:04:13+09:00: 여러 차례 독립 fuzz에서 추가로 확인한 공백 이메일, 임의 숫자
+  grouping, 공백 차량번호, 건강정보 수식어, 전화 내선, generated-token 사이 raw tail, 주소/차량
+  overlap 이름 leak, 값 없는 문의 false positive를 RED→GREEN으로 보정했다. frozen 74 oracle는
+  `e9f9fbf`와 diff 0이고 privacy 282, architecture+privacy 286+5 subtests, full API 439+8
+  local-DB skips+5 subtests, Ruff/mypy가 PASS했다.
+- 2026-07-20T16:46:00+09:00: label-only 탐지를 positive value evidence로 재구성하고 독립
+  category-gap 회귀를 254건까지 확장했다. frozen 74는 계속 불변이며 privacy 1,161,
+  architecture+privacy 1,165+5 subtests, full API 1,318+8 local-DB skips+5 subtests가 PASS했다.
+  최종 동결 SHA-256 `824F509A8AD7D01A7F0C5166D4687A52436DC941D5AC53F2DB84CC29B4C4942E`에서
+  실제형 77건 raw fail-open 0(75 mask·2 fail-closed), safe 219 오탐 0, insertion 6,272·Unicode
+  1,940·separator 252 fail-open 0, 두 독립 리뷰 Critical/Important 0/0을 확인했다.
+- 2026-07-20T19:40:50+09:00: 최종 문서 동기화 뒤 fresh `verify.ps1 -Offline`이 root·data·
+  seed·Web·API·contract regeneration·secret·package·diff 전 단계를 PASS했다. 같은 최종
+  source에서 privacy 1,161, architecture+privacy 1,165, full API 1,318 결과도 재확인했다.
 
 ## 결과와 회고
 
-- 실제 결과: 구현 전이므로 없음.
-- 계획과 달라진 점: 실행 중 기록한다.
-- 다음 단계: Task 0 decision commit → isolated worktree → Task 1 RED fixture.
+- 실제 결과: Task 1~4 구현과 Task 5 architecture/version/root 검증을 완료했고, 독립 리뷰에서
+  확인한 separator·Unicode·provenance·context 조합 우회를 추가 TDD로 보정했다.
+- 계획과 달라진 점: 최초 계획의 단일 separator regex만으로는 반복 공백·탭·줄바꿈 숫자
+  skeleton을 닫지 못해 bounded regex와 선형 residual scan을 함께 사용했다. frozen v1은 불변이다.
+- 다음 단계: Q-PII-002와 Q-SEED-002 결정 후 provider/DB-writer spy를 먼저 고정하는 parent AI-001
+  consumer 계획을 작성한다. `/chat`·DB·DeepSeek 활성화는 이 완료 범위 밖이다.

@@ -4,6 +4,16 @@
 
 ### Added
 
+- AI-001A standard-library fail-closed PII masking core with 13 closed categories, five unresolved
+  reasons, immutable value-free findings, Unicode normalization/control rejection, deterministic
+  overlap selection, conservative contextual ambiguity closure, and a frozen 74-case exact oracle;
+  representative/service phones, repeated whitespace separators, Hangul explicit values, and
+  fixed-token trailing-raw bypasses fail closed; irregular numeric/vehicle/email splitting, health
+  modifiers, phone extensions, generated-token tail composition, and value-less inquiry controls are
+  covered by direct regressions and positive value-evidence grammars; a 254-case category-gap suite
+  plus independent actual/safe/insertion/Unicode/separator matrices found no raw fail-open or safe
+  false positive at the final frozen source; this pure core has no route, DB, provider,
+  official-data, or public API activation
 - User-approved Q-PII-003=A public-number masking policy and AI-001A execution plan: citizen-provided “official” labels are untrusted, all phone-shaped input values are masked, and approved official contacts remain server-combined KB/office metadata cards
 - User-approved AI-001 PII written specification and AI-001A TDD plan for an isolated standard-library core, frozen exact-output synthetic v1 evaluation set, Unicode/overlap/residual/bypass gates, and no route/DB/provider activation; its former A-032 gate is resolved by Q-PII-003=A/D-043
 - User-approved AI-001 fail-closed PII masking core design and written specification: standard-library deterministic typed rules, value-free fixed tokens/findings, unsafe result with no text, metadata-only event allowance, and no route/DB/provider implementation yet
@@ -51,6 +61,9 @@
 
 ### Changed
 
+- Completed the isolated AI-001A core and permanent standard-library/no-I/O architecture gate while
+  leaving parent AI-001, citizen-visible unresolved-PII behavior, official readiness, DeepSeek
+  adapter, and public deployment behind their existing independent blockers
 - Resolved A-032 and moved AI-001A from Review to Ready while keeping parent AI-001, official seed/readiness, unresolved-PII consumer behavior, and public deployment blocked by their existing independent gates
 - Clarified the source-of-truth privacy boundary: successful masking is necessary but not sufficient for storage or synthetic-provider use; unresolved PII forbids failed-question text/row and provider calls, while actual citizen DeepSeek transmission remains prohibited
 - Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged. The `.1` filesystem release and dispatcher are now published/verified, but actual DB rows, ACTIVE reads, readiness and `official_data` promotion remain blocked.
@@ -109,11 +122,6 @@
   unchanged
 
 ### Pending
-
-- Audited the next DB-independent PII masking core slice. No new human A/B decision was found;
-  the recommended design is a standard-library deterministic rule engine that returns no text and
-  permits metadata-only handling when PII cannot be safely resolved. Product/API/DB/data code remains
-  unchanged pending explicit design review.
 
 - A-030/Q-SEED-002 human decision. Recommended/default A is a separately PM/technically approved
   immutable `0.1.0-initial.2` with the same 19/3/10 data and corrected effective-union guard; B is a
