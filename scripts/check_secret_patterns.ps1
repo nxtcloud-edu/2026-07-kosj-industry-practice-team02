@@ -1,9 +1,11 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Explicit')]
 param(
-    [Parameter(Position = 0)]
+    [Parameter(ParameterSetName = 'Explicit', Position = 0)]
     [string[]]$Path,
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$AdditionalPath
+    [Parameter(ParameterSetName = 'Explicit', ValueFromRemainingArguments = $true)]
+    [string[]]$AdditionalPath,
+    [Parameter(ParameterSetName = 'Repository', Mandatory = $true)]
+    [string]$RepositoryRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,7 +20,26 @@ foreach ($inputPath in $AdditionalPath) {
     $script:InputPaths += $inputPath
 }
 
-$script:RepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$requestedRepositoryRoot = $RepositoryRoot
+$script:DefaultRepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$script:RepositoryRoot = $script:DefaultRepositoryRoot
+$script:RepositoryRootInvalid = $false
+if ($PSCmdlet.ParameterSetName -eq 'Repository') {
+    try {
+        if ([string]::IsNullOrWhiteSpace($requestedRepositoryRoot)) {
+            throw 'repository root is empty'
+        }
+        $repositoryItem = Get-Item -LiteralPath $requestedRepositoryRoot -Force
+        if (-not $repositoryItem.PSIsContainer) {
+            throw 'repository root is not a directory'
+        }
+        $script:RepositoryRoot = [System.IO.Path]::GetFullPath($repositoryItem.FullName)
+    }
+    catch {
+        $script:RepositoryRootInvalid = $true
+    }
+}
+$script:MaxGitOutputBytes = 32MB
 $script:ExcludedSegments = @(
     '.git', '.mypy_cache', '.next', '.pytest_cache', '.ruff_cache', '.superpowers',
     '.tools', '.turbo', '.venv', '.worktrees', '__pycache__', 'artifacts', 'backups',
@@ -45,6 +66,27 @@ $script:SecretAssignmentNames = @(
     ('CONTEXT_TOKEN_' + 'SECRET'),
     ('DEEPSEEK_' + 'API_KEY')
 )
+
+
+function ConvertTo-SafeDisplayText {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
+
+    $builder = New-Object System.Text.StringBuilder
+    foreach ($character in $Value.ToCharArray()) {
+        $code = [int][char]$character
+        if ($code -lt 32 -or $code -eq 127 -or $code -eq 0x2028 -or $code -eq 0x2029) {
+            [void]$builder.Append(('\u{0:X4}' -f $code))
+        }
+        else {
+            [void]$builder.Append($character)
+        }
+    }
+    $safe = $builder.ToString()
+    if ($safe.StartsWith('::', [System.StringComparison]::Ordinal)) {
+        return '\u003A\u003A' + $safe.Substring(2)
+    }
+    return $safe
+}
 
 
 function Get-DisplayPath {
@@ -82,11 +124,12 @@ function Add-Result {
         [Parameter(Mandatory = $true)][int]$Count
     )
 
+    $safePath = ConvertTo-SafeDisplayText -Value $DisplayPath
     [void]$Results.Add([pscustomobject]@{
-        Path = $DisplayPath
+        Path = $safePath
         Rule = $Rule
         Count = $Count
-        SortKey = $DisplayPath + '|' + $Rule
+        SortKey = $safePath + '|' + $Rule
     })
 }
 
@@ -130,23 +173,92 @@ function Get-AssignmentCount {
 }
 
 
-function Get-DefaultFiles {
-    $relativeFiles = @(
-        & git -C $script:RepositoryRoot -c core.quotepath=false ls-files -co --exclude-standard 2>$null
-    )
-    $gitExitCode = $LASTEXITCODE
-    if ($gitExitCode -ne 0) {
-        throw 'git discovery failed'
+function Invoke-BoundedGit {
+    param([Parameter(Mandatory = $true)][string]$Arguments)
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = 'git'
+    $startInfo.Arguments = $Arguments
+    $startInfo.WorkingDirectory = $script:RepositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $memory = New-Object System.IO.MemoryStream
+    try {
+        if (-not $process.Start()) {
+            throw 'git process did not start'
+        }
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $buffer = New-Object byte[] 8192
+        while (($read = $process.StandardOutput.BaseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            if (($memory.Length + $read) -gt $script:MaxGitOutputBytes) {
+                try { $process.Kill() } catch { }
+                throw 'git output exceeded scanner limit'
+            }
+            $memory.Write($buffer, 0, $read)
+        }
+        $process.WaitForExit()
+        [void]$stderrTask.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) {
+            throw 'git discovery failed'
+        }
+        return ,$memory.ToArray()
     }
+    finally {
+        $memory.Dispose()
+        $process.Dispose()
+    }
+}
+
+
+function ConvertFrom-StrictUtf8 {
+    param([Parameter(Mandatory = $true)][byte[]]$Bytes)
+
+    $strictUtf8 = New-Object System.Text.UTF8Encoding($false, $true)
+    return $strictUtf8.GetString($Bytes)
+}
+
+
+function Assert-RepositoryRoot {
+    if ($script:RepositoryRootInvalid) {
+        throw 'invalid repository root'
+    }
+    $bytes = Invoke-BoundedGit -Arguments 'rev-parse --show-toplevel'
+    $topLevel = (ConvertFrom-StrictUtf8 -Bytes $bytes).TrimEnd([char[]]@("`r", "`n"))
+    if ([string]::IsNullOrWhiteSpace($topLevel)) {
+        throw 'git returned no repository root'
+    }
+    $resolvedTopLevel = [System.IO.Path]::GetFullPath($topLevel)
+    if (-not $resolvedTopLevel.Equals($script:RepositoryRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'requested path is not the repository root'
+    }
+}
+
+
+function Get-DefaultFiles {
+    Assert-RepositoryRoot
+    $bytes = Invoke-BoundedGit -Arguments '-c core.quotepath=false ls-files -co --exclude-standard -z'
+    $relativeFiles = (ConvertFrom-StrictUtf8 -Bytes $bytes).Split([char]0)
 
     foreach ($relativePath in $relativeFiles) {
-        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+        if ($relativePath.Length -eq 0) {
             continue
         }
         if (Test-IsExcludedRelativePath -RelativePath $relativePath) {
             continue
         }
-        $literalPath = Join-Path $script:RepositoryRoot $relativePath
+        if ([System.IO.Path]::IsPathRooted($relativePath)) {
+            throw 'git returned a rooted path'
+        }
+        $literalPath = [System.IO.Path]::GetFullPath((Join-Path $script:RepositoryRoot $relativePath))
+        $rootPrefix = $script:RepositoryRoot.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+        if (-not $literalPath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'git returned a path outside the repository'
+        }
         if (Test-Path -LiteralPath $literalPath -PathType Leaf) {
             $item = Get-Item -LiteralPath $literalPath -Force
             if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) {

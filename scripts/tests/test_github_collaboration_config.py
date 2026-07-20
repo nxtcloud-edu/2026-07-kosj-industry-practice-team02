@@ -93,6 +93,7 @@ class GitHubCollaborationConfigTests(unittest.TestCase):
             "../trusted/scripts/check_collaboration_scope.py",
             "trusted/scripts/check_repository_docs.py",
             "trusted/scripts/check_secret_patterns.ps1",
+            "-RepositoryRoot candidate",
             "candidate",
         ):
             self.assertIn(token, text)
@@ -143,6 +144,16 @@ class GitHubCollaborationConfigTests(unittest.TestCase):
             'if [[ "$DIFF_STATUS" -eq 0 ]]',
             'elif [[ "$DIFF_STATUS" -eq 1 ]]',
             'exit 2',
+        ):
+            self.assertIn(token, text)
+
+    def test_frontend_detection_includes_every_gate_input(self) -> None:
+        text = self.workflow("frontend-ci.yml")
+        for token in (
+            ".npmrc",
+            ".github/workflows/frontend-ci.yml",
+            "scripts/check_web_bundle_secrets.mjs",
+            "scripts/check_web_prod_dependency_boundary.mjs",
         ):
             self.assertIn(token, text)
 

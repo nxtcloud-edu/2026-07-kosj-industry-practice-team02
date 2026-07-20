@@ -72,7 +72,7 @@ jobs:
         run: python trusted/scripts/check_repository_docs.py --repository-root candidate
       - name: Scan candidate files with trusted value-redacting rules
         shell: pwsh
-        run: pwsh -NoProfile -File trusted/scripts/check_secret_patterns.ps1 candidate
+        run: pwsh -NoProfile -File trusted/scripts/check_secret_patterns.ps1 -RepositoryRoot candidate
       - name: Install locked contract dependencies without lifecycle scripts
         working-directory: candidate
         run: corepack pnpm install --frozen-lockfile --ignore-scripts
@@ -130,7 +130,7 @@ jobs:
         run: python trusted/scripts/check_repository_docs.py --repository-root candidate
       - name: Scan candidate files with trusted value-redacting rules
         shell: pwsh
-        run: pwsh -NoProfile -File trusted/scripts/check_secret_patterns.ps1 candidate
+        run: pwsh -NoProfile -File trusted/scripts/check_secret_patterns.ps1 -RepositoryRoot candidate
       - name: Install locked contract dependencies without lifecycle scripts
         working-directory: candidate
         run: corepack pnpm install --frozen-lockfile --ignore-scripts

@@ -42,7 +42,10 @@ jobs:
           set +e
           git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             apps/web contracts packages/shared-contracts tools/web-e2e \
-            package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version
+            scripts/check_web_bundle_secrets.mjs \
+            scripts/check_web_prod_dependency_boundary.mjs \
+            .github/workflows/frontend-ci.yml .node-version .npmrc \
+            package.json pnpm-lock.yaml pnpm-workspace.yaml
           DIFF_STATUS=$?
           set -e
           if [[ "$DIFF_STATUS" -eq 0 ]]; then

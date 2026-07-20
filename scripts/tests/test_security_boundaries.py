@@ -26,13 +26,17 @@ def assignments(path: Path) -> dict[str, str]:
     return result
 
 
-def run_secret_scanner(*paths: Path) -> subprocess.CompletedProcess[str]:
+def run_secret_scanner(
+    *paths: Path, repository_root: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     executable = shutil.which("powershell.exe") or shutil.which("powershell")
     if executable is None:
         raise AssertionError("Windows PowerShell is required")
     command = [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SECRET_SCANNER)]
     if paths:
         command.extend(["-Path", *(str(path) for path in paths)])
+    if repository_root is not None:
+        command.extend(["-RepositoryRoot", str(repository_root)])
     return subprocess.run(
         command, cwd=ROOT, capture_output=True, check=False, encoding="utf-8", errors="replace"
     )
@@ -150,6 +154,50 @@ class EnvironmentBoundaryTest(unittest.TestCase):
 
 
 class SecretPatternScannerTest(unittest.TestCase):
+    def test_scanner_source_escapes_control_paths_and_workflow_command_prefixes(self) -> None:
+        source = SECRET_SCANNER.read_text(encoding="utf-8")
+        self.assertIn("$code -lt 32", source)
+        self.assertIn("$code -eq 0x2028", source)
+        self.assertIn("$safe.StartsWith('::'", source)
+        self.assertIn("'\\u003A\\u003A'", source)
+
+    def test_repository_mode_scans_active_git_files_and_excludes_inactive_trees(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong candidate repository ") as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+            active = repository / "active.env"
+            legacy = repository / "legacy" / "old.env"
+            metadata = repository / ".git" / "scanner-sentinel.env"
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            active.write_text("LLM_API_KEY=active-synthetic-value\n", encoding="utf-8")
+            legacy.write_text("LLM_API_KEY=legacy-synthetic-value\n", encoding="utf-8")
+            metadata.write_text("LLM_API_KEY=git-synthetic-value\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "--", "active.env", "legacy/old.env"],
+                cwd=repository,
+                check=True,
+            )
+
+            result = run_secret_scanner(repository_root=repository)
+
+        assert_exit(self, result, 1)
+        self.assertIn("active.env rule=NONEMPTY_SECRET_ASSIGNMENT count=1", result.stdout)
+        self.assertNotIn("legacy", result.stdout)
+        self.assertNotIn(".git", result.stdout)
+        assert_no_disclosure(
+            self,
+            result,
+            ["active-synthetic-value", "legacy-synthetic-value", "git-synthetic-value"],
+        )
+
+    def test_repository_mode_rejects_non_repository_without_raw_path_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong non repository sentinel ") as directory:
+            result = run_secret_scanner(repository_root=Path(directory))
+
+        assert_exit(self, result, 2)
+        self.assertIn("rule=GIT_DISCOVERY_ERROR count=1", result.stdout)
+        self.assertNotIn("non repository sentinel", result.stdout + result.stderr)
+
     def test_runtime_shell_assignment_prefixes_are_detected_without_value_disclosure(
         self,
     ) -> None:
