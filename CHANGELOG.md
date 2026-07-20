@@ -9,7 +9,7 @@
   classifier, add-only web implementation-note/INDEX validator, tracked active Markdown/JSON checker,
   candidate-tree secret scan mode, pinned read-only GitHub policy/frontend workflows, PR/Issue/ownership
   templates and cross-platform production Playwright startup; independent review closed Critical/
-  Important findings at 0
+  Important findings at 0 after bounding candidate Git stdout/stderr/time and per-file/aggregate reads
 - D-054: 사용자의 `COLLAB-001 계획 승인, 구현 시작`으로 협업 전환 실행계획을 승인하고 로컬
   history-secret/scope/docs 검사기와 GitHub workflow/template 구현을 시작; account 인증이 필요한
   remote·invite·Codex App·rehearsal은 실제 외부 증거 전까지 pending

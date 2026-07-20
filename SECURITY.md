@@ -68,10 +68,10 @@ node scripts/check_web_bundle_secrets.mjs apps/web/.next
 첫 명령은 현재 repository, 두 번째 예시는 trusted base의 scanner로 별도 checkout한 candidate
 repository를 검사한다. `-RepositoryRoot`는 요청 경로가 정확한 Git top-level인지 확인한 뒤 그
 candidate의 tracked + untracked nonignored regular file만 읽고 reparse point/symlink와 제외 runtime
-directory는 건너뛴다. Git discovery 출력은 32 MiB로 제한되며 한도·root 불일치·읽기 실패는 exit
-2로 fail closed한다. current-tree와 bundle scanner는 clean 0, finding 1, operational error 2 이상을
-반환한다. 출력은 escaped 경로·stable rule ID·개수만 포함하며 일치한 값이나 파일 내용을 출력하지
-않는다.
+directory는 건너뛴다. Git discovery stdout 32 MiB·stderr 1 MiB·wall clock 60초, repository file당
+4 MiB·전체 16 MiB가 한도다. 한도·root 불일치·읽기 실패는 exit 2로 fail closed한다. current-tree와
+bundle scanner는 clean 0, finding 1, operational error 2 이상을 반환한다. 출력은 escaped 경로·stable
+rule ID·개수만 포함하며 일치한 값이나 파일 내용을 출력하지 않는다.
 
 history scanner는 `git rev-list --objects --all`의 reachable commit/tree/tag/blob raw bytes를 검사한다.
 선택한 ignored local secret을 exact 비교할 때도 값은 process memory에만 두며 Git argv/env·임시 파일·

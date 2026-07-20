@@ -189,3 +189,7 @@ node scripts/check_web_bundle_secrets.mjs apps/web/.next
 범위와 제외 대상, 보장하지 않는 항목은 `SECURITY.md`를 따른다. secret assignment 검사는
 일반/`export`, PowerShell `$env:NAME=value`, cmd `set NAME=value` 형식을 포함하지만 등호 없는
 `setx NAME value`는 현재 P2 한계로 탐지하지 않는다.
+
+별도 candidate checkout은 trusted scanner에 `-RepositoryRoot <candidate>`를 전달한다. 이 모드는
+Git stdout 32 MiB·stderr 1 MiB·60초, regular file당 4 MiB·전체 16 MiB에서 fail closed하고
+legacy/runtime/reparse 경계를 제외한다. limit failure는 값 없는 stable rule과 exit 2다.

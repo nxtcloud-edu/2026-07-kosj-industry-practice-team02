@@ -542,8 +542,11 @@ successful external-state evidence.
 - 2026-07-21: Tasks 1~3 local implementation, integration and independent review closed with
   Critical/Important 0. History/current-tree secret gates, scope/append classification, repository-doc
   validation, pinned workflow/templates and cross-platform Playwright startup are ready locally. Task 8
-  local documentation/version synchronization and the integrated Python 3.12 gate passed 98 tests with
+  local documentation/version synchronization and the integrated Python 3.12 gate passed 102 tests with
   two Windows platform skips; API 1,318 tests, contract 37 tests, Web 6 tests, production build and
   Playwright 9 tests also passed. Fresh history/current-tree scans, repository-doc/package validation,
   YAML parse, Ruff/compile/fsck/diff checks passed. Hosted Actions evidence remains external. Tasks 4~7
   remain unchecked with remote 0, push 0, hosted Actions run 0 and Codex Cloud task/PR 0.
+- 2026-07-21: final whole-diff review found one Important candidate-scanner resource-bound gap. Commit
+  `264518a` added Git stdout/stderr/deadline and repository per-file/aggregate limits with behavioral
+  oversized/stall tests; final rereview closed Critical 0 / Important 0 and marked the branch ready to merge.
