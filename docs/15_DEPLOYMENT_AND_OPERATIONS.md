@@ -23,14 +23,14 @@
 
 현재 위 항목은 공개 배포 전에 확인할 Deferred 항목이다. 초기 구현을 막는 배포 계정 요구사항으로 해석하지 않는다.
 
-Q-GIT/Q-COLLAB 결정으로 사용자의 개인 GitHub private source remote, Frontend collaborator와
-collaboration CI 방향, Q-GIT-004=A history·SHA 보존과 COLLAB-001 실행계획은 승인됐다. 로컬
-검사기·workflow/template를 먼저 구현하고 실제 remote·초대·Codex 연결은 account 확인과 사용자
-browser 인증 뒤에만 수행한다. 실행 뒤에도 local Git의 lint·typecheck·test·build·contract·secret
-증거를 유지하고 Windows/Docker/
-DeepSeek actual gate를 Cloud CI로 대체하지 않는다. 이 source remote는 tracked source/history의
-협업 경로이며 Vercel/Render/Supabase application deployment, remote DB, public admin/API 승인이
-아니다.
+Q-GIT/Q-COLLAB 결정의 private source remote bootstrap, hosted policy/Frontend CI, collaborator
+accepted write access, repository variable, read-only default Actions permissions과 direct-push
+description warning은 검증됐다. teammate MFA/recovery, repository-limited Codex App, Cloud Draft
+PR/manual merge와 Frontend onboarding rehearsal은 여전히 Pending이다. Task 5는 partial이며 첫
+Task 7 PR-only/no-direct-main-push rehearsal이 완료돼야 닫힌다. 실행 뒤에도 local Git의
+lint·typecheck·test·build·contract·secret 증거를 유지하고 Windows/Docker/DeepSeek actual gate를
+Cloud CI로 대체하지 않는다. 이 source remote는 tracked source/history의 협업 경로이며
+Vercel/Render/Supabase application deployment, remote DB, public admin/API 승인이 아니다.
 
 ## 필수 엔드포인트
 
