@@ -4,7 +4,8 @@
 
 ### Added
 
-- User-approved AI-001 fail-closed PII masking core design and review-pending written specification: standard-library deterministic typed rules, value-free fixed tokens/findings, unsafe result with no text, metadata-only event allowance, and no route/DB/provider implementation yet
+- User-approved AI-001 PII written specification and review-pending AI-001A TDD plan for an isolated standard-library core, frozen exact-output synthetic v1 evaluation set, Unicode/overlap/residual/bypass gates, and no route/DB/provider activation; A-032 public-number treatment remains an implementation blocker
+- User-approved AI-001 fail-closed PII masking core design and written specification: standard-library deterministic typed rules, value-free fixed tokens/findings, unsafe result with no text, metadata-only event allowance, and no route/DB/provider implementation yet
 - Immutable filesystem official release `0.1.0-initial.1` with approved 19 KB·3 offices·10
   mappings, approval/artifact/semantic hashes, excluded KB 1 and rejected mappings 2, deterministic
   seed/compensation SQL, and a byte-identical local dispatcher while `[db.seed].enabled=false`

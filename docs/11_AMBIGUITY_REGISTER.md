@@ -34,6 +34,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
 | A-030 | A / Blocker | official seed correction | Open / Blocked | Q-SEED-002: PostgreSQL 17 grantor-specific effective option union과 immutable `.1` single-row membership guard 충돌을 어떻게 보정할 것인가 | A 추천/default: migration/pgTAP union 권위를 유지하고 별도 승인된 immutable `0.1.0-initial.2`를 생성·전체 actual cycle 재실행; 답 전에는 아무 방안도 구현하지 않음 |
+| A-031 | B / High | unresolved PII consumer response | Open / Deferred — AI-001A core blocker 아님 | Q-PII-002: 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 공개 응답·event reason으로 표현할 것인가 | A 추천: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 추가; 답 전 consumer 연결만 차단 |
+| A-032 | A / Blocker | public phone-shaped value masking | Open / AI-001A plan blocker | Q-PII-003: 시민 질문에 들어온 공공기관 대표번호 형태의 값을 보존할지 마스킹할지 | A 추천: 입력 label을 신뢰하지 않고 모든 phone-shaped value를 마스킹; B는 승인된 공식번호 집합을 별도 주입하므로 signature/data lineage 재설계 필요 |
 
 ## 우선도 정의
 
@@ -43,6 +45,9 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - D: 내부 구현 판단
 
 현재 DATA-SEED/READY/AI local 진행을 막는 인간 결정형 A/Blocker는 A-030/Q-SEED-002다.
+A-032/Q-PII-003은 전체 데이터 seed와 별개로 AI-001A 계획 실행만 막는다.
+A-031/Q-PII-002는 AI-001A pure core 구현을 막지 않지만 route/consumer activation 전에는
+반드시 해결해야 하는 B/High 공개 동작 결정이다.
 A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
 2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
 byte-active dispatcher를 완료했지만 `[db.seed].enabled=false`다. Task 6 actual DB cycle은 seed write
@@ -66,6 +71,46 @@ A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat 
 완료됐다.
 
 ## 열린 인터뷰 질문
+
+Q-PII-003. 시민 질문에 들어온 공공기관 대표번호 형태의 값을 보존할지 마스킹할지
+- 왜 지금 필요한가: 승인된 명세는 공공기관 대표번호를 false-positive 표본에 포함하지만,
+  동시에 core 진입점은 공식 데이터 문맥이 없는 `redact_question(raw_question)` 하나다. 사용자가
+  “공식 대표번호”라고 썼다는 label만 신뢰해 번호를 보존하면 개인 전화번호가 그 문구로 우회될 수
+  있고, 공식 번호인지 실제 확인하려면 함수 경계와 공식 데이터 계보가 달라진다.
+- 선택지 A / 장점 / 단점: 입력 문구를 신뢰하지 않고 모든 전화번호 형태를 `[전화번호]`로
+  마스킹한다 / 개인정보 누락 우회를 막고 현재 one-argument pure core·0원 local-first 경계를
+  유지한다 / 시민 질문에 포함된 실제 공공 대표번호도 과잉 마스킹되며 명세의 대표번호 negative는
+  번호 없는 “대표전화는 어디서 확인하나요?” 표본으로 해석해야 한다.
+- 선택지 B / 장점 / 단점: 서버가 승인된 공식기관 번호 집합을 core에 불변 입력으로 주입하고 exact
+  match만 보존한다 / 공식번호 사용자 경험을 보존한다 / 함수 signature, 데이터 버전·갱신·승인,
+  cache와 stale-data fail-closed 정책까지 재설계해야 하며 AI-001A 범위와 비용이 커진다.
+- 당신의 추천안: A. 개인정보 보호 원칙과 현재 pure core 범위가 우선이며, 공식 기관 카드는 후속
+  서버 KB metadata에서 안전하게 별도 제공할 수 있다.
+- 답을 받지 못할 때 사용할 기본값: AI-001A 계획을 승인하지 않고 제품 코드·fixture 0건을
+  유지한다. A/B 어느 동작도 구현하지 않는다.
+- 영향을 받는 파일·계약·데이터·배포: A는 PII plan의 phone rule·negative fixture 해석과 test에,
+  B는 그에 더해 privacy function signature, official office data/version/lineage, cache·readiness와
+  architecture plan에 영향을 준다. 공개 API·DB migration은 선택 후 별도 감사한다.
+
+Q-PII-002. 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 응답·event reason으로 표현할 것인가
+- 왜 지금 필요한가: AI-001A core는 `masked_text=None`으로 안전하게 닫을 수 있지만, 후속
+  `/chat` consumer가 시민에게 보여줄 문구와 metadata reason은 현재 4개 `FallbackReason`에 없다.
+  기존 reason을 임의 재사용하면 KPI·감사 의미와 공개 계약이 왜곡된다. core 구현에는 필요
+  없지만 consumer 명세 전에 인간 결정이 필요하다.
+- 선택지 A / 장점 / 단점: 후속 공개 계약에 `PRIVACY_UNRESOLVED` reason을 추가하고 HTTP 200으로
+  개인정보를 빼거나 표현을 바꿔 다시 질문해 달라는 안전 응답을 반환한다 / 원인·KPI·시민
+  행동이 명확하고 재시도 가능한 정책 폴백이다 / enum·FE/BE/fixture·버전 동기화와 호환성
+  검토가 필요하다.
+- 선택지 B / 장점 / 단점: 새 reason 없이 HTTP 503 `SERVICE_UNAVAILABLE`을 반환한다 / 지금
+  공개 enum을 늘리지 않는다 / 시스템 장애가 아닌 입력 안전 문제를 장애로 오인하고 같은
+  원문 재시도를 유도하며 운영 지표가 섞인다.
+- 당신의 추천안: A. 개인정보 안전 실패는 근거 부족·개인 조회·법적 판단·지원 범위 밖과 다른
+  정책 outcome이므로 명시적으로 분리한다.
+- 답을 받지 못할 때 사용할 기본값: AI-001A pure core까지만 진행하고 route/DB/provider consumer
+  연결은 Blocked로 유지한다. A/B 어느 계약도 구현하지 않는다.
+- 영향을 받는 파일·계약·데이터·배포: 후속 OpenAPI/JSON Schema/Pydantic/TS fixture, chat service,
+  event reason, Web fallback copy와 API/test/docs version. DB enum/migration 필요 여부는 선택 후
+  별도 감사하며 이번 core plan에서는 변경 0이다.
 
 Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게 보정할 것인가
 - 왜 지금 필요한가: Task 5의 immutable `.1` filesystem release와 dispatcher는 게시·검증됐지만,
