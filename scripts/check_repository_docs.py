@@ -37,6 +37,10 @@ EXCLUDED_DIRECTORY_NAMES = frozenset(
 MARKDOWN_SUFFIXES = frozenset({".markdown", ".md"})
 MARKDOWN_TARGET_PATTERN = re.compile(r"\]\(\s*(?P<target>[^)\n]+)\)")
 FENCE_PATTERN = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<rest>.*)$")
+OBJECT_ID_PATTERN = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+MAX_ACTIVE_BLOB_BYTES = 2 * 1024 * 1024
+MAX_ACTIVE_TOTAL_BYTES = 32 * 1024 * 1024
+MAX_CAT_FILE_HEADER_BYTES = 256
 GIT_ENVIRONMENT_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
 GIT_ENVIRONMENT_NAMES = frozenset(
     {
@@ -71,6 +75,21 @@ class MarkdownTarget:
     ordinal: int
 
 
+@dataclass(frozen=True)
+class TrackedTargets:
+    paths: frozenset[str]
+    directories: frozenset[str]
+    top_levels: frozenset[str]
+
+
+class InvalidJsonConstant(ValueError):
+    pass
+
+
+def reject_json_constant(value: str) -> None:
+    raise InvalidJsonConstant(value)
+
+
 def escape_source_path(source_path: str) -> str:
     return json.dumps(source_path, ensure_ascii=True)
 
@@ -87,7 +106,23 @@ def git_environment() -> dict[str, str]:
     return environment
 
 
-def tracked_active_blobs(repository: Path) -> tuple[list[TrackedBlob], set[str]]:
+def build_tracked_targets(paths: set[str]) -> TrackedTargets:
+    directories: set[str] = set()
+    top_levels: set[str] = set()
+    for path in paths:
+        parts = PurePosixPath(path).parts
+        if parts:
+            top_levels.add(parts[0])
+        for length in range(1, len(parts)):
+            directories.add("/".join(parts[:length]))
+    return TrackedTargets(
+        paths=frozenset(paths),
+        directories=frozenset(directories),
+        top_levels=frozenset(top_levels),
+    )
+
+
+def tracked_active_blobs(repository: Path) -> tuple[list[TrackedBlob], TrackedTargets]:
     try:
         repository_check = subprocess.run(
             ["git", "-C", os.fspath(repository), "rev-parse", "--show-toplevel"],
@@ -126,6 +161,11 @@ def tracked_active_blobs(repository: Path) -> tuple[list[TrackedBlob], set[str]]
         relative_path = PurePosixPath(source_path)
         if relative_path.is_absolute() or ".." in relative_path.parts or stage != "0":
             raise RepositoryCheckError("REPO_DOCS_INVALID_GIT_INDEX")
+        if not OBJECT_ID_PATTERN.fullmatch(object_id):
+            raise RepositoryCheckError(
+                "REPO_DOCS_INVALID_OBJECT_ID "
+                f"source={escape_source_path(source_path)}"
+            )
         tracked_paths.add(source_path)
         if not is_active(relative_path):
             continue
@@ -135,45 +175,82 @@ def tracked_active_blobs(repository: Path) -> tuple[list[TrackedBlob], set[str]]
                 f"source={escape_source_path(source_path)} mode={json.dumps(mode)}"
             )
         blobs.append(TrackedBlob(mode=mode, object_id=object_id, relative_path=source_path))
-    return blobs, tracked_paths
+    return blobs, build_tracked_targets(tracked_paths)
 
 
 def read_git_blobs(repository: Path, records: list[TrackedBlob]) -> dict[str, bytes]:
     object_ids = list(dict.fromkeys(record.object_id for record in records))
     if not object_ids:
         return {}
+    for record in records:
+        if not OBJECT_ID_PATTERN.fullmatch(record.object_id):
+            raise RepositoryCheckError(
+                "REPO_DOCS_INVALID_OBJECT_ID "
+                f"source={escape_source_path(record.relative_path)}"
+            )
+
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["git", "-C", os.fspath(repository), "cat-file", "--batch"],
-            input="".join(f"{object_id}\n" for object_id in object_ids).encode("ascii"),
-            check=True,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             env=git_environment(),
         )
-    except (OSError, subprocess.CalledProcessError, UnicodeError) as error:
+    except OSError as error:
         raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED") from error
 
+    source_by_object_id = {
+        record.object_id: record.relative_path
+        for record in records
+    }
     blobs: dict[str, bytes] = {}
-    cursor = 0
-    output = completed.stdout
+    total_bytes = 0
     try:
+        if process.stdin is None or process.stdout is None:
+            raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
         for expected_object_id in object_ids:
-            header_end = output.index(b"\n", cursor)
-            header = output[cursor:header_end].split()
+            process.stdin.write(f"{expected_object_id}\n".encode("ascii"))
+            process.stdin.flush()
+            raw_header = process.stdout.readline(MAX_CAT_FILE_HEADER_BYTES + 1)
+            if len(raw_header) > MAX_CAT_FILE_HEADER_BYTES or not raw_header.endswith(b"\n"):
+                raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
+            header = raw_header[:-1].split()
             if len(header) != 3 or header[1] != b"blob":
-                raise ValueError
+                raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
             actual_object_id = header[0].decode("ascii")
             size = int(header[2])
-            content_start = header_end + 1
-            content_end = content_start + size
-            if actual_object_id != expected_object_id or output[content_end : content_end + 1] != b"\n":
-                raise ValueError
-            blobs[expected_object_id] = output[content_start:content_end]
-            cursor = content_end + 1
-        if cursor != len(output):
-            raise ValueError
-    except (IndexError, UnicodeError, ValueError) as error:
+            if actual_object_id != expected_object_id or size < 0:
+                raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
+            source_path = source_by_object_id[expected_object_id]
+            if size > MAX_ACTIVE_BLOB_BYTES:
+                raise RepositoryCheckError(
+                    "REPO_DOCS_BLOB_LIMIT_EXCEEDED "
+                    f"source={escape_source_path(source_path)}"
+                )
+            if total_bytes + size > MAX_ACTIVE_TOTAL_BYTES:
+                raise RepositoryCheckError(
+                    "REPO_DOCS_AGGREGATE_LIMIT_EXCEEDED "
+                    f"source={escape_source_path(source_path)}"
+                )
+            total_bytes += size
+            content = process.stdout.read(size)
+            if len(content) != size or process.stdout.read(1) != b"\n":
+                raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
+            blobs[expected_object_id] = content
+        process.stdin.close()
+        if process.wait() != 0:
+            raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED")
+    except (BrokenPipeError, KeyError, OSError, UnicodeError, ValueError) as error:
         raise RepositoryCheckError("REPO_DOCS_GIT_BLOB_READ_FAILED") from error
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        if process.stdin is not None and not process.stdin.closed:
+            process.stdin.close()
+        if process.stdout is not None:
+            process.stdout.close()
     return blobs
 
 
@@ -201,6 +278,10 @@ def markdown_targets(contents: str) -> list[MarkdownTarget]:
             continue
         if fence:
             marker = fence.group("fence")
+            if marker[0] == "`" and "`" in fence.group("rest"):
+                fence = None
+        if fence:
+            marker = fence.group("fence")
             active_fence = (marker[0], len(marker))
             continue
         for ordinal, match in enumerate(MARKDOWN_TARGET_PATTERN.finditer(line), start=1):
@@ -219,14 +300,11 @@ def markdown_targets(contents: str) -> list[MarkdownTarget]:
     return targets
 
 
-def tracked_target_exists(target: str, tracked_paths: set[str]) -> bool:
-    if target in tracked_paths:
-        return True
-    prefix = f"{target.rstrip('/')}/"
-    return any(path.startswith(prefix) for path in tracked_paths)
+def tracked_target_exists(target: str, tracked_targets: TrackedTargets) -> bool:
+    return target in tracked_targets.paths or target in tracked_targets.directories
 
 
-def resolve_target(source_path: str, target: str, tracked_paths: set[str]) -> str:
+def resolve_target(source_path: str, target: str, tracked_targets: TrackedTargets) -> str:
     if not target:
         return source_path
     if target.startswith("/"):
@@ -237,10 +315,10 @@ def resolve_target(source_path: str, target: str, tracked_paths: set[str]) -> st
     )
     target_path = PurePosixPath(target)
     if (
-        not tracked_target_exists(relative_candidate, tracked_paths)
+        not tracked_target_exists(relative_candidate, tracked_targets)
         and target_path.parts
         and target_path.parts[0] not in {".", ".."}
-        and any(path == target_path.parts[0] or path.startswith(f"{target_path.parts[0]}/") for path in tracked_paths)
+        and target_path.parts[0] in tracked_targets.top_levels
     ):
         return posixpath.normpath(target)
     return relative_candidate
@@ -250,7 +328,7 @@ def check_repository(repository: Path) -> list[str]:
     repository = repository.resolve()
     errors: list[str] = []
 
-    records, tracked_paths = tracked_active_blobs(repository)
+    records, tracked_targets = tracked_active_blobs(repository)
     inspected_records = [
         record
         for record in records
@@ -263,13 +341,16 @@ def check_repository(repository: Path) -> list[str]:
         try:
             contents = blobs[record.object_id].decode("utf-8")
             if relative_path.suffix.lower() == ".json":
-                json.loads(contents)
+                json.loads(
+                    contents,
+                    parse_constant=reject_json_constant,
+                )
             if relative_path.suffix.lower() in MARKDOWN_SUFFIXES:
                 for target in markdown_targets(contents):
                     resolved = resolve_target(
                         record.relative_path,
                         target.destination,
-                        tracked_paths,
+                        tracked_targets,
                     )
                     if resolved != ".." and not resolved.startswith("../") and not is_active(
                         PurePosixPath(resolved)
@@ -278,18 +359,20 @@ def check_repository(repository: Path) -> list[str]:
                     if (
                         resolved == ".."
                         or resolved.startswith("../")
-                        or not tracked_target_exists(resolved, tracked_paths)
+                        or not tracked_target_exists(resolved, tracked_targets)
                     ):
                         errors.append(
                             "REPO_DOCS_MISSING_MARKDOWN_TARGET "
                             f"source={escape_source_path(record.relative_path)} "
                             f"line={target.line} ordinal={target.ordinal}"
                         )
-        except json.JSONDecodeError as error:
+        except (InvalidJsonConstant, json.JSONDecodeError) as error:
+            line = error.lineno if isinstance(error, json.JSONDecodeError) else 1
+            column = error.colno if isinstance(error, json.JSONDecodeError) else 1
             errors.append(
                 "REPO_DOCS_INVALID_JSON "
                 f"source={escape_source_path(record.relative_path)} "
-                f"line={error.lineno} column={error.colno}"
+                f"line={line} column={column}"
             )
         except (KeyError, UnicodeError) as error:
             raise RepositoryCheckError(

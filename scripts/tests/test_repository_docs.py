@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import check_repository_docs as repository_docs
 from scripts.check_repository_docs import RepositoryCheckError, check_repository
@@ -103,6 +104,18 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
         self.assertTrue(any("REPO_DOCS_INVALID_JSON" in error for error in errors))
         self.assertFalse(any(malformed_contents in error for error in errors))
 
+    def test_rejects_non_standard_json_numeric_constants(self) -> None:
+        for constant in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(constant=constant):
+                repository = self.make_repository()
+                self.track(repository, "data/value.json", f'{{"value": {constant}}}\n')
+
+                errors = check_repository(repository)
+
+                self.assertEqual(len(errors), 1)
+                self.assertIn("REPO_DOCS_INVALID_JSON", errors[0])
+                self.assertNotIn(constant, errors[0])
+
     def test_ignores_legacy_and_generated_runtime_directories(self) -> None:
         repository = self.make_repository()
         self.track(repository, "legacy/broken.md", "[missing](missing.md)\n")
@@ -169,6 +182,22 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
         self.track(repository, "docs/exists.md", "# exists\n")
 
         self.assertEqual(check_repository(repository), [])
+
+    def test_backtick_in_backtick_fence_info_does_not_open_fence(self) -> None:
+        repository = self.make_repository()
+        self.track(
+            repository,
+            "docs/index.md",
+            "```lang`invalid\n[missing](not-found.md)\n```\n",
+        )
+
+        self.assertEqual(
+            check_repository(repository),
+            [
+                'REPO_DOCS_MISSING_MARKDOWN_TARGET source="docs/index.md" '
+                "line=2 ordinal=1"
+            ],
+        )
 
     def test_rejects_tracked_symlink_before_reading_its_target(self) -> None:
         repository = self.make_repository()
@@ -244,6 +273,53 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
         self.assertEqual(escaped, json.dumps(source_path, ensure_ascii=True))
         self.assertNotIn("\n", escaped)
         self.assertNotIn("\x1b", escaped)
+
+    def test_rejects_single_blob_over_byte_limit_without_content_output(self) -> None:
+        repository = self.make_repository()
+        sentinel = "SINGLE_BLOB_CONTENT_SENTINEL"
+        self.track(repository, "docs/large.md", sentinel)
+
+        with mock.patch.object(repository_docs, "MAX_ACTIVE_BLOB_BYTES", 8):
+            with self.assertRaises(RepositoryCheckError) as raised:
+                check_repository(repository)
+
+        message = str(raised.exception)
+        self.assertIn("REPO_DOCS_BLOB_LIMIT_EXCEEDED", message)
+        self.assertNotIn(sentinel, message)
+
+    def test_rejects_aggregate_blobs_over_byte_limit_without_content_output(self) -> None:
+        repository = self.make_repository()
+        sentinel = "AGGREGATE_BLOB_CONTENT_SENTINEL"
+        self.track(repository, "docs/one.md", f"{sentinel}-one")
+        self.track(repository, "docs/two.md", f"{sentinel}-two")
+
+        with (
+            mock.patch.object(repository_docs, "MAX_ACTIVE_BLOB_BYTES", 128),
+            mock.patch.object(repository_docs, "MAX_ACTIVE_TOTAL_BYTES", 40),
+        ):
+            with self.assertRaises(RepositoryCheckError) as raised:
+                check_repository(repository)
+
+        message = str(raised.exception)
+        self.assertIn("REPO_DOCS_AGGREGATE_LIMIT_EXCEEDED", message)
+        self.assertNotIn(sentinel, message)
+
+    def test_rejects_invalid_object_id_before_cat_file(self) -> None:
+        repository = self.make_repository()
+        record = repository_docs.TrackedBlob(
+            mode="100644",
+            object_id="A" * 40,
+            relative_path="docs/index.md",
+        )
+
+        with mock.patch("scripts.check_repository_docs.subprocess.Popen") as popen:
+            with self.assertRaisesRegex(
+                RepositoryCheckError,
+                "REPO_DOCS_INVALID_OBJECT_ID",
+            ):
+                repository_docs.read_git_blobs(repository, [record])
+
+        popen.assert_not_called()
 
     def test_fails_closed_when_tracked_file_listing_fails(self) -> None:
         temporary_directory = tempfile.TemporaryDirectory()
