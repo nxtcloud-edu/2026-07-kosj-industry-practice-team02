@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
@@ -23,6 +25,8 @@ MAX_TREE_ENTRIES = 1_000_000
 MAX_PATH_BYTES = 4096
 MAX_AGGREGATE_PATH_BYTES = 128 * 1024 * 1024
 GIT_TIMEOUT_SECONDS = 60
+GIT_STREAM_CHUNK_BYTES = 64 * 1024
+GIT_THREAD_JOIN_SECONDS = 5
 VALID_OBJECT_TYPES = frozenset({b"blob", b"commit", b"tag", b"tree"})
 LOCAL_PLACEHOLDER_DATABASE_URL = "_LOCAL_PLACEHOLDER_DATABASE_URL"
 SAFE_PLACEHOLDER_DATABASE_PATHS = frozenset(
@@ -103,6 +107,63 @@ def _safe_environment(exact_secrets: Sequence[bytes]) -> dict[str, str]:
     return environment
 
 
+def _terminate_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+    except OSError:
+        pass
+
+
+def _write_process_input(
+    process: subprocess.Popen[bytes],
+    stream: object,
+    content: bytes,
+    failed: threading.Event,
+) -> None:
+    try:
+        offset = 0
+        while offset < len(content):
+            written = stream.write(content[offset : offset + GIT_STREAM_CHUNK_BYTES])
+            if not isinstance(written, int) or written <= 0:
+                raise ScannerOperationalError
+            offset += written
+        stream.flush()
+    except BaseException:
+        failed.set()
+        _terminate_process(process)
+    finally:
+        with contextlib.suppress(OSError):
+            stream.close()
+
+
+def _read_bounded_stream(
+    process: subprocess.Popen[bytes],
+    stream: object,
+    chunks: list[bytes] | None,
+    failed: threading.Event,
+) -> None:
+    total = 0
+    try:
+        while True:
+            remaining = MAX_GIT_OUTPUT_BYTES - total
+            if remaining < 0:
+                raise ScannerOperationalError
+            chunk = stream.read(min(GIT_STREAM_CHUNK_BYTES, remaining + 1))
+            if not isinstance(chunk, bytes):
+                raise ScannerOperationalError
+            if not chunk:
+                return
+            if len(chunk) > remaining:
+                raise ScannerOperationalError
+            if chunks is not None:
+                chunks.append(chunk)
+            total += len(chunk)
+    except BaseException:
+        failed.set()
+        _terminate_process(process)
+
+
 def _run_git(
     repository: Path,
     arguments: Sequence[str],
@@ -112,26 +173,63 @@ def _run_git(
     accepted_returncodes: Iterable[int] = (0,),
 ) -> bytes:
     command = ["git", "-c", "core.quotepath=false", *arguments]
+    process: subprocess.Popen[bytes] | None = None
+    threads: list[threading.Thread] = []
+    stdout_chunks: list[bytes] = []
+    failed = threading.Event()
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=str(repository),
-            input=input_bytes,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             env=environment,
             shell=False,
-            check=False,
-            timeout=GIT_TIMEOUT_SECONDS,
+            bufsize=0,
         )
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise ScannerOperationalError
+        threads = [
+            threading.Thread(
+                target=_write_process_input,
+                args=(process, process.stdin, input_bytes, failed),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process, process.stdout, stdout_chunks, failed),
+                daemon=True,
+            ),
+            threading.Thread(
+                target=_read_bounded_stream,
+                args=(process, process.stderr, None, failed),
+                daemon=True,
+            ),
+        ]
+        for thread in threads:
+            thread.start()
+        returncode = process.wait(timeout=GIT_TIMEOUT_SECONDS)
+        for thread in threads:
+            thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
+        if failed.is_set() or any(thread.is_alive() for thread in threads):
+            raise ScannerOperationalError
+    except ScannerOperationalError:
+        raise
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError):
         raise ScannerOperationalError from None
-    if result.returncode not in set(accepted_returncodes):
+    finally:
+        if process is not None:
+            _stop_process(process)
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    with contextlib.suppress(OSError):
+                        stream.close()
+            for thread in threads:
+                thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
+    if returncode not in set(accepted_returncodes):
         raise ScannerOperationalError
-    if not isinstance(result.stdout, bytes) or not isinstance(result.stderr, bytes):
-        raise ScannerOperationalError
-    if len(result.stdout) > MAX_GIT_OUTPUT_BYTES:
-        raise ScannerOperationalError
-    return result.stdout
+    return b"".join(stdout_chunks)
 
 
 def _resolve_repository(value: str) -> Path:
@@ -277,19 +375,27 @@ def _batch_contents(
         return
     command = ["git", "-c", "core.quotepath=false", "cat-file", "--batch"]
     process: subprocess.Popen[bytes] | None = None
+    stderr_thread: threading.Thread | None = None
+    failed = threading.Event()
     try:
         process = subprocess.Popen(
             command,
             cwd=str(repository),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             env=environment,
             shell=False,
             bufsize=0,
         )
-        if process.stdin is None or process.stdout is None:
+        if process.stdin is None or process.stdout is None or process.stderr is None:
             raise ScannerOperationalError
+        stderr_thread = threading.Thread(
+            target=_read_bounded_stream,
+            args=(process, process.stderr, None, failed),
+            daemon=True,
+        )
+        stderr_thread.start()
         aggregate_size = 0
         for expected_id in object_ids:
             process.stdin.write(expected_id + b"\n")
@@ -326,6 +432,9 @@ def _batch_contents(
             raise ScannerOperationalError
         if process.wait(timeout=GIT_TIMEOUT_SECONDS) != 0:
             raise ScannerOperationalError
+        stderr_thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
+        if failed.is_set() or stderr_thread.is_alive():
+            raise ScannerOperationalError
     except ScannerOperationalError:
         raise
     except (BrokenPipeError, OSError, subprocess.TimeoutExpired, ValueError):
@@ -333,12 +442,12 @@ def _batch_contents(
     finally:
         if process is not None:
             _stop_process(process)
-            for stream in (process.stdin, process.stdout):
-                try:
-                    if stream is not None:
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    with contextlib.suppress(OSError):
                         stream.close()
-                except OSError:
-                    pass
+            if stderr_thread is not None:
+                stderr_thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
 
 
 def _categories(content: bytes, exact_secrets: Sequence[bytes]) -> set[str]:

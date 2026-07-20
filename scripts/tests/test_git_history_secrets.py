@@ -54,6 +54,37 @@ def load_scanner(testcase: unittest.TestCase) -> ModuleType:
     return module
 
 
+class RetainedInput(io.BytesIO):
+    def close(self) -> None:
+        self.flush()
+
+
+class FakePopenProcess:
+    def __init__(
+        self,
+        *,
+        returncode: int = 0,
+        stdout: bytes = b"",
+        stderr: bytes = b"",
+    ) -> None:
+        self.stdin = RetainedInput()
+        self.stdout = io.BytesIO(stdout)
+        self.stderr = io.BytesIO(stderr)
+        self.returncode = returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        return self.returncode
+
+    def poll(self) -> int:
+        return self.returncode
+
+    def terminate(self) -> None:
+        pass
+
+    def kill(self) -> None:
+        pass
+
+
 class GitHistorySecretScannerTests(unittest.TestCase):
     maxDiff = None
 
@@ -279,13 +310,7 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         exact_secret = "s" + "k-" + "local_exact_" + ("Z" * 24)
         commit_oid = "c" * 40
         blob_oid = "b" * 40
-        invocations: list[tuple[list[str], dict[str, object]]] = []
-        popen_invocations: list[tuple[list[str], dict[str, object]]] = []
-
-        def completed(
-            command: list[str], returncode: int, stdout: bytes = b"", stderr: bytes = b""
-        ) -> subprocess.CompletedProcess[bytes]:
-            return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+        popen_invocations: list[tuple[list[str], dict[str, object], FakePopenProcess]] = []
 
         def batch_output() -> bytes:
             output = bytearray()
@@ -308,60 +333,28 @@ class GitHistorySecretScannerTests(unittest.TestCase):
                 output.extend(content + b"\n")
             return bytes(output)
 
-        def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-            invocations.append((list(command), dict(kwargs)))
+        def fake_popen(command: list[str], **kwargs: object) -> FakePopenProcess:
             command_text = " ".join(command)
             if "check-ignore" in command:
-                return completed(command, 0)
-            if "rev-list --objects --all" in command_text:
-                return completed(
-                    command,
-                    0,
-                    f"{commit_oid}\n{blob_oid} synthetic.txt\n".encode("ascii"),
+                process = FakePopenProcess()
+            elif "rev-list --objects --all" in command_text:
+                process = FakePopenProcess(
+                    stdout=f"{commit_oid}\n{blob_oid} synthetic.txt\n".encode("ascii")
                 )
-            if any(argument.startswith("--batch-check=") for argument in command):
-                return completed(
-                    command,
-                    0,
-                    (f"{commit_oid} commit\n{blob_oid} blob\n").encode("ascii"),
+            elif any(argument.startswith("--batch-check=") for argument in command):
+                process = FakePopenProcess(
+                    stdout=(f"{commit_oid} commit\n{blob_oid} blob\n").encode("ascii")
                 )
-            if "--batch" in command:
-                return completed(command, 0, batch_output())
-            if "rev-list --all" in command_text:
-                return completed(command, 0, f"{commit_oid}\n".encode("ascii"))
-            if "ls-tree" in command:
-                return completed(
-                    command,
-                    0,
-                    f"100644 blob {blob_oid}\tsynthetic.txt\0".encode("ascii"),
+            elif "--batch" in command:
+                process = FakePopenProcess(stdout=batch_output())
+            elif "ls-tree" in command:
+                process = FakePopenProcess(
+                    stdout=f"100644 blob {blob_oid}\tsynthetic.txt\0".encode("ascii")
                 )
-            raise AssertionError(f"unexpected git command: {command!r}")
-
-        class FakeInput(io.BytesIO):
-            def close(self) -> None:
-                self.flush()
-
-        class FakeBatchProcess:
-            def __init__(self) -> None:
-                self.stdin = FakeInput()
-                self.stdout = io.BytesIO(batch_output())
-                self.returncode = 0
-
-            def wait(self, timeout: float | None = None) -> int:
-                return 0
-
-            def poll(self) -> int:
-                return 0
-
-            def terminate(self) -> None:
-                self.returncode = 0
-
-            def kill(self) -> None:
-                self.returncode = 0
-
-        def fake_popen(command: list[str], **kwargs: object) -> FakeBatchProcess:
-            popen_invocations.append((list(command), dict(kwargs)))
-            return FakeBatchProcess()
+            else:
+                raise AssertionError(f"unexpected git command: {command!r}")
+            popen_invocations.append((list(command), dict(kwargs), process))
+            return process
 
         with tempfile.TemporaryDirectory() as directory:
             repository = Path(directory)
@@ -371,7 +364,6 @@ class GitHistorySecretScannerTests(unittest.TestCase):
             stderr = io.StringIO()
             with (
                 mock.patch.dict(os.environ, {"SYNTHETIC_PARENT_SECRET": exact_secret}, clear=False),
-                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
                 mock.patch.object(module.subprocess, "Popen", side_effect=fake_popen),
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
@@ -391,12 +383,11 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         self.assertIn("LOCAL_SECRET_EXACT", stdout.getvalue())
         self.assertNotIn(exact_secret, stdout.getvalue())
         self.assertNotIn(exact_secret, stderr.getvalue())
-        self.assertTrue(invocations)
         self.assertTrue(popen_invocations)
-        for command, kwargs in [*invocations, *popen_invocations]:
+        for command, kwargs, process in popen_invocations:
             self.assertNotIn(exact_secret, repr(command))
             self.assertNotIn(exact_secret, repr(kwargs.get("env")))
-            self.assertNotIn(exact_secret.encode("utf-8"), bytes(kwargs.get("input", b"")))
+            self.assertNotIn(exact_secret.encode("utf-8"), process.stdin.getvalue())
             self.assertEqual(dict(kwargs["env"]).get("GIT_NO_REPLACE_OBJECTS"), "1")
 
     def test_exact_secret_collision_with_fixed_git_environment_fails_before_child(
@@ -410,7 +401,7 @@ class GitHistorySecretScannerTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with (
-                mock.patch.object(module.subprocess, "run") as child_run,
+                mock.patch.object(module.subprocess, "Popen") as child_process,
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
             ):
@@ -428,16 +419,10 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         self.assertEqual(returncode, 2)
         self.assertEqual(stderr.getvalue(), "")
         self.assertEqual(json.loads(stdout.getvalue())["category"], "SCANNER_OPERATIONAL_ERROR")
-        child_run.assert_not_called()
+        child_process.assert_not_called()
 
-    def test_cat_file_batch_content_uses_streaming_process(self) -> None:
+    def test_every_git_command_uses_streaming_process(self) -> None:
         module = load_scanner(self)
-        real_run = module.subprocess.run
-
-        def guarded_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-            if "cat-file" in command and "--batch" in command:
-                raise AssertionError("cat-file --batch must use a streaming process")
-            return real_run(command, **kwargs)
 
         with tempfile.TemporaryDirectory() as directory:
             repository = Path(directory)
@@ -447,13 +432,76 @@ class GitHistorySecretScannerTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with (
-                mock.patch.object(module.subprocess, "run", side_effect=guarded_run),
+                mock.patch.object(
+                    module.subprocess,
+                    "run",
+                    side_effect=AssertionError("every Git command must stream bounded output"),
+                ),
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
             ):
                 returncode = module.main(["--repo", str(repository)])
 
         self.assertEqual(returncode, 0, stdout.getvalue() + stderr.getvalue())
+
+    def test_git_stderr_over_limit_fails_closed(self) -> None:
+        module = load_scanner(self)
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(module, "MAX_GIT_OUTPUT_BYTES", 8),
+            self.assertRaises(module.ScannerOperationalError),
+        ):
+            module._run_git(
+                Path(directory),
+                ["not-a-real-git-command"],
+                environment={"GIT_NO_REPLACE_OBJECTS": "1"},
+                accepted_returncodes=(1,),
+            )
+
+    def test_batch_git_stderr_over_limit_fails_closed(self) -> None:
+        module = load_scanner(self)
+        object_id = b"a" * 40
+        content = b"clean"
+
+        class FakeBatchProcess:
+            def __init__(self) -> None:
+                self.stdin = io.BytesIO()
+                self.stdout = io.BytesIO(
+                    object_id
+                    + b" blob "
+                    + str(len(content)).encode("ascii")
+                    + b"\n"
+                    + content
+                    + b"\n"
+                )
+                self.stderr = io.BytesIO(b"x" * 9)
+
+            def wait(self, timeout: float | None = None) -> int:
+                return 0
+
+            def poll(self) -> int:
+                return 0
+
+            def terminate(self) -> None:
+                pass
+
+            def kill(self) -> None:
+                pass
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(module, "MAX_GIT_OUTPUT_BYTES", 8),
+            mock.patch.object(module.subprocess, "Popen", return_value=FakeBatchProcess()),
+            self.assertRaises(module.ScannerOperationalError),
+        ):
+            list(
+                module._batch_contents(
+                    Path(directory),
+                    [object_id],
+                    {object_id: b"blob"},
+                    environment={"GIT_NO_REPLACE_OBJECTS": "1"},
+                )
+            )
 
     def test_per_object_size_limit_fails_operationally(self) -> None:
         module = load_scanner(self)
@@ -500,20 +548,17 @@ class GitHistorySecretScannerTests(unittest.TestCase):
     def test_child_failure_does_not_relay_untrusted_stdout_or_stderr(self) -> None:
         module = load_scanner(self)
         child_sentinel = "synthetic-child-secret-must-not-be-relayed"
-
-        def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[bytes]:
-            return subprocess.CompletedProcess(
-                command,
-                128,
-                child_sentinel.encode("utf-8"),
-                child_sentinel.encode("utf-8"),
-            )
+        process = FakePopenProcess(
+            returncode=128,
+            stdout=child_sentinel.encode("utf-8"),
+            stderr=child_sentinel.encode("utf-8"),
+        )
 
         with tempfile.TemporaryDirectory() as directory:
             stdout = io.StringIO()
             stderr = io.StringIO()
             with (
-                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(module.subprocess, "Popen", return_value=process),
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
             ):
@@ -528,15 +573,13 @@ class GitHistorySecretScannerTests(unittest.TestCase):
 
     def test_malformed_git_object_listing_fails_closed(self) -> None:
         module = load_scanner(self)
-
-        def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[bytes]:
-            return subprocess.CompletedProcess(command, 0, b"not-an-object-id\n", b"")
+        process = FakePopenProcess(stdout=b"not-an-object-id\n")
 
         with tempfile.TemporaryDirectory() as directory:
             stdout = io.StringIO()
             stderr = io.StringIO()
             with (
-                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(module.subprocess, "Popen", return_value=process),
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
             ):
@@ -561,17 +604,17 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         }
 
         for name, output in scenarios.items():
-            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
-                completed = subprocess.CompletedProcess(["git"], 0, output.encode("ascii"), b"")
-                with (
-                    mock.patch.object(module.subprocess, "run", return_value=completed),
-                    self.assertRaises(module.ScannerOperationalError),
-                ):
-                    module._object_types(
-                        Path(directory),
-                        [object_id.encode("ascii")],
-                        environment={"GIT_NO_REPLACE_OBJECTS": "1"},
-                    )
+            with (
+                self.subTest(name=name),
+                tempfile.TemporaryDirectory() as directory,
+                mock.patch.object(module, "_run_git", return_value=output.encode("ascii")),
+                self.assertRaises(module.ScannerOperationalError),
+            ):
+                module._object_types(
+                    Path(directory),
+                    [object_id.encode("ascii")],
+                    environment={"GIT_NO_REPLACE_OBJECTS": "1"},
+                )
 
     def test_ignores_missing_credential_containers_but_keeps_root_npmrc(self) -> None:
         ignored = {
