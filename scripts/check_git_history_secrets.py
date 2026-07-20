@@ -7,12 +7,27 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 
 OBJECT_ID = re.compile(rb"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 SECRET_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 MAX_LOCAL_SECRET_FILE_BYTES = 1024 * 1024
+MAX_REACHABLE_OBJECTS = 100_000
+MAX_OBJECT_BYTES = 16 * 1024 * 1024
+MAX_AGGREGATE_OBJECT_BYTES = 256 * 1024 * 1024
+MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024
+MAX_BATCH_HEADER_BYTES = 256
+MAX_UNIQUE_TREES = 20_000
+MAX_TREE_ENTRIES = 1_000_000
+MAX_PATH_BYTES = 4096
+MAX_AGGREGATE_PATH_BYTES = 128 * 1024 * 1024
+GIT_TIMEOUT_SECONDS = 60
+VALID_OBJECT_TYPES = frozenset({b"blob", b"commit", b"tag", b"tree"})
+LOCAL_PLACEHOLDER_DATABASE_URL = "_LOCAL_PLACEHOLDER_DATABASE_URL"
+SAFE_PLACEHOLDER_DATABASE_PATHS = frozenset(
+    {".env.example", "apps/api/.env.example", "apps/web/.env.example"}
+)
 
 PATTERNS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
     (
@@ -62,18 +77,29 @@ def _safe_environment(exact_secrets: Sequence[bytes]) -> dict[str, str]:
     for name, value in os.environ.items():
         if name.upper().startswith("GIT_"):
             continue
-        encoded = f"{name}={value}".encode("utf-8", errors="replace")
-        if _secret_in_bytes(encoded, exact_secrets):
+        encoded_name = name.encode("utf-8", errors="replace")
+        encoded_value = value.encode("utf-8", errors="replace")
+        if _secret_in_bytes(encoded_name, exact_secrets) or _secret_in_bytes(
+            encoded_value, exact_secrets
+        ):
             continue
         environment[name] = value
     environment.update(
         {
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
             "GIT_OPTIONAL_LOCKS": "0",
             "GIT_TERMINAL_PROMPT": "0",
             "LC_ALL": "C",
         }
     )
+    for name, value in environment.items():
+        encoded_name = name.encode("utf-8", errors="replace")
+        encoded_value = value.encode("utf-8", errors="replace")
+        if _secret_in_bytes(encoded_name, exact_secrets) or _secret_in_bytes(
+            encoded_value, exact_secrets
+        ):
+            raise ScannerOperationalError
     return environment
 
 
@@ -95,12 +121,15 @@ def _run_git(
             env=environment,
             shell=False,
             check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         )
-    except (OSError, ValueError):
+    except (OSError, subprocess.TimeoutExpired, ValueError):
         raise ScannerOperationalError from None
     if result.returncode not in set(accepted_returncodes):
         raise ScannerOperationalError
     if not isinstance(result.stdout, bytes) or not isinstance(result.stderr, bytes):
+        raise ScannerOperationalError
+    if len(result.stdout) > MAX_GIT_OUTPUT_BYTES:
         raise ScannerOperationalError
     return result.stdout
 
@@ -179,6 +208,8 @@ def _parse_object_ids(output: bytes) -> list[bytes]:
         if object_id not in seen:
             seen.add(object_id)
             object_ids.append(object_id)
+            if len(object_ids) > MAX_REACHABLE_OBJECTS:
+                raise ScannerOperationalError
     return object_ids
 
 
@@ -199,12 +230,40 @@ def _object_types(
     result: dict[bytes, bytes] = {}
     for line in output.splitlines():
         parts = line.split()
-        if len(parts) != 2 or OBJECT_ID.fullmatch(parts[0]) is None:
+        if (
+            len(parts) != 2
+            or OBJECT_ID.fullmatch(parts[0]) is None
+            or parts[1] not in VALID_OBJECT_TYPES
+            or parts[0] in result
+        ):
             raise ScannerOperationalError
         result[parts[0]] = parts[1]
-    if set(result) != set(object_ids):
+    if len(result) != len(object_ids) or set(result) != set(object_ids):
         raise ScannerOperationalError
     return result
+
+
+def _read_exact(stream: object, size: int) -> bytes:
+    content = bytearray()
+    while len(content) < size:
+        chunk = stream.read(min(64 * 1024, size - len(content)))
+        if not isinstance(chunk, bytes) or not chunk:
+            raise ScannerOperationalError
+        content.extend(chunk)
+    return bytes(content)
+
+
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def _batch_contents(
@@ -213,41 +272,73 @@ def _batch_contents(
     object_types: dict[bytes, bytes],
     *,
     environment: dict[str, str],
-) -> list[tuple[bytes, bytes]]:
+) -> Iterator[tuple[bytes, bytes]]:
     if not object_ids:
-        return []
-    output = _run_git(
-        repository,
-        ["cat-file", "--batch"],
-        environment=environment,
-        input_bytes=b"\n".join(object_ids) + b"\n",
-    )
-    offset = 0
-    contents: list[tuple[bytes, bytes]] = []
-    for expected_id in object_ids:
-        header_end = output.find(b"\n", offset)
-        if header_end < 0:
+        return
+    command = ["git", "-c", "core.quotepath=false", "cat-file", "--batch"]
+    process: subprocess.Popen[bytes] | None = None
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=str(repository),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+            shell=False,
+            bufsize=0,
+        )
+        if process.stdin is None or process.stdout is None:
             raise ScannerOperationalError
-        header = output[offset:header_end].split()
-        if len(header) != 3 or header[0] != expected_id:
+        aggregate_size = 0
+        for expected_id in object_ids:
+            process.stdin.write(expected_id + b"\n")
+            process.stdin.flush()
+            header_line = process.stdout.readline(MAX_BATCH_HEADER_BYTES + 1)
+            if (
+                not isinstance(header_line, bytes)
+                or not header_line.endswith(b"\n")
+                or len(header_line) > MAX_BATCH_HEADER_BYTES
+            ):
+                raise ScannerOperationalError
+            header = header_line[:-1].split()
+            if (
+                len(header) != 3
+                or header[0] != expected_id
+                or header[1] != object_types.get(expected_id)
+            ):
+                raise ScannerOperationalError
+            try:
+                size = int(header[2])
+            except ValueError:
+                raise ScannerOperationalError from None
+            if size < 0 or size > MAX_OBJECT_BYTES:
+                raise ScannerOperationalError
+            aggregate_size += size
+            if aggregate_size > MAX_AGGREGATE_OBJECT_BYTES:
+                raise ScannerOperationalError
+            content = _read_exact(process.stdout, size)
+            if process.stdout.read(1) != b"\n":
+                raise ScannerOperationalError
+            yield expected_id, content
+        process.stdin.close()
+        if process.stdout.read(1) != b"":
             raise ScannerOperationalError
-        if header[1] != object_types.get(expected_id):
+        if process.wait(timeout=GIT_TIMEOUT_SECONDS) != 0:
             raise ScannerOperationalError
-        try:
-            size = int(header[2])
-        except ValueError:
-            raise ScannerOperationalError from None
-        if size < 0:
-            raise ScannerOperationalError
-        content_start = header_end + 1
-        content_end = content_start + size
-        if content_end >= len(output) or output[content_end : content_end + 1] != b"\n":
-            raise ScannerOperationalError
-        contents.append((expected_id, output[content_start:content_end]))
-        offset = content_end + 1
-    if offset != len(output):
-        raise ScannerOperationalError
-    return contents
+    except ScannerOperationalError:
+        raise
+    except (BrokenPipeError, OSError, subprocess.TimeoutExpired, ValueError):
+        raise ScannerOperationalError from None
+    finally:
+        if process is not None:
+            _stop_process(process)
+            for stream in (process.stdin, process.stdout):
+                try:
+                    if stream is not None:
+                        stream.close()
+                except OSError:
+                    pass
 
 
 def _categories(content: bytes, exact_secrets: Sequence[bytes]) -> set[str]:
@@ -255,8 +346,11 @@ def _categories(content: bytes, exact_secrets: Sequence[bytes]) -> set[str]:
     for category, pattern in PATTERNS:
         matches = pattern.finditer(content)
         if category == "CREDENTIAL_DATABASE_URL":
-            if any(not _is_local_placeholder_database_url(match) for match in matches):
-                categories.add(category)
+            for match in matches:
+                if _is_local_placeholder_database_url(match):
+                    categories.add(LOCAL_PLACEHOLDER_DATABASE_URL)
+                else:
+                    categories.add(category)
         elif next(matches, None) is not None:
             categories.add(category)
     if _secret_in_bytes(content, exact_secrets):
@@ -304,41 +398,70 @@ def _decode_path(path: bytes, exact_secrets: Sequence[bytes]) -> str:
     return path.decode("utf-8", errors="surrogateescape")
 
 
-def _blob_contexts(
+def _commit_tree_id(content: bytes) -> bytes:
+    first_line = content.split(b"\n", 1)[0]
+    prefix, separator, tree_id = first_line.partition(b" ")
+    if prefix != b"tree" or not separator or OBJECT_ID.fullmatch(tree_id) is None:
+        raise ScannerOperationalError
+    return tree_id
+
+
+def _history_contexts(
     repository: Path,
     blob_ids: set[bytes],
+    tree_contexts: dict[bytes, bytes],
     *,
     environment: dict[str, str],
     exact_secrets: Sequence[bytes],
-) -> dict[bytes, set[tuple[str, str]]]:
+) -> tuple[dict[bytes, set[tuple[str, str]]], list[dict[str, str]]]:
     contexts: dict[bytes, set[tuple[str, str]]] = defaultdict(set)
-    if not blob_ids:
-        return contexts
-    commit_output = _run_git(
-        repository,
-        ["rev-list", "--all"],
-        environment=environment,
-    )
-    commits = _parse_object_ids(commit_output)
-    for commit_id in commits:
+    path_findings: list[dict[str, str]] = []
+    total_entries = 0
+    total_path_bytes = 0
+    for tree_id, commit_id in sorted(tree_contexts.items()):
         tree = _run_git(
             repository,
-            ["ls-tree", "-r", "-z", "--full-tree", commit_id.decode("ascii")],
+            ["ls-tree", "-r", "-z", "--full-tree", tree_id.decode("ascii")],
             environment=environment,
         )
         for entry in tree.split(b"\0"):
             if not entry:
                 continue
+            total_entries += 1
+            if total_entries > MAX_TREE_ENTRIES:
+                raise ScannerOperationalError
             metadata, separator, path = entry.partition(b"\t")
             fields = metadata.split()
-            if not separator or len(fields) != 3 or fields[1] != b"blob":
+            if not separator or len(fields) != 3:
+                raise ScannerOperationalError
+            if fields[1] == b"commit":
+                continue
+            if fields[1] != b"blob" or OBJECT_ID.fullmatch(fields[2]) is None:
+                raise ScannerOperationalError
+            if len(path) > MAX_PATH_BYTES:
+                raise ScannerOperationalError
+            total_path_bytes += len(path)
+            if total_path_bytes > MAX_AGGREGATE_PATH_BYTES:
                 raise ScannerOperationalError
             blob_id = fields[2]
-            if blob_id in blob_ids:
-                contexts[blob_id].add(
-                    (commit_id.decode("ascii"), _decode_path(path, exact_secrets))
+            display_path = _decode_path(path, exact_secrets)
+            for category in _categories(path, exact_secrets):
+                public_category = (
+                    "CREDENTIAL_DATABASE_URL"
+                    if category == LOCAL_PLACEHOLDER_DATABASE_URL
+                    else category
                 )
-    return contexts
+                path_findings.append(
+                    {
+                        "blob": blob_id.decode("ascii"),
+                        "category": public_category,
+                        "commit": commit_id.decode("ascii"),
+                        "path": display_path,
+                    }
+                )
+            if blob_id in blob_ids:
+                contexts[blob_id].add((commit_id.decode("ascii"), display_path))
+    return contexts, path_findings
 
 
 def scan_repository(
@@ -354,38 +477,48 @@ def scan_repository(
     )
     object_ids = _parse_object_ids(object_output)
     object_types = _object_types(repository, object_ids, environment=environment)
-    scannable_ids = [
-        object_id for object_id in object_ids if object_types[object_id] in (b"blob", b"commit")
-    ]
+    scannable_ids = list(object_ids)
     findings_by_object: dict[bytes, set[str]] = {}
+    tree_contexts: dict[bytes, bytes] = {}
     for object_id, content in _batch_contents(
         repository,
         scannable_ids,
         object_types,
         environment=environment,
     ):
+        if object_types[object_id] == b"commit":
+            tree_id = _commit_tree_id(content)
+            tree_contexts.setdefault(tree_id, object_id)
+            if len(tree_contexts) > MAX_UNIQUE_TREES:
+                raise ScannerOperationalError
         categories = _categories(content, exact_secrets)
         if categories:
             findings_by_object[object_id] = categories
 
-    finding_blobs = {
-        object_id for object_id in findings_by_object if object_types[object_id] == b"blob"
-    }
-    contexts = _blob_contexts(
+    all_blobs = {object_id for object_id in object_ids if object_types[object_id] == b"blob"}
+    contexts, path_findings = _history_contexts(
         repository,
-        finding_blobs,
+        all_blobs,
+        tree_contexts,
         environment=environment,
         exact_secrets=exact_secrets,
     )
-    findings: list[dict[str, str]] = []
+    findings: list[dict[str, str]] = list(path_findings)
     for object_id, categories in findings_by_object.items():
         object_text = object_id.decode("ascii")
-        if object_types[object_id] == b"commit":
+        object_type = object_types[object_id]
+        if object_type == b"blob":
+            object_contexts = contexts.get(object_id, {("<unresolved>", "<unresolved>")})
+        elif object_type == b"commit":
             object_contexts = {(object_text, "<commit-object>")}
         else:
-            object_contexts = contexts.get(object_id, {("<unresolved>", "<unresolved>")})
+            object_contexts = {("<unresolved>", f"<{object_type.decode('ascii')}-object>")}
         for commit, path in object_contexts:
             for category in categories:
+                if category == LOCAL_PLACEHOLDER_DATABASE_URL:
+                    if object_type == b"blob" and path in SAFE_PLACEHOLDER_DATABASE_PATHS:
+                        continue
+                    category = "CREDENTIAL_DATABASE_URL"
                 findings.append(
                     {
                         "blob": object_text,
@@ -394,8 +527,11 @@ def scan_repository(
                         "path": path,
                     }
                 )
+    unique_findings = {
+        (item["category"], item["commit"], item["blob"], item["path"]): item for item in findings
+    }
     return sorted(
-        findings,
+        unique_findings.values(),
         key=lambda item: (
             item["category"],
             item["commit"],

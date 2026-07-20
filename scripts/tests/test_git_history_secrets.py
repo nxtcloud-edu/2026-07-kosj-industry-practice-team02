@@ -126,8 +126,13 @@ class GitHistorySecretScannerTests(unittest.TestCase):
             self.assertNotIn(value, result.stderr)
 
         findings = [json.loads(line) for line in result.stdout.splitlines()]
+        contextual_findings = [
+            finding
+            for finding in findings
+            if finding["commit"] == secret_commit and finding["path"] == "<redacted-path>"
+        ]
         self.assertEqual(
-            {finding["category"] for finding in findings},
+            {finding["category"] for finding in contextual_findings},
             {
                 "ACTUAL_QUESTION_SENTINEL",
                 "CREDENTIAL_DATABASE_URL",
@@ -137,11 +142,79 @@ class GitHistorySecretScannerTests(unittest.TestCase):
                 "PROVIDER_BEARER_KEY",
             },
         )
-        for finding in findings:
+        for finding in contextual_findings:
             self.assertEqual(set(finding), {"blob", "category", "commit", "path"})
             self.assertEqual(finding["blob"], secret_blob)
             self.assertEqual(finding["commit"], secret_commit)
             self.assertEqual(finding["path"], "<redacted-path>")
+
+    def test_disables_replace_refs_and_detects_original_secret(self) -> None:
+        github_token = "gh" + "p_" + ("R" * 32)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / "secret.txt").write_text(github_token, encoding="utf-8")
+            secret_commit = commit_all(repository, "commit synthetic secret")
+
+            run_command(["git", "checkout", "--orphan", "clean-replacement"], cwd=repository)
+            run_command(["git", "rm", "-rf", "."], cwd=repository)
+            (repository / "README.md").write_text("clean replacement\n", encoding="utf-8")
+            replacement_commit = commit_all(repository, "create clean replacement")
+            run_command(["git", "replace", secret_commit, replacement_commit], cwd=repository)
+
+            result = self.run_scanner(repository)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("GITHUB_TOKEN", result.stdout)
+        self.assertNotIn(github_token, result.stdout)
+        self.assertNotIn(github_token, result.stderr)
+
+    def test_scans_annotated_tag_object_bytes(self) -> None:
+        provider_token = "s" + "k-" + "tag_" + ("T" * 24)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / "README.md").write_text("clean\n", encoding="utf-8")
+            commit_all(repository, "create clean commit")
+            run_command(
+                ["git", "tag", "-a", "synthetic-tag", "-m", provider_token],
+                cwd=repository,
+            )
+
+            result = self.run_scanner(repository)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        findings = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertIn("PROVIDER_BEARER_KEY", {item["category"] for item in findings})
+        self.assertTrue(any(item["path"] == "<tag-object>" for item in findings))
+        self.assertNotIn(provider_token, result.stdout)
+        self.assertNotIn(provider_token, result.stderr)
+
+    def test_detects_path_only_secret_with_redacted_json_safe_context(self) -> None:
+        github_token = "gh" + "p_" + ("P" * 32)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            secret_path = repository / f"unicode-한글-{github_token}.txt"
+            secret_path.write_text("clean blob content\n", encoding="utf-8")
+            secret_commit = commit_all(repository, "add synthetic path fixture")
+
+            result = self.run_scanner(repository)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertNotIn(github_token, result.stdout)
+        findings = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertTrue(
+            any(
+                item["category"] == "GITHUB_TOKEN"
+                and item["commit"] == secret_commit
+                and item["path"] == "<redacted-path>"
+                for item in findings
+            )
+        )
+        for finding in findings:
+            self.assertEqual(set(finding), {"blob", "category", "commit", "path"})
 
     def test_returns_zero_and_no_output_for_clean_reachable_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -174,6 +247,31 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.stderr, "")
 
+    def test_detects_local_placeholder_database_url_in_production_path(self) -> None:
+        placeholder_url = "postgresql" + "://user:password@localhost:5432/example"
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / ".env.production").write_text(
+                f"DATABASE_URL={placeholder_url}\n", encoding="utf-8"
+            )
+            production_commit = commit_all(repository, "add unsafe production fixture")
+
+            result = self.run_scanner(repository)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        findings = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertTrue(
+            any(
+                item["category"] == "CREDENTIAL_DATABASE_URL"
+                and item["path"] == ".env.production"
+                and item["commit"] == production_commit
+                for item in findings
+            )
+        )
+        self.assertNotIn(placeholder_url, result.stdout)
+        self.assertNotIn(placeholder_url, result.stderr)
+
     def test_exact_ignored_secret_stays_out_of_child_argv_env_stdin_and_output(
         self,
     ) -> None:
@@ -182,11 +280,33 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         commit_oid = "c" * 40
         blob_oid = "b" * 40
         invocations: list[tuple[list[str], dict[str, object]]] = []
+        popen_invocations: list[tuple[list[str], dict[str, object]]] = []
 
         def completed(
             command: list[str], returncode: int, stdout: bytes = b"", stderr: bytes = b""
         ) -> subprocess.CompletedProcess[bytes]:
             return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+
+        def batch_output() -> bytes:
+            output = bytearray()
+            for object_id, object_type, content in (
+                (
+                    commit_oid.encode("ascii"),
+                    b"commit",
+                    b"tree " + (b"d" * 40) + b"\n\nclean commit\n",
+                ),
+                (blob_oid.encode("ascii"), b"blob", exact_secret.encode("utf-8")),
+            ):
+                output.extend(
+                    object_id
+                    + b" "
+                    + object_type
+                    + b" "
+                    + str(len(content)).encode("ascii")
+                    + b"\n"
+                )
+                output.extend(content + b"\n")
+            return bytes(output)
 
         def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
             invocations.append((list(command), dict(kwargs)))
@@ -206,27 +326,7 @@ class GitHistorySecretScannerTests(unittest.TestCase):
                     (f"{commit_oid} commit\n{blob_oid} blob\n").encode("ascii"),
                 )
             if "--batch" in command:
-                requested = bytes(kwargs.get("input", b"")).splitlines()
-                output = bytearray()
-                for object_id in requested:
-                    if object_id == commit_oid.encode("ascii"):
-                        content = b"tree " + (b"d" * 40) + b"\n\nclean commit\n"
-                        object_type = b"commit"
-                    elif object_id == blob_oid.encode("ascii"):
-                        content = exact_secret.encode("utf-8")
-                        object_type = b"blob"
-                    else:
-                        raise AssertionError(f"unexpected batch object: {object_id!r}")
-                    output.extend(
-                        object_id
-                        + b" "
-                        + object_type
-                        + b" "
-                        + str(len(content)).encode("ascii")
-                        + b"\n"
-                    )
-                    output.extend(content + b"\n")
-                return completed(command, 0, bytes(output))
+                return completed(command, 0, batch_output())
             if "rev-list --all" in command_text:
                 return completed(command, 0, f"{commit_oid}\n".encode("ascii"))
             if "ls-tree" in command:
@@ -237,6 +337,32 @@ class GitHistorySecretScannerTests(unittest.TestCase):
                 )
             raise AssertionError(f"unexpected git command: {command!r}")
 
+        class FakeInput(io.BytesIO):
+            def close(self) -> None:
+                self.flush()
+
+        class FakeBatchProcess:
+            def __init__(self) -> None:
+                self.stdin = FakeInput()
+                self.stdout = io.BytesIO(batch_output())
+                self.returncode = 0
+
+            def wait(self, timeout: float | None = None) -> int:
+                return 0
+
+            def poll(self) -> int:
+                return 0
+
+            def terminate(self) -> None:
+                self.returncode = 0
+
+            def kill(self) -> None:
+                self.returncode = 0
+
+        def fake_popen(command: list[str], **kwargs: object) -> FakeBatchProcess:
+            popen_invocations.append((list(command), dict(kwargs)))
+            return FakeBatchProcess()
+
         with tempfile.TemporaryDirectory() as directory:
             repository = Path(directory)
             secret_file = repository / ".env"
@@ -246,6 +372,7 @@ class GitHistorySecretScannerTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {"SYNTHETIC_PARENT_SECRET": exact_secret}, clear=False),
                 mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(module.subprocess, "Popen", side_effect=fake_popen),
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
             ):
@@ -265,10 +392,110 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         self.assertNotIn(exact_secret, stdout.getvalue())
         self.assertNotIn(exact_secret, stderr.getvalue())
         self.assertTrue(invocations)
-        for command, kwargs in invocations:
+        self.assertTrue(popen_invocations)
+        for command, kwargs in [*invocations, *popen_invocations]:
             self.assertNotIn(exact_secret, repr(command))
             self.assertNotIn(exact_secret, repr(kwargs.get("env")))
             self.assertNotIn(exact_secret.encode("utf-8"), bytes(kwargs.get("input", b"")))
+            self.assertEqual(dict(kwargs["env"]).get("GIT_NO_REPLACE_OBJECTS"), "1")
+
+    def test_exact_secret_collision_with_fixed_git_environment_fails_before_child(
+        self,
+    ) -> None:
+        module = load_scanner(self)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            secret_file = repository / ".env"
+            secret_file.write_text("LLM_API_KEY=1\n", encoding="utf-8")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(module.subprocess, "run") as child_run,
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                returncode = module.main(
+                    [
+                        "--repo",
+                        str(repository),
+                        "--local-secret-file",
+                        str(secret_file),
+                        "--local-secret-name",
+                        "LLM_API_KEY",
+                    ]
+                )
+
+        self.assertEqual(returncode, 2)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue())["category"], "SCANNER_OPERATIONAL_ERROR")
+        child_run.assert_not_called()
+
+    def test_cat_file_batch_content_uses_streaming_process(self) -> None:
+        module = load_scanner(self)
+        real_run = module.subprocess.run
+
+        def guarded_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+            if "cat-file" in command and "--batch" in command:
+                raise AssertionError("cat-file --batch must use a streaming process")
+            return real_run(command, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / "README.md").write_text("clean\n", encoding="utf-8")
+            commit_all(repository, "create clean repository")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(module.subprocess, "run", side_effect=guarded_run),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                returncode = module.main(["--repo", str(repository)])
+
+        self.assertEqual(returncode, 0, stdout.getvalue() + stderr.getvalue())
+
+    def test_per_object_size_limit_fails_operationally(self) -> None:
+        module = load_scanner(self)
+        self.assertTrue(hasattr(module, "MAX_OBJECT_BYTES"))
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / "oversized.bin").write_bytes(b"x" * 64)
+            commit_all(repository, "add oversized synthetic object")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(module, "MAX_OBJECT_BYTES", 8),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                returncode = module.main(["--repo", str(repository)])
+
+        self.assertEqual(returncode, 2)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_aggregate_object_size_limit_fails_operationally(self) -> None:
+        module = load_scanner(self)
+        self.assertTrue(hasattr(module, "MAX_AGGREGATE_OBJECT_BYTES"))
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            initialize_repository(repository)
+            (repository / "one.txt").write_bytes(b"one")
+            (repository / "two.txt").write_bytes(b"two")
+            commit_all(repository, "add aggregate synthetic objects")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(module, "MAX_OBJECT_BYTES", 1024 * 1024),
+                mock.patch.object(module, "MAX_AGGREGATE_OBJECT_BYTES", 10),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                returncode = module.main(["--repo", str(repository)])
+
+        self.assertEqual(returncode, 2)
+        self.assertEqual(stderr.getvalue(), "")
 
     def test_child_failure_does_not_relay_untrusted_stdout_or_stderr(self) -> None:
         module = load_scanner(self)
@@ -318,6 +545,33 @@ class GitHistorySecretScannerTests(unittest.TestCase):
         self.assertEqual(returncode, 2)
         self.assertEqual(stderr.getvalue(), "")
         self.assertEqual(json.loads(stdout.getvalue())["category"], "SCANNER_OPERATIONAL_ERROR")
+
+    def test_batch_check_rejects_missing_unknown_duplicate_and_mismatched_types(
+        self,
+    ) -> None:
+        module = load_scanner(self)
+        object_id = "a" * 40
+        other_id = "b" * 40
+        scenarios = {
+            "missing": f"{object_id} missing\n",
+            "unknown": f"{object_id} mystery\n",
+            "duplicate": f"{object_id} blob\n{object_id} blob\n",
+            "set-mismatch": f"{other_id} blob\n",
+            "malformed": f"{object_id} blob extra\n",
+        }
+
+        for name, output in scenarios.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                completed = subprocess.CompletedProcess(["git"], 0, output.encode("ascii"), b"")
+                with (
+                    mock.patch.object(module.subprocess, "run", return_value=completed),
+                    self.assertRaises(module.ScannerOperationalError),
+                ):
+                    module._object_types(
+                        Path(directory),
+                        [object_id.encode("ascii")],
+                        environment={"GIT_NO_REPLACE_OBJECTS": "1"},
+                    )
 
     def test_ignores_missing_credential_containers_but_keeps_root_npmrc(self) -> None:
         ignored = {
