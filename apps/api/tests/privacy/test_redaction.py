@@ -160,6 +160,22 @@ def test_unsafe_unicode_is_closed_without_findings(raw: str) -> None:
     assert result == RedactionResult(None, (), False, False, UnresolvedReason.UNSAFE_UNICODE)
 
 
+@pytest.mark.parametrize("character", ["\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"])
+def test_approved_zero_width_characters_are_removed_before_detection(character: str) -> None:
+    result = redact_question(f"일반{character}질문")
+    assert result == RedactionResult("일반질문", (), True, True, None)
+
+
+@pytest.mark.parametrize(
+    "character",
+    ["\u202a", "\u202b", "\u202c", "\u202d", "\u202e", "\u2066", "\u2067", "\u2068", "\u2069"],
+)
+def test_every_bidi_override_or_isolate_is_rejected(character: str) -> None:
+    result = redact_question(f"질문{character}값")
+    assert result.unresolved_reason is UnresolvedReason.UNSAFE_UNICODE
+    assert result.masked_text is None
+
+
 def test_exact_replacement_and_normalized_offsets() -> None:
     result = redact_question("연락처 010\u200b-0000-0000")
     assert result.masked_text == "연락처 [전화번호]"
@@ -176,7 +192,7 @@ def test_input_is_not_mutated_and_repeated_results_are_identical() -> None:
     assert first == second
 
 
-def test_raw_identifier_never_appears_in_value_objects_exception_or_log(
+def test_raw_identifier_never_appears_in_result_exception_or_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     sentinel = "unique.secret@example.invalid"
