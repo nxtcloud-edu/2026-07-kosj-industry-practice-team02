@@ -4,10 +4,12 @@ import argparse
 import contextlib
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
 import threading
+import time
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
@@ -27,6 +29,12 @@ MAX_AGGREGATE_PATH_BYTES = 128 * 1024 * 1024
 GIT_TIMEOUT_SECONDS = 60
 GIT_STREAM_CHUNK_BYTES = 64 * 1024
 GIT_THREAD_JOIN_SECONDS = 5
+GIT_CLEANUP_SECONDS = 1
+GIT_EVENT_POLL_SECONDS = 0.05
+BATCH_EVENT_QUEUE_SIZE = 1
+BATCH_ITEM = "item"
+BATCH_DONE = "done"
+BATCH_ERROR = "error"
 VALID_OBJECT_TYPES = frozenset({b"blob", b"commit", b"tag", b"tree"})
 LOCAL_PLACEHOLDER_DATABASE_URL = "_LOCAL_PLACEHOLDER_DATABASE_URL"
 SAFE_PLACEHOLDER_DATABASE_PATHS = frozenset(
@@ -351,56 +359,47 @@ def _read_exact(stream: object, size: int) -> bytes:
     return bytes(content)
 
 
-def _stop_process(process: subprocess.Popen[bytes]) -> None:
-    try:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+def _remaining_seconds(deadline: float) -> float:
+    return max(0.0, deadline - time.monotonic())
 
 
-def _batch_contents(
-    repository: Path,
+def _put_batch_event(
+    events: queue.Queue[tuple[str, bytes, bytes]],
+    event: tuple[str, bytes, bytes],
+    failed: threading.Event,
+    deadline: float,
+) -> None:
+    while not failed.is_set():
+        remaining = _remaining_seconds(deadline)
+        if remaining <= 0:
+            raise ScannerOperationalError
+        try:
+            events.put(event, timeout=min(GIT_EVENT_POLL_SECONDS, remaining))
+            return
+        except queue.Full:
+            continue
+    raise ScannerOperationalError
+
+
+def _batch_protocol_worker(
+    process: subprocess.Popen[bytes],
+    stdin: object,
+    stdout: object,
     object_ids: Sequence[bytes],
     object_types: dict[bytes, bytes],
-    *,
-    environment: dict[str, str],
-) -> Iterator[tuple[bytes, bytes]]:
-    if not object_ids:
-        return
-    command = ["git", "-c", "core.quotepath=false", "cat-file", "--batch"]
-    process: subprocess.Popen[bytes] | None = None
-    stderr_thread: threading.Thread | None = None
-    failed = threading.Event()
+    events: queue.Queue[tuple[str, bytes, bytes]],
+    failed: threading.Event,
+    deadline: float,
+) -> None:
     try:
-        process = subprocess.Popen(
-            command,
-            cwd=str(repository),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=environment,
-            shell=False,
-            bufsize=0,
-        )
-        if process.stdin is None or process.stdout is None or process.stderr is None:
-            raise ScannerOperationalError
-        stderr_thread = threading.Thread(
-            target=_read_bounded_stream,
-            args=(process, process.stderr, None, failed),
-            daemon=True,
-        )
-        stderr_thread.start()
         aggregate_size = 0
         for expected_id in object_ids:
-            process.stdin.write(expected_id + b"\n")
-            process.stdin.flush()
-            header_line = process.stdout.readline(MAX_BATCH_HEADER_BYTES + 1)
+            request = expected_id + b"\n"
+            written = stdin.write(request)
+            if not isinstance(written, int) or written != len(request):
+                raise ScannerOperationalError
+            stdin.flush()
+            header_line = stdout.readline(MAX_BATCH_HEADER_BYTES + 1)
             if (
                 not isinstance(header_line, bytes)
                 or not header_line.endswith(b"\n")
@@ -423,31 +422,150 @@ def _batch_contents(
             aggregate_size += size
             if aggregate_size > MAX_AGGREGATE_OBJECT_BYTES:
                 raise ScannerOperationalError
-            content = _read_exact(process.stdout, size)
-            if process.stdout.read(1) != b"\n":
+            content = _read_exact(stdout, size)
+            if stdout.read(1) != b"\n":
                 raise ScannerOperationalError
-            yield expected_id, content
-        process.stdin.close()
-        if process.stdout.read(1) != b"":
+            _put_batch_event(
+                events,
+                (BATCH_ITEM, expected_id, content),
+                failed,
+                deadline,
+            )
+        stdin.close()
+        if stdout.read(1) != b"":
             raise ScannerOperationalError
-        if process.wait(timeout=GIT_TIMEOUT_SECONDS) != 0:
+        _put_batch_event(events, (BATCH_DONE, b"", b""), failed, deadline)
+    except BaseException:
+        failed.set()
+        _terminate_process(process)
+        with contextlib.suppress(queue.Full):
+            events.put_nowait((BATCH_ERROR, b"", b""))
+
+
+def _stop_process(
+    process: subprocess.Popen[bytes],
+    *,
+    deadline: float | None = None,
+) -> None:
+    def wait_timeout() -> float:
+        if deadline is None:
+            return 5
+        return min(5, _remaining_seconds(deadline))
+
+    try:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=wait_timeout())
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=wait_timeout())
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _batch_contents(
+    repository: Path,
+    object_ids: Sequence[bytes],
+    object_types: dict[bytes, bytes],
+    *,
+    environment: dict[str, str],
+) -> Iterator[tuple[bytes, bytes]]:
+    if not object_ids:
+        return
+    deadline = time.monotonic() + GIT_TIMEOUT_SECONDS
+    command = ["git", "-c", "core.quotepath=false", "cat-file", "--batch"]
+    process: subprocess.Popen[bytes] | None = None
+    protocol_thread: threading.Thread | None = None
+    stderr_thread: threading.Thread | None = None
+    failed = threading.Event()
+    events: queue.Queue[tuple[str, bytes, bytes]] = queue.Queue(maxsize=BATCH_EVENT_QUEUE_SIZE)
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=str(repository),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            shell=False,
+            bufsize=0,
+        )
+        if process.stdin is None or process.stdout is None or process.stderr is None:
             raise ScannerOperationalError
-        stderr_thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
-        if failed.is_set() or stderr_thread.is_alive():
+        protocol_thread = threading.Thread(
+            target=_batch_protocol_worker,
+            args=(
+                process,
+                process.stdin,
+                process.stdout,
+                object_ids,
+                object_types,
+                events,
+                failed,
+                deadline,
+            ),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=_read_bounded_stream,
+            args=(process, process.stderr, None, failed),
+            daemon=True,
+        )
+        protocol_thread.start()
+        stderr_thread.start()
+        while True:
+            if failed.is_set():
+                raise ScannerOperationalError
+            remaining = _remaining_seconds(deadline)
+            if remaining <= 0:
+                raise ScannerOperationalError
+            try:
+                kind, object_id, content = events.get(
+                    timeout=min(GIT_EVENT_POLL_SECONDS, remaining)
+                )
+            except queue.Empty:
+                continue
+            if failed.is_set() or kind == BATCH_ERROR:
+                raise ScannerOperationalError
+            if kind == BATCH_ITEM:
+                yield object_id, content
+                continue
+            if kind == BATCH_DONE:
+                break
+            raise ScannerOperationalError
+
+        remaining = _remaining_seconds(deadline)
+        if remaining <= 0:
+            raise ScannerOperationalError
+        protocol_thread.join(timeout=remaining)
+        if protocol_thread.is_alive() or failed.is_set():
+            raise ScannerOperationalError
+        remaining = _remaining_seconds(deadline)
+        if remaining <= 0 or process.wait(timeout=remaining) != 0:
+            raise ScannerOperationalError
+        remaining = _remaining_seconds(deadline)
+        if remaining <= 0:
+            raise ScannerOperationalError
+        stderr_thread.join(timeout=remaining)
+        if stderr_thread.is_alive() or failed.is_set():
             raise ScannerOperationalError
     except ScannerOperationalError:
         raise
-    except (BrokenPipeError, OSError, subprocess.TimeoutExpired, ValueError):
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError):
         raise ScannerOperationalError from None
     finally:
         if process is not None:
-            _stop_process(process)
+            failed.set()
+            cleanup_deadline = time.monotonic() + GIT_CLEANUP_SECONDS
+            _stop_process(process, deadline=cleanup_deadline)
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None:
                     with contextlib.suppress(OSError):
                         stream.close()
-            if stderr_thread is not None:
-                stderr_thread.join(timeout=GIT_THREAD_JOIN_SECONDS)
+            for thread in (protocol_thread, stderr_thread):
+                if thread is not None:
+                    thread.join(timeout=_remaining_seconds(cleanup_deadline))
 
 
 def _categories(content: bytes, exact_secrets: Sequence[bytes]) -> set[str]:

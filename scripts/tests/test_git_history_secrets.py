@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import ModuleType
@@ -83,6 +84,100 @@ class FakePopenProcess:
 
     def kill(self) -> None:
         pass
+
+
+class StallingBatchInput(io.BytesIO):
+    def __init__(self, stalled_stage: str, release: threading.Event) -> None:
+        super().__init__()
+        self._stalled_stage = stalled_stage
+        self._release = release
+
+    def write(self, value: bytes) -> int:
+        if self._stalled_stage == "stdin":
+            self._release.wait()
+        return super().write(value)
+
+
+class StallingBatchOutput:
+    def __init__(
+        self,
+        stalled_stage: str,
+        release: threading.Event,
+        object_id: bytes,
+        content: bytes,
+    ) -> None:
+        self._stalled_stage = stalled_stage
+        self._release = release
+        self._stream = io.BytesIO(
+            object_id + b" blob " + str(len(content)).encode("ascii") + b"\n" + content + b"\n"
+        )
+        self._read_calls = 0
+
+    def readline(self, size: int = -1) -> bytes:
+        if self._stalled_stage == "header":
+            self._release.wait()
+        return self._stream.readline(size)
+
+    def read(self, size: int = -1) -> bytes:
+        self._read_calls += 1
+        if self._stalled_stage == "body" and self._read_calls == 1:
+            self._release.wait()
+        if self._stalled_stage == "trailing" and self._read_calls == 3:
+            self._release.wait()
+        return self._stream.read(size)
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+class StallingBatchProcess:
+    def __init__(self, stalled_stage: str, object_id: bytes, content: bytes) -> None:
+        self.release = threading.Event()
+        self.stdin = StallingBatchInput(stalled_stage, self.release)
+        self.stdout = StallingBatchOutput(
+            stalled_stage,
+            self.release,
+            object_id,
+            content,
+        )
+        self.stderr = io.BytesIO()
+        self.returncode: int | None = None
+        self.terminate_called = False
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.returncode is None:
+            self.returncode = 0
+        return self.returncode
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminate_called = True
+        self.returncode = -15
+        self.release.set()
+
+    def kill(self) -> None:
+        self.returncode = -9
+        self.release.set()
+
+
+def consume_batch_for_test(
+    module: ModuleType,
+    object_id: bytes,
+    failures: list[BaseException],
+) -> None:
+    try:
+        list(
+            module._batch_contents(
+                Path.cwd(),
+                [object_id],
+                {object_id: b"blob"},
+                environment={"GIT_NO_REPLACE_OBJECTS": "1"},
+            )
+        )
+    except BaseException as error:
+        failures.append(error)
 
 
 class GitHistorySecretScannerTests(unittest.TestCase):
@@ -502,6 +597,41 @@ class GitHistorySecretScannerTests(unittest.TestCase):
                     environment={"GIT_NO_REPLACE_OBJECTS": "1"},
                 )
             )
+
+    def test_batch_io_stalls_obey_wall_clock_deadline(self) -> None:
+        module = load_scanner(self)
+        object_id = b"a" * 40
+        content = b"clean"
+
+        for stalled_stage in ("stdin", "header", "body", "trailing"):
+            with self.subTest(stalled_stage=stalled_stage):
+                process = StallingBatchProcess(stalled_stage, object_id, content)
+                failures: list[BaseException] = []
+
+                with (
+                    mock.patch.object(module, "GIT_TIMEOUT_SECONDS", 0.05),
+                    mock.patch.object(module.subprocess, "Popen", return_value=process),
+                ):
+                    worker = threading.Thread(
+                        target=consume_batch_for_test,
+                        args=(module, object_id, failures),
+                        daemon=True,
+                    )
+                    worker.start()
+                    worker.join(timeout=0.5)
+                    missed_deadline = worker.is_alive()
+                    if missed_deadline:
+                        process.release.set()
+                    worker.join(timeout=1)
+
+                self.assertFalse(worker.is_alive(), "stalled test worker did not clean up")
+                self.assertFalse(
+                    missed_deadline,
+                    f"{stalled_stage} I/O exceeded the wall-clock deadline",
+                )
+                self.assertEqual(len(failures), 1)
+                self.assertIsInstance(failures[0], module.ScannerOperationalError)
+                self.assertTrue(process.terminate_called)
 
     def test_per_object_size_limit_fails_operationally(self) -> None:
         module = load_scanner(self)
