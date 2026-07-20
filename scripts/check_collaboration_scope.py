@@ -127,7 +127,10 @@ def require_commit(
 def _decode_path(raw_path: bytes) -> str:
     if not raw_path:
         raise OperationalError
-    return raw_path.decode("utf-8", errors="surrogateescape")
+    try:
+        return raw_path.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise OperationalError from error
 
 
 def parse_name_status(raw_diff: bytes) -> list[Change]:

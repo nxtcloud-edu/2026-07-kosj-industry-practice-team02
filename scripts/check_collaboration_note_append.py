@@ -10,7 +10,7 @@ INDEX_PATH = "docs/implementation-notes/INDEX.md"
 UNIFIED_CONTEXT_LINES = 1_000_000
 NOTE_PATH_PATTERN = re.compile(
     r"\Adocs/implementation-notes/"
-    r"(IMP-(\d{8})-(\d{3})-web-[^/\x00-\x1f\x7f]+\.md)\Z"
+    r"(IMP-(\d{8})-(\d{3})-web-[a-z0-9]+(?:-[a-z0-9]+)*\.md)\Z"
 )
 HUNK_HEADER_PATTERN = re.compile(
     rb"\A@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?\Z"
@@ -32,6 +32,7 @@ class ParsedHunk:
     new_count: int
     prefixes: tuple[bytes, ...]
     added_lines: tuple[bytes, ...]
+    context_lines: tuple[bytes, ...]
     context_count: int
     deletion_count: int
 
@@ -100,6 +101,7 @@ def _parse_single_hunk(lines: list[bytes]) -> tuple[list[bytes], ParsedHunk] | N
     new_count = int(header_match.group(4) or b"1")
     prefixes: list[bytes] = []
     added_lines: list[bytes] = []
+    context_lines: list[bytes] = []
     context_count = 0
     deletion_count = 0
     previous_was_content = False
@@ -115,12 +117,16 @@ def _parse_single_hunk(lines: list[bytes]) -> tuple[list[bytes], ParsedHunk] | N
         if not line or line[:1] not in (b" ", b"+", b"-"):
             return None
         prefix = line[:1]
+        content = line[1:]
+        if content.endswith(b"\r"):
+            content = content[:-1]
         prefixes.append(prefix)
         previous_was_content = True
         if prefix == b" ":
             context_count += 1
+            context_lines.append(content)
         elif prefix == b"+":
-            added_lines.append(line[1:])
+            added_lines.append(content)
         else:
             deletion_count += 1
 
@@ -131,6 +137,7 @@ def _parse_single_hunk(lines: list[bytes]) -> tuple[list[bytes], ParsedHunk] | N
         new_count=new_count,
         prefixes=tuple(prefixes),
         added_lines=tuple(added_lines),
+        context_lines=tuple(context_lines),
         context_count=context_count,
         deletion_count=deletion_count,
     )
@@ -209,6 +216,18 @@ def _valid_index_append_patch(note_path: str, lines: list[bytes]) -> bool:
     if row_match is None:
         return False
     row_date, row_number, linked_note = row_match.groups()
+    for raw_context_line in hunk.context_lines:
+        try:
+            context_line = raw_context_line.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            return False
+        context_match = INDEX_ROW_PATTERN.fullmatch(context_line)
+        if (
+            context_match is not None
+            and context_match.group(1) == note_date
+            and context_match.group(2) == note_number
+        ):
+            return False
     return (
         row_date == note_date
         and row_number == note_number

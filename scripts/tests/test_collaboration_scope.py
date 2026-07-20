@@ -206,6 +206,7 @@ class ScopePolicyUnitTests(unittest.TestCase):
             b"M\0",
             b"R100\0apps/web/src/old.tsx\0",
             b"\xff\0apps/web/src/page.tsx\0",
+            b"M\0apps/web/src/\xff.tsx\0",
         )
         for stream in malformed_streams:
             with self.subTest(stream=stream), self.assertRaises(scope.OperationalError):
@@ -281,6 +282,8 @@ class ScopePolicyUnitTests(unittest.TestCase):
             ],
             [scope.Change("D", ("apps/web/src/page.tsx",))],
             [scope.Change("C100", ("apps/web/src/a.tsx", "apps/web/src/b.tsx"))],
+            [scope.Change("T", ("apps/web/src/page.tsx",))],
+            [scope.Change("U", ("apps/web/src/page.tsx",))],
             [scope.Change("Q", ("apps/web/src/page.tsx",))],
             [scope.Change("M", ("apps/web/src/../../contracts/chat.yaml",))],
             [],
@@ -411,6 +414,21 @@ class ScopePolicyUnitTests(unittest.TestCase):
                 actual = note_append.validate_unified_diff(unified_diff, note_path)
                 self.assertFalse(actual)
 
+    def test_web_note_filename_uses_safe_ascii_slug_grammar(self) -> None:
+        self.assertIsNotNone(
+            note_append.web_note_identity(
+                "docs/implementation-notes/IMP-20260720-901-web-chat-shell-2.md"
+            )
+        )
+        for unsafe in (
+            "docs/implementation-notes/IMP-20260720-901-web-chat shell.md",
+            "docs/implementation-notes/IMP-20260720-901-web-채팅.md",
+            "docs/implementation-notes/IMP-20260720-901-web--chat.md",
+            "docs/implementation-notes/IMP-20260720-901-web-Chat.md",
+        ):
+            with self.subTest(unsafe=unsafe):
+                self.assertIsNone(note_append.web_note_identity(unsafe))
+
 
 class ScopePolicyCommandTests(unittest.TestCase):
     def test_frontend_changes_in_both_exact_roots_are_eligible_without_content_output(self) -> None:
@@ -456,6 +474,41 @@ class ScopePolicyCommandTests(unittest.TestCase):
         self.assertEqual(parsed["classification"], scope.FRONTEND_SELF_MERGE_ELIGIBLE)
         self.assertEqual(parsed["counts"], {"changes": 2, "paths": 2})
         self.assertEqual(parsed["paths"], sorted((note_path, INDEX_PATH)))
+
+    def test_duplicate_logical_note_id_requires_owner_review(self) -> None:
+        with TemporaryGitRepository() as repository:
+            note_name = "IMP-20260719-001-web-duplicate.md"
+            note_path = f"docs/implementation-notes/{note_name}"
+            repository.write(note_path, "# Duplicate logical ID\n")
+            repository.append(INDEX_PATH, index_row(note_name) + "\n")
+            head_sha = repository.commit("duplicate implementation note identity")
+
+            result = run_classifier(repository, repository.base_sha, head_sha)
+            parsed = parse_result(self, result)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(parsed["classification"], scope.OWNER_REVIEW_REQUIRED)
+
+    def test_crlf_index_append_is_eligible_without_replacing_existing_bytes(self) -> None:
+        with TemporaryGitRepository() as repository:
+            index_path = repository.root / INDEX_PATH
+            crlf_base = index_path.read_text(encoding="utf-8").replace("\n", "\r\n")
+            index_path.write_bytes(crlf_base.encode("utf-8"))
+            base_sha = repository.commit("CRLF index baseline")
+
+            note_name = "IMP-20260720-904-web-crlf-note.md"
+            note_path = f"docs/implementation-notes/{note_name}"
+            repository.write(note_path, "# CRLF append test\n")
+            index_path.write_bytes(
+                index_path.read_bytes() + index_row(note_name).encode("utf-8") + b"\r\n"
+            )
+            head_sha = repository.commit("append one CRLF index row")
+
+            result = run_classifier(repository, base_sha, head_sha)
+            parsed = parse_result(self, result)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(parsed["classification"], scope.FRONTEND_SELF_MERGE_ELIGIBLE)
 
     def test_index_insert_replacement_multiple_rows_and_mismatched_link_require_review(self) -> None:
         def build_case(kind: str) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
