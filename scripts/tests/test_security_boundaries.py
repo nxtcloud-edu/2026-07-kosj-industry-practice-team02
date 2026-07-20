@@ -27,19 +27,99 @@ def assignments(path: Path) -> dict[str, str]:
 
 
 def run_secret_scanner(
-    *paths: Path, repository_root: Path | None = None
+    *paths: Path,
+    repository_root: Path | None = None,
+    scanner: Path = SECRET_SCANNER,
+    environment: dict[str, str] | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     executable = shutil.which("powershell.exe") or shutil.which("powershell")
     if executable is None:
         raise AssertionError("Windows PowerShell is required")
-    command = [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SECRET_SCANNER)]
+    command = [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(scanner)]
     if paths:
         command.extend(["-Path", *(str(path) for path in paths)])
     if repository_root is not None:
         command.extend(["-RepositoryRoot", str(repository_root)])
     return subprocess.run(
-        command, cwd=ROOT, capture_output=True, check=False, encoding="utf-8", errors="replace"
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+        env=environment,
+        timeout=timeout,
     )
+
+
+def scanner_with_mock_git(directory: Path, mode: str) -> tuple[Path, dict[str, str]]:
+    helper = directory / "mock_git.py"
+    helper.write_text(
+        """\
+import os
+import sys
+import time
+
+mode = sys.argv[1]
+arguments = sys.argv[2:]
+if "rev-parse" in arguments:
+    sys.stdout.write(os.environ["SEJONG_MOCK_GIT_ROOT"] + "\\n")
+    raise SystemExit(0)
+if "ls-files" not in arguments:
+    raise SystemExit(3)
+if mode == "oversized-stderr":
+    marker = b"mock-git-stderr-secret-value"
+    target = (4 * 1024 * 1024) + 1
+    while target > 0:
+        chunk = marker[:target]
+        sys.stderr.buffer.write(chunk)
+        target -= len(chunk)
+    sys.stderr.buffer.flush()
+    sys.stdout.buffer.write(b"clean.txt\\0")
+    sys.stdout.buffer.flush()
+elif mode == "stalled-stdout":
+    sys.stdout.buffer.write(b"stalled-stdout-secret-value")
+    sys.stdout.buffer.flush()
+    time.sleep(12)
+elif mode == "stalled-stderr":
+    sys.stderr.buffer.write(b"stalled-stderr-secret-value")
+    sys.stderr.buffer.flush()
+    time.sleep(12)
+elif mode == "stalled-process":
+    os.close(sys.stdout.fileno())
+    os.close(sys.stderr.fileno())
+    time.sleep(12)
+else:
+    raise SystemExit(4)
+""",
+        encoding="utf-8",
+    )
+
+    source = SECRET_SCANNER.read_text(encoding="utf-8")
+    executable_literal = str(Path(os.sys.executable)).replace("'", "''")
+    helper_arguments = subprocess.list2cmdline([str(helper), mode]).replace("'", "''")
+    file_name_line = "$startInfo.FileName = 'git'"
+    arguments_line = "$startInfo.Arguments = $Arguments"
+    deadline_line = "$script:GitDeadlineMilliseconds = 60000"
+    if (
+        source.count(file_name_line) != 1
+        or source.count(arguments_line) != 1
+        or source.count(deadline_line) != 1
+    ):
+        raise AssertionError("secret scanner Git process seam changed")
+    source = source.replace(file_name_line, f"$startInfo.FileName = '{executable_literal}'")
+    source = source.replace(
+        arguments_line,
+        f"$startInfo.Arguments = '{helper_arguments} ' + $Arguments",
+    )
+    source = source.replace(deadline_line, "$script:GitDeadlineMilliseconds = 300")
+    scanner = directory / "check_secret_patterns.mock-git.ps1"
+    scanner.write_text(source, encoding="utf-8")
+    (directory / "clean.txt").write_text("public content\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["SEJONG_MOCK_GIT_ROOT"] = str(directory)
+    return scanner, environment
 
 
 def run_bundle_scanner(build: Path, sentinel: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -197,6 +277,92 @@ class SecretPatternScannerTest(unittest.TestCase):
         assert_exit(self, result, 2)
         self.assertIn("rule=GIT_DISCOVERY_ERROR count=1", result.stdout)
         self.assertNotIn("non repository sentinel", result.stdout + result.stderr)
+
+    def test_repository_mode_rejects_oversized_active_file_before_content_allocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong oversized candidate ") as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+            active = repository / "oversized-active.bin"
+            secret_value = b"sk-" + (b"q" * 32)
+            active.write_bytes(secret_value + (b"\0" * ((4 * 1024 * 1024) + 1)))
+            subprocess.run(["git", "add", "--", active.name], cwd=repository, check=True)
+
+            result = run_secret_scanner(repository_root=repository)
+
+        assert_exit(self, result, 2)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["oversized-active.bin rule=FILE_SIZE_LIMIT count=1"],
+        )
+        self.assertFalse(result.stderr)
+        assert_no_disclosure(self, result, [secret_value.decode("ascii")])
+
+    def test_repository_mode_rejects_aggregate_active_bytes_before_next_allocation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong aggregate candidate ") as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+            for index in range(5):
+                active = repository / f"aggregate-{index}.bin"
+                active.write_bytes(b"\0" * (4 * 1024 * 1024))
+            subprocess.run(["git", "add", "--", "."], cwd=repository, check=True)
+
+            result = run_secret_scanner(repository_root=repository)
+
+        assert_exit(self, result, 2)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [". rule=AGGREGATE_SCAN_LIMIT count=1"],
+        )
+        self.assertFalse(result.stderr)
+
+    def test_repository_mode_bounds_git_stderr_without_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sejong mock git stderr ") as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+            scanner, environment = scanner_with_mock_git(repository, "oversized-stderr")
+
+            result = run_secret_scanner(
+                repository_root=repository,
+                scanner=scanner,
+                environment=environment,
+                timeout=8,
+            )
+
+        assert_exit(self, result, 2)
+        self.assertEqual(result.stdout.splitlines(), [". rule=GIT_DISCOVERY_ERROR count=1"])
+        self.assertFalse(result.stderr)
+        assert_no_disclosure(self, result, ["mock-git-stderr-secret-value"])
+
+    def test_repository_mode_deadline_covers_stalled_git_streams_and_process(self) -> None:
+        values = {
+            "stalled-stdout": "stalled-stdout-secret-value",
+            "stalled-stderr": "stalled-stderr-secret-value",
+            "stalled-process": "stalled-process-secret-value",
+        }
+        for mode, secret_value in values.items():
+            with self.subTest(mode=mode):
+                with tempfile.TemporaryDirectory(prefix="sejong mock git stall ") as directory:
+                    repository = Path(directory)
+                    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+                    scanner, environment = scanner_with_mock_git(repository, mode)
+
+                    try:
+                        result = run_secret_scanner(
+                            repository_root=repository,
+                            scanner=scanner,
+                            environment=environment,
+                            timeout=8,
+                        )
+                    except subprocess.TimeoutExpired:
+                        self.fail(f"scanner missed its Git deadline for mode={mode}")
+
+                assert_exit(self, result, 2)
+                self.assertEqual(
+                    result.stdout.splitlines(),
+                    [". rule=GIT_DISCOVERY_ERROR count=1"],
+                )
+                self.assertFalse(result.stderr)
+                assert_no_disclosure(self, result, [secret_value])
 
     def test_runtime_shell_assignment_prefixes_are_detected_without_value_disclosure(
         self,

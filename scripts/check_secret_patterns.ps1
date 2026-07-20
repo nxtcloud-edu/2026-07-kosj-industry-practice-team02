@@ -40,6 +40,12 @@ if ($PSCmdlet.ParameterSetName -eq 'Repository') {
     }
 }
 $script:MaxGitOutputBytes = 32MB
+$script:MaxGitErrorBytes = 1MB
+$script:GitDeadlineMilliseconds = 60000
+$script:MaxRepositoryFileBytes = 4MB
+$script:MaxRepositoryScanBytes = 16MB
+$script:RepositoryBytesScanned = [int64]0
+$script:AggregateLimitExceeded = $false
 $script:ExcludedSegments = @(
     '.git', '.mypy_cache', '.next', '.pytest_cache', '.ruff_cache', '.superpowers',
     '.tools', '.turbo', '.venv', '.worktrees', '__pycache__', 'artifacts', 'backups',
@@ -188,27 +194,105 @@ function Invoke-BoundedGit {
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo
     $memory = New-Object System.IO.MemoryStream
+    $processStarted = $false
+    $stdoutTask = $null
+    $stderrTask = $null
     try {
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         if (-not $process.Start()) {
             throw 'git process did not start'
         }
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-        $buffer = New-Object byte[] 8192
-        while (($read = $process.StandardOutput.BaseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-            if (($memory.Length + $read) -gt $script:MaxGitOutputBytes) {
-                try { $process.Kill() } catch { }
-                throw 'git output exceeded scanner limit'
+        $processStarted = $true
+        $stdoutBuffer = New-Object byte[] 8192
+        $stderrBuffer = New-Object byte[] 8192
+        $stderrBytes = [int64]0
+        $stdoutClosed = $false
+        $stderrClosed = $false
+        $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync(
+            $stdoutBuffer, 0, $stdoutBuffer.Length
+        )
+        $stderrTask = $process.StandardError.BaseStream.ReadAsync(
+            $stderrBuffer, 0, $stderrBuffer.Length
+        )
+
+        while (-not ($stdoutClosed -and $stderrClosed -and $process.HasExited)) {
+            if ($stopwatch.ElapsedMilliseconds -ge $script:GitDeadlineMilliseconds) {
+                throw 'git discovery deadline exceeded'
             }
-            $memory.Write($buffer, 0, $read)
+
+            $madeProgress = $false
+            if (-not $stdoutClosed -and $stdoutTask.IsCompleted) {
+                $read = [int]$stdoutTask.GetAwaiter().GetResult()
+                if ($read -eq 0) {
+                    $stdoutClosed = $true
+                }
+                else {
+                    if (($memory.Length + $read) -gt $script:MaxGitOutputBytes) {
+                        throw 'git stdout exceeded scanner limit'
+                    }
+                    $memory.Write($stdoutBuffer, 0, $read)
+                    $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync(
+                        $stdoutBuffer, 0, $stdoutBuffer.Length
+                    )
+                }
+                $madeProgress = $true
+            }
+
+            if (-not $stderrClosed -and $stderrTask.IsCompleted) {
+                $read = [int]$stderrTask.GetAwaiter().GetResult()
+                if ($read -eq 0) {
+                    $stderrClosed = $true
+                }
+                else {
+                    $stderrBytes += $read
+                    if ($stderrBytes -gt $script:MaxGitErrorBytes) {
+                        throw 'git stderr exceeded scanner limit'
+                    }
+                    $stderrTask = $process.StandardError.BaseStream.ReadAsync(
+                        $stderrBuffer, 0, $stderrBuffer.Length
+                    )
+                }
+                $madeProgress = $true
+            }
+
+            if (-not $madeProgress) {
+                Start-Sleep -Milliseconds 10
+            }
         }
-        $process.WaitForExit()
-        [void]$stderrTask.GetAwaiter().GetResult()
         if ($process.ExitCode -ne 0) {
             throw 'git discovery failed'
         }
         return ,$memory.ToArray()
     }
     finally {
+        if ($processStarted) {
+            $shutdownStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill()
+                }
+            }
+            catch { }
+            try {
+                $remaining = 1000 - [int]$shutdownStopwatch.ElapsedMilliseconds
+                if ($remaining -gt 0 -and -not $process.HasExited) {
+                    [void]$process.WaitForExit($remaining)
+                }
+            }
+            catch { }
+            foreach ($readTask in @($stdoutTask, $stderrTask)) {
+                if ($null -eq $readTask) {
+                    continue
+                }
+                try {
+                    $remaining = 1000 - [int]$shutdownStopwatch.ElapsedMilliseconds
+                    if ($remaining -gt 0) {
+                        [void]$readTask.Wait($remaining)
+                    }
+                }
+                catch { }
+            }
+        }
         $memory.Dispose()
         $process.Dispose()
     }
@@ -308,8 +392,51 @@ function Scan-File {
 
     $displayPath = Get-DisplayPath -LiteralPath $File.FullName
     try {
-        $bytes = [System.IO.File]::ReadAllBytes($File.FullName)
-        $content = $script:Utf8NoBom.GetString($bytes)
+        if ($script:InputPaths.Count -gt 0) {
+            $bytes = [System.IO.File]::ReadAllBytes($File.FullName)
+            $content = $script:Utf8NoBom.GetString($bytes)
+        }
+        else {
+            if ($script:AggregateLimitExceeded) {
+                return
+            }
+            $stream = [System.IO.File]::Open(
+                $File.FullName,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read,
+                [System.IO.FileShare]::ReadWrite
+            )
+            try {
+                $length = [int64]$stream.Length
+                if ($length -gt $script:MaxRepositoryFileBytes) {
+                    Add-Result -Results $OperationalResults -DisplayPath $displayPath -Rule 'FILE_SIZE_LIMIT' -Count 1
+                    return
+                }
+                if ($script:RepositoryBytesScanned -gt ($script:MaxRepositoryScanBytes - $length)) {
+                    Add-Result -Results $OperationalResults -DisplayPath '.' -Rule 'AGGREGATE_SCAN_LIMIT' -Count 1
+                    $script:AggregateLimitExceeded = $true
+                    return
+                }
+
+                $script:RepositoryBytesScanned += $length
+                $bytes = New-Object byte[] ([int]$length)
+                $offset = 0
+                while ($offset -lt $bytes.Length) {
+                    $read = $stream.Read($bytes, $offset, $bytes.Length - $offset)
+                    if ($read -eq 0) {
+                        throw 'file changed during scan'
+                    }
+                    $offset += $read
+                }
+                if ($stream.ReadByte() -ne -1) {
+                    throw 'file changed during scan'
+                }
+                $content = $script:Utf8NoBom.GetString($bytes, 0, $bytes.Length)
+            }
+            finally {
+                $stream.Dispose()
+            }
+        }
     }
     catch {
         Add-Result -Results $OperationalResults -DisplayPath $displayPath -Rule 'FILE_READ_ERROR' -Count 1
