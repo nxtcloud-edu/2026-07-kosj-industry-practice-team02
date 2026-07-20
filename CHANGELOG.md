@@ -4,6 +4,19 @@
 
 ### Added
 
+- D-054: 사용자의 `COLLAB-001 계획 승인, 구현 시작`으로 협업 전환 실행계획을 승인하고 로컬
+  history-secret/scope/docs 검사기와 GitHub workflow/template 구현을 시작; account 인증이 필요한
+  remote·invite·Codex App·rehearsal은 실제 외부 증거 전까지 pending
+- Q-GIT-001/Q-OWN-001/Q-GIT-002/Q-GIT-003/Q-CLOUD-001/Q-COLLAB-001과 ADR-0019:
+  개인 GitHub private 단일 저장소, 인간 Frontend 팀원의 전체 UI 수직 흐름과 제한적 self-merge,
+  사용자 검토가 필요한 contract/backend/DB/data/security/dependency 경계, Codex Cloud
+  Draft-PR-only, local-only Docker/Supabase/DeepSeek actual gate를 승인된 협업 명세·Frontend
+  handoff·Review 실행계획으로 기록; pre-push content secret 0, remote/CI/invite/App 설정과 제품
+  코드는 아직 변경하지 않음
+- Q-GIT-004=A/D-053: 기존 author/committer email이 사용자 본인이며 private Frontend
+  collaborator에게 보여도 괜찮음을 확인해 현재 history·SHA 보존과 noreply rewrite 0을 확정;
+  당시 COLLAB-001을 Review로 전환했고, 이후 D-054 실행 승인 전까지 remote/commit/push/CI/invite/App
+  변경 0
 - Q-SEED-002=A/D-044 and ADR-0017 successor correction specification/plan: preserve immutable `.1`,
   create reviewed `.2` with the PostgreSQL 17 effective membership-option union, and require the full
   disposable-local cycle before official-data promotion; no successor artifact or DB mutation yet

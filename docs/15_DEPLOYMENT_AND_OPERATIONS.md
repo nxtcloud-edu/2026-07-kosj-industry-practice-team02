@@ -23,7 +23,14 @@
 
 현재 위 항목은 공개 배포 전에 확인할 Deferred 항목이다. 초기 구현을 막는 배포 계정 요구사항으로 해석하지 않는다.
 
-현재 원격 저장소와 CI는 사용하지 않는다. local Git에서 lint·typecheck·test·build·OpenAPI/JSON Schema·secret scan을 수동 gate로 실행하고 구현 노트에 명령과 실제 결과를 남긴다. 원격/CI는 사용자가 Git 연결을 다시 요청할 때 추가한다.
+Q-GIT/Q-COLLAB 결정으로 사용자의 개인 GitHub private source remote, Frontend collaborator와
+collaboration CI 방향, Q-GIT-004=A history·SHA 보존과 COLLAB-001 실행계획은 승인됐다. 로컬
+검사기·workflow/template를 먼저 구현하고 실제 remote·초대·Codex 연결은 account 확인과 사용자
+browser 인증 뒤에만 수행한다. 실행 뒤에도 local Git의 lint·typecheck·test·build·contract·secret
+증거를 유지하고 Windows/Docker/
+DeepSeek actual gate를 Cloud CI로 대체하지 않는다. 이 source remote는 tracked source/history의
+협업 경로이며 Vercel/Render/Supabase application deployment, remote DB, public admin/API 승인이
+아니다.
 
 ## 필수 엔드포인트
 
@@ -50,7 +57,7 @@ health/readiness에 비밀이나 내부 상세를 노출하지 않는다.
 - 배포 rollback 지침
 - 발표용 캡처/녹화
 
-local/private 합성 MVP의 기본 복구 목표는 RPO 24시간, RTO 60분이다. 승인 seed와 versioned migration을 1차 복구 수단으로 사용하고 매일 및 파괴적 migration/데모 milestone 직전에 gitignored local logical dump를 만든다. dump에는 비밀·실제 시민 데이터를 넣지 않으며 30일이 지난 dump는 삭제한다. 인수인계 전에 reset/replay 또는 dump restore와 서비스 개방 전 retention purge를 한 번 재현한다. 원격/off-device backup이 없으므로 단일 PC 손실 위험은 남으며, 실제·비재현 데이터나 공개 운영 전에는 백업 위치·암호화·RPO/RTO·삭제 전파를 다시 승인한다.
+local/private 합성 MVP의 기본 복구 목표는 RPO 24시간, RTO 60분이다. 승인 seed와 versioned migration을 1차 복구 수단으로 사용하고 매일 및 파괴적 migration/데모 milestone 직전에 gitignored local logical dump를 만든다. dump에는 비밀·실제 시민 데이터를 넣지 않으며 30일이 지난 dump는 삭제한다. 인수인계 전에 reset/replay 또는 dump restore와 서비스 개방 전 retention purge를 한 번 재현한다. COLLAB-001의 private GitHub remote가 실제 push되면 tracked Git history의 off-device 복사본은 생기지만 `.env`, ignored tool/runtime, Docker state와 logical dump는 백업되지 않는다. 실제·비재현 데이터나 공개 운영 전에는 별도 백업 위치·암호화·RPO/RTO·삭제 전파를 다시 승인한다.
 
 ## DB-001 local 운영 절차
 

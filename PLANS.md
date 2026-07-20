@@ -10,6 +10,7 @@
 - 개인정보·로그 정책 변경
 - LLM 공급자 또는 검색 전략 변경
 - 배포·환경·의존성 변경
+- 원격 repository·collaborator·GitHub App·branch/PR/merge 권한·CI 변경
 - 여러 앱/패키지에 걸친 리팩터링
 - 30분 이상 또는 5개 이상 파일이 예상되는 작업
 

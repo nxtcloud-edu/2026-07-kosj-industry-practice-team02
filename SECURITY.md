@@ -12,12 +12,30 @@
 - LLM이 생성한 출처를 공식 근거로 표시
 - 승인되지 않은 KB를 시민 답변에 노출
 - mock 기관 정보를 실제처럼 표시
+- private GitHub·Issue·PR·Actions artifact·Codex Cloud에 local env/secret/시민 원문 업로드
+- Codex Cloud에서 DeepSeek 실호출, remote DB mutation 또는 자기 PR merge
 
 ## 보안 관련 변경
 
 마스킹, 로그, 권한, 보관기간, 외부 LLM, CORS, 배포 비밀, DB RLS/권한 변경은 반드시 인간 승인을 받고 ADR 또는 결정 로그를 남긴다.
 
 자세한 정책은 `docs/07_SECURITY_PRIVACY.md`와 `docs/source-of-truth/PRIVACY_POLICY.md`를 따른다.
+
+## GitHub·Codex Cloud 경계
+
+- 원격 최초 push 전 worktree와 전체 reachable Git history를 값 비노출 방식으로 검사한다.
+- 확인된 secret은 파일 삭제 commit만으로 닫지 않고 먼저 회전하며 history 정리는 인간 승인을
+  받는다.
+- private repository는 노출 가능성을 줄일 뿐 secret/PII 커밋을 허용하지 않는다.
+- Codex GitHub App은 selected repository 하나만 허용하고 Cloud에는 DeepSeek key, DB DSN,
+  context-token secret을 등록하지 않는다.
+- Actions 권한은 `contents: read` 기본이며 `pull_request_target`으로 untrusted PR code를 실행하지
+  않는다. workflow action은 공식 출처의 검토된 commit SHA로 고정한다.
+- Frontend 팀원의 self-merge는 협업 정책이지 GitHub Free의 강제 보안 경계가 아니다. contract,
+  backend, DB/migration, official/staging data, security/privacy, dependency/lockfile 변경은 owner
+  review로 승격한다.
+- GitHub source remote는 application deployment나 DB backup이 아니다. ignored env·Docker state·
+  local logical dump는 GitHub에 올리지 않는다.
 
 ## 환경변수와 로그 경계
 
@@ -62,9 +80,9 @@ JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` ru
 
 ## Local PostgreSQL 안전 경계
 
-- DB-001 `0.3.0-local`은 exact loopback/full gate 뒤에만 승격할 후보이며 현재 manifest는
-  `0.2.0-draft`다. Docker Desktop 4.62.0/Engine 29.2.1의 stock CLI runtime이 wildcard로
-  해석돼 fail-closed했으므로 현재 localhost-only 기준선은 없다.
+- DB-001은 project-local patched Supabase CLI `2.109.1`의 exact loopback/full gate를 통과한
+  disposable `0.3.0-local` 기준선이다. stock CLI와 Q-SEC-004/005의 Docker 전역 설정은 IPv6
+  wildcard를 남겼으므로 DB 실행 권위나 fallback이 아니다.
 - local Supabase/PostgreSQL의 개발용 기본 credential, TLS/rate-limit 부재를 전제로 한다.
   runner는 Engine 28+, 고정 network/container identity와 actual single `127.0.0.1:54322`를
   reset/status/env 전에 요구한다. port를 외부 interface에 bind하거나 credential을
@@ -79,8 +97,9 @@ JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` ru
   remote/public 배포, public admin/API, public backend DB credential을 차단한다.
 - Q-SEC-004=A/D-029의 `default-local-port-binding`과 Q-SEC-005=A/D-030의
   `local-only-port-binding`은 모두 actual HostIP 미지정 probe에서 `127.0.0.1`과 IPv6 wildcard
-  `::`를 함께 생성해 exact local 기준에 실패했다. explicit `127.0.0.1` control만 단일
-  loopback이었다. Q-SEC-006/A-024 해결 전 local DB runtime과 후속
-  DB 작업을 계속 차단한다. 공식 근거:
+  `::`를 함께 생성해 exact local 기준에 실패했다. Q-SEC-006=A/D-031과
+  Q-TOOL-001=A/D-032의 source/hash-pinned patched CLI·short workspace가 exact one
+  `127.0.0.1:54322`, pgTAP 282, integration 8/8과 cleanup 0/0을 통과했다. 이는 local/private
+  기준선일 뿐 public readiness가 아니다. 공식 근거:
   [Docker published ports](https://docs.docker.com/engine/network/port-publishing/),
   [Docker Desktop settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/).

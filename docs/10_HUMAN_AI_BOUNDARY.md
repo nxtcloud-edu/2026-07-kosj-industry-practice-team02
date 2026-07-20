@@ -15,6 +15,8 @@
 | 의존성 | 새 production package | 보안·유지비 |
 | 배포 | 도메인, CORS, secret, public URL | 운영 위험 |
 | KPI | 성공률 정의와 공개 수치 | 평가 신뢰성 |
+| Source control·접근 | repository visibility/owner, collaborator, GitHub App scope, merge 권한 | 소스·비밀·감사·공급망 위험 |
+| Cloud 경계 | Cloud secret, internet, 자동 병합, local-only 검증 대체 | 외부 전송·잘못된 완료 주장 위험 |
 
 ## AI가 자율 처리 가능
 
@@ -26,6 +28,10 @@
 - 문서 링크·색인·오탈자
 - 성능에 영향 없는 파일 배치
 
+AI 자율 범위에는 branch 작성, Draft PR 준비와 검증 증거 정리가 포함될 수 있지만 merge, repository
+visibility 변경, collaborator/App 권한 부여, secret 등록, 공개 배포는 포함되지 않는다. Codex Cloud는
+Q-CLOUD-001=A에 따라 스스로 merge하지 않는다.
+
 ## 경계가 애매할 때
 
 다음 중 하나라도 해당하면 인간 질문으로 승격한다.
@@ -36,6 +42,7 @@
 - 롤백이 어렵거나 파괴적임
 - 여러 앱/팀의 계약이 달라짐
 - 정답 데이터나 평가 지표가 달라짐
+- GitHub/Cloud actor가 접근·merge·secret·internet 권한을 새로 얻음
 
 ## 보고 형식
 

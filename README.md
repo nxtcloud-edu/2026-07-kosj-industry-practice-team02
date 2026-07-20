@@ -43,8 +43,16 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 ## 현재 상태
 
 - 최종 제품과 정책 문서는 확정됨.
-- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, 승인 seed 전 `/ready=503`. Web은 정적 소개 `/` shell까지 구현됐고 `/chat`·`/admin`은 아직 없음.
+- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, 승인 seed 전 `/ready=503`. Web은 정적 소개
+  `/`와 입력·저장·fetch 없는 `/chat` 준비 화면까지 구현됐고, 실제 chat 입력/API 연결과 `/admin`은
+  아직 없음.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
+- 개인 GitHub private source remote, Frontend 팀원 전체 수직 흐름 소유, 허용 frontend-only PR
+  자가 병합, Codex Cloud Draft-PR-only 운영 명세와
+  [COLLAB-001 실행계획](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md)은
+  승인됐다. 로컬 검사기·CI/template는 구현 중이고 실제 remote·collaborator·Codex 연결은 account
+  identifier와 사용자 browser 인증을 기다린다. Q-GIT-004=A로 본인 author email의 private
+  collaborator 공개와 기존 history·SHA 보존은 확정됐다.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
 - 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
 - DB-001 disposable local/private 기준선은 patched Supabase CLI 2.109.1, PostgreSQL 17.6,
@@ -63,6 +71,19 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 - Q-SEC-003=A/D-046으로 exact privileged function 22 signatures의 property-only `00700`
   hardening 방향은 확정됐지만 public 준비까지 구현을 보류했다. 그전에는 local/private 전용이며
   remote/public 배포, public admin/API, public backend DB credential 사용을 금지한다.
+
+## GitHub·Cloud 협업 준비
+
+- 상세 권한·병합·비밀 경계:
+  [승인된 협업 설계](docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md)
+- Frontend 담당자 시작점:
+  [Frontend collaborator handoff](docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md)
+- 원격 생성·CI·Codex 연결 순서:
+  [COLLAB-001 실행계획](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md)
+
+private GitHub source remote는 public Web/API나 remote DB 배포가 아니다. Cloud에는 DeepSeek key,
+DB DSN과 context secret을 넣지 않고 Codex는 branch와 Draft PR까지만 만든다. Docker/Supabase와
+DeepSeek 합성 actual 검증은 계속 local-only다.
 
 ## 개발 런타임 계약
 

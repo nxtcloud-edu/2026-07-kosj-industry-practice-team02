@@ -62,9 +62,13 @@ Approved — 2026-07-15 사용자가 `진행`으로 최종 계획·초기 프로
   - DeepSeek 기존 잔액·local/private 합성 경계와 정확한 `deepseek-v4-flash`/thinking off/max 1024/concurrency 1/retry 1/run cap 30이 확정됐다. 아직 key 입력·패키지 설치·실제 호출은 0건이다.
   - 이 PC는 RAM 15.6GiB, Intel Arc 표시 메모리 2GiB로 확인됐다. 20B급 local model은 안정적 데모 기본값으로 부적합하고 4B급도 실제 한국어 품질·latency benchmark가 필요하다.
   - Supabase CLI 버전 SQL migration을 선택했지만 도구 설치·Docker local stack·migration은 계획 승인 전 실행하지 않았다.
-  - 원격 저장소·CI 없이 local 수동 검증을 사용하므로 단일 PC 백업과 명령 증거가 필요하다.
+  - 원격 저장소·CI 없이 local 수동 검증하므로 단일 PC 백업과 명령 증거만 있다.
   - 앱이 없으므로 build/test/lint/typecheck/E2E를 실행할 수 없다.
   - 인간 결정형 A/Blocker는 모두 해소됐고, 공개 배포·실제 시민 외부 LLM·원격 Git/CI는 현재 구현과 분리된 미래 승인 사항이다.
+
+> 역사적 상태 주석(2026-07-20): 이 계획 본문의 `현재`, `남은`, `deferred` 표현은 2026-07-14
+> 승인 시점의 기록이다. 이후 private source remote와 collaboration CI는 ADR-0019/COLLAB-001이
+> successor로 소유한다. local-only Docker/Supabase/DeepSeek gate는 계속 유효하다.
 
 ## 미지의 영역과 인터뷰
 

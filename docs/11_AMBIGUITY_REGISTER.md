@@ -11,11 +11,11 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-005 | A | 데이터 | Resolved | AI/Data·Backend 작성, PM 승인, 2026-07-20 목표 | Q-DATA-001 / D-011 |
 | A-006 | B | 마스킹 | Resolved with review gate | 이름·상세주소는 재현율 우선 보수적 감지. 과잉 마스킹이 성공률 80% 미달 원인으로 입증돼도 B 전환은 재승인 | Q-PRIV-002 / ADR-0004 |
 | A-007 | B | 검색 | Defaulted / Deferred | MVP는 keyword/metadata만 사용하고 embedding flag는 off | ADR-0006; 품질 근거와 비용 승인 전 활성화 금지 |
-| A-008 | B | CI | Resolved for current phase; deferred | local Git+수동 검증 gate. 원격/CI는 사용자가 다시 요청할 때 결정 | Q-CI-001 / D-021 |
+| A-008 | B | CI·source remote | Resolved / implementation in progress | private GitHub source remote와 collaboration CI 방향 및 실행계획은 승인됨. Windows/Docker/DeepSeek local gate는 유지하고 로컬 검사기/workflow를 먼저 구현; 실제 remote는 account 확인 뒤 진행 | D-021 partially superseded by D-047~D-054 / ADR-0019 |
 | A-009 | B | 데모 | Defaulted / Deferred | 현재 완료 기준은 local live demo+재시작 runbook. 공개 URL·녹화본은 별도 발표/배포 승인 시 선택 | D-013/D-021 범위의 0원·local-first 기본값 |
 | A-010 | C | UI | Defaultable | 디자인 시스템 세부 | 기존 아이디어노트 톤, 접근성 우선 |
 | A-011 | C | 코드 | Defaultable | 모듈 명명·파일 분할 | framework conventions |
-| A-012 | A | 저장소 | Resolved | 원본 원격 없음; 독립 Git repo와 `main` 사용 | Q-REPO-001 / D-009; init은 계획 승인 후 |
+| A-012 | A | 저장소 | Resolved / private hosting successor approved | 원본 원격 없이 독립 Git repo와 `main`을 시작한 역사적 결정은 유지하며, 후속 private GitHub source remote는 D-047/COLLAB-001이 소유 | Q-REPO-001 / D-009 / D-047 / ADR-0019 |
 | A-013 | A | 개인정보 | Resolved | 30일 후 masked text만 파기, 행·비텍스트 메타·후보 FK 유지 | Q-PRIV-001 / ADR-0004 |
 | A-014 | A | 대화 | Resolved | 현재 탭 메모리 transcript + 15분 서명형 client-carried context token; 서버 세션·raw transcript 없음 | Q-CHAT-001 / D-024 / ADR-0010 |
 | A-015 | B | 오류 계약 | Resolved | 정책 응답은 200, 안전 대체가 없는 기술 장애는 503 `SERVICE_UNAVAILABLE` envelope | Q-API-001 / ADR-0009 |
@@ -36,6 +36,13 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-030 | A / Blocker | official seed correction | Resolved decision / spec·plan Review | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044 / ADR-0017. 후속 plan 승인 전 `.2`/dispatcher/DB 실행 0 |
 | A-031 | B / High | unresolved PII consumer response | Resolved behavior / consumer implementation deferred | Q-PII-002=A: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045 / ADR-0004. 별도 public contract+forward DB migration 명세·승인 전 route 차단 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
+| A-033 | A | Git source remote·access | Resolved decision / external execution pending | Q-GIT-001=A 및 D-054 실행계획 승인: 개인 GitHub private repository, Frontend collaborator, Codex app selected-repository-only. account identifier와 browser 인증 전 remote 생성·push 완료 주장 0 | D-047/D-053/D-054 / ADR-0019 |
+| A-034 | A | Frontend ownership | Resolved | Q-OWN-001=A: 인간 팀원이 세 페이지·typed client·화면 상태·반응형·접근성·frontend unit/E2E 전체 소유 | D-048 / frontend handoff; contract/backend/DB/data/security는 owner 요청 |
+| A-035 | B | GitHub plan·enforcement | Resolved | Q-GIT-002=A: GitHub Free·0원, private branch protection/CODEOWNERS 강제를 전제하지 않음 | D-049 / ADR-0019; PR·CI·scope policy와 사람 규칙, Pro 전환은 재승인 |
+| A-036 | B | Frontend merge | Resolved policy | Q-GIT-003=B: 허용 frontend-only green PR은 팀원 자가 병합, 경계 밖은 사용자 검토 | D-050 / ADR-0019; GitHub Free 기술적 완전 강제 아님 |
+| A-037 | A | Codex Cloud merge·secret | Resolved policy | Q-CLOUD-001=A: Cloud는 branch+Draft PR만, 사람이 merge; secret·DeepSeek·Docker actual 없음 | D-051 / ADR-0019 |
+| A-038 | A | Collaboration operating model | Resolved spec and plan / implementation in progress | Q-COLLAB-001=A: private single repo, role-scoped self-merge, Cloud Draft PR, local-only actual gate. D-054로 로컬 구현 시작 | D-052~D-054 / collaboration design and plan |
+| A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
 
 ## 우선도 정의
 
@@ -44,8 +51,11 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 열린 인간 결정형 A/Blocker는 0개다. DATA-SEED-002는 architecture 결정이 아니라 written
-specification/plan의 명시적 실행 승인만 기다린다.
+현재 열린 인간 결정형 A/Blocker는 0개다. A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
+사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
+보존한다. COLLAB-001 실행계획은 D-054로 승인돼 로컬 Tasks 1~3을 진행한다. 남은 외부 gate는
+사용자가 직접 확인할 GitHub owner/repository name/collaborator login과 browser 인증·초대 수락·
+Codex App repository 제한·rehearsal 증거다. AI가 계정 식별자나 성공 증거를 추정하지 않는다.
 A-032/Q-PII-003은 2026-07-20 D-043으로 해결돼 AI-001A pure core 실행이 승인됐다.
 A-031/Q-PII-002의 시민 동작은 D-045로 해결됐다. route/consumer activation은 공개 계약과
 forward DB migration을 함께 다루는 별도 명세·승인 전까지 Blocked다.
@@ -75,9 +85,29 @@ A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat 
 
 ## 현재 열린 인터뷰 질문
 
-없음. 세 결정은 D-044~D-046으로 확정됐고, 남은 것은 별도 명세·계획·실행 승인 gate다.
+없음. D-053으로 A-039/Q-GIT-004가 해결됐고 D-054로 COLLAB-001 실행계획이 승인됐다. GitHub
+account identifier와 browser 인증은 설계 질문이 아닌 외부 실행 입력으로 남는다.
 
 ## 2026-07-20 해결된 인터뷰 질문
+
+Q-GIT-004. 기존 Git commit author/committer email metadata를 private remote에 포함할 것인가
+- 결정: A / D-053 / ADR-0019. 사용자 본인의 email이며 private Frontend collaborator에게 보여도
+  괜찮음을 확인했다. 현재 Git history와 SHA를 보존하고 noreply rewrite를 하지 않는다.
+- 왜 지금 필요한가: 전체 이력 감사에서 도달 가능한 163개 commit의 비밀·credential 내용은 0건이고
+  ignored local DeepSeek key의 exact value도 history 0건이었지만, 실제 형태의 author/committer email
+  identity metadata가 확인됐다. 최초 push 뒤에는 private GitHub와 Frontend collaborator가 이를 볼 수
+  있으므로 공개 전에 결정해야 한다.
+- 선택지 A / 장점 / 단점: 현재 history를 그대로 보존한다 / 모든 commit SHA, 감사 증거와 branch
+  관계가 유지되고 가장 단순하다 / 해당 이메일이 private GitHub와 collaborator에게 보인다.
+- 선택지 B / 장점 / 단점: 최초 push 전에 모든 author/committer email을 사용자의 GitHub noreply
+  주소로 재작성한다 / 이메일 노출을 줄인다 / 모든 commit SHA가 바뀌고 문서의 SHA 참조, local
+  branch 관계와 감사 증거를 다시 매핑해야 하는 파괴적 별도 작업이다.
+- 당신의 추천안: 해당 이메일이 본인 것이고 private collaborator에게 보여도 괜찮다면 A. 본인 것이
+  아니거나 노출을 원하지 않으면 B.
+- 답을 받지 못할 때 사용할 기본값: remote 생성·commit·push를 하지 않는다. 실제로는 A 답을 받아
+  이 기본값을 종료했지만 COLLAB-001 plan 승인 전 push 0은 유지한다.
+- 영향을 받는 파일·계약·데이터·배포: `.git` history와 local branch, 문서의 commit SHA 참조,
+  remote 감사 계보. 제품 동작·공개 API·DB·공식 데이터에는 영향이 없다.
 
 Q-PII-002. 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 응답·event reason으로 표현할 것인가
 - 결정: A / D-045 / ADR-0004. HTTP 200 `PRIVACY_UNRESOLVED` 안전 재질문으로 분리한다.

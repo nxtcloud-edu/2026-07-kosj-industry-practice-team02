@@ -35,6 +35,8 @@
 | `docs/superpowers/plans/2026-07-17-q-sec-006-patched-supabase-cli.md` | 수정 계획 승인 뒤 Tasks 1~5 local gate와 code remediation까지 수행한 계획; final docs reviews 진행 중 |
 | `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md` | DATA-001 staging JSON·hash-bound PM 검수 경계; AI scope complete / Review (PM pending) |
 | `docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md` | DATA-001 DRAFT 20/3/12·validator·PM handoff와 Remediation 3 full-root verification 기록; official release/seed는 별도 DATA-SEED-001 |
+| `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md` | 승인된 private GitHub·Frontend 소유권·Cloud Draft-PR-only 협업 경계 |
+| `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | secret/history audit부터 remote·CI·collaborator·Cloud·리허설까지의 Review 실행계획; Q-GIT-004 해결, 실행 승인 대기 |
 
 ## 모든 작업 후 갱신할 파일
 
@@ -54,6 +56,7 @@
 | `database/` | verified `0.3.0-local` 논리 projection, 역순 disposable-local 보상, absence proof; 실행 권위는 timestamp migration |
 | `docs/test-reports/DB-001-LOCAL-BASELINE.md` | patched-only runtime의 fresh exact loopback·pgTAP 282·integration 8/8·cleanup local 검증 보고서 |
 | `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md` | 완료된 local/private DB 기준선의 재현·rollback/recovery와 별도 public-release blocker 인수인계 |
+| `docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md` | Frontend 전체 수직 흐름의 허용 경로·작업 순서·검증·자가 병합 인수인계 |
 | `docs/03_ARCHITECTURE.md` | 시스템 경계와 장애 전략 |
 | `docs/04_DOMAIN_AND_STATE_MODEL.md` | enum·상태·불변조건 |
 | `docs/05_API_AND_CONTRACTS.md` | API 관리 규칙 |

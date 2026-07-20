@@ -390,3 +390,21 @@ Q-PRIV-001: A
 남은 A 블로커는 Q-LLM-002, 호스팅 선택 시 Q-LLM-003, Q-DB-001, Q-PRIV-002, Q-CHAT-001, Q-API-001과 최종 계획 승인이다. Q-CI-001은 B/High다.
 
 Q-LLM-002 선택지 검증을 위한 읽기 전용 하드웨어 조회에서 RAM 15.6GiB와 Intel Arc 표시 메모리 2GiB를 확인했다. 따라서 20B급 local model을 안정적 데모 기본값으로 추천하지 않으며, 0원 local 경로는 4B급 모델의 별도 한국어/구조화 출력/latency benchmark를 조건으로 한다.
+
+## 13. Collaboration pre-push discovery addendum — 2026-07-20
+
+Q-COLLAB-001=A로 협업 명세는 승인됐지만 최초 private GitHub push 전 읽기 전용 full-history
+감사에서 새 identity privacy 결정을 발견했다.
+
+- 도달 가능한 commit 163개, `main` 157개, 별도 local branch의 main 밖 commit 6개다.
+- high-risk credential/content secret은 0건이다.
+- ignored local `apps/api/.env`의 LLM key exact value는 Git history 0건이다. 값은 출력·기록하지 않았다.
+- 실제 형태 author/committer email metadata가 reachable history에 있어 private GitHub와 Frontend
+  collaborator에게 보존 공개할지 noreply로 최초 push 전 재작성할지 결정이 필요하다.
+- `git push --mirror`는 내부 ref까지 전송할 수 있어 금지하고, 승인 뒤에도 검토된 `main`만 먼저
+  push한다. main 밖 6개 commit은 별도 검토 전 전송하지 않는다.
+
+이를 A-039/Q-GIT-004 A/Blocker로 등록했다. 이후 2026-07-20 사용자가 Q-GIT-004=A로 본인 email의
+private Frontend collaborator 공개를 허용해 D-053으로 해결했다. 현재 history·SHA를 보존하고
+noreply rewrite는 하지 않는다. COLLAB-001 plan 승인 전 remote·commit·push 0은 유지하며 제품
+코드·공개 API·DB·공식 데이터 동작에는 영향이 없다.

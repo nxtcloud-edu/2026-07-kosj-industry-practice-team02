@@ -2,8 +2,8 @@
 
 > **최종 제품**: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터  
 > **프로젝트 기간**: 2026-07-06 ~ 2026-07-31  
-> **팀 규모**: 4명  
-> **문서 버전**: v2.2.4
+> **책임 역할**: PM·Frontend·Backend·AI/Data 4개; 현재 실제 개발 협업은 사용자 owner + Frontend 팀원 1명
+> **문서 버전**: v2.2.5
 > **팀명·팀원·연락처·제출일**: 제출 전 직접 입력
 
 ## 1. 프로젝트 정의
@@ -186,6 +186,25 @@ guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initi
 | 차트 | Recharts | 기본 KPI만 |
 | 테스트 | Pytest, Playwright, k6/Locust, 수동 표본 평가 | 품질·UI·성능 분리 |
 
+### 저장소·협업·변경 통합
+
+- 원본 원격 없이 시작한 현재 `main` history를 사용자의 개인 GitHub 계정 아래 private monorepo에
+  연결한다. Q-GIT-004=A/D-053으로 현재 author/committer email의 private collaborator 공개와
+  history·SHA 보존을 확정했고 D-054로 COLLAB-001 계획 실행도 승인했다. remote 생성·push는
+  pre-push secret/history audit와 정확한 account 확인·사용자 browser 인증 뒤에만 수행한다.
+- GitHub Free·0원으로 시작하므로 private branch protection/CODEOWNERS 강제를 전제하지 않는다.
+  PR-only 팀 규칙, 변경 범위 분류, CI와 작은 revert 가능한 PR을 사용한다.
+- Frontend 팀원은 `/`, `/chat`, `/admin`, typed client, 모든 화면 상태, 반응형·접근성과 frontend
+  unit/E2E를 소유한다. 자가 병합은 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web 구현 노트
+  하나와 INDEX append만 포함한 green PR로 제한한다.
+- 공개 계약·backend·DB·migration·official data·privacy/security policy·dependency/lockfile 변경은
+  사용자 검토 대상이다. 계약 간극은 frontend 임의 타입이 아니라 Issue와 owner contract PR로
+  해결한다.
+- Codex Cloud는 `codex/<task-id>-<slug>` branch와 Draft PR까지만 만들고 사용자가 병합한다.
+  비밀·DeepSeek 실호출·Docker/Supabase actual 검증은 Cloud에서 금지한다.
+- private GitHub source remote는 D-046이 차단하는 remote/public application·DB deployment와
+  별개이며 이를 해제하지 않는다.
+
 ### 핵심 데이터 저장
 
 ```text
@@ -251,9 +270,12 @@ audit_logs
 | 역할 | 최종 책임 | 3주차 핵심 |
 | --- | --- | --- |
 | PM·제안서·QA·KB 승인자 | 범위·문서·정책·승인·발표 | 승인 체크리스트·테스트 판정 |
-| Frontend | /, /chat, /admin·반응형·접근성 | 탭·모달·카드 통합 |
+| Frontend 팀원 | `/`, `/chat`, `/admin` 전체 frontend 수직 흐름·typed API client·모든 화면 상태·반응형·접근성·unit/E2E | 탭·모달·카드 통합, 계약 간극 Issue, 허용 frontend-only PR 자가 병합 |
 | Backend | API·DB·마스킹·상태·배포 | 승인 권한·이벤트·성능 |
 | AI/Data·민원 운영자 | KB·검색·폴백·평가 | 공식 KB 10건+후보 작성 |
+
+사용자는 Backend·DB·공개 계약·공식 데이터·보안·배포 결정과 Codex Cloud PR의 최종 merge를
+책임진다. Frontend 팀원은 구현자이며 공식 데이터 승인자나 PM reviewer가 아니다.
 
 ## 10. 주차별 실행계획
 
@@ -327,6 +349,10 @@ audit_logs
 | mock 수치 오해 | 이벤트 집계·MVP 표본·시연용 샘플 배지 |
 | 데모 장애 | 고정 KB·템플릿 답변·로컬 백업·녹화 |
 | 제안서와 MVP 불일치 | RFP 대응표와 인수 기준을 개발 백로그에 연결 |
+| GitHub Free의 약한 merge 강제 | direct `main` push 금지 팀 규칙, scope CI, 작은 PR, green evidence와 revert runbook |
+| Frontend 자가 병합 범위 초과 | contract/backend/DB/data/security/dependency deny 경계와 owner-review 승격 |
+| GitHub App·collaborator 권한 과다 | private repository, selected-repository-only Codex 권한, 최소 collaborator와 revoke 절차 |
+| Cloud가 local 검증을 대체 | Docker/Supabase/DeepSeek actual은 `local-verification-required`로 유지 |
 
 ## 14. 최종 완료 기준
 

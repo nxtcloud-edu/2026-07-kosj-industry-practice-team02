@@ -86,6 +86,15 @@ P2를 사용자의 명시적 범위 변경 없이 구현하지 않는다.
 - 내부 리팩터링·테스트 추가·포맷팅·명명 정리는 행동 변화가 없고 검증 가능하면 자율적으로 수행할 수 있다.
 - 오래된 스타터 코드에서 코드를 복사할 때는 현재 계약과 정책에 맞는지 먼저 검증한다.
 - 가능한 한 타입·스키마·열거형으로 상태를 제한하고 문자열을 산발적으로 하드코딩하지 않는다.
+- 협업 권위는 ADR-0019와 승인된 collaboration spec을 따른다. 인간 Frontend 팀원은 허용된
+  frontend-only green PR만 자가 병합할 수 있으며 계약·backend·DB·migration·official data·
+  privacy/security·dependency/lockfile 변경은 사용자 검토로 승격한다.
+- Codex Cloud는 branch와 Draft PR을 만들 수 있지만 스스로 merge하지 않는다. local Codex의
+  commit/merge 권한은 현재 task의 명시적 인간 승인 범위만 따른다. GitHub Free에서 merge 버튼이나
+  green CI가 보이는 사실을 인간 승인으로 간주하지 않는다.
+- Codex Cloud에는 DeepSeek key·DB DSN·context secret을 넣지 않고, Docker/Supabase/DeepSeek actual
+  검증은 local-only로 기록한다. private GitHub source remote는 public deployment나 remote DB
+  승인이 아니다.
 
 ## 7. 테스트와 완료 기준
 

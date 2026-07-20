@@ -6,6 +6,8 @@
 - 구조: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터
 - 기준 문장: **모르면 지어내지 않고, 알면 끝까지 안내한다.**
 - 차별점: 실패 질문을 공식 KB 후보로 전환하고 담당자가 승인하는 개선 루프
+- 현재 실제 개발 협업: 사용자 owner 1명 + Frontend 팀원 1명. PM·Frontend·Backend·AI/Data는
+  책임 역할 구분이며 Backend·DB·계약·데이터·보안의 최종 책임은 사용자가 가진다.
 
 ## 구현 범위
 
@@ -85,8 +87,28 @@
   실제 질문 입력·공식 KB 답변은 API-CHAT/WEB-CHAT/READY gate 이후에만 활성화한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
-- 저장소: 원본 원격 없는 새 독립 Git 저장소, 기본 브랜치 `main`, 작업 브랜치 `codex/<task-id>-<slug>`
-- 협업 gate: 현재 원격/CI 없음, local 수동 lint·typecheck·test·build·contract·secret 검사; Git 연결은 사용자 재요청 시 결정
+- 저장소: 원본 원격 없이 시작한 독립 Git 저장소와 `main` history를 사용자의 개인 GitHub
+  비공개 단일 저장소에 연결하는 방향을 Q-GIT-001=A로 확정했고 D-054로 COLLAB-001 실행계획을
+  승인했다. 실제 remote 생성·push·초대는 pre-push secret/history audit와 account 확인·사용자
+  browser 인증 뒤에만 수행한다. Q-GIT-004=A/D-053으로
+  기존 author/committer email이 사용자 본인이며 private collaborator 공개에 동의했으므로 현재
+  history·SHA를 보존하고 noreply rewrite를 하지 않는다.
+- 협업 비용·강제 경계: Q-GIT-002=A로 GitHub Free·초기 0원을 유지한다. private repository의
+  branch protection/CODEOWNERS 강제를 전제하지 않고 PR·CI·scope classification과 팀 규칙을
+  사용하며, merge 버튼이 보이는 것은 정책상 허가를 뜻하지 않는다.
+- Frontend 소유권: Q-OWN-001=A로 인간 Frontend 팀원이 `/`, `/chat`, `/admin`, typed API client,
+  loading/empty/error/offline, 반응형·접근성, unit/E2E를 소유한다. `apps/web/**`,
+  `tools/web-e2e/**`와 자신의 frontend 구현 노트만 직접 쓰며 계약·backend·DB·migration·official
+  data·privacy/security policy는 read-only 또는 owner 요청 대상이다.
+- 병합: Q-GIT-003=B로 허용 범위만 포함하고 CI를 통과한 frontend-only PR은 팀원이 자가
+  병합할 수 있다. exact self-merge allowlist는 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web
+  구현 노트 1개와 그 INDEX append뿐이다. 기존 note/INDEX 행·env/package/lockfile/config·공개
+  계약·backend·DB·data·security·`.github`가 포함되면 사용자 검토로 승격한다.
+- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. Codex GitHub
+  app은 이 repository 하나로 제한하며 DeepSeek key·DB DSN·context secret을 Cloud에 넣지 않는다.
+  Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
+- 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
+  remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.
 - 오류 계약: 정책 응답은 HTTP 200, 승인 근거로 안전 응답을 만들 수 없는 시스템 불능만 HTTP 503 `SERVICE_UNAVAILABLE`
 - 대화 기억: 화면 기록은 현재 탭 메모리, 짧은 구조화 문맥은 15분 서명형 client-carried `context_token`; 서버 세션·raw 대화문·token 저장 금지, token은 인증이나 공식 사실 근거가 아님
 - DB role bootstrap: PostgreSQL 17 non-superuser migration runner를 유지한다. role은 처음부터 안전 속성으로 생성하고, replay에서는 runner가 허용받은 `NOLOGIN`·`NOCREATEDB`·`NOCREATEROLE`만 재적용한 뒤 `NOSUPERUSER`·`NOREPLICATION`·`NOBYPASSRLS`, membership, role setting을 catalog로 검증한다. 안전하지 않으면 중단하며 privileged 자동 downgrade/bootstrap은 도입하지 않는다.
@@ -128,4 +150,4 @@
 - 대표 연락처: [직접 입력]
 - 제출일: [직접 입력]
 - 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.2.4
+- 문서 버전: v2.2.5

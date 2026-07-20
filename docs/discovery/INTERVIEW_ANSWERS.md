@@ -40,7 +40,7 @@ Q-PRIV-001: A
 | Q-PRIV-002 | 이름·상세주소 마스킹 기준 | `A - 일단 a해보고 성능 안나오면 B로 변경하는 느낌으로 가자` | 재현율 우선 보수적 마스킹으로 시작한다. 동일 평가셋에서 답변 성공률 80% 미달의 원인이 과잉 마스킹으로 입증되면 B를 재검토하되 자동 전환하지 않고 개인정보 계약 변경으로 다시 승인받는다. 마스킹률 100% 기준은 유지한다. | D-019 / ADR-0004 | Resolved with human review gate |
 | Q-CHAT-001 | 대화 기억·세션 | `대화기억이 없으면 챗봇느낌이 안나지않을까? 이건 아직 잘 모르겠음. 나중에 제대로 설명해줘.` | 사용자는 무상태 기본안에 우려를 표시했고 결정을 보류했다. 브라우저의 화면 대화기록·구조화 문맥 전달·서버 영속 저장을 분리해 설명한 뒤 다시 결정한다. 현재 `session_id` 의미와 TTL은 확정하지 않는다. | D-022 (Deferred) | Open — A blocker |
 | Q-API-001 | 기술 장애 HTTP 계약 | `A` | 정책 폴백은 200 `ChatResponse`, 안전 응답을 만들 수 없는 실제 시스템 불능만 503 `SERVICE_UNAVAILABLE` envelope로 반환한다. provider 장애라도 ACTIVE KB 템플릿으로 안전 답변 가능하면 200이다. | D-020 / ADR-0009 | Resolved |
-| Q-CI-001 | 원격 저장소·CI | `일단은 B 로가고 나중에 내가 git 연결해야할거같을때 다시 말해줄게.` | 현재 단계는 local Git과 수동 검증 gate만 사용한다. 원격/CI를 임의 생성하지 않으며 사용자가 다시 요청할 때 계정·백업·branch protection을 결정한다. | D-021 / ADR-0002 | Resolved for current phase; remote/CI deferred |
+| Q-CI-001 | 원격 저장소·CI | `일단은 B 로가고 나중에 내가 git 연결해야할거같을때 다시 말해줄게.` | 2026-07-14 당시 local Git과 수동 검증 gate만 사용한다는 결정이다. 2026-07-20 private source remote/협업 방향은 Batch 6 D-047~D-052가 후속 결정하며 local-only gate는 유지한다. | D-021 / ADR-0002 / ADR-0019 | Historical; source-remote 부분 superseded, local gate 유지 |
 
 ## Batch 2 답변 원문
 
@@ -103,8 +103,56 @@ Q-WEB-001: A
 그리고 이제부터 다시 멈추지 말고, 계속해서 ㄱㄱ. 7시간 동안 루프 ㄱㄱ. 너가 할수있는거 다 해줘. 사람이 해야하는건 따로 남겨두고.
 ```
 
+## Batch 6 — 2026-07-20 KST
+
+- Scope: private GitHub·Frontend ownership·Codex Cloud collaboration
+
+| Q-ID | Question summary | User answer | Interpretation | Decision/ADR | Status |
+|---|---|---|---|---|---|
+| Q-GIT-001 | 공유 source remote 위치·가시성 | `A` | 사용자의 개인 GitHub 계정 아래 private repository를 만들고 Frontend 팀원을 collaborator로, Codex App은 이 repository 하나에만 허용한다. | D-047 / ADR-0019 | Resolved decision; execution pending |
+| Q-OWN-001 | Frontend 위임 범위 | `A` | 팀원이 세 페이지, typed API client, 화면 상태, 반응형·접근성, frontend unit/E2E의 전체 frontend 수직 흐름을 소유한다. | D-048 / ADR-0019 | Resolved |
+| Q-GIT-002 | private branch protection을 위한 유료 plan | `A` | GitHub Free·초기 0원을 유지하고 보호 기능의 완전 강제를 전제하지 않는다. | D-049 / ADR-0019 | Resolved |
+| Q-GIT-003 | Frontend 팀원 자가 병합 | `B` | 허용 frontend-only green PR만 자가 병합하고 contract/backend/DB/data/security/dependency 경계는 사용자 검토로 승격한다. | D-050 / ADR-0019 | Resolved |
+| Q-CLOUD-001 | Codex Cloud 병합 권한 | `A` | Cloud는 branch와 Draft PR까지만 만들고 사용자가 병합한다. | D-051 / ADR-0019 | Resolved |
+| Q-COLLAB-001 | 전체 협업 운영 명세 | `A` | private single repo, role-scoped merge, Cloud Draft PR, local-only actual gate 설계를 승인한다. | D-052/D-054 / ADR-0019 | Written spec and execution plan Approved; implementation in progress |
+
+## Batch 6 답변 원문
+
+```text
+Q-GIT-001: A
+Q-OWN-001: A
+Q-GIT-002: A
+Q-GIT-003: B
+Q-CLOUD-001: A
+Q-COLLAB-001: A
+```
+
+COLLAB-001은 별도 실행계획 승인과 GitHub owner/repository/collaborator login 확인 전에는 remote,
+push, 초대, workflow 또는 Codex App 설정을 완료로 기록하지 않는다.
+
+전체 Git history 감사에서 credential/content secret은 0건이고 ignored local DeepSeek key의 exact
+value도 history 0건이었다. 다만 도달 가능한 163개 commit의 실제 형태 author/committer email
+metadata 공개 여부는 Q-GIT-004/A-039로 분리했다. 답 전에는 remote 생성·commit·push를 하지 않는다.
+
+## Batch 7 — 2026-07-20 KST
+
+- Scope: existing Git author identity privacy before first private remote push
+
+| Q-ID | Question summary | User answer | Interpretation | Decision/ADR | Status |
+|---|---|---|---|---|---|
+| Q-GIT-004 | 기존 author/committer email metadata 공개 여부 | `A — 내 이메일이고 private 팀원에게 보여도 괜찮음` | 현재 reachable history와 SHA를 보존하고 noreply rewrite를 하지 않는다. | D-053 / ADR-0019 | Resolved; COLLAB-001 plan subsequently Approved by D-054 |
+
+## Batch 7 답변 원문
+
+```text
+Q-GIT-004: A — 내 이메일이고 private 팀원에게 보여도 괜찮음
+```
+
 ## 남은 구현 차단 조건
 
-- DATA-SEED-001: written specification의 명시적 `명세 승인`, 그 뒤 실행계획의 `계획 승인, 구현 시작`.
-- public release: A-021/Q-SEC-003 해결과 별도 공개 배포 승인.
-- 별도 미래 승인: 실제 시민 입력의 외부 LLM 전송, 원격 저장소/CI, 실제 사용자 데이터, 파괴적 DB 변경.
+- DATA-SEED-002: approved architecture/spec 뒤 successor 실행계획의 명시적 승인.
+- COLLAB-001: Q-GIT-004는 D-053으로 해결되고 실행계획은 D-054로 승인. GitHub account 식별자와
+  browser 인증·collaborator 수락·Cloud rehearsal은 외부 실행 입력/증거로 pending.
+- PII-CONSUMER-001: 공개 contract와 forward DB migration의 별도 명세·계획·승인.
+- public release: D-046의 deferred `00700` 구현·검증과 별도 공개 배포 승인.
+- 별도 미래 승인: 실제 시민 입력의 외부 LLM 전송, 실제 사용자 데이터, 파괴적 DB 변경.

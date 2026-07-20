@@ -10,6 +10,7 @@
 | DISC-002 | P0 | Architecture·Product·Security | 아키텍처 영향 인터뷰 | Done | DISC-001 | batch 1~3 기록, 인간 결정형 A/Blocker 0 |
 | DOC-001 | P0 | Architecture·Docs | 결정 로그·ADR·모호성·계약·DB draft 동기화 | Done | DISC-002 | D-009~024, ADR-0002~0010, OpenAPI 2.0.1-draft와 source-of-truth 정합성 검사 통과 |
 | PLAN-001 | P0 | Architecture·전체 | [local-first 기반과 승인형 민원 안내 실행계획](docs/plans/PLAN-20260714-001-foundation-and-governed-chat.md) | Done | DISC-002, DOC-001 | 2026-07-15 사용자 `진행` 승인; 공개/실제 시민 경계는 별도 승인 유지 |
+| COLLAB-001 | P0 | Platform·Security·Docs·Frontend | [private GitHub·Codex Cloud 협업 전환](docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md) | In Progress — local Tasks 1~3; external Tasks 4~7 pending human account actions | D-047~D-054/ADR-0019, approved [execution plan](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md), GitHub owner/repo/collaborator login 확인 | Q-GIT-004=A로 history·SHA 보존, credential/content secret audit Critical 0, private `origin/main`, collaborator 수락, repository-limited Codex app, scope/frontend CI, 인간 Frontend self-merge와 Cloud Draft-PR-only rehearsal. public deployment/remote DB는 계속 blocked |
 
 ## Phase 1 — 프로젝트 스캐폴딩
 
@@ -42,30 +43,30 @@
 | DATA-SEED-002 | P0 | Backend·Data·Security | [immutable `.2` successor와 actual DB 재검증](docs/superpowers/specs/2026-07-20-data-seed-002-successor-release-correction-design.md) | Review | D-044/ADR-0017, approved DATA-001 19/3/10, [execution plan](docs/superpowers/plans/2026-07-20-data-seed-002-successor-release-correction.md) 승인 필요 | `.1`/v1 byte 불변, migration three-`EXISTS` 의미로 one pgTAP predicate 정렬, `.2` effective-option union seed/compensation, independent technical review, atomic dispatcher, full actual cycle. 모든 PASS 뒤에만 `official_data=.2`; `/ready=503` 유지 |
 | READY-001 | P0 | Backend·Data·Platform | 실제 DB·필수 승인 seed readiness probe 전환 | Blocked | DATA-SEED-002 actual PASS, DEV-001B | DB 연결과 필수 ACTIVE KB/기관 seed가 모두 준비될 때만 `/ready=200`; 결손/장애는 503 |
 | AI-001A | P0 | Backend·Security | [순수 fail-closed PII 마스킹 코어](docs/superpowers/specs/2026-07-20-ai-001-pii-masking-design.md)와 frozen v1 합성 평가셋 | Done | D-041/D-042/D-043, approved written spec, A-032 Resolved, [approved execution plan](docs/superpowers/plans/2026-07-20-ai-001a-pii-masking-core.md), [IMP-006](docs/implementation-notes/IMP-20260720-006-ai-001a-pii-마스킹-코어-구현.md) | privacy 1,161·architecture+privacy 1,165+5 subtests·full API 1,318+8 DB skips+5 subtests PASS. 13범주·5 reason, frozen 74 불변, actual 77 원문 유출 0·safe 219 오탐 0, raw/log/I/O/dependency 0, API/DB/data/provider/route 불변 |
-| PII-CONSUMER-001 | P0 | Backend·FE·Security·Contract | `PRIVACY_UNRESOLVED` HTTP 200 consumer·metadata event 계약 | Blocked | D-045/ADR-0004, 별도 written spec, 공개 계약+forward DB migration 계획·승인 | no source/context/office/provider/text/failed row, questionless event, OpenAPI/JSON Schema/Pydantic/TS/DB enum 동시 변경과 회귀 |
+| PII-CONSUMER-001 | P0 | Backend·Frontend 팀원·Security·Contract | `PRIVACY_UNRESOLVED` HTTP 200 consumer·metadata event 계약 | Blocked | D-045/ADR-0004, 별도 written spec, 공개 계약+forward DB migration 계획·승인 | no source/context/office/provider/text/failed row, questionless event, OpenAPI/JSON Schema/Pydantic/TS/DB enum 동시 변경과 회귀 |
 | AI-001 | P0 | AI/Data·Backend·Security | 보수적 PII 마스킹과 분류·검색·근거 gate·template 응답 | Blocked | DATA-SEED-002, AI-001A, PII-CONSUMER-001 | core 뒤 provider payload/DB writer spy 원문 0, ACTIVE 전용 검색, 시민-visible privacy fallback 계약, PII 100%·성공률 동시 측정 |
 | LLM-001 | P0 | AI/Data·Backend·Security | DeepSeek 합성 fixture adapter와 장애 fallback | Blocked | AI-001, PLAN-001 Approved | exact Flash/thinking off/max1024, hidden retry 0, retry≤1, concurrency 1, run attempt 28/29/30 경계, allowlist·schema/empty/429/timeout·template fallback |
 | API-CHAT-001 | P0 | Backend·QA | `/api/v1/chat`·signed context와 공통 오류 계약 | Blocked | CONTRACT-001, AI-001, LLM-001 | SUCCESS/FOLLOWUP/FALLBACK 200, 안전 대체 없는 503, 900초 token/tamper reset/current request 우선/source 결합·token persistence 0 |
-| WEB-HOME-001 | P0 | Frontend·QA | `/` 서비스 소개·4개 지원 분야·한계·`/chat` 진입 | Done | DEV-001 complete; Q-WEB-001=A/D-037; [execution plan](docs/superpowers/plans/2026-07-19-web-home-and-static-chat-shell.md) | 정적 `/chat`·home CTA, 입력/저장/외부 요청 0, 390/430/desktop·키보드·focus·contrast·실제 Chrome UI 200%·prod dependency gate PASS, [IMP-20260719-005](docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-준비-화면.md) |
-| WEB-CHAT-001 | P0 | Frontend·QA | `/chat` current-tab 대화·카드·출처·폴백·기관 | Blocked | API-CHAT-001, WEB-HOME-001 | 390/430px, 키보드·포커스·대비, 중복 전송·503 재시도·empty office, 새로고침 소멸·browser storage/token log 0 |
+| WEB-HOME-001 | P0 | Frontend 팀원·QA | `/` 서비스 소개·4개 지원 분야·한계·`/chat` 진입 | Done | DEV-001 complete; Q-WEB-001=A/D-037; [execution plan](docs/superpowers/plans/2026-07-19-web-home-and-static-chat-shell.md) | 정적 `/chat`·home CTA, 입력/저장/외부 요청 0, 390/430/desktop·키보드·focus·contrast·실제 Chrome UI 200%·prod dependency gate PASS, [IMP-20260719-005](docs/implementation-notes/IMP-20260719-005-web-home과-정적-채팅-준비-화면.md) |
+| WEB-CHAT-001 | P0 | Frontend 팀원·QA | `/chat` current-tab 대화·카드·출처·폴백·기관 | Blocked | API-CHAT-001, WEB-HOME-001 | 390/430px, 키보드·포커스·대비, 중복 전송·503 재시도·empty office, 새로고침 소멸·browser storage/token log 0 |
 
 ## Phase 3 — 관리자 개선 루프
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
 | LOG-001 | P0 | Backend·Security·Data | 비식별 이벤트·실패 질문 저장과 30일 텍스트 파기 | Blocked | API-CHAT-001 | 원문 0, OUT_OF_SCOPE/FOLLOWUP 실패행 0, NULL purge·FK 보존·복구 테스트 |
-| ADMIN-001 | P0 | FE·BE·Security | local/private 실패 질문 확인·사유 정정 | Blocked | LOG-001 | 목록/필터/상세/만료 빈 상태, public route 차단 |
-| ADMIN-002 | P0 | FE·BE·PM·Security | KB 후보 작성·제출·별도 승인·반려·재작성 | Blocked | ADMIN-001 | 작성자 자기 승인·PII 후보·미승인 ACTIVE 각각 0, 반려 comment와 재작성 경로 동작 |
+| ADMIN-001 | P0 | Frontend 팀원·Backend·Security | local/private 실패 질문 확인·사유 정정 | Blocked | LOG-001 | 목록/필터/상세/만료 빈 상태, public route 차단 |
+| ADMIN-002 | P0 | Frontend 팀원·Backend·PM·Security | KB 후보 작성·제출·별도 승인·반려·재작성 | Blocked | ADMIN-001 | 작성자 자기 승인·PII 후보·미승인 ACTIVE 각각 0, 반려 comment와 재작성 경로 동작 |
 | REG-001 | P0 | 전체·QA | 침대 프레임 개선 전후 회귀 | Blocked | ADMIN-002 | 승인 전 폴백→승인 후 공식 출처 답변 완주 |
 
 ## Phase 4 — P1 품질·배포
 
 | ID | 우선순위 | 담당 영역 | 작업 | 상태 | 의존성 | 완료 기준 |
 |---|---|---|---|---|---|---|
-| A11Y-001 | P1 | Frontend·QA | 쉬운 말·큰 글씨·대비·키보드 | Blocked | WEB-CHAT-001 | 자동+수동 접근성 체크리스트 통과 |
+| A11Y-001 | P1 | Frontend 팀원·QA | 쉬운 말·큰 글씨·대비·키보드 | Blocked | WEB-CHAT-001 | 자동+수동 접근성 체크리스트 통과 |
 | QA-001 | P1 | QA·PM·AI/Data | 표본 20개 평가 리포트 | Blocked | REG-001 | KPI 계산·실패 분석·수치 출처 표시 |
 | PERF-001 | P1 | Backend·QA | 평균/p95·100명 제한 스모크 | Blocked | API-CHAT-001 | deterministic 경로 결과와 실제 LLM 한계 분리 기록 |
-| ADMIN-QUALITY-001 | P1 | FE·BE·QA·Security | 품질 카드·최소 감사 이력 | Blocked | ADMIN-002, QA-001 | EVENT/EVALUATION/MOCK 배지 항상 표시·비합산; action/actor/target/old-new status/changed fields와 질문·답변 snapshot 0 |
+| ADMIN-QUALITY-001 | P1 | Frontend 팀원·Backend·QA·Security | 품질 카드·최소 감사 이력 | Blocked | ADMIN-002, QA-001 | EVENT/EVALUATION/MOCK 배지 항상 표시·비합산; action/actor/target/old-new status/changed fields와 질문·답변 snapshot 0 |
 | DEMO-001 | P1 | PM·Platform·QA | local live→template fallback 데모 리허설 | Blocked | REG-001, PERF-001 | 인터넷/provider 장애에도 승인 KB 흐름 완주; 공개 URL·녹화는 별도 승인 항목 |
 | BACKUP-001 | P1 | Platform·Backend·Security | local RPO/RTO·dump 보관·restore/purge drill | Blocked | LOG-001 | RPO24h/RTO60m, daily/pre-risk gitignored dump, 30일 삭제, restore 후 service-open 전 purge 1회 |
 | DEPLOY-001 | P1 | Platform·Security·PM | 조건부 Vercel/Render/Supabase 공개 demo | Blocked | DEV-002, D-046의 deferred `00700` 구현·검증, 별도 공개 배포 승인 | privileged function/public port hardening 뒤 계정·리전·CORS·비밀·로그·비용·admin gate 승인 시에만 URL/health/rollback |

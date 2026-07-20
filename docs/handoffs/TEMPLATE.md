@@ -4,6 +4,15 @@
 - Branch/commit:
 - Versions:
 
+## Repository/collaboration state
+
+- Source remote owner/name/visibility:
+- Branch/upstream/verified SHA:
+- Collaborator/App scope and acceptance state (no secrets/contact details):
+- Open PRs and merge owner:
+- Local-only pending gates:
+- Revoke/revert path:
+
 ## 완료
 
 ## 실행/테스트 명령
