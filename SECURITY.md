@@ -24,8 +24,8 @@
 ## GitHub·Codex Cloud 경계
 
 - 원격 최초 push 전 current worktree와 전체 reachable Git history를 서로 다른 값 비노출 검사기로
-  검사한다. history scanner는 local 구현·review 완료 후 최종 integration 대상이며, integration과
-  fresh PASS 전에는 remote 생성/push를 진행하지 않는다.
+  검사한다. history scanner의 local 통합·독립 review·fresh PASS는 완료됐지만, 이후 commit이 생기면
+  최초 remote 생성/push 직전에 두 검사를 다시 실행한다.
 - 확인된 secret은 파일 삭제 commit만으로 닫지 않고 먼저 회전하며 history 정리는 인간 승인을
   받는다.
 - private repository는 노출 가능성을 줄일 뿐 secret/PII 커밋을 허용하지 않는다.

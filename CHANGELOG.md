@@ -4,8 +4,8 @@
 
 ### Added
 
-- COLLAB-001 local Tasks 1~3 automation: a value-redacting full reachable-history scanner (local
-  implementation/review complete, final integration pending), exact base/head PR author/path scope
+- COLLAB-001 local Tasks 1~3 automation: an integrated value-redacting full reachable-history scanner,
+  exact base/head PR author/path scope
   classifier, add-only web implementation-note/INDEX validator, tracked active Markdown/JSON checker,
   candidate-tree secret scan mode, pinned read-only GitHub policy/frontend workflows, PR/Issue/ownership
   templates and cross-platform production Playwright startup; independent review closed Critical/

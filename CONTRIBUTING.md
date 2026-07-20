@@ -27,8 +27,8 @@ feat/web-WEB-CHAT-001-answer-states
 Q-GIT/Q-COLLAB 결정으로 사용자의 개인 GitHub private source remote와 collaboration CI 방향은
 승인됐다. Q-GIT-004=A로 기존 author email의 private collaborator 공개와 history·SHA 보존도
 확정했고 D-054로 COLLAB-001 실행계획도 승인됐다. history/current-tree secret gate, scope/append
-분류기, repository docs 검사기와 workflow/template의 local 구현·review는 끝났고 history scanner의
-최종 integration만 남아 있다. 실제 remote·push·hosted Actions·초대·Codex 연결은 모두 0이며 정확한
+분류기, repository docs 검사기와 workflow/template의 local 구현·통합·review는 끝났다. 실제
+remote·push·hosted Actions·초대·Codex 연결은 모두 0이며 정확한
 account identifier와 사용자 browser 인증 뒤에만 수행한다. 실행 뒤에도 각 작업자는 변경 영역의
 local 검증과 구현 노트 의무를 유지한다. GitHub remote는 public application deployment나 remote
 DB가 아니다.

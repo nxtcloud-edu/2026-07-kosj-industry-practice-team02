@@ -24,9 +24,9 @@
 
 `legacy/`는 참고 자료이며 현재 화면·API·범위의 정답이 아니다.
 
-scope/append·repository docs·current-tree secret·workflow/template와 Playwright portability gate는
-local 구현·review Critical/Important 0 상태다. history scanner도 별도 local 구현·review를 마쳤으며
-최종 integration과 fresh pre-push PASS가 남아 있다. 따라서 이 문서는 운영 경계를 미리 제공하지만,
+scope/append·repository docs·current-tree/history secret·workflow/template와 Playwright portability
+gate는 local 통합·review Critical/Important 0 및 fresh PASS 상태다. 따라서 이 문서는 운영 경계를
+미리 제공하지만,
 실제 clone/PR/self-merge 가능 상태를 뜻하지 않는다.
 
 ## 2. 담당 범위

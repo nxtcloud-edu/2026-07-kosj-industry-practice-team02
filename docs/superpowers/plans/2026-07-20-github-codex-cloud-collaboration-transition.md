@@ -539,11 +539,11 @@ successful external-state evidence.
   execution approval. Local Tasks 1~3 and documentation closeout may proceed. Tasks 4~7 still require
   verified GitHub account identifiers, browser authentication, collaborator acceptance and rehearsal
   evidence and must not be reported complete before those external checks actually pass.
-- 2026-07-21: Tasks 1~3 local implementation and independent review closed with Critical/Important 0.
-  History/current-tree secret gates, scope/append classification, repository-doc validation, pinned
-  workflow/templates and cross-platform Playwright startup are ready locally. Task 8 local documentation
-  and version synchronization passed 57 focused collaboration/docs/workflow tests (one platform skip),
-  repository-doc validation, package validation, current-tree secret scan and staged diff check. The
-  worktree-local pinned venv was absent, so the stdlib-only focused tests used available Python 3.14.0;
-  hosted/pinned-runtime evidence remains external. Tasks 4~7 remain unchecked with remote 0, push 0,
-  hosted Actions run 0 and Codex Cloud task/PR 0.
+- 2026-07-21: Tasks 1~3 local implementation, integration and independent review closed with
+  Critical/Important 0. History/current-tree secret gates, scope/append classification, repository-doc
+  validation, pinned workflow/templates and cross-platform Playwright startup are ready locally. Task 8
+  local documentation/version synchronization and the integrated Python 3.12 gate passed 98 tests with
+  two Windows platform skips; API 1,318 tests, contract 37 tests, Web 6 tests, production build and
+  Playwright 9 tests also passed. Fresh history/current-tree scans, repository-doc/package validation,
+  YAML parse, Ruff/compile/fsck/diff checks passed. Hosted Actions evidence remains external. Tasks 4~7
+  remain unchecked with remote 0, push 0, hosted Actions run 0 and Codex Cloud task/PR 0.
