@@ -5,6 +5,15 @@
 *.pem
 *.key
 *.p12
+*.pfx
+*.jks
+*.keystore
+.netrc
+_netrc
+.authinfo
+.authinfo.gpg
+.pypirc
+.npmrc.local
 
 # Node
 node_modules/
