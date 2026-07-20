@@ -144,9 +144,162 @@ def _normalize(raw_question: object) -> tuple[str | None, UnresolvedReason | Non
     return normalized, None
 
 
+@dataclass(frozen=True, slots=True)
+class _Rule:
+    category: PiiCategory
+    pattern: re.Pattern[str]
+
+
+_CATEGORY_PRIORITY: Final = (
+    PiiCategory.RESIDENT_REGISTRATION_NUMBER,
+    PiiCategory.PAYMENT_CARD,
+    PiiCategory.FINANCIAL_ACCOUNT,
+    PiiCategory.AUTH_SECRET,
+    PiiCategory.PASSPORT_OR_LICENSE,
+    PiiCategory.PHONE_NUMBER,
+    PiiCategory.EMAIL,
+    PiiCategory.PRECISE_LOCATION,
+    PiiCategory.VEHICLE_PLATE,
+    PiiCategory.CASE_REFERENCE,
+    PiiCategory.DETAILED_ADDRESS,
+    PiiCategory.NAME,
+    PiiCategory.SENSITIVE_HEALTH_WELFARE,
+)
+_RULES: Final = (
+    _Rule(
+        PiiCategory.RESIDENT_REGISTRATION_NUMBER,
+        re.compile(r"(?<!\d)(?P<value>\d{6}\s*[- ]?\s*[1-8]\d{6})(?!\d)"),
+    ),
+    _Rule(
+        PiiCategory.PAYMENT_CARD,
+        re.compile(
+            r"(?<!\d)(?P<value>(?:\d{4}(?:[- .]?\d{4}){3}|"
+            r"\d{4}[- .]?\d{6}[- .]?\d{5}))(?!\d)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.FINANCIAL_ACCOUNT,
+        re.compile(
+            r"(?:계좌(?:번호)?|입금계좌|통장)\s*[:：]?\s*"
+            r"(?P<value>\d{2,6}(?:[- ]\d{2,6}){1,4})"
+        ),
+    ),
+    _Rule(
+        PiiCategory.AUTH_SECRET,
+        re.compile(
+            r"(?:비밀번호|인증번호|OTP|PIN)\s*[:：]?\s*(?!\[)"
+            r"(?P<value>[A-Z0-9!#$%&()*+,\-./:;<=>?@\^_`{|}~]{3,63}"
+            r"[A-Z0-9!#$%&()*+\-/:;<=>?@\^_`{|}~])"
+            r"(?=$|[\s,.!?]|입니다|이에요|예요|이고|라고)",
+            re.IGNORECASE,
+        ),
+    ),
+    _Rule(
+        PiiCategory.PASSPORT_OR_LICENSE,
+        re.compile(
+            r"(?:여권번호|운전면허번호|면허번호)\s*[:：]?\s*"
+            r"(?P<value>(?:[A-Z]\d{8}|(?:[가-힣]{2,4}\s*)?"
+            r"\d{2}(?:-\d{2})?-\d{6}-\d{2}))",
+            re.IGNORECASE,
+        ),
+    ),
+    _Rule(
+        PiiCategory.PHONE_NUMBER,
+        re.compile(
+            r"(?<!\d)(?P<value>(?:01[016789]|070)(?:[- .]?\d{3,4})"
+            r"[- .]?\d{4})(?!\d)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.PHONE_NUMBER,
+        re.compile(
+            r"(?<!\d)(?P<value>0(?:2|[3-6][1-5])[- .]?\d{3,4}"
+            r"[- .]?\d{4})(?!\d)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.EMAIL,
+        re.compile(
+            r"(?<![\w.+-])(?P<value>[A-Z0-9._%+\-]+@[A-Z0-9.\-]+"
+            r"\.[A-Z]{2,})(?![\w.-])",
+            re.IGNORECASE,
+        ),
+    ),
+    _Rule(
+        PiiCategory.VEHICLE_PLATE,
+        re.compile(r"(?<!\d)(?P<value>\d{2,3}[가-힣]\s?\d{4})(?!\d)"),
+    ),
+    _Rule(
+        PiiCategory.CASE_REFERENCE,
+        re.compile(
+            r"(?:접수번호|민원번호)\s*[:：]?\s*"
+            r"(?P<value>(?:[A-Z]+-)?\d{4}-\d{6}|[A-Z]+-\d{6}|\d{6}-\d{7})",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _match_bounds(match: re.Match[str]) -> tuple[int, int]:
+    if match.groupdict().get("value") is not None:
+        return match.span("value")
+    return match.start("value_lat"), match.end("value_lng")
+
+
+def _collect_findings(text: str) -> tuple[RedactionFinding, ...]:
+    findings: list[RedactionFinding] = []
+    for rule in _RULES:
+        for match in rule.pattern.finditer(text):
+            start, end = _match_bounds(match)
+            findings.append(
+                RedactionFinding(rule.category, start, end, _replacement(rule.category))
+            )
+    return tuple(findings)
+
+
+def _overlaps(left: RedactionFinding, right: RedactionFinding) -> bool:
+    return left.start < right.end and right.start < left.end
+
+
+def _select_findings(
+    candidates: tuple[RedactionFinding, ...],
+) -> tuple[RedactionFinding, ...]:
+    ranked = sorted(
+        candidates,
+        key=lambda item: (
+            _CATEGORY_PRIORITY.index(item.category),
+            -(item.end - item.start),
+            item.start,
+        ),
+    )
+    selected: list[RedactionFinding] = []
+    for candidate in ranked:
+        if not any(_overlaps(candidate, existing) for existing in selected):
+            selected.append(candidate)
+    return tuple(
+        sorted(
+            selected,
+            key=lambda item: (
+                item.start,
+                item.end,
+                _CATEGORY_PRIORITY.index(item.category),
+            ),
+        )
+    )
+
+
+def _apply_findings(text: str, findings: tuple[RedactionFinding, ...]) -> str:
+    masked = text
+    for finding in reversed(findings):
+        masked = masked[: finding.start] + finding.replacement + masked[finding.end :]
+    return masked
+
+
 def redact_question(raw_question: str) -> RedactionResult:
     normalized, reason = _normalize(raw_question)
     if reason is not None:
         return _closed(reason)
     assert normalized is not None
-    return RedactionResult(normalized, (), True, True, None)
+    findings = _select_findings(_collect_findings(normalized))
+    masked = _apply_findings(normalized, findings)
+    return RedactionResult(masked, findings, True, True, None)

@@ -184,6 +184,106 @@ def test_exact_replacement_and_normalized_offsets() -> None:
     )
 
 
+def test_multiple_findings_are_returned_in_text_order() -> None:
+    result = redact_question("메일 qa@example.invalid 전화 010-0000-0000")
+    assert [item.category for item in result.findings] == [
+        PiiCategory.EMAIL, PiiCategory.PHONE_NUMBER,
+    ]
+    assert result.masked_text == "메일 [이메일] 전화 [전화번호]"
+
+
+EXPECTED_CATEGORY_PRIORITY = (
+    PiiCategory.RESIDENT_REGISTRATION_NUMBER,
+    PiiCategory.PAYMENT_CARD,
+    PiiCategory.FINANCIAL_ACCOUNT,
+    PiiCategory.AUTH_SECRET,
+    PiiCategory.PASSPORT_OR_LICENSE,
+    PiiCategory.PHONE_NUMBER,
+    PiiCategory.EMAIL,
+    PiiCategory.PRECISE_LOCATION,
+    PiiCategory.VEHICLE_PLATE,
+    PiiCategory.CASE_REFERENCE,
+    PiiCategory.DETAILED_ADDRESS,
+    PiiCategory.NAME,
+    PiiCategory.SENSITIVE_HEALTH_WELFARE,
+)
+TOKEN_BY_CATEGORY = dict(zip(EXPECTED_CATEGORY_PRIORITY, (
+    "[주민등록번호]", "[카드번호]", "[계좌번호]", "[인증정보]",
+    "[여권·면허번호]", "[전화번호]", "[이메일]", "[정밀위치]", "[차량번호]",
+    "[접수번호]", "[상세주소]", "[이름]", "[건강·복지정보]",
+), strict=True))
+
+
+@pytest.mark.parametrize(
+    ("higher", "lower"),
+    zip(
+        EXPECTED_CATEGORY_PRIORITY[:-1],
+        EXPECTED_CATEGORY_PRIORITY[1:],
+        strict=True,
+    ),
+)
+def test_every_adjacent_total_priority_pair_selects_higher(
+    higher: PiiCategory,
+    lower: PiiCategory,
+) -> None:
+    from sejong_ai_api.privacy.redaction import _select_findings
+
+    candidates = (
+        RedactionFinding(lower, 2, 10, TOKEN_BY_CATEGORY[lower]),
+        RedactionFinding(higher, 2, 10, TOKEN_BY_CATEGORY[higher]),
+    )
+    assert _select_findings(candidates) == (candidates[1],)
+
+
+def test_same_category_prefers_longer_then_earlier_overlap() -> None:
+    from sejong_ai_api.privacy.redaction import _select_findings
+
+    category = PiiCategory.EMAIL
+    token = TOKEN_BY_CATEGORY[category]
+    short = RedactionFinding(category, 2, 8, token)
+    long = RedactionFinding(category, 2, 10, token)
+    later_tie = RedactionFinding(category, 3, 11, token)
+    assert _select_findings((short, long)) == (long,)
+    assert _select_findings((later_tie, long)) == (long,)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_text", "expected_category"),
+    [
+        ("연락처 070-1234-5678", "연락처 [전화번호]", PiiCategory.PHONE_NUMBER),
+        ("연락처 010.1234.5678", "연락처 [전화번호]", PiiCategory.PHONE_NUMBER),
+        (
+            "면허번호 부산 12-34-567890-12",
+            "면허번호 [여권·면허번호]",
+            PiiCategory.PASSPORT_OR_LICENSE,
+        ),
+        ("비밀번호 !secret!", "비밀번호 [인증정보]", PiiCategory.AUTH_SECRET),
+        (
+            "비밀번호 sample-secret입니다.",
+            "비밀번호 [인증정보]입니다.",
+            PiiCategory.AUTH_SECRET,
+        ),
+        ("카드 3782-822463-10005", "카드 [카드번호]", PiiCategory.PAYMENT_CARD),
+    ],
+)
+def test_identifier_separator_bypasses_are_not_fail_open(
+    raw: str,
+    expected_text: str,
+    expected_category: PiiCategory,
+) -> None:
+    result = redact_question(raw)
+    assert result.masked_text == expected_text
+    assert [finding.category for finding in result.findings] == [expected_category]
+
+
+def test_q_pii_003_a_masks_phone_even_when_input_calls_it_official() -> None:
+    result = redact_question("세종시청 대표전화 044-000-0000")
+    assert result.masked_text == "세종시청 대표전화 [전화번호]"
+    assert [finding.category for finding in result.findings] == [
+        PiiCategory.PHONE_NUMBER
+    ]
+
+
 def test_input_is_not_mutated_and_repeated_results_are_identical() -> None:
     raw = "제 이름은 김가상이고 주소는 세종시 테스트길 34-5입니다."
     first = redact_question(raw)
