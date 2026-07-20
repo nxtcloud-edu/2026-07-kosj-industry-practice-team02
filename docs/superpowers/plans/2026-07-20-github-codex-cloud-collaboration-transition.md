@@ -21,10 +21,11 @@ Playwright toolchain, Codex Cloud.
 
 - Plan ID: `COLLAB-001`
 - Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
-  PR-only/no-direct-main-push rehearsal pending); Tasks 6~7 remain pending human rehearsal evidence**
+  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope confirmed, Cloud
+  environment/Draft PR pending); Task 7 pending**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
-- Decision/ADR: D-047~D-055 / ADR-0019
+- Decision/ADR: D-047~D-057 / ADR-0019
 - Local authority at plan creation: branch `main`, HEAD
   `177dac810468f3cd5aaa4929a971cbde21b4deba`, remote 0.
 - External evidence state on 2026-07-21: approved owner `tskwak111`, private repository `Sejong_AI`,
@@ -391,19 +392,19 @@ enforcement or rehearsal evidence. Do not advertise CI as an enforced security b
 
 2026-07-21 correction: connector visibility of public repositories cannot distinguish **All
 repositories** from **Only select repositories**, because a GitHub App always has at least read-only
-access to public GitHub repositories. The user must inspect the GitHub installation UI and confirm
-**Only select repositories / `Sejong_AI`**; change and save only if it currently says **All
-repositories**. This human confirmation is still pending. It is not Cloud environment, docs/test-only
-task, Draft-PR or manual-merge rehearsal evidence; all Task 6 checkboxes remain pending.
+access to public GitHub repositories. The user confirmed **Only select repositories / `Sejong_AI`**
+on 2026-07-21. This completes the App-scope gate only; it is not Cloud environment, docs/test-only task,
+Draft-PR or manual-merge rehearsal evidence, which remain pending.
 
-**Human browser steps:**
+- [x] User opened GitHub App settings and confirmed **Only select repositories / `Sejong_AI`**.
+
+**Remaining human browser steps:**
 
 1. Open [Codex](https://chatgpt.com/codex) and connect GitHub.
-2. Install/authorize the Codex GitHub app for **Only select repositories** and select this one.
-3. Create a Cloud environment for the repository.
-4. Pin Node `24.12.0`, Python `3.12.13` and pnpm `11.13.0` through repository files/setup.
-5. Leave agent internet access off unless a task proves a narrow allowlist is necessary.
-6. Add no DeepSeek key, DB DSN, context-token secret or citizen fixture.
+2. Create a Cloud environment for the repository.
+3. Pin Node `24.12.0`, Python `3.12.13` and pnpm `11.13.0` through repository files/setup.
+4. Leave agent internet access off unless a task proves a narrow allowlist is necessary.
+5. Add no DeepSeek key, DB DSN, context-token secret or citizen fixture.
 
 The setup script may install existing locked dependencies because setup has internet access. It must
 not print environment values and must not start Docker, a database or an external LLM request. Prefer:
@@ -574,8 +575,12 @@ successful external-state evidence.
   the first Task 7 PR-only/no-direct-main-push rehearsal are human-only Pending.
 - 2026-07-21: App-scope evidence interpretation corrected by D-056. Public repository visibility is
   normal even for selected-repository installation and does not prove over-broad scope. Human UI
-  confirmation of `Only select repositories / Sejong_AI` remains Pending; change is required only if
-  the UI says `All repositories`. Cloud environment, docs/test-only task, `codex/...` Draft PR/manual
-  merge and all Task 7 teammate onboarding/self-merge/forbidden-scope rehearsals remain Pending.
-  COLLAB-001 stays In Progress. Exact owner and teammate steps are in
+  confirmation of `Only select repositories / Sejong_AI` was later completed by D-057. Cloud
+  environment, docs/test-only task, `codex/...` Draft PR/manual merge and all Task 7 teammate
+  onboarding/self-merge/forbidden-scope rehearsals remain Pending. COLLAB-001 stays In Progress. Exact owner and teammate steps are in
   `docs/handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md`.
+- 2026-07-21: user completed the App-scope check and merged PR #1. GitHub evidence confirms merge
+  commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`; post-merge Collaboration policy `29782433649`
+  and Frontend CI `29782433682` both passed on that SHA. Task 6 is partial. Teammate MFA/recovery is a
+  recommended account and repository-supply-chain control before their first push, but does not block
+  Cloud or backend work; no authentication value is collected.

@@ -203,8 +203,9 @@ guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initi
   사용자 검토 대상이다. 계약 간극은 frontend 임의 타입이 아니라 Issue와 owner contract PR로
   해결한다.
 - Codex Cloud는 `codex/<task-id>-<slug>` branch와 Draft PR까지만 만들고 사용자가 병합한다.
-  현재 App installation의 selected-repository-only 제한이 확인되지 않아 Cloud environment/task/PR
-  rehearsal은 Pending이다. 비밀·DeepSeek 실호출·Docker/Supabase actual 검증은 Cloud에서 금지한다.
+  App installation의 `Only select repositories / Sejong_AI`는 사용자 확인됐고, Cloud
+  environment/task/Draft-PR rehearsal은 Pending이다. 비밀·DeepSeek 실호출·Docker/Supabase actual
+  검증은 Cloud에서 금지한다.
 - private GitHub source remote는 D-046이 차단하는 remote/public application·DB deployment와
   별개이며 이를 해제하지 않는다.
 

@@ -1,9 +1,9 @@
 {
   "manifest_version": "1.0.0",
-  "updated_at": "2026-07-21T06:43:13+09:00",
+  "updated_at": "2026-07-21T07:04:10+09:00",
   "versions": {
     "product_spec": "2.2.5",
-    "repo_guidance": "1.7.2",
+    "repo_guidance": "1.7.3",
     "application": "0.3.0-pii-core",
     "web": "0.2.0-static-chat-shell",
     "api": "2.0.1-draft",
@@ -13,7 +13,7 @@
     "mock_data": "0.0.0-not-populated",
     "prompt_set": "0.0.2-deepseek-v4-flash-selected",
     "test_suite": "1.0.0-collaboration",
-    "documentation": "2.9.2"
+    "documentation": "2.9.3"
   },
   "policy": "Every implementation note records before/after versions. Breaking API or schema changes require human approval and an ADR."
 }

@@ -4,6 +4,9 @@
 
 ### Added
 
+- D-057 COLLAB-001 post-merge evidence: user-confirmed `Only select repositories / Sejong_AI`, PR #1
+  merge commit and green post-merge collaboration/frontend Actions; App scope is complete while Cloud
+  Draft-PR and teammate MFA/onboarding evidence remain pending
 - COLLAB-001 owner/teammate execution checklist for GitHub App UI confirmation, MFA/recovery,
   bootstrap PR merge, no-secret Codex Cloud Draft-PR rehearsal, Frontend clone/baseline/self-merge and
   forbidden-scope close-without-merge rehearsal; D-056 corrects the earlier inference that public
