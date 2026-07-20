@@ -1,7 +1,7 @@
 # ADR-0004: 질문 텍스트와 이벤트 메타데이터 분리
 
 - Status: Accepted
-- Date: 2026-07-13 (updated 2026-07-20 by Q-PRIV-001, Q-PRIV-002, D-041)
+- Date: 2026-07-13 (updated 2026-07-20 by Q-PRIV-001, Q-PRIV-002, D-041, D-043)
 
 ## Decision
 
@@ -16,6 +16,12 @@ engine으로 구현한다. 원문 값 없는 고정 토큰과 finding만 반환�
 만들지 못하면 `masked_text`를 반환하지 않는다. 이 경우 provider 호출과 실패 질문 텍스트/row
 생성은 금지하고 질문 없는 interaction event만 허용한다. 마스킹 성공도 실제 시민 질문의
 DeepSeek 전송을 허용하지 않는다.
+
+2026-07-20 D-043 addendum: 시민 입력의 “공식 대표번호” label은 신뢰하지 않는다. 질문에
+포함된 모든 phone-shaped value를 마스킹하고, 공식 기관 연락처는 승인된 KB·기관 메타데이터를
+서버가 결합한 카드에서만 제공한다. 이 결정은 one-argument pure core와 공식 데이터 계보의
+분리를 유지하며, 번호 없는 “대표전화는 어디서 확인하나요?” 같은 문의 문구는 안전한 negative
+표본으로 남긴다.
 
 ## Consequences
 

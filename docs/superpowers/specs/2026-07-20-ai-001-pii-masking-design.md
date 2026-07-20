@@ -3,8 +3,8 @@
 - 작성일: 2026-07-20
 - 설계 결정 상태: **Approved** — 사용자 `PII 설계 승인` (2026-07-20T10:08:44+09:00)
 - 정식 명세 상태: **Approved** — 사용자 `PII 명세 승인` (2026-07-20T10:22:13+09:00)
-- 구현 상태: **Plan review pending / Not started** — A-032/Q-PII-003 decision pending
-- 관련 결정: D-017, D-041, D-042, ADR-0004
+- 구현 상태: **Plan approved / Ready** — Q-PII-003=A와 실행계획 승인 (2026-07-20T11:32:00+09:00)
+- 관련 결정: D-017, D-041, D-042, D-043, ADR-0004
 - 관련 작업: AI-001A, AI-001
 
 ## 1. 목적
@@ -188,7 +188,8 @@ FOLLOWUP, fixture allowlist, `DEEPSEEK_ENABLED`, 호출 한도 등 기존 상위
 구현은 TDD로 진행한다. core 슬라이스의 최소 검증 범위는 다음과 같다.
 
 - 13개 개인정보 범주의 형식·띄어쓰기·구분자 변형
-- 공공기관 대표번호, 수수료, 날짜, 읍·면·동, 공식 용어 등 false-positive 표본
+- 번호 없는 대표전화 문의 문구, 수수료, 날짜, 읍·면·동, 공식 용어 등 false-positive 표본;
+  질문에 실제 phone-shaped value가 포함되면 “공식 대표번호” label과 무관하게 마스킹
 - full-width, zero-width, bidi/control 문자 우회
 - 겹침·중첩·동일 시작 위치 span의 결정론
 - 결과·finding·예외·모듈 logger capture에서 raw sentinel 0건
@@ -203,10 +204,11 @@ FOLLOWUP, fixture allowlist, `DEEPSEEK_ENABLED`, 호출 한도 등 기존 상위
 - 실제 개인정보·공식 데이터가 아닌 명백한 합성 값만 사용하고 file-level
   `fixture_version=1`, `synthetic_only=true`를 둔다.
 - 13개 범주마다 positive 변형 3개 이상, Unicode 우회 10개 이상, overlap 5개 이상,
-  공공 대표번호·날짜·수수료·읍면동 등 negative 20개 이상을 둔다.
+  번호 없는 대표전화 문의·날짜·수수료·읍면동 등 negative 20개 이상을 둔다. 실제
+  phone-shaped value는 “공식 대표번호”라고 표시돼도 `[전화번호]`로 마스킹한다.
 - 각 case는 안정된 ID, synthetic input, expected outcome(`MASKED`, `SAFE_UNCHANGED`,
-  `UNRESOLVED` 중 하나), expected category/token만 가진다. 실제 사람·계정과 연결되는
-  metadata를 넣지 않는다.
+  `UNRESOLVED` 중 하나), expected category/token과 exact `expected_masked_text` oracle을
+  가진다. 부분·과잉 마스킹을 허용하지 않으며 실제 사람·계정과 연결되는 metadata를 넣지 않는다.
 - test fixture 작성은 인간-AI 책임 경계상 내부 테스트 세부다. 이 명세와 후속 실행계획의
   승인 범위 안에서 AI가 작성한다. production implementation 전에 RED tests와 함께 먼저
   commit하고 그 RED commit에서 v1을 동결한다.
@@ -249,10 +251,9 @@ application-service 슬라이스의 activation gate다. 이번 core 슬라이스
 
 1. [완료] 사용자가 이 정식 명세를 검토·승인한다.
 2. [완료] `superpowers:writing-plans`로 TDD 실행계획을 작성한다.
-3. [대기] A-032/Q-PII-003 공공 대표번호 형태 처리 방식을 사용자가 결정한다.
-4. [대기] 사용자가 실행계획을 승인한다.
-5. 그 뒤에만 제품 코드와 테스트를 작성한다.
+3. [완료] A-032/Q-PII-003=A로 모든 phone-shaped value 마스킹을 확정한다.
+4. [완료] 사용자가 실행계획을 승인한다.
+5. [진행 가능] 승인된 격리 TDD 계획에 따라서만 제품 코드와 테스트를 작성한다.
 
 A-030/Q-SEED-002와 A-021/Q-SEC-003은 별도 인간 결정으로 유지되며 이 명세 승인으로
-해결되지 않는다. A-032는 명세 승인 뒤 독립 계획 검토에서 확인한 명세 해석 충돌이며 답 전에는
-phone-shaped value 동작을 구현하지 않는다.
+해결되지 않는다. A-032는 D-043으로 해결됐고 공식 연락처 제공은 후속 서버 결합 카드의 책임이다.

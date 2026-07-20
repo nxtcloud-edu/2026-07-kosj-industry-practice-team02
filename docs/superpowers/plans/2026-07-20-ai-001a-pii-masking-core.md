@@ -34,7 +34,7 @@
 
 ## 상태
 
-Review — written specification approved; implementation plan approval pending
+Approved — Q-PII-003=A and implementation start approved at 2026-07-20T11:32:00+09:00
 
 ## 목표와 비목표
 
@@ -98,10 +98,10 @@ Review — written specification approved; implementation plan approval pending
 
 | ID | 영향 | 질문 | 상태 | 결정 |
 |---|---|---|---|---|
-| AI-001A-PLAN | code/test | 이 계획으로 core를 구현할 것인가 | Plan approval pending | 승인 전 code 0 |
+| AI-001A-PLAN | code/test | 이 계획으로 core를 구현할 것인가 | Approved | Task 0 decision commit 뒤 isolated TDD 실행 |
 | A-030/Q-SEED-002 | data/READY | official seed membership 보정 | Open/Blocked | AI-001A unit core만 분리, activation 금지 |
 | A-031/Q-PII-002 | public behavior/API | unresolved PII 시민 응답·event reason | Open/Deferred | consumer slice 전 인간 결정; core blocker 아님 |
-| A-032/Q-PII-003 | privacy/core | 공식 대표번호라고 주장된 phone-shaped value 처리 | Open / plan blocker | A 추천: label을 신뢰하지 않고 항상 mask; plan 승인 답변에 선택 필요 |
+| A-032/Q-PII-003 | privacy/core | 공식 대표번호라고 주장된 phone-shaped value 처리 | Resolved / D-043 | A 확정: label을 신뢰하지 않고 항상 mask; 공식 연락처는 server-combined metadata/card |
 | A-021/Q-SEC-003 | public deployment | privileged function posture | Open/Deferred | local-only; public release 금지 |
 
 ## 제안 설계
@@ -147,7 +147,7 @@ raw_question (request scope only)
 **Gate:** 사용자가 exact 의미로 `Q-PII-003: A`와 `계획 승인, 구현 시작`을 함께 답한 경우에만
 실행한다. B 또는 plan 미승인이면 여기서 중단하며 제품 코드·fixture 0을 유지한다.
 
-- [ ] **Step 1: Record the semantic specification amendment and decision**
+- [x] **Step 1: Record the semantic specification amendment and decision**
 
 `D-043`에 시민 입력의 “공식” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹하며,
 공식 기관 연락처는 후속 서버 결합 KB metadata/card에서만 제공한다는 결정을 기록한다.
@@ -159,14 +159,14 @@ ADR-0004에 D-043 addendum을 추가한다. 모든 source-of-truth version 표�
 검사하되 요구사항 상태가 바뀌지 않으면 `RFP_MATRIX` 내용은 변경하지 않는다. frozen fixture
 계약에는 `expected_masked_text` exact oracle 필드를 추가해 부분·과잉 마스킹을 금지한다.
 
-- [ ] **Step 2: Synchronize lineage without touching product code**
+- [x] **Step 2: Synchronize lineage without touching product code**
 
 - product spec `2.2.2→2.2.3`
 - documentation `2.7.8→2.7.9`
 - application/API package/test/DB/data/prompt/web/dependency axes unchanged
 - `IMP-20260720-005`에 승인 문구·시각, semantic change, alternatives, rollback과 인간/AI 경계를 기록
 
-- [ ] **Step 3: Verify and commit the decision-only preflight**
+- [x] **Step 3: Verify and commit the decision-only preflight**
 
 ```powershell
 python -m json.tool versions/manifest.json > $null
@@ -1728,9 +1728,11 @@ Expected: final commit succeeds and worktree is clean. 그 뒤에만 AI-001A Don
 - 2026-07-20T10:22:13+09:00: written specification 승인.
 - 2026-07-20: Task 0+5 TDD 계획과 74-row exact oracle 작성. 독립 전체/regex review
   Critical 0 / Important 0. Q-PII-003 결정과 구현 승인 대기.
+- 2026-07-20T11:32:00+09:00: Q-PII-003=A와 계획 승인·구현 시작 확정. D-043/A-032,
+  exact oracle, product spec 2.2.3/docs 2.7.9 preflight 동기화 시작.
 
 ## 결과와 회고
 
 - 실제 결과: 구현 전이므로 없음.
 - 계획과 달라진 점: 실행 중 기록한다.
-- 다음 단계: Q-PII-003=A+사용자 계획 승인 → Task 0 decision commit → isolated worktree → Task 1 RED fixture.
+- 다음 단계: Task 0 decision commit → isolated worktree → Task 1 RED fixture.

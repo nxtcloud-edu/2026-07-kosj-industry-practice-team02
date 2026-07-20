@@ -4,7 +4,8 @@
 
 ### Added
 
-- User-approved AI-001 PII written specification and review-pending AI-001A TDD plan for an isolated standard-library core, frozen exact-output synthetic v1 evaluation set, Unicode/overlap/residual/bypass gates, and no route/DB/provider activation; A-032 public-number treatment remains an implementation blocker
+- User-approved Q-PII-003=A public-number masking policy and AI-001A execution plan: citizen-provided “official” labels are untrusted, all phone-shaped input values are masked, and approved official contacts remain server-combined KB/office metadata cards
+- User-approved AI-001 PII written specification and AI-001A TDD plan for an isolated standard-library core, frozen exact-output synthetic v1 evaluation set, Unicode/overlap/residual/bypass gates, and no route/DB/provider activation; its former A-032 gate is resolved by Q-PII-003=A/D-043
 - User-approved AI-001 fail-closed PII masking core design and written specification: standard-library deterministic typed rules, value-free fixed tokens/findings, unsafe result with no text, metadata-only event allowance, and no route/DB/provider implementation yet
 - Immutable filesystem official release `0.1.0-initial.1` with approved 19 KB·3 offices·10
   mappings, approval/artifact/semantic hashes, excluded KB 1 and rejected mappings 2, deterministic
@@ -50,6 +51,7 @@
 
 ### Changed
 
+- Resolved A-032 and moved AI-001A from Review to Ready while keeping parent AI-001, official seed/readiness, unresolved-PII consumer behavior, and public deployment blocked by their existing independent gates
 - Clarified the source-of-truth privacy boundary: successful masking is necessary but not sufficient for storage or synthetic-provider use; unresolved PII forbids failed-question text/row and provider calls, while actual citizen DeepSeek transmission remains prohibited
 - Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged. The `.1` filesystem release and dispatcher are now published/verified, but actual DB rows, ACTIVE reads, readiness and `official_data` promotion remain blocked.
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
