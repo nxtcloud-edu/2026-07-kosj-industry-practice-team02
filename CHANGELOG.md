@@ -61,6 +61,9 @@
 
 ### Changed
 
+- Corrected the AI-001A isolated-worktree handoff to forbid junctioning a worktree `.tools` to the
+  main ignored tool directory; require byte-copy/hash verification instead after Windows cleanup was
+  observed following the junction target, and reproducibly restored exact uv and patched Supabase runtime
 - Completed the isolated AI-001A core and permanent standard-library/no-I/O architecture gate while
   leaving parent AI-001, citizen-visible unresolved-PII behavior, official readiness, DeepSeek
   adapter, and public deployment behind their existing independent blockers

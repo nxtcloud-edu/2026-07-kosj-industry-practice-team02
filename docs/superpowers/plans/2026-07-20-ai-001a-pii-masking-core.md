@@ -1754,6 +1754,9 @@ Expected: final commit succeeds and worktree is clean. 그 뒤에만 AI-001A Don
 - 2026-07-20T19:40:50+09:00: 최종 문서 동기화 뒤 fresh `verify.ps1 -Offline`이 root·data·
   seed·Web·API·contract regeneration·secret·package·diff 전 단계를 PASS했다. 같은 최종
   source에서 privacy 1,161, architecture+privacy 1,165, full API 1,318 결과도 재확인했다.
+- 2026-07-20 IMP-007 safety addendum: 위 historical main `.tools` junction은 통합 cleanup에서
+  Windows Git이 target까지 삭제하는 실제 위험을 만들었으므로 재사용을 금지한다. 후속 worktree는
+  exact ignored binary를 byte-copy/hash/`-VerifyOnly`로 검증하고 worktree-local 사본만 정리한다.
 
 ## 결과와 회고
 
