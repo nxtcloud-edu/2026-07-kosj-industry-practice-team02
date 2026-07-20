@@ -3,7 +3,7 @@
 > **최종 제품**: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터  
 > **프로젝트 기간**: 2026-07-06 ~ 2026-07-31  
 > **팀 규모**: 4명  
-> **문서 버전**: v2.2.3
+> **문서 버전**: v2.2.4
 > **팀명·팀원·연락처·제출일**: 제출 전 직접 입력
 
 ## 1. 프로젝트 정의
@@ -78,7 +78,7 @@
 | P0-02 | 공식 KB 검색 | ACTIVE KB만 검색하고 사용 source_id 반환 | AI/Data+BE |
 | P0-03 | 구조화 답변·출처 | 절차·서류·기간·수수료·기관·출처 카드 | FE+BE |
 | P0-04 | 후속질문 | 모호 질문 2개에 선택형 FOLLOWUP | AI/Data+FE |
-| P0-05 | 4개 안전 폴백 | 사유·다음 행동·기관 안내·후보 적격성 | AI/Data+BE |
+| P0-05 | 4개 행정-domain 안전 폴백 | 사유·다음 행동·기관 안내·후보 적격성 | AI/Data+BE |
 | P0-06 | 개인정보 마스킹 | 외부 LLM 전 마스킹, 원문 DB 미저장 | BE |
 | P0-07 | 지역·기관 매칭 | 3개 지역과 공식 기관 데이터 | BE+FE |
 | P0-08 | 실패 질문 목록 | masked_question·사유·상태·텍스트 만료일 표시, 만료 후 파기 빈 상태 | FE+BE |
@@ -155,19 +155,20 @@ activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확
 
 Task 5는 `.1` filesystem release 19/3/10을 게시·검증하고 byte-identical local
 dispatcher를 활성화했다. `[db.seed].enabled=false`는 유지된다. Task 6 actual disposable
-PostgreSQL 17 cycle은 seed write 전 identity guard에서 Blocked다. migration/pgTAP은 grantor별 row의
+PostgreSQL 17 cycle은 seed write 전 identity guard에서 Blocked다. migration은 grantor별 row의
 ADMIN/INHERIT/SET effective union을 권위로 삼지만 불변 `.1` seed/compensation은 모든
 option을 가진 단일 row만 인정하기 때문이다. 따라서 PostgreSQL에 승인 row가 삽입된
 근거, citizen-visible ACTIVE data, READY/AI 승격은 없고 `official_data`는
 `0.0.0-not-populated`다. runtime은 container 0·port 54322 listener 0으로 정리됐다.
 
-A-030/Q-SEED-002가 후속 아키텍처를 인간 결정으로 열어 둔다. 추천·미응답 기본값은
-기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected guard·new
-manifest·technical approval에 묶은 successor immutable `0.1.0-initial.2`로 새로 게시한 뒤
-actual cycle 전체를 재실행하는 A다. B는 새 versioned DB migration으로 grantor별
-membership를 한 row로 정규화하는 방식이며 글로벌 권한/스키마 변경이다. 답이 없으면
-A를 추천만 유지하고 둘 다 구현하지 않으며 DATA-SEED/READY/AI는 Blocked다.
-`.1` release byte는 수정·삭제하지 않는다.
+Q-SEED-002=A/D-044로 기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected
+guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initial.2`로 새로
+게시한 뒤 actual cycle 전체를 재실행하는 방향을 확정했다. `.1` release와 v1 schema byte는
+수정·삭제하지 않는다. ADR-0017과 DATA-SEED-002 written specification/plan은 Review이고,
+사용자의 후속 plan 승인 전 `.2` 생성·dispatcher 교체·DB reset/import·official-data 승격은
+금지한다. 현재 pgTAP의 `INHERIT+SET` same-row 검사는 successor 실행에서 migration의 세 독립
+`EXISTS` 의미로 정렬하되 assertion count와 runtime DB object는 바꾸지 않는다. 성공하더라도
+`/ready=200`은 별도 READY-001이 소유한다.
 
 ## 7. 시스템 설계
 
@@ -220,6 +221,7 @@ audit_logs
 | PERSONAL_LOOKUP | 불가 | 필요 시 마스킹 후 30일 |
 | LEGAL_JUDGMENT | 불가 | 필요 시 마스킹 후 30일 |
 | OUT_OF_SCOPE | 불가 | 질문 텍스트 저장 금지, 이벤트만 |
+| PRIVACY_UNRESOLVED | 불가 | 질문 텍스트·실패 질문 행 없이 metadata event만 |
 | FOLLOWUP | 해당 없음 | 실패 질문 목록 미저장 |
 
 ### 외부 AI
@@ -237,6 +239,7 @@ audit_logs
 
 - 이름·상세주소는 재현율 우선으로 보수적으로 가린다. 답변 성공률 80% 미달의 원인이 과잉 마스킹으로 입증돼도 정밀도 우선으로 자동 전환하지 않고 인간 재승인을 받는다.
 - 초기 마스킹 코어는 표준 라이브러리 기반 결정론적 typed rule engine과 원문 값 없는 고정 토큰을 사용한다. 정규화·탐지 후에도 안전한 마스킹 문자열을 만들 수 없으면 텍스트를 반환하지 않고 실패 질문 row·provider 호출을 금지하며 질문 없는 interaction event만 허용한다.
+- 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. source/context/office, provider 호출, 질문 text, 실패 질문 행과 후보는 만들지 않는다. 후속 consumer 명세에서 공개 계약과 forward DB migration을 함께 승인하기 전에는 route를 활성화하지 않는다.
 - 시민 질문에 들어온 phone-shaped value는 사용자가 “공식 대표번호”라고 적어도 모두 마스킹한다. 공식 연락처는 입력에서 보존하지 않고 승인된 KB·기관 메타데이터를 서버가 결합한 기관 카드에서만 제공한다.
 - 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니다. 실제 시민 질문은 마스킹 여부와 무관하게 DeepSeek에 전송하지 않는다.
 - 화면상 대화 기록과 15분 서명형 `context_token`은 현재 브라우저 탭 메모리에만 둔다. 서버 세션·raw 대화문·token을 DB/로그에 저장하지 않고 새로고침·탭 종료 시 화면 기록을 없앤다.

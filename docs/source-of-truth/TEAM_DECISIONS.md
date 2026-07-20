@@ -11,7 +11,7 @@
 
 - 실제 페이지: `/`, `/chat`, `/admin`
 - 지원 분야: 전입·주민등록, 증명서 발급, 대형폐기물, 지방세 일반 안내
-- P0: 질문·분류·공식 KB 답변·출처·후속질문·4개 폴백·지역 선택·기관 카드·관리자 승인 루프
+- P0: 질문·분류·공식 KB 답변·출처·후속질문·4개 행정-domain 폴백+privacy 안전 재질문·지역 선택·기관 카드·관리자 승인 루프
 - P1: 쉬운 말, 큰 글씨, 기본 명도 대비 4.5:1 이상, 실패 질문 필터, KPI, 품질 카드, 감사 이력, 성능 스모크 테스트
 - P2: 실제 GPS·지도 내장·상태조회·정부24/내부망 연계·다국어·음성·고급 분석·전체 KB CRUD
 
@@ -35,10 +35,13 @@
 - DATA-SEED actual status: `.1` filesystem release는 19/3/10으로 게시·검증됐고
   `supabase/seed.sql`은 release seed와 byte-identical이며 `[db.seed].enabled=false`다. 2026-07-20
   actual DB cycle은 seed write 전, PostgreSQL 17 grantor별 membership option을 효과적 union으로
-  인정하는 migration/pgTAP 권위와 불변 `.1` single-row guard 충돌로 Blocked다.
+  인정하는 migration 권위와 불변 `.1` single-row guard 충돌로 Blocked다. 현재 pgTAP은 실제
+  두-row 상태를 통과하지만 `INHERIT+SET`을 같은 row에 묶으므로 successor 실행에서 정렬한다.
   citizen-visible ACTIVE data·READY·AI 승격은 없고 `official_data=0.0.0-not-populated`다.
   런타임은 container 0·port 54322 listener 0으로 정리됐다. `.1` byte는 수정·삭제하지
-  않으며 A-030/Q-SEED-002의 후속 선택 전에 DATA-SEED/READY/AI는 Blocked다.
+  않는다. Q-SEED-002=A/D-044로 기존 effective-option union 권위를 유지하고 같은 승인
+  projection의 immutable `0.1.0-initial.2` successor를 만드는 방향은 확정됐다. ADR-0017과
+  DATA-SEED-002 명세·계획은 Review이며 후속 plan 승인 전 `.2`·dispatcher·DB 변경은 0이다.
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -50,6 +53,7 @@
 - PERSONAL_LOOKUP: 후보 불가
 - LEGAL_JUDGMENT: 후보 불가
 - OUT_OF_SCOPE: 후보 불가, 질문 텍스트 저장 금지
+- PRIVACY_UNRESOLVED: 안전한 마스킹 text 생성 불능 전용 HTTP 200 재질문; 후보·질문 text·실패 행·provider 호출 없음
 - 모호 질문: FOLLOWUP, 실패 질문이 아님
 
 ## 개인정보
@@ -64,6 +68,7 @@
 - 이름·상세주소는 재현율 우선 보수적 마스킹; 답변 성공률 저하가 입증돼도 정밀도 우선 전환은 인간 재승인 후
 - 초기 runtime 마스커는 표준 라이브러리 기반 결정론적 typed rule engine으로 구현한다. 원문 값 없는 고정 토큰만 반환하고 안전한 결과를 만들 수 없으면 텍스트 저장·실패 질문 row·provider 호출을 금지하며 metadata-only event만 허용한다.
 - 시민 입력이 번호를 “공식 대표번호”라고 표시해도 그 label은 신뢰하지 않고 모든 phone-shaped value를 마스킹한다. 공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다.
+- 안전한 마스킹 text를 만들 수 없으면 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. 질문 text·source/context/office·provider·실패 질문 행·후보는 0이고 질문 없는 metadata event만 허용한다. 공개 계약과 DB enum은 별도 consumer 명세·forward migration 승인 전까지 현재 4개 값으로 유지한다.
 - 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니며 실제 시민 질문의 DeepSeek 전송 금지는 유지한다.
 - DeepSeek 외부 호출은 local/private의 서버 검증 합성 fixture에만 허용; 실제 시민·PII·민감정보·공개 운영은 금지
 - 화면 transcript와 대화 token은 현재 탭 메모리에만 유지; 서버 세션·raw transcript·token 영속 저장 금지
@@ -110,10 +115,11 @@
   `수정 계획 승인, 구현 시작`을 승인했고, checkout `.tools/s/a`, `.tools/s/b`와 pre-mutation
   absolute path budget, legacy partial-tree deny-only 경계, reproducible runtime manifest, patched-only
   runner와 actual full gate가 local에서 구현·검증됐다.
-- DB public release 경계: Q-SEC-003은 미응답이며 기본값 B를 적용한다. privileged function
-  graph 22개 중 `00600` validator 외 21개의 search path hardening이 남아 있으므로 remote/public
-  배포, public admin/API, public backend DB credential 사용을 차단한다. 인간 결정 전 `00700`을
-  만들지 않으며 이 local 기준선을 production-ready라고 부르지 않는다.
+- DB public release 경계: Q-SEC-003=A/D-046으로 exact privileged function 22 signatures를
+  property-only `00700`에서 `search_path=pg_catalog, pg_temp`로 보정하는 방향은 확정했다.
+  구현은 사용자의 지시대로 public 준비 단계까지 보류한다. `00700`·matching compensation·전체
+  regression과 별도 배포 승인이 끝날 때까지 remote/public 배포, public admin/API,
+  public backend DB credential 사용을 차단하고 local 기준선을 production-ready라고 부르지 않는다.
 
 ## 제출 정보
 
@@ -122,4 +128,4 @@
 - 대표 연락처: [직접 입력]
 - 제출일: [직접 입력]
 - 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.2.3
+- 문서 버전: v2.2.4

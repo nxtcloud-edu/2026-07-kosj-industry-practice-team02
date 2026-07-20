@@ -27,8 +27,13 @@ MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할
 | PERSONAL_LOOKUP | 불가 | 공식 조회 시스템·담당 부서 안내 |
 | LEGAL_JUDGMENT | 불가 | 일반 정보와 전문 담당자 안내 |
 | OUT_OF_SCOPE | 불가 | 지원 범위 안내; 범위 확대는 별도 사업 결정 |
+| PRIVACY_UNRESOLVED | 불가 | 개인정보를 빼거나 표현을 바꿔 재질문; 질문 text·실패 질문 행 미생성 |
 
-모호한 질문은 FOLLOWUP이며 후보 전환 대상이 아니다.
+모호한 질문은 FOLLOWUP이며 후보 전환 대상이 아니다. `PRIVACY_UNRESOLVED`도 운영 개선용
+실패 질문이 아니며 후보·사유 확인 상태 머신에 진입하지 않는다.
+
+`PRIVACY_UNRESOLVED` 행은 D-045로 확정된 후속 정책 목표다. 현재 active API 계약·DB enum·route는
+기존 4개 reason을 유지하며, 별도 consumer 명세와 forward migration 승인이 끝난 뒤 적용한다.
 
 ### 사유 확인 불변조건
 

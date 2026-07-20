@@ -4,9 +4,9 @@ DB-001의 manifest 의미 버전은 disposable local/private `0.3.0-local`이다
 Supabase CLI의 exact single `127.0.0.1:54322`, pgTAP 282, backend integration 8/8,
 6단계 compensation/reset/replay와 final review를 통과했다. 이는 production/public readiness를
 뜻하지 않는다.
-A-021/Q-SEC-003이 해결되기 전에는 remote/public 배포, public admin/API, public backend DB
-credential 사용이 금지된다. 답변이 없을 때의 현재 기본값은 Q-SEC-003 선택지 B이며
-`00700` migration은 만들지 않는다.
+Q-SEC-003=A/D-046으로 exact privileged function 22 signatures의 property-only `00700`
+보정 방향은 확정됐지만 public 준비까지 구현을 보류한다. `00700`·matching compensation·전체
+regression 전에는 remote/public 배포, public admin/API, public backend DB credential을 금지한다.
 
 ## 권위와 계보
 
@@ -70,14 +70,16 @@ provider 설정은 보존한다. DSN, password, status 원문을 문서·로그�
 `supabase/seed.sql`은 현재 `.1` release `seed.sql`과 byte-identical이다. 단 Supabase reset의
 자동 seed는 `[db.seed].enabled=false`로 비활성이다. 2026-07-20 actual runner는 baseline,
 patched runtime, status까지 통과한 뒤 identity에서 중단되었다. PostgreSQL 17의 grantor별
-membership row에 대한 migration/pgTAP effective ADMIN/INHERIT/SET union 권위와 불변 `.1`
-seed/compensation의 exactly-one-row guard가 충돌한다. seed write는 도달하지 않았다.
+membership row에 대한 migration의 effective ADMIN/INHERIT/SET union 권위와 불변 `.1`
+seed/compensation의 exactly-one-row guard가 충돌한다. 현재 pgTAP의 관측 상태 검사는
+`INHERIT+SET`을 한 row에 묶으므로 DATA-SEED-002 계획에서 세 독립 `EXISTS`로 정렬한다.
+seed write는 도달하지 않았다.
 
 따라서 공식/mock persistent row, citizen-visible ACTIVE data, final DB semantic hash 근거는 0이고
 `official_data=0.0.0-not-populated`, `/ready=503`이 정상이다. READY-001이 별도로
-`/ready=200`을 소유한다. A-030/Q-SEED-002의 후속 아키텍처가 승인되기 전에는
-`.1` release·dispatcher, role/grant, migration을 수정하지 않고 actual runner를 재실행하지
-않는다. 상세는
+`/ready=200`을 소유한다. Q-SEED-002=A/D-044의 `.2` successor 명세·계획은 Review이며 후속 plan
+승인 전 `.1` release·dispatcher, role/grant, migration을 수정하거나 actual runner를 재실행하지
+않는다. 상세 historical evidence는
 [`DATA-SEED-001-0.1.0-initial.1`](../docs/data-lineage/DATA-SEED-001-0.1.0-initial.1.md)을
 따른다.
 

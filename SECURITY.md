@@ -74,9 +74,9 @@ JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` ru
   password를 terminal·문서·Git에 남기지 않는다.
 - reset/compensation/absence 명령은 disposable local DB에만 허용한다. remote project,
   실제 데이터, Docker volume 삭제·prune에는 사용하지 않는다.
-- A-021/Q-SEC-003 기본값 B가 활성이다. public-release 전 privileged function 21개
-  search-path hardening이 남아 있으므로 remote/public 배포, public admin/API, public backend
-  DB credential을 차단하며 인간 승인 전 `00700` migration을 만들지 않는다.
+- Q-SEC-003=A/D-046으로 exact 22 signature의 property-only `00700` 방향은 확정됐지만 구현은
+  public 준비까지 보류한다. `00700`·matching compensation·전체 regression 전까지
+  remote/public 배포, public admin/API, public backend DB credential을 차단한다.
 - Q-SEC-004=A/D-029의 `default-local-port-binding`과 Q-SEC-005=A/D-030의
   `local-only-port-binding`은 모두 actual HostIP 미지정 probe에서 `127.0.0.1`과 IPv6 wildcard
   `::`를 함께 생성해 exact local 기준에 실패했다. explicit `127.0.0.1` control만 단일

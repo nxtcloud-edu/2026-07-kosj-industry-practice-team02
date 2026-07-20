@@ -62,7 +62,7 @@ documentation: 2.4.0
 `127.0.0.1:54322`, fresh pgTAP 282, integration 8/8, compensation/absence/replay와 static/root gate다.
 제품·API·shared contracts·official/mock data·prompt 축은 바뀌지 않았다. 공식 데이터·mock 데이터는
 모두 `0.0.0-not-populated`이고 `/ready=503`이 정상이다. `local` suffix는 공개·원격·production
-release가 아님을 명시한다. A-021/Q-SEC-003은 계속 별도 public blocker다.
+release가 아님을 명시한다. D-046에서 방향이 확정된 `00700` 구현·검증은 계속 별도 public blocker다.
 
 ## 릴리스 체크
 

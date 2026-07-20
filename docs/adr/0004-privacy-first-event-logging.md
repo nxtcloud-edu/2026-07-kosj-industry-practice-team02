@@ -1,7 +1,7 @@
 # ADR-0004: 질문 텍스트와 이벤트 메타데이터 분리
 
 - Status: Accepted
-- Date: 2026-07-13 (updated 2026-07-20 by Q-PRIV-001, Q-PRIV-002, D-041, D-043)
+- Date: 2026-07-13 (updated 2026-07-20 by Q-PRIV-001, Q-PRIV-002, D-041, D-043, D-045)
 
 ## Decision
 
@@ -23,6 +23,15 @@ DeepSeek 전송을 허용하지 않는다.
 분리를 유지하며, 번호 없는 “대표전화는 어디서 확인하나요?” 같은 문의 문구는 안전한 negative
 표본으로 남긴다.
 
+2026-07-20 D-045 addendum: 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 시스템 장애나
+기존 4개 행정-domain 폴백으로 가장하지 않는다. 후속 public consumer는 HTTP 200
+`PRIVACY_UNRESOLVED` 정책 outcome으로 “개인정보를 빼거나 표현을 바꿔 다시 질문”하는 다음
+행동을 제공한다. provider 호출, source/context/office, 질문 text 저장, `failed_questions` row와
+후보 전환은 모두 금지하고 질문 없는 interaction metadata만 기록할 수 있다. 이 결정은 시민
+동작을 확정하지만 현재 OpenAPI·JSON Schema·Pydantic·TypeScript·DB enum을 즉시 변경하지
+않는다. consumer 명세에서 기존 migration 불변을 지키는 forward DB migration과 공개 계약을
+함께 설계·승인한 뒤에만 route를 활성화한다.
+
 ## Consequences
 
-운영 KPI·상태·후보 연결을 유지하면서 텍스트 노출 기간을 제한한다. 만료 후 관리자는 텍스트가 파기된 빈 상태를 보게 되며 자유로운 대화 재생은 제공하지 않는다. 백업 복구 직후에는 서비스 개방 전에 만료 텍스트 파기를 재실행해야 한다. 보수적 마스킹은 답변 의미를 일부 손상할 수 있으므로 PII 누락률과 답변 성공률을 같은 고정 평가셋에서 함께 측정한다.
+운영 KPI·상태·후보 연결을 유지하면서 텍스트 노출 기간을 제한한다. 만료 후 관리자는 텍스트가 파기된 빈 상태를 보게 되며 자유로운 대화 재생은 제공하지 않는다. 백업 복구 직후에는 서비스 개방 전에 만료 텍스트 파기를 재실행해야 한다. 보수적 마스킹은 답변 의미를 일부 손상할 수 있으므로 PII 누락률과 답변 성공률을 같은 고정 평가셋에서 함께 측정한다. `PRIVACY_UNRESOLVED`는 별도 KPI reason이며 근거 부족 개선 수요에 합산하지 않는다.

@@ -40,9 +40,9 @@ reset 전에 먼저 확인하고, 안전할 때만 로컬 DB reset 뒤
 내부 repository는 9개 schema-qualified fixed SQL만 사용하고 native DB diagnostic을
 SQLSTATE 기반 고정 domain error로 축약한다.
 
-A-021/Q-SEC-003 default B에 따라 이 DB credential과 repository는 local/private 전용이다.
-public admin/API, public backend DB credential, remote/public 배포와 `00700`은 인간 결정 전
-금지한다.
+Q-SEC-003=A/D-046의 `00700` 방향은 확정됐지만 public 준비까지 구현 보류다. 이 DB credential과
+repository는 계속 local/private 전용이며 public admin/API, public backend DB credential과
+remote/public 배포는 `00700` 전체 검증 전 금지한다.
 
 ## 로컬 명령
 

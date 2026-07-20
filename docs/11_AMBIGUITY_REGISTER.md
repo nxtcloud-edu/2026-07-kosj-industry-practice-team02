@@ -24,7 +24,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-018 | A | DB role 보안 | Resolved | Q-SEC-002=A: non-superuser PG17 runner 유지, 허용된 role 속성 재적용+catalog 검증, unsafe role fail closed | D-026 / ADR-0011; privileged auto-downgrade/bootstrap 없음 |
 | A-019 | A | 관리자 workflow | Resolved | Q-WF-001=A: 별도 backend-only `confirm_failed_question_reason(uuid,text,text,text)` capability | D-027 / ADR-0011; event 자동 사유 불변, failure 사유·적격성 재계산 |
 | A-020 | A | DB trigger 권한 | Resolved | Q-DB-003=A: 새 `00600`에서 ACTIVE-question validator 하나만 SECURITY DEFINER+owner/`search_path=pg_catalog, pg_temp`/revoke 검증, compensation은 INVOKER | D-028 / ADR-0012; 사용자의 직전 추천안 뒤 계속 진행 지시를 A 승인으로 해석, 문자 A 직접 입력 아님; `pg_temp` 마지막 명시는 D/Internal 보안 보정 |
-| A-021 | B | 기존 DB function 보안 | Open / Deferred — local Task 9 blocker 아님, public release blocker | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. data-type shadow DoS는 high-confidence plausible, privilege escalation은 conservative medium-confidence inference이며 exploit은 재현하지 않았다. | Q-SEC-003 A 추천: exact 22 signatures에 새 `00700` property-only migration. B/default: local-only 완료는 허용하되 remote/public 배포·public admin/API·public backend DB credential은 해결 전 차단 |
+| A-021 | B | 기존 DB function 보안 | Resolved decision / implementation deferred to public preparation | read-only audit의 privileged execution graph는 `app_api` SECURITY DEFINER 9개+중첩/trigger `app_private` 13개=22개다. `00600` validator만 교정돼 unsafe `pg_catalog`-only path는 21개다. application relation/helper는 qualified이고 dynamic SQL은 0이다. | Q-SEC-003=A / D-046 / ADR-0018. exact 22 signatures의 `00700` property-only 보정은 확정했지만 public 준비까지 구현 보류; 그전 remote/public 경로 차단 |
 | A-022 | A | local Docker port 보안 1차 결정 | Resolved decision / remediation insufficient | Q-SEC-004=A로 Docker Desktop `PortBindingBehavior=default-local-port-binding`을 적용·재시작했다. 빈 HostIP probe는 IPv4 `127.0.0.1`과 IPv6 wildcard `::`를 함께 만들었고 explicit `127.0.0.1` probe만 단일 loopback이었다. | D-029; 승인 결정은 기록하되 exact local 완료 근거로 사용하지 않음 |
 | A-023 | A | local Docker IPv6 port 보안 2차 결정 | Resolved decision / remediation insufficient | Q-SEC-005=A로 `local-only-port-binding`을 적용·재시작했지만 HostIP 생략 probe는 다시 `127.0.0.1`+`::`였다. explicit `127.0.0.1` control만 단일 loopback이었다. | D-030; 승인 설정은 유지하지만 exact local 완료 근거로 사용하지 않음 |
 | A-024 | A | local Supabase CLI port 공급망 | Resolved / implemented and verified locally | Q-SEC-006=A. official v2.109.1 exact source의 local DB start HostIP만 `127.0.0.1`로 지정하는 project-local patched CLI를 source/tag/commit·patch·Go 1.25.11·binary SHA-256과 함께 pin했고 actual gate를 통과했다. | D-031 / ADR-0013; local/private DB authority, public readiness 아님 |
@@ -33,8 +33,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
 | A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
-| A-030 | A / Blocker | official seed correction | Open / Blocked | Q-SEED-002: PostgreSQL 17 grantor-specific effective option union과 immutable `.1` single-row membership guard 충돌을 어떻게 보정할 것인가 | A 추천/default: migration/pgTAP union 권위를 유지하고 별도 승인된 immutable `0.1.0-initial.2`를 생성·전체 actual cycle 재실행; 답 전에는 아무 방안도 구현하지 않음 |
-| A-031 | B / High | unresolved PII consumer response | Open / Deferred — AI-001A core blocker 아님 | Q-PII-002: 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 공개 응답·event reason으로 표현할 것인가 | A 추천: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 추가; 답 전 consumer 연결만 차단 |
+| A-030 | A / Blocker | official seed correction | Resolved decision / spec·plan Review | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044 / ADR-0017. 후속 plan 승인 전 `.2`/dispatcher/DB 실행 0 |
+| A-031 | B / High | unresolved PII consumer response | Resolved behavior / consumer implementation deferred | Q-PII-002=A: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045 / ADR-0004. 별도 public contract+forward DB migration 명세·승인 전 route 차단 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
 
 ## 우선도 정의
@@ -44,16 +44,18 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 DATA-SEED/READY/AI local 진행을 막는 인간 결정형 A/Blocker는 A-030/Q-SEED-002다.
+현재 열린 인간 결정형 A/Blocker는 0개다. DATA-SEED-002는 architecture 결정이 아니라 written
+specification/plan의 명시적 실행 승인만 기다린다.
 A-032/Q-PII-003은 2026-07-20 D-043으로 해결돼 AI-001A pure core 실행이 승인됐다.
-A-031/Q-PII-002는 AI-001A pure core 구현을 막지 않지만 route/consumer activation 전에는
-반드시 해결해야 하는 B/High 공개 동작 결정이다.
+A-031/Q-PII-002의 시민 동작은 D-045로 해결됐다. route/consumer activation은 공개 계약과
+forward DB migration을 함께 다루는 별도 명세·승인 전까지 Blocked다.
 A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
 2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
 byte-active dispatcher를 완료했지만 `[db.seed].enabled=false`다. Task 6 actual DB cycle은 seed write
 전 grantor별 effective-option union 권위와 `.1` single-row guard 충돌로 Blocked다. 인간 결정 전
 `.1`·role/grant·migration을 바꾸지 않고 `official_data=0.0.0-not-populated`, `/ready=503`을
-유지한다. Q-SEC-002와 Q-WF-001은 2026-07-16에
+  유지했다. Q-SEED-002=A/D-044가 `.2` successor 방향을 해결했지만 plan 승인 전 실행하지 않는다.
+  Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
 6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
@@ -61,7 +63,8 @@ publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 
 `0.3.0-local` 승격을 차단했었다. 이후 사용자는 수정 계획을 `수정 계획 승인, 구현 시작`으로
 승인했고 A-024/A-025는 short-root TDD, reproducible runtime pin, patched-only runner와 2026-07-18
 fresh exact loopback/full DB/root/static gate를 통해 local에서 구현·검증됐다. DB-001은
-disposable local/private 기준선으로 완료됐지만 A-021은 계속 B/High public-release blocker다.
+  disposable local/private 기준선으로 완료됐다. A-021의 방향은 D-046으로 해결됐지만 `00700`
+  구현·검증 전에는 public-release 실행 blocker다.
 
 Q-DATA-002/A-026은 2026-07-18 사용자 `Q-DATA-002: A`로 해결됐다. 2026-07-19 사용자는
 Q-DATA-003=A로 exact reviewer/disposition/final-confirmation 시각을 확정해 A-027을 해소했다.
@@ -70,9 +73,14 @@ disposable local DB cycle을 승인했다. 실제 실행 결과 filesystem relea
 A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell은 구현·검증
 완료됐다.
 
-## 열린 인터뷰 질문
+## 현재 열린 인터뷰 질문
+
+없음. 세 결정은 D-044~D-046으로 확정됐고, 남은 것은 별도 명세·계획·실행 승인 gate다.
+
+## 2026-07-20 해결된 인터뷰 질문
 
 Q-PII-002. 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 응답·event reason으로 표현할 것인가
+- 결정: A / D-045 / ADR-0004. HTTP 200 `PRIVACY_UNRESOLVED` 안전 재질문으로 분리한다.
 - 왜 지금 필요한가: AI-001A core는 `masked_text=None`으로 안전하게 닫을 수 있지만, 후속
   `/chat` consumer가 시민에게 보여줄 문구와 metadata reason은 현재 4개 `FallbackReason`에 없다.
   기존 reason을 임의 재사용하면 KPI·감사 의미와 공개 계약이 왜곡된다. core 구현에는 필요
@@ -86,21 +94,24 @@ Q-PII-002. 안전한 마스킹 text를 만들지 못한 시민 요청을 어떤 
   원문 재시도를 유도하며 운영 지표가 섞인다.
 - 당신의 추천안: A. 개인정보 안전 실패는 근거 부족·개인 조회·법적 판단·지원 범위 밖과 다른
   정책 outcome이므로 명시적으로 분리한다.
-- 답을 받지 못할 때 사용할 기본값: AI-001A pure core까지만 진행하고 route/DB/provider consumer
-  연결은 Blocked로 유지한다. A/B 어느 계약도 구현하지 않는다.
+- 실행 경계: 현재 공개 계약과 DB는 바꾸지 않는다. consumer contract/DB forward migration을
+  별도 명세·계획·승인한 뒤 route를 활성화한다.
 - 영향을 받는 파일·계약·데이터·배포: 후속 OpenAPI/JSON Schema/Pydantic/TS fixture, chat service,
-  event reason, Web fallback copy와 API/test/docs version. DB enum/migration 필요 여부는 선택 후
-  별도 감사하며 이번 core plan에서는 변경 0이다.
+  event reason, Web fallback copy와 API/test/docs version. forward DB migration의 순서·함수 영향은
+  별도 consumer 명세에서 감사하며 이번 core plan에서는 변경 0이다.
 
 Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게 보정할 것인가
+- 결정: A / D-044 / ADR-0017. immutable `.2` successor와 전체 actual cycle을 선택했다.
 - 왜 지금 필요한가: Task 5의 immutable `.1` filesystem release와 dispatcher는 게시·검증됐지만,
-  Task 6 actual PostgreSQL 17은 seed write 전 identity에서 중단됐다. migration/pgTAP은
-  grantor별 row의 ADMIN/INHERIT/SET effective union을 인정하고 `.1` seed/compensation은 하나의
+  Task 6 actual PostgreSQL 17은 seed write 전 identity에서 중단됐다. migration은
+  grantor별 row의 ADMIN/INHERIT/SET effective union을 인정하고 현재 pgTAP은 관측된 두-row
+  상태는 통과하지만 `INHERIT+SET`을 같은 row에 묶어 검사한다. `.1` seed/compensation은 하나의
   row에 세 option이 모두 있어야 한다. 인간이 권위와 보정 방식을 결정하기 전에는 actual
   cycle, `official_data`, READY, AI를 진행할 수 없다.
-- 선택지 A / 장점 / 단점: 기존 migration/pgTAP effective-union 권위를 유지하고, 같은 PM 승인
-  19/3/10 data에 corrected membership guard를 적용한 successor immutable `0.1.0-initial.2`를 새
-  manifest·technical approval로 만든 뒤 전체 actual cycle을 재실행한다 / 이미 검증된 DB
+- 선택지 A / 장점 / 단점: 기존 migration의 three-`EXISTS` effective-union 권위를 유지하고,
+  narrower pgTAP predicate를 같은 의미로 정렬하며, 같은 PM 승인 19/3/10 data에 corrected
+  membership guard를 적용한 successor immutable `0.1.0-initial.2`를 새 manifest·technical
+  approval로 만든 뒤 전체 actual cycle을 재실행한다 / 이미 검증된 DB
   권위와 글로벌 privilege state를 유지하고 변경을 versioned release에 한정한다 / 새 release,
   manifest, PM/technical approval, 전체 actual 검증이 필요하다.
 - 선택지 B / 장점 / 단점: 새 versioned DB migration으로 grantor-specific membership를 하나의 row로
@@ -108,19 +119,22 @@ Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게
   membership를 바꾸는 보안/스키마 변경이므로 별도 migration, rollback, replay, 배포 검토가
   필요하다.
 - 당신의 추천안: A. 권위 계약을 하나로 유지하고 immutable correction 정책을 지킨다.
-- 답을 받지 못할 때 사용할 기본값: A를 추천만 유지하되 A·B 모두 구현하지 않는다.
-  DATA-SEED-001, READY-001, AI-001은 Blocked다.
+- 실행 경계: written specification/plan은 Review다. 후속 plan 승인 전 `.2`, dispatcher,
+  disposable DB와 official-data version을 변경하지 않는다.
 - 영향 범위: A는 successor official release/schema/manifest/generator/dispatcher·actual test·lineage/version 승인에,
   B는 그에 더해 DB migration/compensation/pgTAP/role security/deployment에 영향을 준다. 두 선택 모두
   `.1` byte, public API, citizen 답변, READY 활성을 자동 변경하지 않는다.
-- 결정 기록 경계: 아직 확정된 사용자 선택이 없으므로 D-040을 작성하지 않는다.
+- 결정 기록 경계: D-044를 추가했다. 과거 의도적으로 비워 둔 D-040은 소급 채우지 않는다.
 
 Q-SEC-003. 기존 privileged function 22개의 search path를 public release 전에 어떻게 보정할 것인가
+- 결정: A / D-046 / ADR-0018. exact 22 signature property-only `00700`을 선택하되 사용자의
+  지시대로 public 준비 단계까지 구현을 보류한다.
 - 왜 지금 필요한가: local/private Task 9 완료에는 영향이 없지만 PostgreSQL 17 공식 지침과 22-function read-only audit상 `00600` 뒤에도 21개가 `search_path=pg_catalog` 단독이다. remote/public 배포, public admin/API 활성화, public backend DB credential 사용 전에는 인간이 보안 경계를 승인해야 한다.
 - 선택지 A / 장점 / 단점: 새 versioned `00700` property-only migration에서 exact 22 signatures의 `search_path`를 `pg_catalog, pg_temp`로 재설정하고 catalog/behavior/compensation을 검증한다 / 함수 본문·API·table/data를 바꾸지 않고 일관된 방어를 제공하지만 새 migration과 전체 회귀가 필요하다.
 - 선택지 B / 장점 / 단점: 현재 posture를 유지하고 local/private demo만 완료한다 / 즉시 추가 migration이 없지만 remote/public 배포·public admin/API·public backend DB credential을 계속 차단해야 한다.
 - 당신의 추천안: A. exact signature allowlist, property-only forward migration, matching compensation, no body rewrite/grant/data change로 제한한다.
-- 답을 받지 못할 때 사용할 기본값: B. local-only 완료는 허용하고 public release 관련 경로는 차단한다. `00700`은 구현하지 않는다.
+- 실행 경계: 현재는 `00700`을 만들지 않는다. public 준비 명세·DB migration·실행계획 승인과
+  full regression 전까지 remote/public 경로를 계속 차단한다.
 - 영향을 받는 파일·계약·데이터·배포: 새 `00700`/compensation/pgTAP·통합 회귀와 DB 보안 문서가 영향받는다. 공개 API/table/data/retention/dependency/cost는 변하지 않지만 remote/public release gate가 직접 영향받는다.
 
 ## 해결된 인터뷰 질문
@@ -130,27 +144,28 @@ Q-PII-003. 시민 질문에 들어온 공공기관 대표번호 형태의 값을
 - 선택: 입력의 “공식” label을 신뢰하지 않고 모든 phone-shaped value를 `[전화번호]`로 마스킹한다.
   공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다.
 - 결과 경계: one-argument pure core와 0원 local-first 경계를 유지하며 AI-001A 구현은 승인됐다.
-  공개 API·DB·공식 데이터·provider·route activation은 없고 Q-PII-002 consumer 결정은 유지한다.
+  공개 API·DB·공식 데이터·provider·route activation은 없었다. Q-PII-002 시민 동작은 이후
+  D-045로 확정됐고 consumer contract/DB 구현은 별도다.
 
 Q-WEB-001. 실제 chat pipeline 전 홈 CTA의 목적지는 무엇인가
 - 결정: A / D-037. 입력·저장·cookie·API/LLM 호출이 없는 접근 가능한 정적 `/chat` 준비 화면을
   만들고 `/` CTA를 연결한다.
 - 결과 경계: 실제 질문 입력, 공식 KB 답변, 출처 카드, 대화 문맥은 WEB-CHAT/API-CHAT/READY
-  gate 이후 별도 수직 흐름에서만 구현한다. 공개 배포는 A-021/Q-SEC-003으로 계속 차단된다.
+  gate 이후 별도 수직 흐름에서만 구현한다. 공개 배포는 D-046의 `00700` 구현·검증 전까지 차단된다.
 
 Q-SEED-001. approved record의 official release/import 구조는 무엇인가
 - 결정: A / D-036 / ADR-0016. initial `0.1.0-initial.1` immutable filesystem release와 기존
   schema용 empty-local transactional seed를 선택한다.
 - 결과 경계: architecture, written specification, 실행계획은 승인됐고 `.1` filesystem
   release/dispatcher까지 게시·검증됐다. Actual DB는 seed write 전 membership contract 충돌로
-  Blocked이며 후속 보정은 A-030/Q-SEED-002가 소유한다.
+  Blocked였고 후속 보정 방향은 D-044/ADR-0017의 DATA-SEED-002가 소유한다.
 
 Q-DATA-003. PM 검수 완료 진술을 canonical approval evidence로 어떻게 확정할 것인가
 - 결정: A / D-035. reviewer `PM-LOCAL-001`, confirmation
   `2026-07-19T02:06:19+09:00`, current recommendation 35건을 모두 채택한다.
 - 결과 경계: 이 결정은 DATA-001 approval manifest materialization만 허용했다. 이후 별도
   Q-SEED-001 승인으로 `.1` filesystem release는 게시됐지만 DB seed·ACTIVE 검색·readiness는
-  A-030/Q-SEED-002로 계속 Blocked다.
+  DATA-SEED-002 실행·actual cycle 완료 전까지 계속 Blocked다.
 
 Q-DATA-002. 승인 전 공식 데이터 artifact를 어떤 방식으로 저장하고 승인할 것인가
 - 결정: A / D-033 / ADR-0015. 사용자가 2026-07-18 `Q-DATA-002: A`라고 명시했다.
@@ -182,16 +197,16 @@ Q-SEC-005. Docker Desktop의 모든 새 port publish를 loopback으로 강제하
 - 적용 결과: `PortBindingBehavior=local-only-port-binding`을 저장하고 Docker Desktop을 재시작했다. HostIP 생략 probe는 다시 `127.0.0.1`과 `::` 두 binding이었고 explicit `127.0.0.1` control은 단일 loopback이었다. 두 probe를 제거했고 Supabase DB start/reset/status/credential/SQL은 실행하지 않았다.
 - 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시에는
   A-024/Q-SEC-006이 후속 local 완료 blocker였으나 이후 D-031/ADR-0013으로 구현·검증돼
-  해결됐다. 현재 DATA-SEED blocker는 A-030/Q-SEED-002고 A-021/Q-SEC-003은 별도 public
-  release blocker다.
+  해결됐다. 현재 DATA-SEED는 approved DATA-SEED-002 plan 실행 전이고, public은 D-046의
+  `00700` 구현·검증 전까지 별도 차단된다.
 
 Q-SEC-004. Docker Desktop의 향후 모든 새 container 기본 port binding을 loopback으로 바꿀 것인가
 - 결정: A / D-029. 사용자가 2026-07-17 `ㅇㅇ 승인할게. 계속 ㄱㄱ`라고 명시했다.
 - 적용 결과: `PortBindingBehavior=default-local-port-binding`을 저장하고 Docker Desktop을 완전 재시작했다. 빈 HostIP probe의 실제 결과는 `127.0.0.1`과 `::` 두 binding이어서 exact local 기준에는 실패했다. explicit `127.0.0.1` probe는 단일 loopback이었다. 두 probe는 제거했고 DB reset/status/credential 처리는 실행하지 않았다.
 - 영향: 승인된 설정은 유지하지만 DB-001 완료 근거로 사용하지 않는다. 당시
   A-023/Q-SEC-005, 이어 A-024/Q-SEC-006으로 이관했고 A-024는 이후 D-031/ADR-0013으로
-  구현·검증돼 해결됐다. 현재 DATA-SEED blocker는 A-030/Q-SEED-002고 A-021/Q-SEC-003은
-  별도 public release blocker다.
+  구현·검증돼 해결됐다. 현재 DATA-SEED는 approved DATA-SEED-002 plan 실행 전이고,
+  public은 D-046의 `00700` 구현·검증 전까지 별도 차단된다.
 
 Q-DB-003. backend 승인 commit에서 deferred ACTIVE-question trigger를 어떤 권한으로 실행할 것인가
 - 결정: A / D-028 / ADR-0012. 사용자는 문자 `A`를 직접 입력하지 않았고, 직전 추천안 뒤 `이거 끝나면 계속해서 진행해줘. 5시간 동안 루프 ㄱㄱ`라고 지시했다. 이를 추천안 A의 실행 승인으로 투명하게 해석했다.

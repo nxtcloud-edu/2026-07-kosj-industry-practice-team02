@@ -1,6 +1,6 @@
 # ADR-0016 — Immutable filesystem official release and empty-local transactional seed
 
-- Status: Accepted and partially delivered / actual DB import Blocked by A-030/Q-SEED-002
+- Status: Accepted historical `.1`; actual import blocked, correction direction superseded by ADR-0017
 - Date: 2026-07-19
 - Related: Q-SEED-001, D-036, A-028, ADR-0015, DATA-SEED-001
 
@@ -68,21 +68,19 @@ history.
   filesystem semantics, not a PostgreSQL import.
 - Task 6 attempted the supported actual runner three times. Two bounded runner/query defects were
   fixed and independently approved, but the final attempt stopped before seed writes.
-- The authoritative migration/pgTAP contract accepts the effective PostgreSQL 17
-  ADMIN/INHERIT/SET option union across grantor-specific membership rows. Immutable `.1` seed and
+- The authoritative migration accepts the effective PostgreSQL 17 ADMIN/INHERIT/SET option union
+  across grantor-specific membership rows. The then-current pgTAP proves the observed two-row shape
+  but combines INHERIT and SET on one row. Immutable `.1` seed and
   compensation instead require exactly one row with all three options. Actual safe metadata used two
   grantor-specific rows, so the `.1` guard rejected it before mutation.
 - Consequently there is no actual 19/3/10 PostgreSQL count, compensation/replay, final DB semantic
   hash, citizen-read, READY or AI promotion evidence. `official_data=0.0.0-not-populated` and
   `/ready=503` remain authoritative. Cleanup ended with repo-owned container 0 and port 54322
   listener 0.
-- Released `.1` bytes remain immutable and must not be edited or deleted. A-030/Q-SEED-002 now owns
-  the human decision. Option A (recommended/default, not implemented) keeps migration/pgTAP union
-  authority and creates separately approved immutable `0.1.0-initial.2` with the same PM-approved
-  19/3/10 data, corrected guard, new manifest and full rerun. Option B creates a versioned DB
-  migration that normalizes grantor-specific memberships to one row and therefore expands the
-  platform security/schema review. Without an answer, neither option is implemented and
-  DATA-SEED/READY/AI remain Blocked.
+- Released `.1` bytes remain immutable and must not be edited or deleted. Q-SEED-002=A/D-044 later
+  selected ADR-0017: keep migration union authority, align the narrower pgTAP predicate, and create immutable
+  `0.1.0-initial.2` with the same PM-approved 19/3/10 data, corrected guard, new manifest and full
+  rerun. ADR-0017의 written specification/plan은 Review이며 후속 plan 승인 전 구현하지 않는다.
 
 ## Safety and rollback
 

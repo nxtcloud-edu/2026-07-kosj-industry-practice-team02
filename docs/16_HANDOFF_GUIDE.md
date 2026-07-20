@@ -42,5 +42,5 @@ clone
 재현이 안 되면 handoff가 완료되지 않은 것이다.
 
 현재 DB-001 handoff는 local/private 기준선만 다룬다. official seed, READY 200, public admin,
-remote deployment, production backup은 후속 작업이며 A-021/Q-SEC-003 해결 전 공개 경로를
-열지 않는다.
+remote deployment, production backup은 후속 작업이며 D-046의 deferred `00700` 구현·검증 전
+공개 경로를 열지 않는다.

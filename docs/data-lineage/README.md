@@ -16,4 +16,4 @@
 
 - [`DATA-SEED-001 / 0.1.0-initial.1`](DATA-SEED-001-0.1.0-initial.1.md) — filesystem release
   19/3/10 published/verified; actual PostgreSQL import Blocked before seed, `official_data` not
-  promoted, A-030/Q-SEED-002 open
+  promoted; D-044/ADR-0017의 `.2` successor spec·plan Review

@@ -19,6 +19,15 @@ No role/grant, migration, release, dispatcher, official-data version, applicatio
 runtime was changed to work around the mismatch. `versions/manifest.json.versions.official_data`
 remains `0.0.0-not-populated`.
 
+### 2026-07-20 D-044 technical correction addendum
+
+This report's phrases that group “migration and pgTAP authority” are historical shorthand, not an
+exact statement about arbitrary split-row semantics. The migration uses three independent `EXISTS`
+checks. The then-current pgTAP passed the observed two-row catalog but required `INHERIT+SET` on one
+row, so it was narrower than the migration. D-044/ADR-0017 keeps the migration meaning authoritative
+and requires the successor plan to align that one pgTAP predicate without changing runtime DB
+objects or the assertion count. The original reached/unreached evidence above and below is unchanged.
+
 ## 2. Runtime and release identity
 
 | Evidence | Actual result |

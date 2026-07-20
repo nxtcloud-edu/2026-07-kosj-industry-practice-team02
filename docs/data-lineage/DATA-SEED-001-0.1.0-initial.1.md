@@ -97,6 +97,12 @@ Consequently:
 
 ## 5. Correction policy and open decision
 
+> **2026-07-20 D-044 technical correction:** references below to a combined “migration/pgTAP
+> effective-union authority” are historical shorthand. The migration has three independent `EXISTS`
+> predicates; the then-current pgTAP passed the observed two-row state but coupled `INHERIT+SET` on
+> one row. ADR-0017 keeps the migration semantics authoritative and plans a one-predicate pgTAP
+> alignment. This addendum does not alter `.1` bytes or the historical failed-run evidence.
+
 Released `.1` bytes are immutable: never edit, overwrite, rename away, or delete them. Correction
 requires a separately approved version and a complete actual DB cycle from an absent repo-owned
 runtime.

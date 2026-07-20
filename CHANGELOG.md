@@ -4,6 +4,14 @@
 
 ### Added
 
+- Q-SEED-002=A/D-044 and ADR-0017 successor correction specification/plan: preserve immutable `.1`,
+  create reviewed `.2` with the PostgreSQL 17 effective membership-option union, and require the full
+  disposable-local cycle before official-data promotion; no successor artifact or DB mutation yet
+- Q-PII-002=A/D-045 privacy-safe public behavior: future HTTP 200 `PRIVACY_UNRESOLVED` rephrase
+  outcome with no text/failed row/provider/source/context; active contract and DB remain unchanged
+  pending a separate consumer specification and forward-migration approval
+- Q-SEC-003=A/D-046 and ADR-0018 exact 22-signature `search_path=pg_catalog, pg_temp` direction;
+  `00700` implementation is explicitly deferred until public preparation and public paths stay blocked
 - AI-001A standard-library fail-closed PII masking core with 13 closed categories, five unresolved
   reasons, immutable value-free findings, Unicode normalization/control rejection, deterministic
   overlap selection, conservative contextual ambiguity closure, and a frozen 74-case exact oracle;

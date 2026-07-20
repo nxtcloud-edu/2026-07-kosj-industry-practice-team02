@@ -44,6 +44,9 @@
 | D-041 | 2026-07-20 | Q-PII-DESIGN: 초기 runtime PII 마스커는 새 프로덕션 의존성 없는 결정론적 typed rule engine, 닫힌 범주/사유, 원문 값 없는 고정 token/finding을 사용한다. 안전한 문자열을 만들 수 없으면 `masked_text=None`, 저장/provider 안전 플래그 false, 실패 질문 text/row와 provider 호출 금지, metadata-only event만 허용한다. | Design approved by user `PII 설계 승인`; written specification review and execution-plan approval before implementation. 실제 시민 DeepSeek 금지, API/DB/data/dependency 불변. | ADR-0004, AI-001 PII masking spec, IMP-20260720-003 | 사용자 |
 | D-042 | 2026-07-20 | 사용자의 `PII 명세 승인`을 AI-001 fail-closed PII core written specification의 명시적 승인으로 기록하고, 전체 AI-001 activation과 분리된 `AI-001A` pure core TDD 계획만 작성한다. | Written specification Approved at `2026-07-20T10:22:13+09:00`; execution plan Review, product code 0. A-030/Q-SEED-002·A-021/Q-SEC-003·후속 Q-PII-002는 미해결 유지. 독립 plan review에서 A-032/Q-PII-003이 추가됐으며 별도 사용자 답 전 구현 0. | D-041, AI-001 PII masking spec, AI-001A plan, IMP-20260720-004 | 사용자 |
 | D-043 | 2026-07-20 | Q-PII-003=A: 시민 입력의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹하며 공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다. 사용자는 같은 답변에서 AI-001A 실행계획을 승인하고 구현 시작을 지시했다. | Confirmed at `2026-07-20T11:32:00+09:00`; A-032 Resolved, AI-001A Ready. Public API/DB/data/provider/route activation 없음. A-030/Q-SEED-002·A-031/Q-PII-002·A-021/Q-SEC-003은 유지. | Q-PII-003, ADR-0004, AI-001 PII masking spec, AI-001A plan, IMP-20260720-005 | 사용자 |
+| D-044 | 2026-07-20 | Q-SEED-002=A: PostgreSQL 17 grantor별 membership의 ADMIN/INHERIT/SET effective-option union을 migration의 세 독립 `EXISTS` 권위로 유지하고, 현재 narrower pgTAP predicate도 같은 의미로 정렬하며, 같은 PM 승인 19/3/10 projection을 corrected guard와 새 manifest에 묶은 immutable `0.1.0-initial.2` successor로 교정한다. | Confirmed at governance processing time `2026-07-20T20:41:24+09:00`; A-030 decision Resolved. ADR-0017과 written spec/plan은 Review이며 별도 plan 승인 전 `.2`/dispatcher/DB/official-data 변경 0. `.1` byte는 영구 불변. | Q-SEED-002, ADR-0017, DATA-SEED-002 spec/plan, IMP-20260720-008 | 사용자 |
+| D-045 | 2026-07-20 | Q-PII-002=A: 안전한 마스킹 text를 만들지 못한 시민 요청은 후속 공개 계약에서 `PRIVACY_UNRESOLVED` 전용 reason의 HTTP 200 안전 재질문 응답으로 분리한다. provider 호출·질문 text·failed-question row·후보 전환은 0이고 질문 없는 metadata event만 허용한다. | Product behavior Confirmed; A-031 decision Resolved. 현재 OpenAPI/JSON Schema/Pydantic/TS/DB enum은 불변이며 consumer spec과 forward DB migration/API 계약 실행계획·별도 승인을 마칠 때까지 route activation은 Blocked. | Q-PII-002, ADR-0004, PRIVACY_POLICY, IMP-20260720-008 | 사용자 |
+| D-046 | 2026-07-20 | Q-SEC-003=A: privileged execution graph exact 22 signatures를 새 `00700` property-only migration에서 `search_path=pg_catalog, pg_temp`로 통일하고 matching compensation·catalog/behavior regression을 수행한다. | Architecture Confirmed; A-021 decision Resolved, implementation explicitly deferred until public preparation. 현재 migration 6개/DB `0.3.0-local`은 불변이며 `00700` 구현·검증과 별도 배포 승인 전 remote/public 경로는 계속 Blocked. | Q-SEC-003, ADR-0018, DB-001-A021 audit, IMP-20260720-008 | 사용자 |
 
 새 결정은 기존 값을 덮어쓰지 않고 새 행과 ADR/노트 링크를 추가한다.
 Q-SEC-004/A-022와 Q-SEC-005/A-023은 각각 D-029/D-030으로 결정됐지만 실제 보정이 불충분했다.
@@ -52,10 +55,11 @@ A-024/Q-SEC-006은 D-031/ADR-0013, A-025/Q-TOOL-001은 D-032/ADR-0014로 해결�
 D-033/ADR-0015로 해결되고 DRAFT 20/3/12를 거쳐 D-035의 exact reviewer/disposition/time과
 canonical APPROVED 19/3/10 evidence까지 materialize·검증됐다. D-036/D-038로 DATA-SEED architecture와
 written specification은 확정됐고 D-039로 실행계획까지 승인됐다. 실행 결과 Task 5
-filesystem release/dispatcher와 Task 7A offline gate는 완료됐지만 Task 6 actual DB import는 seed write 전
-grantor-option union 대 `.1` single-row guard 충돌로 Blocked다. A-030/Q-SEED-002가 새 인간 결정
-경계며 미응답 시 추천 A를 구현하지 않고 DATA-SEED/READY/AI를 차단한다. 아직 확정된
-선택이 없으므로 D-040을 추가하지 않았다. D-041/D-042는 PII 마스킹 독립 설계·명세 승인으로
-A-030/Q-SEED-002를 해결하거나 우회하지 않는다. D-037의 static WEB-HOME/chat shell은 구현·검증 완료됐다.
-DB-001은 disposable `0.3.0-local`로 완료됐지만 A-021/Q-SEC-003 기본값 B는 public release를
-계속 차단한다.
+  filesystem release/dispatcher와 Task 7A offline gate는 완료됐지만 Task 6 actual DB import는 seed write 전
+  grantor-option union 대 `.1` single-row guard 충돌로 Blocked였다. 사용자는 D-044에서 successor
+  `.2`를 선택했고 명세·계획 작성까지만 승인했다. D-040은 과거 미결정 상태에서 의도적으로
+  생성하지 않았으며 번호를 소급 채우지 않는다. D-045는 privacy consumer의 시민 동작을,
+  D-046은 public-preparation 보안 방향을 확정했다. active contract/DB migration은 각각 별도
+  명세·계획·승인까지 불변이고, DATA-SEED-002도 plan 승인 전 실행하지 않는다. D-037의 static
+  WEB-HOME/chat shell은 구현·검증 완료됐다. DB-001은 disposable `0.3.0-local`로 완료됐지만
+  D-046의 `00700` 구현·검증 전에는 public release를 계속 차단한다.

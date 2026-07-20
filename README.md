@@ -60,10 +60,9 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   투영이다. 공개·원격 DB 기준선이나 production readiness를 뜻하지 않는다.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
-- A-021/Q-SEC-003의 기본값 B가 활성이다. A-024/A-025가 해결돼 DB 기준선이 local baseline으로
-  승격되더라도 local/private 전용이며 privileged function 21개의 public hardening 전에는
-  remote/public 배포, public admin/API, public backend DB credential 사용과 `00700` 생성을
-  금지한다.
+- Q-SEC-003=A/D-046으로 exact privileged function 22 signatures의 property-only `00700`
+  hardening 방향은 확정됐지만 public 준비까지 구현을 보류했다. 그전에는 local/private 전용이며
+  remote/public 배포, public admin/API, public backend DB credential 사용을 금지한다.
 
 ## 개발 런타임 계약
 
@@ -108,7 +107,7 @@ source/runtime manifest와 project-local patched binary를 DB 실행 권위로 �
 fresh gate에서 actual binding이 정확히 하나의 `127.0.0.1:54322`였고 pgTAP 282, backend integration
 8/8, 역순 보상·absence·reset/replay, final container 0/0이 모두 PASS했다. runner는 여전히 actual
 binding을 reset 전에 검사하며 stock/PATH fallback과 `db diff`를 허용하지 않는다. 공식 seed가
-0이므로 `/ready=503`은 유지되고 A-021/Q-SEC-003 때문에 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
+0이므로 `/ready=503`은 유지되고 D-046의 deferred `00700` 구현·검증 전까지 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
 
 `73f300b`는 DB child를 bounded process tree로 실행·종료·dispose하도록 보정했다. focused 1/1,
 runner 50/50, patched 24/24와 독립 review 0/0/0 뒤 final-code DB gate도 102.746s에 PASS했고 exact

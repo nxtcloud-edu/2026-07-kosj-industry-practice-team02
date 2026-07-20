@@ -23,3 +23,6 @@
 - 0013: project-local patched Supabase CLI 공급망
 - 0014: Windows patched CLI short checkout roots와 path budget
 - 0015: staging JSON과 hash-bound 공식 데이터 승인
+- 0016: immutable filesystem official release와 empty-local seed
+- 0017: successor immutable seed release의 effective-option union 교정
+- 0018: public 준비 시 privileged function search path 전수 보정

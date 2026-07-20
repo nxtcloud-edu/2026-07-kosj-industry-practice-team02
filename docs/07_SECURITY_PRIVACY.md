@@ -112,5 +112,6 @@ raw request in memory
   mutation tests로 고정했다. 명령 argument·child output·credential은 여전히 parent 출력에 노출하지 않는다.
 - A-021 감사에서 privileged execution graph 22개 중 `00600` validator만 exact
   `search_path=pg_catalog, pg_temp`로 보정됐고 21개는 public hardening 미완료다.
-  Q-SEC-003 무응답 기본값 B에 따라 remote/public 배포, public admin/API, public backend DB
-  credential은 차단한다. `00700` property migration은 인간 결정 전 만들지 않는다.
+  Q-SEC-003=A/D-046으로 `00700` property migration 방향은 확정했지만 public 준비까지 구현을
+  보류한다. migration·compensation·전체 regression 전에는 remote/public 배포, public admin/API,
+  public backend DB credential을 차단한다.

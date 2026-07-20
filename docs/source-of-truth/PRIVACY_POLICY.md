@@ -18,6 +18,10 @@
 10. 안전한 마스킹 값을 만들 수 없으면 질문 텍스트를 반환·저장·외부 전송하지 않는다. 이 경우 질문 없는 interaction event만 기록할 수 있다.
 11. 마스킹 성공은 저장 또는 provider 호출의 필요조건일 뿐 충분조건이 아니다. 실제 시민 질문은 마스킹 여부와 무관하게 DeepSeek로 전송하지 않는다.
 12. 시민 입력의 “공식 대표번호” 표시는 신뢰 근거가 아니다. 입력 안의 모든 phone-shaped value를 마스킹하고, 공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다.
+13. 안전한 마스킹 문자열을 만들 수 없는 요청은 `PRIVACY_UNRESOLVED`로 분리해 HTTP 200 안전 재질문을 제공한다. 이 outcome에는 질문 text, source/context/office, provider 호출, 실패 질문 row와 후보를 만들지 않고 질문 없는 interaction metadata만 허용한다.
+
+13번은 D-045로 확정된 후속 consumer 정책 목표다. 현재 active API 계약·DB enum·route에는 아직
+적용되지 않았으며 별도 consumer 명세, 공개 계약과 forward migration 승인 뒤에만 활성화한다.
 
 ## 3. 저장 금지 정보
 
@@ -83,6 +87,7 @@ text_purged_at
 - `PERSONAL_LOOKUP`: 마스킹 질문 저장 가능하나 후보 적격은 false
 - `LEGAL_JUDGMENT`: 마스킹 질문 저장 가능하나 후보 적격은 false
 - `OUT_OF_SCOPE`: 텍스트 저장 금지, 이벤트만 저장
+- `PRIVACY_UNRESOLVED`: 텍스트 저장·실패 질문 행·후보·provider 호출 금지, 질문 없는 이벤트만 저장
 - `FOLLOWUP`: 실패가 아니므로 실패 질문 목록에 저장하지 않음
 - `text_expires_at`: `created_at + 30일`; 실패 행 전체가 아니라 `masked_question` 텍스트의 만료 시각
 - `text_purged_at`: 파기 전에는 NULL, 파기 후에는 실제 처리 시각
@@ -140,5 +145,6 @@ text_purged_at
 - DeepSeek 실제 outbound attempt가 run당 30회 이하이고 retry도 합계에 포함되며, cap 지표·로그에 질문/provider body가 0건인지 확인
 - context token의 TTL 900초·claim allowlist·tamper/expiry silent reset과 token/secret의 DB·로그·브라우저 영속 저장 0건 확인
 - 고정 평가셋에서 보수적 마스킹의 PII 누락 0건과 답변 성공률을 함께 측정하고 완화는 인간 재승인 없이 적용하지 않음
+- `masked_text=None` consumer가 HTTP 200 `PRIVACY_UNRESOLVED`와 안전 재질문을 반환하고 source/context/office/provider/failed-question text·row가 모두 0인지 확인
 - 텍스트 NULL 파기 job의 경계시각·멱등성·후보 FK 보존 테스트
 - 복구 후 서비스 개방 전 만료 텍스트 재파기 테스트
