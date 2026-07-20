@@ -226,6 +226,15 @@ _RULES: Final = (
         ),
     ),
     _Rule(
+        PiiCategory.PRECISE_LOCATION,
+        re.compile(
+            r"(?:(?<![\d.])(?P<value>-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+)"
+            r"(?![\d.])|(?:위도\s*(?P<value_lat>-?\d{1,2}(?:\.\d+)?)\s*"
+            r"경도\s*(?P<value_lng>-?\d{1,3}(?:\.\d+)?)))",
+            re.IGNORECASE,
+        ),
+    ),
+    _Rule(
         PiiCategory.VEHICLE_PLATE,
         re.compile(r"(?<!\d)(?P<value>\d{2,3}[가-힣]\s?\d{4})(?!\d)"),
     ),
@@ -236,6 +245,72 @@ _RULES: Final = (
             r"(?P<value>(?:[A-Z]+-)?\d{4}-\d{6}|[A-Z]+-\d{6}|\d{6}-\d{7})",
             re.IGNORECASE,
         ),
+    ),
+    _Rule(
+        PiiCategory.DETAILED_ADDRESS,
+        re.compile(
+            r"(?:(?:주소(?:는)?|사는\s*곳|거주지|상세주소)\s*[:：]?\s*)?"
+            r"(?P<value>(?:(?:세종특별자치시|세종시)\s*)?(?:[가-힣]+(?:읍|면|동)\s+)?"
+            r"[가-힣0-9]+(?:대로|로|길)\s+\d+(?:-\d+)?"
+            r"(?:\s+\d+동\s+\d+호|\s+\d+층)?)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.NAME,
+        re.compile(
+            r"(?:이름(?:은|이)?|성명|신청인\s*성명|신청인(?!\s*성명))"
+            r"\s*[:：]?\s*"
+            r"(?P<value>[가-힣]{2,4})(?=입니다|이에요|예요|이고|라고|[\s,.!?]|$)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.NAME,
+        re.compile(r"저는\s*(?P<value>[가-힣]{2,4})(?=입니다|이에요|예요|이고|라고)"),
+    ),
+    _Rule(
+        PiiCategory.SENSITIVE_HEALTH_WELFARE,
+        re.compile(
+            r"(?P<value>(?:당뇨|암|고혈압|우울증)\s*(?:진단|치료|환자)|"
+            r"장애등급\s*\d+급|기초생활수급자)"
+        ),
+    ),
+    _Rule(
+        PiiCategory.SENSITIVE_HEALTH_WELFARE,
+        re.compile(r"(?:진단명|복지대상)\s*[:：]?\s*(?!\[)(?P<value>[^\s,.!?]{2,40})"),
+    ),
+)
+
+_AMBIGUOUS_NAME: Final = re.compile(
+    r"(?:(?<![가-힣])(?P<value>[가-힣]{2,4})(?:씨|님)"
+    r"(?=이라고|라고|입니다|이에요|예요|[\s,.!?]|$)|"
+    r"(?:민원인|신청인)(?:은|는)\s*(?P<labeled_value>[가-힣]{2,4})"
+    r"(?=입니다|이에요|예요|[\s,.!?]|$)|"
+    r"(?<![가-힣])(?P<standalone_value>[가-힣]{3})"
+    r"(?=입니다(?:[\s,.!?]|$)|이에요(?:[\s,.!?]|$)|예요(?:[\s,.!?]|$)))"
+)
+_SAFE_STANDALONE_NAME_TERMS: Final = frozenset({"이메일", "신청서", "민원인"})
+_AMBIGUOUS_ADDRESS: Final = re.compile(
+    r"(?P<value>(?:[가-힣0-9]+(?:아파트|빌라)\s*\d+동\s*\d+호|"
+    r"(?:[가-힣]+(?:읍|면|동)\s*)?\d+(?:-\d+)?번지(?:\s*\d+(?:동|호))*))"
+)
+_AMBIGUOUS_EXPLICIT_PII: Final = re.compile(
+    r"(?:주민(?:등록)?번호|여권번호|면허번호|연락처|전화번호|휴대폰|이메일|메일|"
+    r"주소|거주지|계좌번호|카드번호|비밀번호|인증번호|OTP|PIN|차량번호|번호판|"
+    r"접수번호|민원번호|진단명|복지대상|GPS|위치)"
+    r"(?:은|는|이|가|을|를)?(?:\s*[:：]\s*|\s+)"
+    r"(?!\[(?:이름|주민등록번호|여권·면허번호|전화번호|이메일|상세주소|계좌번호|"
+    r"카드번호|인증정보|차량번호|접수번호|건강·복지정보|정밀위치)\]"
+    r"(?=$|[\s,.!?]))"
+    r"(?P<unclassified_value>(?=[^\n]*(?:@|\d|[A-Z]))[^\n]{2,})",
+    re.IGNORECASE,
+)
+_HIGH_RISK_SPAN_PATTERNS: Final = (
+    re.compile(r"(?<!\d)(?:\d[- ./]?){9,}\d(?!\d)"),
+    re.compile(r"(?<!\S)[^\s@]+@[^\s@,.!?]+(?=$|[\s,.!?])"),
+    re.compile(
+        r"(?<![\w.+-])[A-Z0-9._%+\-]+@[A-Z0-9.\-]+"
+        r"\.[A-Z]{2,}(?![\w.-])",
+        re.IGNORECASE,
     ),
 )
 
@@ -295,11 +370,46 @@ def _apply_findings(text: str, findings: tuple[RedactionFinding, ...]) -> str:
     return masked
 
 
+def _has_uncovered_high_risk_span(
+    text: str,
+    findings: tuple[RedactionFinding, ...],
+) -> bool:
+    for pattern in _HIGH_RISK_SPAN_PATTERNS:
+        for match in pattern.finditer(text):
+            start, end = match.span()
+            if not any(finding.start <= start and finding.end >= end for finding in findings):
+                return True
+    return False
+
+
+def _has_ambiguous_name(text: str) -> bool:
+    for match in _AMBIGUOUS_NAME.finditer(text):
+        standalone = match.groupdict().get("standalone_value")
+        if standalone is not None and (
+            standalone in _SAFE_STANDALONE_NAME_TERMS or standalone.endswith(("읍", "면", "동"))
+        ):
+            continue
+        return True
+    return False
+
+
 def redact_question(raw_question: str) -> RedactionResult:
     normalized, reason = _normalize(raw_question)
     if reason is not None:
         return _closed(reason)
     assert normalized is not None
     findings = _select_findings(_collect_findings(normalized))
+    if _has_uncovered_high_risk_span(normalized, findings):
+        return _closed(UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN, findings)
     masked = _apply_findings(normalized, findings)
+    if _has_ambiguous_name(masked):
+        return _closed(UnresolvedReason.AMBIGUOUS_PERSON_NAME, findings)
+    if _AMBIGUOUS_ADDRESS.search(masked):
+        return _closed(UnresolvedReason.AMBIGUOUS_DETAILED_ADDRESS, findings)
+    if (
+        _AMBIGUOUS_EXPLICIT_PII.search(masked)
+        or _select_findings(_collect_findings(masked))
+        or _has_uncovered_high_risk_span(masked, ())
+    ):
+        return _closed(UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN, findings)
     return RedactionResult(masked, findings, True, True, None)

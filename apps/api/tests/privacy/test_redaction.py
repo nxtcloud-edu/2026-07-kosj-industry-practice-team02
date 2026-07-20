@@ -348,6 +348,127 @@ def test_input_is_not_mutated_and_repeated_results_are_identical() -> None:
     assert first == second
 
 
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        ("민원인은 가상씨라고 합니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("샘플아파트 101동 202호", UnresolvedReason.AMBIGUOUS_DETAILED_ADDRESS),
+    ],
+)
+def test_ambiguous_context_returns_no_text(raw: str, reason: UnresolvedReason) -> None:
+    result = redact_question(raw)
+    assert result.masked_text is None
+    assert result.safe_for_failure_storage is False
+    assert result.safe_for_synthetic_provider is False
+    assert result.unresolved_reason is reason
+
+
+def test_residual_unclassified_numeric_identifier_is_closed() -> None:
+    for raw in (
+        "식별번호 123456789012",
+        "식별번호 12345678901234567890",
+        "식별번호 1234-5678-9012-3456-7890",
+    ):
+        result = redact_question(raw)
+        assert result.masked_text is None
+        assert result.safe_for_failure_storage is False
+        assert result.safe_for_synthetic_provider is False
+        assert result.unresolved_reason is UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        ("메일 홍길동@예시.한국", UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN),
+        ("민원인은 김철수입니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("주소 아름동 123번지 101호", UnresolvedReason.AMBIGUOUS_DETAILED_ADDRESS),
+    ],
+)
+def test_explicit_but_unclassified_pii_context_is_closed(
+    raw: str,
+    reason: UnresolvedReason,
+) -> None:
+    result = redact_question(raw)
+    assert result.masked_text is None
+    assert result.safe_for_failure_storage is False
+    assert result.safe_for_synthetic_provider is False
+    assert result.unresolved_reason is reason
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        ("김철수입니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("엄정화입니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("류현진입니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("제갈량입니다.", UnresolvedReason.AMBIGUOUS_PERSON_NAME),
+        ("아름동 123번지", UnresolvedReason.AMBIGUOUS_DETAILED_ADDRESS),
+        ("홍길동@예시.한국", UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN),
+        ("메일 홍길동@예시.한국 [이메일]", UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN),
+        (
+            "메일 홍길동@예시.한국 test@example.invalid",
+            UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN,
+        ),
+        ("메일 문의 홍길동@예시.한국", UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN),
+        ("메일은 홍길동@예시.한국", UnresolvedReason.RESIDUAL_HIGH_RISK_PATTERN),
+    ],
+)
+def test_independent_and_token_or_inquiry_suffix_pii_is_closed(
+    raw: str,
+    reason: UnresolvedReason,
+) -> None:
+    result = redact_question(raw)
+    assert result.masked_text is None
+    assert result.safe_for_failure_storage is False
+    assert result.safe_for_synthetic_provider is False
+    assert result.unresolved_reason is reason
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "아름동입니다.",
+        "전입신고입니다.",
+        "이메일입니다.",
+        "신청서입니다.",
+        "민원인입니다.",
+    ],
+)
+def test_standalone_admin_terms_are_not_person_names(raw: str) -> None:
+    assert redact_question(raw) == RedactionResult(raw, (), True, True, None)
+
+
+def test_masked_email_followed_by_ascii_public_term_stays_safe() -> None:
+    result = redact_question("메일 test@example.invalid FAQ 확인")
+    assert result.masked_text == "메일 [이메일] FAQ 확인"
+    assert [finding.category for finding in result.findings] == [PiiCategory.EMAIL]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_text", "expected_category"),
+    [
+        ("위치는 36.5,127.25", "위치는 [정밀위치]", PiiCategory.PRECISE_LOCATION),
+        ("한누리대로 123 101동 202호", "[상세주소]", PiiCategory.DETAILED_ADDRESS),
+        ("진단명 희귀가상증후군", "진단명 [건강·복지정보]", PiiCategory.SENSITIVE_HEALTH_WELFARE),
+        ("복지대상 가상지원등급", "복지대상 [건강·복지정보]", PiiCategory.SENSITIVE_HEALTH_WELFARE),
+    ],
+)
+def test_contextual_labeled_pii_bypasses_are_not_fail_open(
+    raw: str,
+    expected_text: str,
+    expected_category: PiiCategory,
+) -> None:
+    result = redact_question(raw)
+    assert result.masked_text == expected_text
+    assert [finding.category for finding in result.findings] == [expected_category]
+
+
+def test_fixed_tokens_are_not_reclassified_as_raw_pii() -> None:
+    raw = "비밀번호 [인증정보] 진단명 [건강·복지정보]"
+    result = redact_question(raw)
+    assert result == RedactionResult(raw, (), True, True, None)
+
+
 def test_raw_identifier_never_appears_in_result_exception_or_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
