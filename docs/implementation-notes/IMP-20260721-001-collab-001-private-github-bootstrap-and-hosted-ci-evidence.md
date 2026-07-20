@@ -56,7 +56,7 @@
 |---|---|---|---|---|
 | COLLAB-EXT-001 | Human-only | teammate MFA/recovery | repository API로 검증 불가; Pending 유지 | Task 5 closeout |
 | COLLAB-EXT-004 | Human rehearsal | first PR-only/no-direct-main-push flow | repository warning만 확인됨; first Task 7 onboarding PR에서 증명 | Task 5 remains partial |
-| COLLAB-EXT-002 | External access | App installation can access this repository and other repositories | selected-repository-only constraint is not satisfied; user narrows/confirms `Sejong_AI` only | Task 6 remains Pending |
+| COLLAB-EXT-002 | External access | Connector shows this private repository and public repositories | D-056 correction: public visibility does not identify installation scope; user checks GitHub UI for `Only select repositories / Sejong_AI` | Task 6 remains Pending |
 | COLLAB-EXT-003 | Rehearsal | Cloud environment/Draft PR/manual merge and teammate onboarding | evidence 0; no completion inference | Tasks 6~7 pending |
 
 ## 5. 설계 결정과 대안
@@ -207,8 +207,8 @@ starting state; these are historical evidence, not current-status claims.
 
 ### 미실행 검증과 이유
 
-- Task 6 Cloud environment, docs/test-only task, Draft PR/manual merge: App installation is not yet restricted
-  to `Sejong_AI`; no rehearsal evidence.
+- Task 6 Cloud environment, docs/test-only task, Draft PR/manual merge: App installation scope is not yet
+  human-confirmed in GitHub UI; no rehearsal evidence.
 - Task 7 teammate clone/baseline/self-merge/forbidden-scope run: not performed.
 - MFA/recovery: account-human-only confirmation, not repository API evidence.
 - Task 5 PR-only/no-direct-main-push: warning is present, but the first Task 7 onboarding PR rehearsal is not performed.
@@ -217,8 +217,8 @@ starting state; these are historical evidence, not current-status claims.
 ## 9. 보안·개인정보·접근성·성능 영향
 
 - Privacy: citizen text, PII, email, token, DSN and authentication values are not added.
-- Security: private URLs and CI-log content are excluded. Actions remain read-only; Cloud restriction is a
-  pending least-privilege action, not a completed control.
+- Security: private URLs and CI-log content are excluded. Actions remain read-only; Cloud App-scope UI
+  confirmation is pending and not a completed control.
 - Accessibility: no UI change.
 - Performance/cost: no runtime/dependency/cost change; GitHub Free governance remains human-policy based.
 
@@ -235,8 +235,9 @@ starting state; these are historical evidence, not current-status claims.
   `5e09deccc7205503df07d938b6d4a88f4d5a327e`; hosted policy/Frontend CI evidence is PASS.
 - `koregy` accepted write access and repository variable are verified, but Task 5 remains partial:
   teammate MFA/recovery and the first Task 7 PR-only/no-direct-main-push rehearsal need human evidence.
-- The connected Codex App installation can access other repositories. Before Cloud work, the user must
-  narrow and confirm **Only select repositories** to `Sejong_AI`; do not treat this as Cloud or PR evidence.
+- D-056 corrects this note's original App-scope inference: public repository visibility can occur under
+  **Only select repositories**. Before Cloud work, the user confirms the GitHub UI says
+  **Only select repositories / Sejong_AI**, changing it only if it says **All repositories**.
 - User/team must still perform Cloud Draft PR/manual merge and all teammate onboarding/self-merge/forbidden-scope rehearsals.
 - This private source remote does not approve public deployment, remote DB, backup, secret upload or DeepSeek use.
 
@@ -261,7 +262,8 @@ history, delete the remote, revoke collaborator/App access or change Cloud setti
 
 ### 다음 개발자 시작점
 
-First restrict and confirm the Codex App to `Sejong_AI` only, then run the explicit Task 6 Cloud rehearsal.
+First confirm the GitHub App UI says `Only select repositories / Sejong_AI` (change only if needed), then
+run the explicit Task 6 Cloud rehearsal.
 After that, the Frontend teammate performs Task 7 according to the handoff. Its first onboarding PR also
 proves Task 5 PR-only/no-direct-main-push behavior; record each external result before marking COLLAB-001 Done.
 

@@ -389,11 +389,12 @@ enforcement or rehearsal evidence. Do not advertise CI as an enforced security b
 
 ## Task 6: Connect and constrain Codex Cloud
 
-2026-07-21 evidence confirms the connected Codex GitHub App installation can access this private
-repository but can also access other repositories. Therefore the approved **Only select repositories /
-this repository one only** constraint is not proven: the user must narrow and confirm the installation
-to `Sejong_AI` only. This App evidence is not Cloud environment, docs/test-only task, Draft-PR or
-manual-merge rehearsal evidence; all Task 6 checkboxes remain pending.
+2026-07-21 correction: connector visibility of public repositories cannot distinguish **All
+repositories** from **Only select repositories**, because a GitHub App always has at least read-only
+access to public GitHub repositories. The user must inspect the GitHub installation UI and confirm
+**Only select repositories / `Sejong_AI`**; change and save only if it currently says **All
+repositories**. This human confirmation is still pending. It is not Cloud environment, docs/test-only
+task, Draft-PR or manual-merge rehearsal evidence; all Task 6 checkboxes remain pending.
 
 **Human browser steps:**
 
@@ -571,7 +572,10 @@ successful external-state evidence.
   access, `FRONTEND_COLLABORATOR_LOGIN=koregy`, read-only default Actions permissions and the
   direct-push warning in the repository description. Task 5 remains partial: teammate MFA/recovery and
   the first Task 7 PR-only/no-direct-main-push rehearsal are human-only Pending.
-- 2026-07-21: Codex App evidence is insufficient for Task 6 because the installation also accesses
-  other repositories; the user must restrict and confirm Only select repositories to `Sejong_AI`.
-  Cloud environment, docs/test-only task, `codex/...` Draft PR/manual merge and all Task 7 teammate
-  onboarding/self-merge/forbidden-scope rehearsals remain Pending. COLLAB-001 stays In Progress.
+- 2026-07-21: App-scope evidence interpretation corrected by D-056. Public repository visibility is
+  normal even for selected-repository installation and does not prove over-broad scope. Human UI
+  confirmation of `Only select repositories / Sejong_AI` remains Pending; change is required only if
+  the UI says `All repositories`. Cloud environment, docs/test-only task, `codex/...` Draft PR/manual
+  merge and all Task 7 teammate onboarding/self-merge/forbidden-scope rehearsals remain Pending.
+  COLLAB-001 stays In Progress. Exact owner and teammate steps are in
+  `docs/handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md`.

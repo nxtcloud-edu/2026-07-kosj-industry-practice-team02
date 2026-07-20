@@ -4,6 +4,10 @@
 
 ### Added
 
+- COLLAB-001 owner/teammate execution checklist for GitHub App UI confirmation, MFA/recovery,
+  bootstrap PR merge, no-secret Codex Cloud Draft-PR rehearsal, Frontend clone/baseline/self-merge and
+  forbidden-scope close-without-merge rehearsal; D-056 corrects the earlier inference that public
+  repository visibility proves an over-broad App installation
 - COLLAB-001 local Tasks 1~3 automation: an integrated value-redacting full reachable-history scanner,
   exact base/head PR author/path scope
   classifier, add-only web implementation-note/INDEX validator, tracked active Markdown/JSON checker,

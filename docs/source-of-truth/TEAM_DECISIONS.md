@@ -104,9 +104,9 @@
   병합할 수 있다. exact self-merge allowlist는 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web
   구현 노트 1개와 그 INDEX append뿐이다. 기존 note/INDEX 행·env/package/lockfile/config·공개
   계약·backend·DB·data·security·`.github`가 포함되면 사용자 검토로 승격한다.
-- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. 현재 App
-  installation은 이 repository 외에도 접근하므로 `Sejong_AI`만의 selected-repository 제한을
-  사용자 확인 전에는 Cloud Task 6을 완료로 보지 않는다. DeepSeek key·DB DSN·context secret을
+- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. App의 public
+  repository 가시성은 설치 범위 판정 근거가 아니므로 GitHub UI에서 `Only select repositories`와
+  selected private repository `Sejong_AI`를 사용자가 확인하기 전에는 Cloud Task 6을 완료로 보지 않는다. DeepSeek key·DB DSN·context secret을
   Cloud에 넣지 않으며 Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
 - 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
   remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.

@@ -30,8 +30,8 @@ Q-GIT/Q-COLLAB 결정에 따라 private `tskwak111/Sejong_AI` source remote가 �
 그 SHA에서 통과했다. `koregy`의 accepted write access, `FRONTEND_COLLABORATOR_LOGIN=koregy`,
 read-only default Actions permissions와 repository-description direct-push warning은 확인됐다.
 MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal은 팀원이 직접 확인해야 한다.
-Codex App은 이 repository 외에도 접근하므로
-**Only select repositories**를 `Sejong_AI` 하나로 제한·확인하기 전 Task 6을 완료로 보지 않는다.
+Codex App의 공개 repository 가시성만으로 설치 범위를 판정할 수 없으므로, GitHub 설치 설정 화면에서
+**Only select repositories**와 selected private repository `Sejong_AI`를 사람이 확인하기 전 Task 6을 완료로 보지 않는다.
 Cloud environment/Draft-PR 및 teammate self-merge rehearsal도 아직 없다. 실행 뒤에도 각 작업자는
 변경 영역의 local 검증과 구현 노트 의무를 유지한다. GitHub remote는 public application deployment나
 remote DB가 아니다.
