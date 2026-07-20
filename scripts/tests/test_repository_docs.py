@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from scripts import check_repository_docs as repository_docs
 from scripts.check_repository_docs import RepositoryCheckError, check_repository
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CHECKER = ROOT / "scripts/check_repository_docs.py"
 
 
 class RepositoryDocsCheckerTests(unittest.TestCase):
@@ -35,6 +40,34 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
             text=True,
         )
 
+    def stage_index_entry(
+        self,
+        repository: Path,
+        mode: str,
+        relative_path: str,
+        contents: str,
+    ) -> None:
+        hashed = subprocess.run(
+            ["git", "-C", str(repository), "hash-object", "-w", "--stdin"],
+            input=contents.encode("utf-8"),
+            check=True,
+            capture_output=True,
+        )
+        object_id = hashed.stdout.decode("ascii").strip()
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"{mode},{object_id},{relative_path}",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
     def test_accepts_unicode_target_with_query_and_anchor(self) -> None:
         repository = self.make_repository()
         self.track(
@@ -52,8 +85,13 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
 
         errors = check_repository(repository)
 
-        self.assertTrue(any("missing Markdown target" in error for error in errors))
-        self.assertTrue(any("docs/not-found.md" in error for error in errors))
+        self.assertEqual(
+            errors,
+            [
+                'REPO_DOCS_MISSING_MARKDOWN_TARGET source="docs/index.md" '
+                "line=1 ordinal=1"
+            ],
+        )
 
     def test_reports_malformed_tracked_json_without_echoing_contents(self) -> None:
         repository = self.make_repository()
@@ -62,7 +100,7 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
 
         errors = check_repository(repository)
 
-        self.assertTrue(any("invalid JSON" in error for error in errors))
+        self.assertTrue(any("REPO_DOCS_INVALID_JSON" in error for error in errors))
         self.assertFalse(any(malformed_contents in error for error in errors))
 
     def test_ignores_legacy_and_generated_runtime_directories(self) -> None:
@@ -95,6 +133,117 @@ class RepositoryDocsCheckerTests(unittest.TestCase):
         self.track(repository, "docs/index.md", "```md\n[example](missing.md)\n```\n")
 
         self.assertEqual(check_repository(repository), [])
+
+    def test_four_backtick_fence_requires_same_marker_and_opener_length(self) -> None:
+        repository = self.make_repository()
+        self.track(
+            repository,
+            "docs/index.md",
+            "````md\n"
+            "[ignored](missing-one.md)\n"
+            "```\n"
+            "[still ignored](missing-two.md)\n"
+            "````\n"
+            "[real](exists.md)\n",
+        )
+        self.track(repository, "docs/exists.md", "# exists\n")
+
+        self.assertEqual(check_repository(repository), [])
+
+    def test_tilde_fence_requires_whitespace_only_close_of_sufficient_length(self) -> None:
+        repository = self.make_repository()
+        self.track(
+            repository,
+            "docs/index.md",
+            "~~~~ info\n"
+            "[ignored](missing-one.md)\n"
+            "```\n"
+            "[still ignored](missing-two.md)\n"
+            "~~~\n"
+            "[also ignored](missing-three.md)\n"
+            "~~~~ not-a-close\n"
+            "[yet ignored](missing-four.md)\n"
+            "~~~~  \t\n"
+            "[real](exists.md)\n",
+        )
+        self.track(repository, "docs/exists.md", "# exists\n")
+
+        self.assertEqual(check_repository(repository), [])
+
+    def test_rejects_tracked_symlink_before_reading_its_target(self) -> None:
+        repository = self.make_repository()
+        self.stage_index_entry(
+            repository,
+            "120000",
+            "docs/external.md",
+            "../../outside-sensitive-file",
+        )
+
+        with self.assertRaisesRegex(
+            RepositoryCheckError,
+            r'^REPO_DOCS_UNSUPPORTED_TRACKED_ENTRY source="docs/external.md" mode="120000"$',
+        ):
+            check_repository(repository)
+
+    def test_rejects_tracked_gitlink_before_blob_inspection(self) -> None:
+        repository = self.make_repository()
+        self.stage_index_entry(repository, "160000", "vendor/component", "not-read")
+
+        with self.assertRaisesRegex(
+            RepositoryCheckError,
+            r'^REPO_DOCS_UNSUPPORTED_TRACKED_ENTRY source="vendor/component" mode="160000"$',
+        ):
+            check_repository(repository)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlink API unavailable")
+    def test_reads_regular_tracked_json_from_git_blob_not_external_worktree_symlink(self) -> None:
+        repository = self.make_repository()
+        self.track(repository, "data/safe.json", "{}\n")
+        external = repository.parent / f"{repository.name}-external.json"
+        external.write_text('{"EXTERNAL_CONTENT_SENTINEL": ', encoding="utf-8")
+        self.addCleanup(external.unlink, missing_ok=True)
+        tracked_path = repository / "data/safe.json"
+        tracked_path.unlink()
+        try:
+            tracked_path.symlink_to(external)
+        except OSError as error:
+            self.skipTest(f"symlink creation unavailable: {error.__class__.__name__}")
+
+        self.assertEqual(check_repository(repository), [])
+
+    def test_missing_link_diagnostic_redacts_destination_and_control_characters(self) -> None:
+        repository = self.make_repository()
+        destination_sentinel = "SECRET_DESTINATION_SENTINEL%0A%1B%5B31m"
+        self.track(
+            repository,
+            "docs/index.md",
+            f"[missing](./{destination_sentinel}.md)\n",
+        )
+
+        errors = check_repository(repository)
+        completed = subprocess.run(
+            [sys.executable, str(CHECKER), "--repository-root", str(repository)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        combined = "".join(errors) + completed.stdout + completed.stderr
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertNotIn("SECRET_DESTINATION_SENTINEL", combined)
+        self.assertNotIn("\x1b", combined)
+        self.assertFalse(any("\n" in error or "\r" in error for error in errors))
+        self.assertEqual(completed.stdout, "")
+        self.assertEqual(completed.stderr.count("\n"), 1)
+
+    def test_json_escapes_control_characters_in_untrusted_source_path(self) -> None:
+        source_path = "docs/control-\n-\x1b.md"
+
+        escaped = repository_docs.escape_source_path(source_path)
+
+        self.assertEqual(escaped, json.dumps(source_path, ensure_ascii=True))
+        self.assertNotIn("\n", escaped)
+        self.assertNotIn("\x1b", escaped)
 
     def test_fails_closed_when_tracked_file_listing_fails(self) -> None:
         temporary_directory = tempfile.TemporaryDirectory()
