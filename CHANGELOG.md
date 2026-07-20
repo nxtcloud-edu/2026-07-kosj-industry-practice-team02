@@ -4,6 +4,8 @@
 
 ### Added
 
+- Codex Cloud preinstalled-package selector guidance: choose Python `3.12` and Node.js `24`, never the
+  displayed Node.js `22` default; retain setup-script checks for exact patch/runtime tool versions
 - D-057 COLLAB-001 post-merge evidence: user-confirmed `Only select repositories / Sejong_AI`, PR #1
   merge commit and green post-merge collaboration/frontend Actions; App scope is complete while Cloud
   Draft-PR and teammate MFA/onboarding evidence remain pending

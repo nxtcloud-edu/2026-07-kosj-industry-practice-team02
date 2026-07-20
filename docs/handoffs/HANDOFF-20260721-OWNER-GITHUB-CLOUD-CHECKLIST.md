@@ -140,9 +140,10 @@ PR #1 병합 확인 뒤 진행한다. 공식 개요는
 3. `https://chatgpt.com/codex/settings/environments`로 이동해 **Create Environment**를 누른다.
 4. repository로 `tskwak111/Sejong_AI`를 선택한다.
 5. 환경 이름은 `sejong-ai-cloud-docs`로 한다.
-6. Runtime/package 설정에서 선택할 수 있으면 Node `24.12.0`, Python `3.12.13`을 지정한다. exact patch를
-   선택할 수 없는 UI라면 임의로 계속하지 말고 setup 검증 결과를 확인한다. pnpm과 uv도 아래 setup에서
-   exact 버전을 확인한다.
+6. **Set package versions / 사전 설치된 패키지** UI는 major/minor만 표시할 수 있다. 이 화면에서는
+   Python `3.12`, Node.js `24`를 선택한다. Node.js `22`는 저장소의 `>=24 <25` 계약과 맞지 않으므로
+   선택하지 않는다. Node `24`가 목록에 없으면 저장하지 말고 선택지 화면을 owner에게 전달한다. exact
+   patch Node `24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`은 아래 setup에서 확인한다.
 
 ### 4.2 Setup script
 
