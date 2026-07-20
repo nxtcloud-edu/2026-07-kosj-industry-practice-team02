@@ -1,12 +1,14 @@
 # Handoff — Frontend Collaborator
 
 - Date: 2026-07-21 KST (prepared 2026-07-20; local automation status refreshed)
-- Status: Local onboarding automation ready; external GitHub transition pending exact identifiers and
-  human browser actions
-- Canonical product base at preparation: `main` / `177dac810468f3cd5aaa4929a971cbde21b4deba`;
-  collaboration automation remains local and is not a pushed remote baseline
-- External evidence: remote 0, push 0, hosted Actions run 0, collaborator invite/acceptance 0,
-  Codex Cloud task/PR 0
+- Status: private GitHub bootstrap, hosted CI and `koregy` write access verified; human clone/baseline,
+  MFA/recovery, first PR-only/self-merge, forbidden-scope and Cloud rehearsals pending
+- Canonical collaboration base: local and remote `main` /
+  `5e09deccc7205503df07d938b6d4a88f4d5a327e`
+- External evidence: private `tskwak111/Sejong_AI`, ordinary initial push only, policy run `29776352710`
+  PASS and Frontend CI run `29776352718` PASS; `koregy` accepted write access and the configured
+  repository variable match. MFA/recovery, Codex Cloud task/PR, human clone/baseline, first
+  PR-only/self-merge and forbidden-scope rehearsal are pending.
 - Product: 세종 민원 AI 길잡이
 - Scope owner: Frontend 팀원
 - Architecture/contract/data/security owner: 사용자
@@ -25,9 +27,8 @@
 `legacy/`는 참고 자료이며 현재 화면·API·범위의 정답이 아니다.
 
 scope/append·repository docs·current-tree/history secret·workflow/template와 Playwright portability
-gate는 local 통합·review Critical/Important 0 및 fresh PASS 상태다. 따라서 이 문서는 운영 경계를
-미리 제공하지만,
-실제 clone/PR/self-merge 가능 상태를 뜻하지 않는다.
+gate는 local 통합·review Critical/Important 0 및 fresh PASS 상태다. Bootstrap/CI/write access는
+검증됐지만 human clone/baseline, first PR-only/self-merge와 forbidden-scope rehearsal은 아직 Pending이다.
 
 ## 2. 담당 범위
 
@@ -87,15 +88,16 @@ Blocked이므로 가짜 성공 API나 가짜 공식 데이터를 만들어 연�
 
 ### Lane F0 — onboarding과 baseline
 
-0. 사용자가 exact owner/repository/collaborator login을 확인하고 private remote 생성·최초 push·초대
-   수락·repository variable 설정을 끝냈다는 non-secret 확인을 기다린다.
+0. private remote, initial push, accepted `koregy` write access와 repository variable은 확인됐다.
+   팀원은 자신의 MFA/recovery를 직접 확인하고 owner에게 non-secret 완료 사실만 알린다.
 1. private repository clone과 runtime version 확인
 2. frozen install과 현재 frontend gate 재현
 3. `/`와 정적 `/chat`을 390/430/desktop·keyboard로 확인
 4. 문서만 바꾸는 첫 test PR로 branch/CI/self-merge 절차 리허설
+   - 이 PR은 Task 5의 PR-only/no-direct-main-push rehearsal도 함께 증명한다.
 
-현재 0번이 미완료이므로 clone URL이나 login을 추측하지 않는다. hosted Actions와 self-merge가 아직
-실행되지 않았다는 사실을 local test PASS로 대체하지 않는다.
+clone URL은 이 문서에 기록하지 않는다. hosted Actions는 initial `main`에서 통과했지만 팀원 baseline,
+self-merge 및 forbidden-scope rehearsal의 증거는 아직 없으며 local test PASS로 대체하지 않는다.
 
 ### Lane F1 — fixture 기반 chat 표현 계층
 
@@ -182,8 +184,8 @@ corepack.cmd pnpm --dir tools/web-e2e exec playwright install chromium
 
 ## 6. Git 작업 절차
 
-아래 절차는 사용자가 private `origin`의 exact owner/name과 최초 push 완료를 확인한 뒤에만 시작한다.
-현재 tracked 문서에는 그 identifier가 없고 remote/push도 0이다.
+아래 절차는 private `origin`의 bootstrap이 확인된 뒤에만 시작한다. 이 조건은 현재 충족됐지만 private
+URL은 tracked 문서에 기록하지 않는다. 팀원은 owner가 제공한 private clone 경로만 사용한다.
 
 ```powershell
 git switch main

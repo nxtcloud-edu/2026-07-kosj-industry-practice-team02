@@ -20,16 +20,18 @@ Playwright toolchain, Codex Cloud.
 ## Status and approval boundary
 
 - Plan ID: `COLLAB-001`
-- Status: **Local automation complete / External transition pending — Tasks 1~3 complete; Tasks 4~7
-  require exact GitHub identifiers and human browser actions**
+- Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
+  PR-only/no-direct-main-push rehearsal pending); Tasks 6~7 remain pending human rehearsal evidence**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
-- Decision/ADR: D-047~D-053 / ADR-0019
+- Decision/ADR: D-047~D-055 / ADR-0019
 - Local authority at plan creation: branch `main`, HEAD
   `177dac810468f3cd5aaa4929a971cbde21b4deba`, remote 0.
-- Local closeout state on 2026-07-21: collaboration candidate commits exist only in local Git;
-  remote 0, push 0, hosted Actions run 0 and Codex Cloud task/PR 0. No GitHub owner, repository or
-  collaborator identifier is assumed in tracked documentation.
+- External evidence state on 2026-07-21: approved owner `tskwak111`, private repository `Sejong_AI`,
+  and Frontend collaborator `koregy` are verified operational identifiers. `origin/main` and local
+  `main` resolve to `5e09deccc7205503df07d938b6d4a88f4d5a327e`; the initial ordinary push used only
+  `git push -u origin main`. Hosted policy run `29776352710` and frozen Frontend CI run `29776352718`
+  passed on that SHA. Private URLs and authentication details are intentionally not recorded.
 - Q-GIT-004=A/D-053 preserves the current history and SHAs. Execution starts only after the user says
   `계획 승인, 구현 시작` or equivalent.
 - This plan does not authorize product code, public deployment, remote DB, schema migration, official
@@ -329,12 +331,12 @@ Run the new static tests, existing frontend commands, secret scan, package valid
 **External state:** user personal GitHub account. This task changes external state and begins only after
 plan approval, Task 1 PASS and interactive user authentication. Q-GIT-004 is already resolved by D-053.
 
-- [ ] **Step 1: Authenticate without sharing credentials**
+- [x] **Step 1: Authenticate without sharing credentials**
 
 The user signs in through GitHub CLI browser flow or GitHub UI. Never paste a token into chat,
 PowerShell history, `.env` or documentation.
 
-- [ ] **Step 2: Create private repository**
+- [x] **Step 2: Create private repository**
 
 Preferred CLI shape, substituting the confirmed owner/name:
 
@@ -349,7 +351,7 @@ If `gh` is unavailable, create an empty private repository in GitHub UI without 
 git remote add origin https://github.com/<owner>/sejong-minwon-ai.git
 ```
 
-- [ ] **Step 3: Verify before first push**
+- [x] **Step 3: Verify before first push**
 
 ```powershell
 git remote -v
@@ -359,7 +361,7 @@ git status --short
 
 Expected: exact intended owner/name, `PRIVATE`, no unexpected remote, reviewed local commit.
 
-- [ ] **Step 4: Push without rewriting history**
+- [x] **Step 4: Push without rewriting history**
 
 ```powershell
 git push -u origin main
@@ -372,18 +374,27 @@ uploaded until independently reviewed.
 
 ## Task 5: Configure collaborator and repository variables
 
-- [ ] Invite the exact frontend GitHub login with collaborator write access.
-- [ ] Set repository variable `FRONTEND_COLLABORATOR_LOGIN` to that exact login.
-- [ ] Keep Actions workflow permissions read-only by default; do not enable broad write tokens.
-- [ ] Confirm repository visibility remains private after settings changes.
-- [ ] Teammate accepts the invite and configures MFA/recovery appropriate to their account.
-- [ ] Record login identifiers only; do not record emails, phone numbers or authentication details.
+- [x] Invite the exact frontend GitHub login with collaborator write access.
+- [x] Confirm the invited Frontend collaborator accepted write access.
+- [x] Set repository variable `FRONTEND_COLLABORATOR_LOGIN` to that exact login.
+- [x] Keep Actions workflow permissions read-only by default; do not enable broad write tokens.
+- [x] Confirm repository visibility remains private after settings changes.
+- [ ] Teammate confirms MFA/recovery appropriate to their account.
+- [x] Record login identifiers only; do not record emails, phone numbers or authentication details.
+- [x] Record the `main` direct-push prohibition in the repository description/onboarding.
+- [ ] Rehearse PR-only/no-direct-main-push behavior in the first Task 7 teammate onboarding PR.
 
-Because GitHub Free private branch protection is not assumed, document `main` direct-push prohibition
-in the repository description/onboarding and rehearse it. Do not advertise CI as an enforced security
-boundary.
+Because GitHub Free private branch protection is not assumed, the warning alone is not technical
+enforcement or rehearsal evidence. Do not advertise CI as an enforced security boundary.
 
 ## Task 6: Connect and constrain Codex Cloud
+
+2026-07-21 correction: connector visibility of public repositories cannot distinguish **All
+repositories** from **Only select repositories**, because a GitHub App always has at least read-only
+access to public GitHub repositories. The user must inspect the GitHub installation UI and confirm
+**Only select repositories / `Sejong_AI`**; change and save only if it currently says **All
+repositories**. This human confirmation is still pending. It is not Cloud environment, docs/test-only
+task, Draft-PR or manual-merge rehearsal evidence; all Task 6 checkboxes remain pending.
 
 **Human browser steps:**
 
@@ -440,6 +451,7 @@ Docker/local-only verification as pending for the user.
 - [ ] Scope classification reports frontend self-merge eligible.
 - [ ] Frontend CI passes and screenshots/logs contain no secret or citizen text.
 - [ ] Team member performs the first permitted self-merge.
+- [ ] That onboarding PR proves PR-only/no-direct-main-push behavior required to close Task 5.
 - [ ] User confirms `main` is green and no protected path changed.
 - [ ] Open a second dry-run PR that intentionally touches a temporary forbidden test fixture only in
   an isolated branch; prove `OWNER_REVIEW_REQUIRED`, then close it without merge and without putting the
@@ -455,18 +467,20 @@ Docker/local-only verification as pending for the user.
 - External closeout after Tasks 4~7: actual non-secret GitHub identifiers/evidence and the final
   collaboration implementation note/INDEX
 
-- [ ] Record actual repository owner/name without access tokens.
+- [x] Record actual repository owner/name without access tokens.
 - [ ] Record remote/CI/Cloud test PR URLs only if the user wants URLs in tracked docs; private URLs are
   not required for product reproduction.
 - [ ] Mark COLLAB-001 Done only after remote, invite, CI and Cloud Draft PR rehearsal pass.
-- [x] Record the local-only closeout honestly: remote 0, push 0, hosted Actions run 0, collaborator
-  onboarding 0 and Codex Cloud task/PR 0; do not invent GitHub identifiers.
+- [x] Historical local-only closeout recorded remote 0, push 0 and hosted Actions 0 before external
+  bootstrap; this was superseded by the 2026-07-21 Task 4/partial Task 5 evidence below. Cloud and
+  onboarding rehearsals remain pending; do not invent their evidence.
 - [x] Synchronize local scanner/workflow interfaces, security limits, contributor/handoff guidance,
   file index, changelog and collaboration-only versions.
 - [x] Keep DATA-SEED-002, PII-CONSUMER, `00700`, public deployment and local-only gates at their actual
   prior states.
 - [x] Run the scoped repository-doc/package/current-tree-secret/diff gates and review the final docs-only
-  diff. Hosted/frontend/external rehearsal evidence remains pending with Tasks 4~7.
+  diff. Hosted policy and frozen Frontend CI passed; Task 5 MFA/recovery and the Task 7-owned first
+  PR-only/no-direct-main-push rehearsal plus Tasks 6~7 Cloud/onboarding rehearsals remain pending.
 
 ## Verification matrix
 
@@ -545,8 +559,23 @@ successful external-state evidence.
   local documentation/version synchronization and the integrated Python 3.12 gate passed 102 tests with
   two Windows platform skips; API 1,318 tests, contract 37 tests, Web 6 tests, production build and
   Playwright 9 tests also passed. Fresh history/current-tree scans, repository-doc/package validation,
-  YAML parse, Ruff/compile/fsck/diff checks passed. Hosted Actions evidence remains external. Tasks 4~7
-  remain unchecked with remote 0, push 0, hosted Actions run 0 and Codex Cloud task/PR 0.
+  YAML parse, Ruff/compile/fsck/diff checks passed. **At this local closeout checkpoint**, hosted Actions
+  evidence remained external and Tasks 4~7 were unchecked; the later Task 4/partial Task 5 evidence
+  below supersedes that temporary remote/push/hosted-Actions state.
 - 2026-07-21: final whole-diff review found one Important candidate-scanner resource-bound gap. Commit
   `264518a` added Git stdout/stderr/deadline and repository per-file/aggregate limits with behavioral
   oversized/stall tests; final rereview closed Critical 0 / Important 0 and marked the branch ready to merge.
+- 2026-07-21: Task 4 external bootstrap is verified: `tskwak111/Sejong_AI` is private, non-empty and
+  defaults to `main`; initial ordinary push only set `origin/main` to
+  `5e09deccc7205503df07d938b6d4a88f4d5a327e`. Both hosted runs on that SHA passed (policy
+  `29776352710`, frozen Frontend CI `29776352718`). Task 5 evidence verifies accepted `koregy` write
+  access, `FRONTEND_COLLABORATOR_LOGIN=koregy`, read-only default Actions permissions and the
+  direct-push warning in the repository description. Task 5 remains partial: teammate MFA/recovery and
+  the first Task 7 PR-only/no-direct-main-push rehearsal are human-only Pending.
+- 2026-07-21: App-scope evidence interpretation corrected by D-056. Public repository visibility is
+  normal even for selected-repository installation and does not prove over-broad scope. Human UI
+  confirmation of `Only select repositories / Sejong_AI` remains Pending; change is required only if
+  the UI says `All repositories`. Cloud environment, docs/test-only task, `codex/...` Draft PR/manual
+  merge and all Task 7 teammate onboarding/self-merge/forbidden-scope rehearsals remain Pending.
+  COLLAB-001 stays In Progress. Exact owner and teammate steps are in
+  `docs/handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md`.

@@ -188,10 +188,12 @@ guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initi
 
 ### 저장소·협업·변경 통합
 
-- 원본 원격 없이 시작한 현재 `main` history를 사용자의 개인 GitHub 계정 아래 private monorepo에
-  연결한다. Q-GIT-004=A/D-053으로 현재 author/committer email의 private collaborator 공개와
-  history·SHA 보존을 확정했고 D-054로 COLLAB-001 계획 실행도 승인했다. remote 생성·push는
-  pre-push secret/history audit와 정확한 account 확인·사용자 browser 인증 뒤에만 수행한다.
+- current `main` history는 private `tskwak111/Sejong_AI` monorepo에 연결됐고 local/remote SHA
+  `5e09deccc7205503df07d938b6d4a88f4d5a327e`가 일치한다. initial policy and frozen Frontend CI
+  hosted runs passed, and `koregy` collaborator write/variable evidence is verified. Task 5 is partial:
+  teammate MFA/recovery and the first Task 7 PR-only/no-direct-main-push rehearsal are human-only Pending.
+  Q-GIT-004=A/D-053의 author/committer history·SHA 보존은 유지한다. COLLAB-001은 Task 6~7
+  rehearsal까지 In Progress다.
 - GitHub Free·0원으로 시작하므로 private branch protection/CODEOWNERS 강제를 전제하지 않는다.
   PR-only 팀 규칙, 변경 범위 분류, CI와 작은 revert 가능한 PR을 사용한다.
 - Frontend 팀원은 `/`, `/chat`, `/admin`, typed client, 모든 화면 상태, 반응형·접근성과 frontend
@@ -201,7 +203,8 @@ guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initi
   사용자 검토 대상이다. 계약 간극은 frontend 임의 타입이 아니라 Issue와 owner contract PR로
   해결한다.
 - Codex Cloud는 `codex/<task-id>-<slug>` branch와 Draft PR까지만 만들고 사용자가 병합한다.
-  비밀·DeepSeek 실호출·Docker/Supabase actual 검증은 Cloud에서 금지한다.
+  현재 App installation의 selected-repository-only 제한이 확인되지 않아 Cloud environment/task/PR
+  rehearsal은 Pending이다. 비밀·DeepSeek 실호출·Docker/Supabase actual 검증은 Cloud에서 금지한다.
 - private GitHub source remote는 D-046이 차단하는 remote/public application·DB deployment와
   별개이며 이를 해제하지 않는다.
 

@@ -87,12 +87,12 @@
   실제 질문 입력·공식 KB 답변은 API-CHAT/WEB-CHAT/READY gate 이후에만 활성화한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
-- 저장소: 원본 원격 없이 시작한 독립 Git 저장소와 `main` history를 사용자의 개인 GitHub
-  비공개 단일 저장소에 연결하는 방향을 Q-GIT-001=A로 확정했고 D-054로 COLLAB-001 실행계획을
-  승인했다. 실제 remote 생성·push·초대는 pre-push secret/history audit와 account 확인·사용자
-  browser 인증 뒤에만 수행한다. Q-GIT-004=A/D-053으로
-  기존 author/committer email이 사용자 본인이며 private collaborator 공개에 동의했으므로 현재
-  history·SHA를 보존하고 noreply rewrite를 하지 않는다.
+- 저장소: private `tskwak111/Sejong_AI`에 current `main` history를 ordinary first push로 연결했고
+  local/remote `main`은 `5e09deccc7205503df07d938b6d4a88f4d5a327e`로 일치한다. repository는
+  private이며 hosted policy `29776352710`과 Frontend CI `29776352718`이 통과했다. `koregy`의
+  accepted write access·repository variable·read-only default Actions permissions도 검증됐다.
+  Task 5는 partial이며 teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이
+  남는다. Q-GIT-004=A/D-053에 따라 author/committer history·SHA는 보존한다.
 - 협업 비용·강제 경계: Q-GIT-002=A로 GitHub Free·초기 0원을 유지한다. private repository의
   branch protection/CODEOWNERS 강제를 전제하지 않고 PR·CI·scope classification과 팀 규칙을
   사용하며, merge 버튼이 보이는 것은 정책상 허가를 뜻하지 않는다.
@@ -104,9 +104,10 @@
   병합할 수 있다. exact self-merge allowlist는 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web
   구현 노트 1개와 그 INDEX append뿐이다. 기존 note/INDEX 행·env/package/lockfile/config·공개
   계약·backend·DB·data·security·`.github`가 포함되면 사용자 검토로 승격한다.
-- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. Codex GitHub
-  app은 이 repository 하나로 제한하며 DeepSeek key·DB DSN·context secret을 Cloud에 넣지 않는다.
-  Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
+- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. App의 public
+  repository 가시성은 설치 범위 판정 근거가 아니므로 GitHub UI에서 `Only select repositories`와
+  selected private repository `Sejong_AI`를 사용자가 확인하기 전에는 Cloud Task 6을 완료로 보지 않는다. DeepSeek key·DB DSN·context secret을
+  Cloud에 넣지 않으며 Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
 - 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
   remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.
 - 오류 계약: 정책 응답은 HTTP 200, 승인 근거로 안전 응답을 만들 수 없는 시스템 불능만 HTTP 503 `SERVICE_UNAVAILABLE`

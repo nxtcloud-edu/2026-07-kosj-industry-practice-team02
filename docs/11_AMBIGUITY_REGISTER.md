@@ -11,7 +11,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-005 | A | 데이터 | Resolved | AI/Data·Backend 작성, PM 승인, 2026-07-20 목표 | Q-DATA-001 / D-011 |
 | A-006 | B | 마스킹 | Resolved with review gate | 이름·상세주소는 재현율 우선 보수적 감지. 과잉 마스킹이 성공률 80% 미달 원인으로 입증돼도 B 전환은 재승인 | Q-PRIV-002 / ADR-0004 |
 | A-007 | B | 검색 | Defaulted / Deferred | MVP는 keyword/metadata만 사용하고 embedding flag는 off | ADR-0006; 품질 근거와 비용 승인 전 활성화 금지 |
-| A-008 | B | CI·source remote | Resolved / implementation in progress | private GitHub source remote와 collaboration CI 방향 및 실행계획은 승인됨. Windows/Docker/DeepSeek local gate는 유지하고 로컬 검사기/workflow를 먼저 구현; 실제 remote는 account 확인 뒤 진행 | D-021 partially superseded by D-047~D-054 / ADR-0019 |
+| A-008 | B | CI·source remote | Resolved / external bootstrap verified | private `tskwak111/Sejong_AI` remote, initial `main` push, hosted policy/Frontend CI PASS, collaborator/variable/read-only Actions evidence를 확인했다. Windows/Docker/DeepSeek local gate는 유지한다 | D-021 partially superseded by D-047~D-055 / ADR-0019 |
 | A-009 | B | 데모 | Defaulted / Deferred | 현재 완료 기준은 local live demo+재시작 runbook. 공개 URL·녹화본은 별도 발표/배포 승인 시 선택 | D-013/D-021 범위의 0원·local-first 기본값 |
 | A-010 | C | UI | Defaultable | 디자인 시스템 세부 | 기존 아이디어노트 톤, 접근성 우선 |
 | A-011 | C | 코드 | Defaultable | 모듈 명명·파일 분할 | framework conventions |
@@ -36,12 +36,12 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-030 | A / Blocker | official seed correction | Resolved decision / spec·plan Review | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044 / ADR-0017. 후속 plan 승인 전 `.2`/dispatcher/DB 실행 0 |
 | A-031 | B / High | unresolved PII consumer response | Resolved behavior / consumer implementation deferred | Q-PII-002=A: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045 / ADR-0004. 별도 public contract+forward DB migration 명세·승인 전 route 차단 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
-| A-033 | A | Git source remote·access | Resolved decision / external execution pending | Q-GIT-001=A 및 D-054 실행계획 승인: 개인 GitHub private repository, Frontend collaborator, Codex app selected-repository-only. account identifier와 browser 인증 전 remote 생성·push 완료 주장 0 | D-047/D-053/D-054 / ADR-0019 |
+| A-033 | A | Git source remote·access | Resolved / Task 4 verified; Task 6 human confirmation pending | private `tskwak111/Sejong_AI`, exact matching `main` SHA, ordinary initial push, `koregy` accepted write access와 variable을 검증했다. 공개 repository 가시성은 App 설치 범위를 증명하거나 반증하지 않으며, GitHub UI의 `Only select repositories / Sejong_AI` 확인만 남았다 | D-047/D-053~D-056 / ADR-0019 |
 | A-034 | A | Frontend ownership | Resolved | Q-OWN-001=A: 인간 팀원이 세 페이지·typed client·화면 상태·반응형·접근성·frontend unit/E2E 전체 소유 | D-048 / frontend handoff; contract/backend/DB/data/security는 owner 요청 |
 | A-035 | B | GitHub plan·enforcement | Resolved | Q-GIT-002=A: GitHub Free·0원, private branch protection/CODEOWNERS 강제를 전제하지 않음 | D-049 / ADR-0019; PR·CI·scope policy와 사람 규칙, Pro 전환은 재승인 |
 | A-036 | B | Frontend merge | Resolved policy | Q-GIT-003=B: 허용 frontend-only green PR은 팀원 자가 병합, 경계 밖은 사용자 검토 | D-050 / ADR-0019; GitHub Free 기술적 완전 강제 아님 |
 | A-037 | A | Codex Cloud merge·secret | Resolved policy | Q-CLOUD-001=A: Cloud는 branch+Draft PR만, 사람이 merge; secret·DeepSeek·Docker actual 없음 | D-051 / ADR-0019 |
-| A-038 | A | Collaboration operating model | Resolved spec and plan / implementation in progress | Q-COLLAB-001=A: private single repo, role-scoped self-merge, Cloud Draft PR, local-only actual gate. D-054로 로컬 구현 시작 | D-052~D-054 / collaboration design and plan |
+| A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Task 4는 완료, Task 5는 partial이다. teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal, repository-limited Codex App, Cloud Draft PR/manual merge와 나머지 Task 7 rehearsal은 Pending이다 | D-052~D-055 / collaboration design and plan |
 | A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
 
 ## 우선도 정의
@@ -53,9 +53,11 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 
 현재 열린 인간 결정형 A/Blocker는 0개다. A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
 사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
-보존한다. COLLAB-001 실행계획은 D-054로 승인돼 로컬 Tasks 1~3을 진행한다. 남은 외부 gate는
-사용자가 직접 확인할 GitHub owner/repository name/collaborator login과 browser 인증·초대 수락·
-Codex App repository 제한·rehearsal 증거다. AI가 계정 식별자나 성공 증거를 추정하지 않는다.
+보존한다. COLLAB-001은 Task 4 완료와 Task 5 partial external evidence를 기록했고, private
+owner/repository/collaborator identifiers는 기록됐다. 남은 외부 gate는 teammate MFA/recovery와
+첫 Task 7 PR-only/no-direct-main-push rehearsal, Codex App의
+`Sejong_AI` 단일-repository 제한 확인, Cloud Draft PR/manual merge 및 teammate onboarding/self-merge/
+forbidden-scope rehearsal이다. AI가 이 남은 성공 증거를 추정하지 않는다.
 A-032/Q-PII-003은 2026-07-20 D-043으로 해결돼 AI-001A pure core 실행이 승인됐다.
 A-031/Q-PII-002의 시민 동작은 D-045로 해결됐다. route/consumer activation은 공개 계약과
 forward DB migration을 함께 다루는 별도 명세·승인 전까지 Blocked다.
@@ -85,8 +87,9 @@ A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat 
 
 ## 현재 열린 인터뷰 질문
 
-없음. D-053으로 A-039/Q-GIT-004가 해결됐고 D-054로 COLLAB-001 실행계획이 승인됐다. GitHub
-account identifier와 browser 인증은 설계 질문이 아닌 외부 실행 입력으로 남는다.
+없음. D-053으로 A-039/Q-GIT-004가 해결됐고 D-054로 COLLAB-001 실행계획이 승인됐다. Task 4와
+Task 5는 partial이며, MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push, Cloud/onboarding
+rehearsal은 설계 질문이 아닌 인간 실행 증거로 남는다.
 
 ## 2026-07-20 해결된 인터뷰 질문
 

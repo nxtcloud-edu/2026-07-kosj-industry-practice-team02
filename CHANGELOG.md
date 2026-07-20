@@ -4,6 +4,10 @@
 
 ### Added
 
+- COLLAB-001 owner/teammate execution checklist for GitHub App UI confirmation, MFA/recovery,
+  bootstrap PR merge, no-secret Codex Cloud Draft-PR rehearsal, Frontend clone/baseline/self-merge and
+  forbidden-scope close-without-merge rehearsal; D-056 corrects the earlier inference that public
+  repository visibility proves an over-broad App installation
 - COLLAB-001 local Tasks 1~3 automation: an integrated value-redacting full reachable-history scanner,
   exact base/head PR author/path scope
   classifier, add-only web implementation-note/INDEX validator, tracked active Markdown/JSON checker,
@@ -88,11 +92,13 @@
 
 ### Changed
 
-- Closed the local collaboration documentation/version boundary at `repo_guidance=1.7.0`,
-  `test_suite=1.0.0-collaboration` and `documentation=2.9.0` while keeping COLLAB-001 In Progress:
-  remote 0, push 0, hosted Actions run 0, collaborator onboarding 0 and Codex Cloud task/PR 0. Tasks 4~7
-  still require exact GitHub identifiers and human browser actions; no product/application/web/API/
-  contract/DB/data/prompt/dependency behavior changed
+- Recorded D-055 external collaboration evidence and advanced repository guidance to `1.7.1` and
+  documentation to `2.9.1`: private `tskwak111/Sejong_AI` bootstrap, matching `main` SHA, ordinary
+  initial push, policy and frozen Frontend CI PASS, accepted `koregy` write access, repository variable,
+  private visibility, read-only default Actions and direct-push warning. COLLAB-001 remains In Progress:
+  Task 5 is partial: teammate MFA/recovery and the first Task 7 PR-only/no-direct-main-push rehearsal,
+  repository-limited Codex App, Cloud Draft PR/manual merge and remaining teammate rehearsals are pending;
+  no product/application/web/API/contract/DB/data/prompt/dependency behavior changed
 - Corrected the AI-001A isolated-worktree handoff to forbid junctioning a worktree `.tools` to the
   main ignored tool directory; require byte-copy/hash verification instead after Windows cleanup was
   observed following the junction target, and reproducibly restored exact uv and patched Supabase runtime

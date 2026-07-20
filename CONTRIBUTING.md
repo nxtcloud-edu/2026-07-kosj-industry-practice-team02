@@ -24,14 +24,17 @@ feat/web-WEB-CHAT-001-answer-states
 기본 브랜치는 `main`이다. Codex는 `codex/<task-id>-<slug>`, 인간 Frontend 팀원은
 `feat/web-<task-id>-<slug>`를 사용한다. 한 PR에는 하나의 TASK ID와 하나의 수직 목적만 담는다.
 
-Q-GIT/Q-COLLAB 결정으로 사용자의 개인 GitHub private source remote와 collaboration CI 방향은
-승인됐다. Q-GIT-004=A로 기존 author email의 private collaborator 공개와 history·SHA 보존도
-확정했고 D-054로 COLLAB-001 실행계획도 승인됐다. history/current-tree secret gate, scope/append
-분류기, repository docs 검사기와 workflow/template의 local 구현·통합·review는 끝났다. 실제
-remote·push·hosted Actions·초대·Codex 연결은 모두 0이며 정확한
-account identifier와 사용자 browser 인증 뒤에만 수행한다. 실행 뒤에도 각 작업자는 변경 영역의
-local 검증과 구현 노트 의무를 유지한다. GitHub remote는 public application deployment나 remote
-DB가 아니다.
+Q-GIT/Q-COLLAB 결정에 따라 private `tskwak111/Sejong_AI` source remote가 연결됐고 local/remote
+`main`은 `5e09deccc7205503df07d938b6d4a88f4d5a327e`로 일치한다. 최초 push는 보통의
+`git push -u origin main`만 사용했고 hosted policy `29776352710`과 Frontend CI `29776352718`이
+그 SHA에서 통과했다. `koregy`의 accepted write access, `FRONTEND_COLLABORATOR_LOGIN=koregy`,
+read-only default Actions permissions와 repository-description direct-push warning은 확인됐다.
+MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal은 팀원이 직접 확인해야 한다.
+Codex App의 공개 repository 가시성만으로 설치 범위를 판정할 수 없으므로, GitHub 설치 설정 화면에서
+**Only select repositories**와 selected private repository `Sejong_AI`를 사람이 확인하기 전 Task 6을 완료로 보지 않는다.
+Cloud environment/Draft-PR 및 teammate self-merge rehearsal도 아직 없다. 실행 뒤에도 각 작업자는
+변경 영역의 local 검증과 구현 노트 의무를 유지한다. GitHub remote는 public application deployment나
+remote DB가 아니다.
 
 ## 역할별 PR·병합
 

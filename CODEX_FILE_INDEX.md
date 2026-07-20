@@ -36,7 +36,7 @@
 | `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md` | DATA-001 staging JSON·hash-bound PM 검수 경계; AI scope complete / Review (PM pending) |
 | `docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md` | DATA-001 DRAFT 20/3/12·validator·PM handoff와 Remediation 3 full-root verification 기록; official release/seed는 별도 DATA-SEED-001 |
 | `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md` | 승인된 private GitHub·Frontend 소유권·Cloud Draft-PR-only 협업 경계 |
-| `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | Tasks 1~3와 Task 8 local closeout 완료; remote·push·Actions·collaborator·Cloud Tasks 4~7은 외부 행동 전부 pending |
+| `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | Tasks 1~4 complete; Task 5 partial—MFA/recovery and first Task 7 PR-only/no-direct-main-push rehearsal pending; Tasks 6~7 Cloud/onboarding rehearsals pending |
 
 ## 모든 작업 후 갱신할 파일
 

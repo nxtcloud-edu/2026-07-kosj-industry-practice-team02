@@ -12,6 +12,7 @@
 8. 버전 매니페스트
 9. DB 작업이면 `docs/handoffs/HANDOFF-20260717-DB-001-LOCAL-BASELINE.md`
 10. Frontend 협업이면 `docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md`
+11. GitHub App·PR·Cloud·팀원 최초 실행이면 `docs/handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md`
 
 ## 인수인계에 반드시 포함
 
