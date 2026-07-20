@@ -26,10 +26,12 @@ feat/web-WEB-CHAT-001-answer-states
 
 Q-GIT/Q-COLLAB 결정으로 사용자의 개인 GitHub private source remote와 collaboration CI 방향은
 승인됐다. Q-GIT-004=A로 기존 author email의 private collaborator 공개와 history·SHA 보존도
-확정했고 D-054로 COLLAB-001 실행계획도 승인됐다. 로컬 검사기·workflow/template는 구현 중이며,
-실제 remote·초대·Codex 연결은 정확한 account identifier와 사용자 browser 인증 뒤에만 수행한다.
-실행 뒤에도 각 작업자는 변경 영역의 local 검증과 구현 노트 의무를 유지한다. GitHub remote는
-public application deployment나 remote DB가 아니다.
+확정했고 D-054로 COLLAB-001 실행계획도 승인됐다. history/current-tree secret gate, scope/append
+분류기, repository docs 검사기와 workflow/template의 local 구현·review는 끝났고 history scanner의
+최종 integration만 남아 있다. 실제 remote·push·hosted Actions·초대·Codex 연결은 모두 0이며 정확한
+account identifier와 사용자 browser 인증 뒤에만 수행한다. 실행 뒤에도 각 작업자는 변경 영역의
+local 검증과 구현 노트 의무를 유지한다. GitHub remote는 public application deployment나 remote
+DB가 아니다.
 
 ## 역할별 PR·병합
 
@@ -51,6 +53,20 @@ public application deployment나 remote DB가 아니다.
 origin/main 갱신 → task branch → 작은 commit → push → Draft/Ready PR
 → scope/CI 확인 → 구현 노트·diff review → 권한 있는 인간 merge → branch 정리
 ```
+
+remote가 연결된 뒤 PR head를 분류할 때는 GitHub가 전달한 full base/head commit SHA와 repository
+variable의 exact Frontend login을 사용한다.
+
+```text
+python -B scripts/check_collaboration_scope.py --base-sha <full-sha> --head-sha <full-sha> \
+  --pr-author <login> --frontend-login <configured-login>
+```
+
+`FRONTEND_SELF_MERGE_ELIGIBLE`만 Frontend 자가 병합 후보이며, exit 0의
+`OWNER_REVIEW_REQUIRED`는 검사 성공이지 병합 승인이 아니다. exit 2 `OPERATIONAL_ERROR`, docs/
+current-tree secret/contract/frontend gate 실패, final summary 누락은 모두 병합 중지다. GitHub
+Actions는 trusted base의 검사기로 별도 candidate checkout을 검사하고 read-only token을 사용한다.
+CI 결과도 구현 노트·diff review와 인간 정책을 대체하지 않는다.
 
 ## 커밋 예시
 

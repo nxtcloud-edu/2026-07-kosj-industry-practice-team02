@@ -4,6 +4,12 @@
 
 ### Added
 
+- COLLAB-001 local Tasks 1~3 automation: a value-redacting full reachable-history scanner (local
+  implementation/review complete, final integration pending), exact base/head PR author/path scope
+  classifier, add-only web implementation-note/INDEX validator, tracked active Markdown/JSON checker,
+  candidate-tree secret scan mode, pinned read-only GitHub policy/frontend workflows, PR/Issue/ownership
+  templates and cross-platform production Playwright startup; independent review closed Critical/
+  Important findings at 0
 - D-054: 사용자의 `COLLAB-001 계획 승인, 구현 시작`으로 협업 전환 실행계획을 승인하고 로컬
   history-secret/scope/docs 검사기와 GitHub workflow/template 구현을 시작; account 인증이 필요한
   remote·invite·Codex App·rehearsal은 실제 외부 증거 전까지 pending
@@ -82,6 +88,11 @@
 
 ### Changed
 
+- Closed the local collaboration documentation/version boundary at `repo_guidance=1.7.0`,
+  `test_suite=1.0.0-collaboration` and `documentation=2.9.0` while keeping COLLAB-001 In Progress:
+  remote 0, push 0, hosted Actions run 0, collaborator onboarding 0 and Codex Cloud task/PR 0. Tasks 4~7
+  still require exact GitHub identifiers and human browser actions; no product/application/web/API/
+  contract/DB/data/prompt/dependency behavior changed
 - Corrected the AI-001A isolated-worktree handoff to forbid junctioning a worktree `.tools` to the
   main ignored tool directory; require byte-copy/hash verification instead after Windows cleanup was
   observed following the junction target, and reproducibly restored exact uv and patched Supabase runtime

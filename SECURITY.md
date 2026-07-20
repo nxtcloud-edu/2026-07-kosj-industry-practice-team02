@@ -23,7 +23,9 @@
 
 ## GitHub·Codex Cloud 경계
 
-- 원격 최초 push 전 worktree와 전체 reachable Git history를 값 비노출 방식으로 검사한다.
+- 원격 최초 push 전 current worktree와 전체 reachable Git history를 서로 다른 값 비노출 검사기로
+  검사한다. history scanner는 local 구현·review 완료 후 최종 integration 대상이며, integration과
+  fresh PASS 전에는 remote 생성/push를 진행하지 않는다.
 - 확인된 secret은 파일 삭제 commit만으로 닫지 않고 먼저 회전하며 history 정리는 인간 승인을
   받는다.
 - private repository는 노출 가능성을 줄일 뿐 secret/PII 커밋을 허용하지 않는다.
@@ -57,26 +59,41 @@
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File trusted/scripts/check_secret_patterns.ps1 `
+  -RepositoryRoot candidate
+python -B scripts/check_git_history_secrets.py --repo .
 node scripts/check_web_bundle_secrets.mjs apps/web/.next
 ```
 
-두 스캐너 모두 clean은 0, 탐지 결과는 1, 입력 누락·읽기 실패 같은 운영 오류는 2 이상을
-반환한다. 출력은 경로·stable rule ID·개수만 포함하며 일치한 값이나 파일 내용을 출력하지
+첫 명령은 현재 repository, 두 번째 예시는 trusted base의 scanner로 별도 checkout한 candidate
+repository를 검사한다. `-RepositoryRoot`는 요청 경로가 정확한 Git top-level인지 확인한 뒤 그
+candidate의 tracked + untracked nonignored regular file만 읽고 reparse point/symlink와 제외 runtime
+directory는 건너뛴다. Git discovery 출력은 32 MiB로 제한되며 한도·root 불일치·읽기 실패는 exit
+2로 fail closed한다. current-tree와 bundle scanner는 clean 0, finding 1, operational error 2 이상을
+반환한다. 출력은 escaped 경로·stable rule ID·개수만 포함하며 일치한 값이나 파일 내용을 출력하지
 않는다.
 
-패턴 검사는 명백한 private-key header, provider/GitHub token, AWS access-key ID, 승인된 secret
-assignment, credential URL을 찾지만 엔트로피 분석·Git 과거 이력·프로세스 환경·클라우드
-로그까지 검사하지 않는다. assignment 검사는 일반/`export`, PowerShell `$env:NAME=value`, cmd
-`set NAME=value` 형식을 포함한다. 등호가 없는 `setx NAME value`는 P2 한계로 탐지하지 않는다.
-기본 저장소 검사는 active tracked/untracked nonignored 파일만 대상으로 하고
-legacy·cache·build·quarantine과 symlink는 제외한다.
+history scanner는 `git rev-list --objects --all`의 reachable commit/tree/tag/blob raw bytes를 검사한다.
+선택한 ignored local secret을 exact 비교할 때도 값은 process memory에만 두며 Git argv/env·임시 파일·
+출력으로 전달하지 않는다. clean 0, finding 1, operational/limit failure 2이고 출력은 값 없는 JSON
+Lines metadata뿐이다. 고정 한도는 reachable object 100,000개, object당 16 MiB/합계 256 MiB,
+Git 출력당 64 MiB, unique tree 20,000개, tree entry 1,000,000개, path 4,096 bytes/합계 128 MiB,
+Git 명령당 60초다. 한도 초과는 불완전 clean으로 간주하지 않는다.
+
+current-tree 패턴 검사는 명백한 private-key header, provider/GitHub token, AWS access-key ID, 승인된
+secret assignment, credential URL을 찾지만 엔트로피 분석·Git 과거 이력·프로세스 환경·클라우드
+로그까지 검사하지 않는다. 과거 이력은 별도 history scanner의 명시 패턴/exact-value 경계만 맡는다.
+assignment 검사는 일반/`export`, PowerShell `$env:NAME=value`, cmd `set NAME=value` 형식을 포함한다.
+등호가 없는 `setx NAME value`는 P2 한계로 탐지하지 않는다. 기본 저장소 검사는 active tracked/
+untracked nonignored 파일만 대상으로 하고 legacy·cache·build·quarantine과 symlink는 제외한다.
 
 번들 검사는 build 시 materialize된 `.next/static`, app HTML/RSC, pages HTML에서 server secret
 marker 이름과 선택적 `SEJONG_WEB_SECRET_SENTINEL` 값의 byte literal을 찾는다. 서버 전용
 JavaScript·cache, 동적 RSC/HTML live response와 Pages `_next/data/*.json` runtime 경로는 보증하지
-않는다. WEB-CHAT/DEV-001D에서 live-response sentinel gate를 추가해야 한다. 난독화·인코딩된
-값도 보증하지 않으므로 두 검사는 비밀 회수·provider 설정 검토·배포 전 수동 보안 검토를
-대체하지 않는다.
+않는다. WEB-CHAT/DEV-001D에서 live-response sentinel gate를 추가해야 한다. current-tree,
+history, bundle scanner 모두 분할·암호화·압축·난독화·인코딩된 값의 부재를 보증하지 않으므로
+credential 회수/회전, GitHub 접근 검토, provider 설정 확인과 배포 전 수동 보안 검토를 대체하지
+않는다.
 
 ## Local PostgreSQL 안전 경계
 

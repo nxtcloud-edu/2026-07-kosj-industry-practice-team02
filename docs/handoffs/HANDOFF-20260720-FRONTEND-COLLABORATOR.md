@@ -1,9 +1,12 @@
 # Handoff — Frontend Collaborator
 
-- Date: 2026-07-20 KST
-- Status: Prepared; Q-GIT-004=A resolved; private GitHub remote·collaborator invitation·CI creation
-  pending plan approval
-- Canonical branch/HEAD at preparation: `main` / `177dac810468f3cd5aaa4929a971cbde21b4deba`
+- Date: 2026-07-21 KST (prepared 2026-07-20; local automation status refreshed)
+- Status: Local onboarding automation ready; external GitHub transition pending exact identifiers and
+  human browser actions
+- Canonical product base at preparation: `main` / `177dac810468f3cd5aaa4929a971cbde21b4deba`;
+  collaboration automation remains local and is not a pushed remote baseline
+- External evidence: remote 0, push 0, hosted Actions run 0, collaborator invite/acceptance 0,
+  Codex Cloud task/PR 0
 - Product: 세종 민원 AI 길잡이
 - Scope owner: Frontend 팀원
 - Architecture/contract/data/security owner: 사용자
@@ -20,6 +23,11 @@
 8. 이 handoff와 최신 frontend 구현 노트
 
 `legacy/`는 참고 자료이며 현재 화면·API·범위의 정답이 아니다.
+
+scope/append·repository docs·current-tree secret·workflow/template와 Playwright portability gate는
+local 구현·review Critical/Important 0 상태다. history scanner도 별도 local 구현·review를 마쳤으며
+최종 integration과 fresh pre-push PASS가 남아 있다. 따라서 이 문서는 운영 경계를 미리 제공하지만,
+실제 clone/PR/self-merge 가능 상태를 뜻하지 않는다.
 
 ## 2. 담당 범위
 
@@ -79,10 +87,15 @@ Blocked이므로 가짜 성공 API나 가짜 공식 데이터를 만들어 연�
 
 ### Lane F0 — onboarding과 baseline
 
+0. 사용자가 exact owner/repository/collaborator login을 확인하고 private remote 생성·최초 push·초대
+   수락·repository variable 설정을 끝냈다는 non-secret 확인을 기다린다.
 1. private repository clone과 runtime version 확인
 2. frozen install과 현재 frontend gate 재현
 3. `/`와 정적 `/chat`을 390/430/desktop·keyboard로 확인
 4. 문서만 바꾸는 첫 test PR로 branch/CI/self-merge 절차 리허설
+
+현재 0번이 미완료이므로 clone URL이나 login을 추측하지 않는다. hosted Actions와 self-merge가 아직
+실행되지 않았다는 사실을 local test PASS로 대체하지 않는다.
 
 ### Lane F1 — fixture 기반 chat 표현 계층
 
@@ -145,6 +158,21 @@ git diff --check
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
+협업 정책 자체의 local 확인은 full commit SHA와 확정된 login만 사용한다. 다음 명령의 exit 0은
+분류 성공이며, JSON의 `classification`을 별도로 확인한다.
+
+```powershell
+python -B scripts/check_collaboration_scope.py `
+  --base-sha <full-base-sha> --head-sha <full-head-sha> `
+  --pr-author <pr-login> --frontend-login <configured-frontend-login>
+python -B scripts/check_repository_docs.py --repository-root .
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1 `
+  -RepositoryRoot .
+```
+
+`FRONTEND_SELF_MERGE_ELIGIBLE`만 자가 병합 후보이고 `OWNER_REVIEW_REQUIRED`는 owner review다.
+`OPERATIONAL_ERROR` exit 2, docs/secret/frontend gate 실패 또는 final summary 누락은 병합 중지다.
+
 브라우저가 처음인 Windows PC에서는 아래 명령으로 pinned Playwright의 Chromium을 설치한다. 새
 dependency를 임의로 추가하지 말고 기존 `tools/web-e2e` lock을 사용한다.
 
@@ -153,6 +181,9 @@ corepack.cmd pnpm --dir tools/web-e2e exec playwright install chromium
 ```
 
 ## 6. Git 작업 절차
+
+아래 절차는 사용자가 private `origin`의 exact owner/name과 최초 push 완료를 확인한 뒤에만 시작한다.
+현재 tracked 문서에는 그 identifier가 없고 remote/push도 0이다.
 
 ```powershell
 git switch main

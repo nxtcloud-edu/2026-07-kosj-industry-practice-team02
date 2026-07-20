@@ -20,12 +20,16 @@ Playwright toolchain, Codex Cloud.
 ## Status and approval boundary
 
 - Plan ID: `COLLAB-001`
-- Status: **Approved / In Progress — user approved execution on 2026-07-20**
+- Status: **Local automation complete / External transition pending — Tasks 1~3 complete; Tasks 4~7
+  require exact GitHub identifiers and human browser actions**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
 - Decision/ADR: D-047~D-053 / ADR-0019
-- Current local authority at plan creation: branch `main`, HEAD
+- Local authority at plan creation: branch `main`, HEAD
   `177dac810468f3cd5aaa4929a971cbde21b4deba`, remote 0.
+- Local closeout state on 2026-07-21: collaboration candidate commits exist only in local Git;
+  remote 0, push 0, hosted Actions run 0 and Codex Cloud task/PR 0. No GitHub owner, repository or
+  collaborator identifier is assumed in tracked documentation.
 - Q-GIT-004=A/D-053 preserves the current history and SHAs. Execution starts only after the user says
   `계획 승인, 구현 시작` or equivalent.
 - This plan does not authorize product code, public deployment, remote DB, schema migration, official
@@ -62,9 +66,10 @@ The read-only pre-push audit completed before plan execution found no credential
 times, and high-risk credential patterns were 0. It did find an actual-looking author/committer email
 identity across the reachable history. Q-GIT-004=A/D-053 confirms that the identity belongs to the user
 and may be visible to the private Frontend collaborator, so preserve the history and SHAs and do not
-perform a noreply rewrite. Until this plan is approved, do not create a remote, commit or push. Push
-`main` only after approval; never use `git push --mirror`, and do not push the two extra local branches
-until their six commits are reviewed independently.
+perform a noreply rewrite. Plan approval and local automation do not authorize guessed account state:
+do not create a remote or push until the exact owner/repository is confirmed and the final integrated
+pre-push gate passes. Never use `git push --mirror`, and do not push extra local branches until their
+commits are reviewed independently.
 
 ---
 
@@ -79,7 +84,7 @@ until their six commits are reviewed independently.
 - Append evidence to the COLLAB implementation note
 - Do not modify history in the normal PASS path
 
-- [ ] **Step 1: Capture the exact baseline**
+- [x] **Step 1: Capture the exact baseline**
 
 ```powershell
 git branch --show-current
@@ -93,7 +98,7 @@ git fsck --full
 Expected: `main`, known HEAD, clean worktree except this approved documentation transition once
 committed locally, remote 0 before creation, `git fsck` success.
 
-- [ ] **Step 2: Verify ignored/runtime boundaries**
+- [x] **Step 2: Verify ignored/runtime boundaries**
 
 ```powershell
 git ls-files -- '.env' '.env.*' 'apps/*/.env' 'apps/*/.env.*' '.tools/**' '.worktrees/**' '*.dump' '*.sql.gz'
@@ -104,7 +109,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_pat
 Expected: only keyless example env files are tracked; local secret/runtime paths are ignored; scanner
 passes without echoing values.
 
-- [ ] **Step 3: Scan all reachable history safely**
+- [x] **Step 3: Scan all reachable history safely**
 
 Use tracked blob names and a redacted pattern scanner that reports only commit/blob/path and pattern
 category. Do not use a command that prints matched values. At minimum inspect:
@@ -124,7 +129,7 @@ stream/read Git blob bytes for comparison. It must never pass the key through Gi
 environment variables, temporary files, shell history or logs. RED tests inspect mocked child argv/env
 and prove the synthetic token is absent there as well as stdout/stderr.
 
-- [ ] **Step 4: Gate the outcome**
+- [x] **Step 4: Gate the outcome**
 
 - PASS: Critical 0, continue.
 - Possible false positive: document path/type and independently inspect without copying values.
@@ -158,7 +163,7 @@ failure. The workflow fails policy only when the PR author is the configured Fro
 the successful classification is `OWNER_REVIEW_REQUIRED`. Owner/Codex PRs remain green classification
 evidence and still require human merge under their own policy.
 
-- [ ] **Step 1: Write RED classification tests**
+- [x] **Step 1: Write RED classification tests**
 
 Cover:
 
@@ -180,7 +185,7 @@ Cover:
 - newline/ANSI/control characters in untrusted paths are JSON-escaped; output never includes file
   contents or environment values
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 ```powershell
 .\apps\api\.venv\Scripts\python.exe -B -m unittest -v scripts.tests.test_collaboration_scope
@@ -188,7 +193,7 @@ Cover:
 
 Expected: failure because the classifier does not exist.
 
-- [ ] **Step 3: Implement minimal stdlib classifier**
+- [x] **Step 3: Implement minimal stdlib classifier**
 
 Use `subprocess.run` with argument arrays and `git diff --name-status -z`. Normalize repository-relative
 POSIX paths, validate full commit SHAs and commit existence, reject NUL/path escape/unknown status, and
@@ -196,7 +201,7 @@ apply deny overrides before allow prefixes. The scope classifier does not call G
 contents. A separate append validator reads only the unified diff for the one new implementation note
 and INDEX, proving no existing row/content was replaced.
 
-- [ ] **Step 4: Verify and self-review**
+- [x] **Step 4: Verify and self-review**
 
 ```powershell
 .\apps\api\.venv\Scripts\python.exe -B -m unittest -v scripts.tests.test_collaboration_scope
@@ -220,7 +225,7 @@ git diff --check
 - Test: `scripts/tests/test_github_collaboration_config.py`
 - Test: existing/new portability assertion for the E2E web-server command
 
-- [ ] **Step 1: Write RED static workflow tests**
+- [x] **Step 1: Write RED static workflow tests**
 
 Require:
 
@@ -251,13 +256,13 @@ Require:
 - initial CI does not upload Playwright traces/screenshots/videos. A later artifact policy must be
   failure-only, short-retention and scan/redact synthetic-only artifacts before upload.
 
-- [ ] **Step 2: Confirm RED**
+- [x] **Step 2: Confirm RED**
 
 ```powershell
 .\apps\api\.venv\Scripts\python.exe -B -m unittest -v scripts.tests.test_github_collaboration_config
 ```
 
-- [ ] **Step 3: Implement workflows without new repository dependency**
+- [x] **Step 3: Implement workflows without new repository dependency**
 
 Use the repository variable to identify the PR author, not the event actor. Frontend test execution is
 decided independently by changed paths, not by self-merge classification. Use repository-pinned
@@ -314,7 +319,7 @@ build. Clear the five server-secret variables after build; pass only the same
 `check_web_bundle_secrets.mjs apps/web/.next` scan. The value is fixed synthetic CI text, never a
 repository or Actions secret.
 
-- [ ] **Step 4: Parse and verify locally**
+- [x] **Step 4: Parse and verify locally**
 
 Run the new static tests, existing frontend commands, secret scan, package validator and `git diff
 --check`. Review workflow permissions and every action SHA before commit.
@@ -444,22 +449,24 @@ Docker/local-only verification as pending for the user.
 
 **Files:**
 
-- Modify: `docs/source-of-truth/TEAM_DECISIONS.md`
-- Modify: `docs/source-of-truth/PROJECT_PLAN.md`
-- Modify: `docs/11_AMBIGUITY_REGISTER.md`
-- Modify: `docs/decisions/DECISION_LOG.md`
-- Modify: `TASKS.md`, `CONTRIBUTING.md`, `docs/15_DEPLOYMENT_AND_OPERATIONS.md`
-- Modify: `docs/16_HANDOFF_GUIDE.md`, `README.md`, `CHANGELOG.md`
-- Modify: `versions/manifest.json`
-- Create/modify: final collaboration implementation note and INDEX
+- Local closeout: this plan, `TASKS.md`, `scripts/README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
+  `docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md`, `CODEX_FILE_INDEX.md`, `CHANGELOG.md`
+  and `versions/manifest.json`
+- External closeout after Tasks 4~7: actual non-secret GitHub identifiers/evidence and the final
+  collaboration implementation note/INDEX
 
 - [ ] Record actual repository owner/name without access tokens.
 - [ ] Record remote/CI/Cloud test PR URLs only if the user wants URLs in tracked docs; private URLs are
   not required for product reproduction.
 - [ ] Mark COLLAB-001 Done only after remote, invite, CI and Cloud Draft PR rehearsal pass.
-- [ ] Keep DATA-SEED-002, PII-CONSUMER, `00700`, public deployment and local-only gates at their actual
+- [x] Record the local-only closeout honestly: remote 0, push 0, hosted Actions run 0, collaborator
+  onboarding 0 and Codex Cloud task/PR 0; do not invent GitHub identifiers.
+- [x] Synchronize local scanner/workflow interfaces, security limits, contributor/handoff guidance,
+  file index, changelog and collaboration-only versions.
+- [x] Keep DATA-SEED-002, PII-CONSUMER, `00700`, public deployment and local-only gates at their actual
   prior states.
-- [ ] Run documentation/static/frontend/full feasible gates and review the final diff.
+- [x] Run the scoped repository-doc/package/current-tree-secret/diff gates and review the final docs-only
+  diff. Hosted/frontend/external rehearsal evidence remains pending with Tasks 4~7.
 
 ## Verification matrix
 
@@ -477,11 +484,12 @@ Docker/local-only verification as pending for the user.
 
 ## Version change plan
 
-- product spec: `2.2.4 → 2.2.5` for approved ownership/source-control operating policy
-- repository guidance: `1.5.0 → 1.6.0`
-- documentation: `2.7.12 → 2.8.0`
-- application/web/API/contracts/DB/data/prompts/tests: unchanged during design/plan; test-suite version may
-  increment only when the approved classifier/workflow tests are implemented
+- product spec: remains `2.2.5`; no local collaboration-automation product change
+- repository guidance: `1.6.2 → 1.7.0`
+- test suite: `0.9.0-pii-core → 1.0.0-collaboration`
+- documentation: `2.8.3 → 2.9.0`
+- application/web/API/contracts/DB/data/prompts/dependencies: unchanged by the local collaboration
+  automation
 
 ## Risks and rollback
 
@@ -531,3 +539,11 @@ successful external-state evidence.
   execution approval. Local Tasks 1~3 and documentation closeout may proceed. Tasks 4~7 still require
   verified GitHub account identifiers, browser authentication, collaborator acceptance and rehearsal
   evidence and must not be reported complete before those external checks actually pass.
+- 2026-07-21: Tasks 1~3 local implementation and independent review closed with Critical/Important 0.
+  History/current-tree secret gates, scope/append classification, repository-doc validation, pinned
+  workflow/templates and cross-platform Playwright startup are ready locally. Task 8 local documentation
+  and version synchronization passed 57 focused collaboration/docs/workflow tests (one platform skip),
+  repository-doc validation, package validation, current-tree secret scan and staged diff check. The
+  worktree-local pinned venv was absent, so the stdlib-only focused tests used available Python 3.14.0;
+  hosted/pinned-runtime evidence remains external. Tasks 4~7 remain unchecked with remote 0, push 0,
+  hosted Actions run 0 and Codex Cloud task/PR 0.

@@ -36,7 +36,7 @@
 | `docs/superpowers/specs/2026-07-18-data-001-staged-official-data-design.md` | DATA-001 staging JSON·hash-bound PM 검수 경계; AI scope complete / Review (PM pending) |
 | `docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md` | DATA-001 DRAFT 20/3/12·validator·PM handoff와 Remediation 3 full-root verification 기록; official release/seed는 별도 DATA-SEED-001 |
 | `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md` | 승인된 private GitHub·Frontend 소유권·Cloud Draft-PR-only 협업 경계 |
-| `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | secret/history audit부터 remote·CI·collaborator·Cloud·리허설까지의 Review 실행계획; Q-GIT-004 해결, 실행 승인 대기 |
+| `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | Tasks 1~3 local automation 완료, Task 8 local closeout 검증 중; remote·push·Actions·collaborator·Cloud Tasks 4~7은 외부 행동 전부 pending |
 
 ## 모든 작업 후 갱신할 파일
 
@@ -81,3 +81,10 @@
 | `scripts/capture_repo_state.py` | Git/버전 상태 캡처 |
 | `scripts/check_scope_drift.py` | 오래된 범위의 활성 복귀 탐지 |
 | `scripts/validate_codex_package.py` | 필수 파일과 지침 검증 |
+| `scripts/check_git_history_secrets.py` | 모든 reachable Git object의 값 비노출 secret/actual-question 검사; 별도 local 구현·review 완료, 최종 integration과 fresh pre-push PASS 필요 |
+| `scripts/check_secret_patterns.ps1` | 현재 repository 또는 `-RepositoryRoot` candidate의 tracked/untracked nonignored regular file 값 비노출 검사 |
+| `scripts/check_collaboration_scope.py` | full base/head SHA·PR author·configured Frontend login으로 self-merge/owner-review JSON 분류 |
+| `scripts/check_collaboration_note_append.py` | scope classifier 내부에서 신규 web 구현 노트와 INDEX 마지막 한 행의 add-only diff 검증 |
+| `scripts/check_repository_docs.py` | tracked active Markdown local target·strict JSON을 Git blob 기준으로 bounded 검증 |
+| `.github/workflows/collaboration-policy.yml` | trusted-base scope/docs/secret/contract policy와 항상 보이는 summary; hosted 실행은 remote 생성 뒤 검증 |
+| `.github/workflows/frontend-ci.yml` | read-only frozen frontend/contract/build/bundle/E2E gate와 항상 보이는 summary; Docker/DeepSeek/배포 없음 |

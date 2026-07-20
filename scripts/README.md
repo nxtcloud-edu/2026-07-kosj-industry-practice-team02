@@ -12,6 +12,76 @@ python -B scripts/validate_data_staging.py validate --draft-dir data/staging/dat
 
 위 Python 유틸리티와 `scripts/tests/`의 저장소 경계 검사는 Python 표준 라이브러리만 사용한다.
 
+## 협업 전환 검사기
+
+### 전체 reachable Git history 비밀 검사
+
+`scripts/check_git_history_secrets.py`는 별도 local 구현·review를 마쳤으며 최종 integration commit에
+포함된 뒤 최초 push gate로 사용한다. 모든 reachable ref의 commit/tree/tag/blob을 raw byte로 읽고
+일치값 대신 JSON Lines의 `category`, `commit`, `blob`, `path`만 출력한다.
+
+```powershell
+python -B scripts/check_git_history_secrets.py --repo .
+python -B scripts/check_git_history_secrets.py --repo . `
+  --local-secret-file apps/api/.env --local-secret-name DEEPSEEK_API_KEY
+```
+
+두 local-secret 옵션은 함께만 사용할 수 있다. 파일은 repository 안의 ignored regular file이어야
+하며 1 MiB 이하이고, 지정한 정확한 assignment 값은 process memory에서만 비교한다. Git argv/env,
+임시 파일, finding 출력에는 전달하지 않는다. 종료코드는 clean `0`, finding `1`, 입력·Git·한도·
+읽기 등 operational failure `2`다. operational failure도 값 없는
+`SCANNER_OPERATIONAL_ERROR` JSON record 하나로 fail closed한다.
+
+고정 자원 한도는 reachable object 100,000개, object당 16 MiB, object 합계 256 MiB, Git 명령
+출력당 64 MiB, unique tree 20,000개, tree entry 1,000,000개, path 4,096 bytes, path 합계
+128 MiB, Git 명령당 60초다. 한도를 넘으면 일부 결과를 PASS로 해석하지 않고 exit 2다. GitHub/
+provider token, private-key header, credential DB URL, JWT-like token, actual-question sentinel과 선택적
+local secret exact value를 찾지만 변형·분할·암호화·난독화된 값의 부재를 보장하지 않는다.
+
+### PR author·path scope 분류와 구현 노트 append 검증
+
+```powershell
+python -B scripts/check_collaboration_scope.py `
+  --base-sha <full-40-or-64-hex-commit-sha> `
+  --head-sha <full-40-or-64-hex-commit-sha> `
+  --pr-author <github-login> `
+  --frontend-login <github-login>
+```
+
+출력은 file content 없이 JSON 한 줄의 `classification`, change/path count, JSON-escaped path 목록이다.
+정상 분류는 `FRONTEND_SELF_MERGE_ELIGIBLE` 또는 `OWNER_REVIEW_REQUIRED`이며 둘 다 exit `0`이다.
+SHA/login 누락·형식 오류, commit 미존재, Git/diff failure는 path/content 없이
+`OPERATIONAL_ERROR`와 빈 count/path를 출력하고 exit `2`다. 입력 SHA는 full commit object만 받고
+`git diff --name-status -z <base> <head> --`만 분류한다.
+
+자가 병합 allowlist는 `apps/web/src/**`, `tools/web-e2e/e2e/**`와 선택적으로 정확히 한 개의 신규
+`docs/implementation-notes/IMP-YYYYMMDD-NNN-web-*.md` + 기존 INDEX 마지막 한 행 append다. delete,
+allowlist 밖 rename, `.github`, API/contract/generated type, DB/migration, official/staging data,
+ADR/policy, env/example, README, package metadata·lockfile는 owner review다. PR author가 설정된 Frontend
+login과 다르거나 변경이 비어 있어도 owner review다.
+
+`scripts/check_collaboration_note_append.py`는 standalone CLI가 아니라 scope classifier가 import하는
+scope-bounded interface다. `validate_note_and_index_append(base_sha, head_sha, note_path) -> bool`은 두 파일만
+대상으로 `--no-ext-diff --no-textconv --no-color` unified diff를 읽어 신규 web note 전체가 add-only이고
+INDEX의 기존 전체 내용이 context로 보존된 채 일치하는 행 하나만 마지막에 추가됐는지 검사한다.
+diff는 최대 1,000,000 context lines를 요청한다. standalone exit code는 없으며 형식 위반은 `False`라서
+owner review, Git operational failure는 scope classifier exit `2`가 된다.
+
+### tracked active Markdown·JSON 검사
+
+```powershell
+python -B scripts/check_repository_docs.py
+python -B scripts/check_repository_docs.py --repository-root <candidate-repository-root>
+```
+
+`--repository`는 `--repository-root`의 alias다. 검사기는 지정 Git worktree의 index에서 active tracked
+regular blob만 읽고 Markdown의 repository-local target과 strict JSON을 검증한다. candidate mode는
+신뢰한 base의 스크립트를 실행하면서 PR head가 checkout된 별도 repository root를 지정하는 CI
+interface다. symlink/gitlink/staged conflict 같은 지원하지 않는 tracked entry는 읽지 않고 fail closed한다.
+단일 active blob 2 MiB, active Markdown/JSON blob 합계 32 MiB, cat-file header 256 bytes가 한도다.
+성공은 exit `0`, missing target·invalid JSON·Git/read/limit operational failure는 exit `1`이며 오류는
+escaped source path와 line/ordinal 또는 stable code만 포함하고 target/content 값은 출력하지 않는다.
+
 ## 단일 로컬 검증 gate
 
 ```powershell
