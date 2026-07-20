@@ -40,9 +40,19 @@ CASES = cast(
     json.loads(FIXTURE_PATH.read_text(encoding="utf-8")),
 )
 EXPECTED_TOKENS = {
-    "[이름]", "[주민등록번호]", "[여권·면허번호]", "[전화번호]", "[이메일]",
-    "[상세주소]", "[계좌번호]", "[카드번호]", "[인증정보]", "[차량번호]",
-    "[접수번호]", "[건강·복지정보]", "[정밀위치]",
+    "[이름]",
+    "[주민등록번호]",
+    "[여권·면허번호]",
+    "[전화번호]",
+    "[이메일]",
+    "[상세주소]",
+    "[계좌번호]",
+    "[카드번호]",
+    "[인증정보]",
+    "[차량번호]",
+    "[접수번호]",
+    "[건강·복지정보]",
+    "[정밀위치]",
 }
 
 
@@ -52,8 +62,19 @@ def test_fixture_contract_is_frozen_synthetic_and_complete() -> None:
     cases = CASES["cases"]
     assert len(cases) == 74
     positive_prefixes = (
-        "name", "rrn", "identity", "phone", "email", "address", "account",
-        "card", "auth", "vehicle", "case", "sensitive", "location",
+        "name",
+        "rrn",
+        "identity",
+        "phone",
+        "email",
+        "address",
+        "account",
+        "card",
+        "auth",
+        "vehicle",
+        "case",
+        "sensitive",
+        "location",
     )
     expected_ids = {
         *(f"{prefix}-{number:02d}" for prefix in positive_prefixes for number in range(1, 4)),
@@ -66,12 +87,22 @@ def test_fixture_contract_is_frozen_synthetic_and_complete() -> None:
     assert [case["outcome"] for case in cases].count("SAFE_UNCHANGED") == 20
     assert [case["outcome"] for case in cases].count("UNRESOLVED") == 4
     exact_keys = {
-        "id", "input", "outcome", "categories", "tokens",
-        "expected_masked_text", "unresolved_reason",
+        "id",
+        "input",
+        "outcome",
+        "categories",
+        "tokens",
+        "expected_masked_text",
+        "unresolved_reason",
     }
     expected_key_order = (
-        "id", "input", "outcome", "categories", "tokens",
-        "expected_masked_text", "unresolved_reason",
+        "id",
+        "input",
+        "outcome",
+        "categories",
+        "tokens",
+        "expected_masked_text",
+        "unresolved_reason",
     )
     for case in cases:
         assert set(case) == exact_keys
@@ -82,9 +113,7 @@ def test_fixture_contract_is_frozen_synthetic_and_complete() -> None:
         reason = case["unresolved_reason"]
         assert reason is None or reason in {item.value for item in UnresolvedReason}
         assert (case["outcome"] == "UNRESOLVED") is (reason is not None)
-        assert (case["outcome"] == "UNRESOLVED") is (
-            case["expected_masked_text"] is None
-        )
+        assert (case["outcome"] == "UNRESOLVED") is (case["expected_masked_text"] is None)
     for prefix in positive_prefixes:
         assert sum(case["id"].startswith(f"{prefix}-") for case in cases) == 3
 
@@ -123,10 +152,19 @@ def test_frozen_v1_case(case: FixtureCase) -> None:
 
 def test_enum_values_are_closed_and_exact() -> None:
     assert [item.value for item in PiiCategory] == [
-        "NAME", "RESIDENT_REGISTRATION_NUMBER", "PASSPORT_OR_LICENSE",
-        "PHONE_NUMBER", "EMAIL", "DETAILED_ADDRESS", "FINANCIAL_ACCOUNT",
-        "PAYMENT_CARD", "AUTH_SECRET", "VEHICLE_PLATE", "CASE_REFERENCE",
-        "SENSITIVE_HEALTH_WELFARE", "PRECISE_LOCATION",
+        "NAME",
+        "RESIDENT_REGISTRATION_NUMBER",
+        "PASSPORT_OR_LICENSE",
+        "PHONE_NUMBER",
+        "EMAIL",
+        "DETAILED_ADDRESS",
+        "FINANCIAL_ACCOUNT",
+        "PAYMENT_CARD",
+        "AUTH_SECRET",
+        "VEHICLE_PLATE",
+        "CASE_REFERENCE",
+        "SENSITIVE_HEALTH_WELFARE",
+        "PRECISE_LOCATION",
     ]
 
 
@@ -143,8 +181,11 @@ def test_value_objects_are_frozen_slotted_and_value_free() -> None:
     with pytest.raises(ValueError, match="^REDACTION_RESULT_INVALID$"):
         RedactionResult("raw", (), False, True, None)
     assert [item.value for item in UnresolvedReason] == [
-        "INPUT_INVALID", "UNSAFE_UNICODE", "AMBIGUOUS_PERSON_NAME",
-        "AMBIGUOUS_DETAILED_ADDRESS", "RESIDUAL_HIGH_RISK_PATTERN",
+        "INPUT_INVALID",
+        "UNSAFE_UNICODE",
+        "AMBIGUOUS_PERSON_NAME",
+        "AMBIGUOUS_DETAILED_ADDRESS",
+        "RESIDUAL_HIGH_RISK_PATTERN",
     ]
 
 
@@ -179,15 +220,14 @@ def test_every_bidi_override_or_isolate_is_rejected(character: str) -> None:
 def test_exact_replacement_and_normalized_offsets() -> None:
     result = redact_question("연락처 010\u200b-0000-0000")
     assert result.masked_text == "연락처 [전화번호]"
-    assert result.findings == (
-        RedactionFinding(PiiCategory.PHONE_NUMBER, 4, 17, "[전화번호]"),
-    )
+    assert result.findings == (RedactionFinding(PiiCategory.PHONE_NUMBER, 4, 17, "[전화번호]"),)
 
 
 def test_multiple_findings_are_returned_in_text_order() -> None:
     result = redact_question("메일 qa@example.invalid 전화 010-0000-0000")
     assert [item.category for item in result.findings] == [
-        PiiCategory.EMAIL, PiiCategory.PHONE_NUMBER,
+        PiiCategory.EMAIL,
+        PiiCategory.PHONE_NUMBER,
     ]
     assert result.masked_text == "메일 [이메일] 전화 [전화번호]"
 
@@ -207,19 +247,37 @@ EXPECTED_CATEGORY_PRIORITY = (
     PiiCategory.NAME,
     PiiCategory.SENSITIVE_HEALTH_WELFARE,
 )
-TOKEN_BY_CATEGORY = dict(zip(EXPECTED_CATEGORY_PRIORITY, (
-    "[주민등록번호]", "[카드번호]", "[계좌번호]", "[인증정보]",
-    "[여권·면허번호]", "[전화번호]", "[이메일]", "[정밀위치]", "[차량번호]",
-    "[접수번호]", "[상세주소]", "[이름]", "[건강·복지정보]",
-), strict=True))
+TOKEN_BY_CATEGORY = dict(
+    zip(
+        EXPECTED_CATEGORY_PRIORITY,
+        (
+            "[주민등록번호]",
+            "[카드번호]",
+            "[계좌번호]",
+            "[인증정보]",
+            "[여권·면허번호]",
+            "[전화번호]",
+            "[이메일]",
+            "[정밀위치]",
+            "[차량번호]",
+            "[접수번호]",
+            "[상세주소]",
+            "[이름]",
+            "[건강·복지정보]",
+        ),
+        strict=True,
+    )
+)
 
 
 @pytest.mark.parametrize(
     ("higher", "lower"),
-    zip(
-        EXPECTED_CATEGORY_PRIORITY[:-1],
-        EXPECTED_CATEGORY_PRIORITY[1:],
-        strict=True,
+    tuple(
+        zip(
+            EXPECTED_CATEGORY_PRIORITY[:-1],
+            EXPECTED_CATEGORY_PRIORITY[1:],
+            strict=True,
+        )
     ),
 )
 def test_every_adjacent_total_priority_pair_selects_higher(
@@ -279,9 +337,7 @@ def test_identifier_separator_bypasses_are_not_fail_open(
 def test_q_pii_003_a_masks_phone_even_when_input_calls_it_official() -> None:
     result = redact_question("세종시청 대표전화 044-000-0000")
     assert result.masked_text == "세종시청 대표전화 [전화번호]"
-    assert [finding.category for finding in result.findings] == [
-        PiiCategory.PHONE_NUMBER
-    ]
+    assert [finding.category for finding in result.findings] == [PiiCategory.PHONE_NUMBER]
 
 
 def test_input_is_not_mutated_and_repeated_results_are_identical() -> None:
