@@ -1,7 +1,7 @@
 # ADR-0004: 질문 텍스트와 이벤트 메타데이터 분리
 
 - Status: Accepted
-- Date: 2026-07-13 (updated 2026-07-14 by Q-PRIV-001, Q-PRIV-002)
+- Date: 2026-07-13 (updated 2026-07-20 by Q-PRIV-001, Q-PRIV-002, D-041)
 
 ## Decision
 
@@ -10,6 +10,12 @@
 `OUT_OF_SCOPE`는 `failed_questions` 행을 만들지 않고 interaction event만 남긴다. 성공 질문과 FOLLOWUP 텍스트도 저장하지 않는다. KB 후보의 `representative_question`은 만료 대상 텍스트를 복사한 보관소가 아니며, 운영자가 일반화해 작성하고 PII 재검사를 통과해야 한다.
 
 한국어 이름·상세주소는 재현율 우선의 보수적 마스킹을 적용한다. 개인정보 가능성이 있는데 안전하게 판정할 수 없으면 외부 provider를 호출하지 않고 안전 폴백한다. 동일한 승인 평가셋에서 답변 성공률 80% 미달이 측정되고 과잉 마스킹이 원인으로 입증되면 정밀도 우선 대안을 비교할 수 있지만, 개인정보 계약 변경과 인간 재승인 없이 자동 완화하지 않는다. 개인정보 마스킹률 100%와 raw 원문 미저장은 변경되지 않는다.
+
+2026-07-20 addendum: 초기 runtime 마스커는 새 프로덕션 의존성 없는 결정론적 typed rule
+engine으로 구현한다. 원문 값 없는 고정 토큰과 finding만 반환하며, 안전한 마스킹 문자열을
+만들지 못하면 `masked_text`를 반환하지 않는다. 이 경우 provider 호출과 실패 질문 텍스트/row
+생성은 금지하고 질문 없는 interaction event만 허용한다. 마스킹 성공도 실제 시민 질문의
+DeepSeek 전송을 허용하지 않는다.
 
 ## Consequences
 
