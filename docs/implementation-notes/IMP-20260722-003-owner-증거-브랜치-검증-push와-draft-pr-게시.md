@@ -130,11 +130,10 @@
 | `git push -u origin codex/COLLAB-001-pr2-merge-evidence` | PASS; remote branch created and upstream set | SHA `5feff0b186747c6b5434a09bca0b511264ec78a5` | private origin |
 | Draft PR creation and metadata query | PASS; PR #5 OPEN/Draft, `main` base, expected head, MERGEABLE | 15 files | GitHub |
 | remote SHA comparison | PASS; local HEAD=remote branch=PR head `5feff0b...` at initial publication | 3-way exact | Git/GitHub metadata |
-| initial hosted checks | Frontend CI summary PASS, scope detection PASS, frontend/browser SKIPPED as docs-only; trusted policy IN_PROGRESS at capture | PR #5 initial SHA | GitHub Actions |
+| hosted checks on evidence head `b6804cd` | Collaboration policy summary PASS, trusted candidate policy PASS, Frontend CI summary PASS, scope detection PASS; frontend/browser and main-only jobs SKIPPED as expected | PR #5 | GitHub Actions |
 
 ### 미실행 검증과 이유
 
-- latest follow-up evidence commit push 뒤 hosted Collaboration policy의 최종 green은 아직 Pending이다.
 - 제품 build/API/DB/Docker/DeepSeek actual은 proposed diff가 docs-only이므로 이 게시 요청의 완료 gate가 아니다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
@@ -183,7 +182,7 @@
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- PR #5는 Draft이며 latest follow-up push 이후 hosted checks 최종 green과 인간 review/merge가 Pending이다.
+- PR #5는 Draft이며 hosted checks는 evidence head에서 green이다. 이 기록 자체의 final metadata-only commit도 push 뒤 같은 hosted checks를 다시 확인해야 하며 인간 review/merge는 Pending이다.
 - PR #4와 MFA/recovery human-only evidence가 남아 있다.
 
 ## 15. 자체 리뷰

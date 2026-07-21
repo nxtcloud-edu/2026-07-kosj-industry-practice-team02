@@ -9,7 +9,7 @@
 - Source remote owner/name/visibility: private `tskwak111/Sejong_AI`
 - Branch/upstream/verified SHA: owner worktree branch is clean and `origin/main`보다 7 commits ahead; captured `origin/main=d54fd6f`. Live remote state must be fetched/rechecked before push.
 - Collaborator/App scope and acceptance state (no secrets/contact details): Frontend collaborator write access와 selected-repository Codex App scope는 확인됨. MFA/recovery yes/no는 Pending이며 인증·복구 값은 수집하지 않음.
-- Open PRs and merge owner: owner Draft PR #5 `codex/COLLAB-001-pr2-merge-evidence → main`이 생성됐고 사용자 review/merge와 최종 hosted checks를 기다린다. PR #4 `feat/web-COLLAB-ONBOARDING-doc-check → main`은 OPEN/non-draft이나 duplicate note ID 때문에 계속 HOLD다. Corrected eligible Frontend-only PR may be self-merged by the Frontend collaborator; owner/Codex PR은 사용자가 검토·병합.
+- Open PRs and merge owner: owner Draft PR #5 `codex/COLLAB-001-pr2-merge-evidence → main`이 생성됐고 hosted Collaboration policy/Frontend CI가 green이며 사용자 review/merge를 기다린다. PR #4 `feat/web-COLLAB-ONBOARDING-doc-check → main`은 OPEN/non-draft이나 duplicate note ID 때문에 계속 HOLD다. Corrected eligible Frontend-only PR may be self-merged by the Frontend collaborator; owner/Codex PR은 사용자가 검토·병합.
 - Local-only pending gates: Windows Docker/Supabase actual, DeepSeek actual, future approved seed/runtime gates. Cloud PASS로 대체하지 않음.
 - Revoke/revert path: unexpected remote mutation은 추가 merge를 중단하고 small revert PR 사용. collaborator/App access는 GitHub 설정에서 revoke. force-push/history rewrite 금지.
 
@@ -28,7 +28,7 @@
 1. 완료: owner branch 전체 diff와 비밀·문서·history·scope·Git 검사를 실행했다.
 2. 완료: `codex/COLLAB-001-pr2-merge-evidence`를 원격 작업 브랜치로 normal push했다. `main` 직접 push는 0이다.
 3. 완료: Draft owner-review PR #5를 생성했다.
-4. Pending: 사용자가 파일·CI를 검토하고 `Create a merge commit`으로 병합한다.
+4. Pending: hosted checks green을 확인한 사용자가 파일을 검토하고 `Create a merge commit`으로 병합한다.
 5. Pending: post-merge main CI가 green인지 확인한다.
 
 이 단계가 끝날 때까지 PR #4를 병합하거나 새 Cloud write branch를 시작하지 않는다.
