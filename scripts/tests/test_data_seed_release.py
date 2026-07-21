@@ -39,6 +39,54 @@ CANONICAL_DRAFT_TOKEN = "data/staging/data-001/0.1.0-draft.1"
 CANONICAL_DRAFT_RELATIVE = Path(CANONICAL_DRAFT_TOKEN)
 RELEASE_VERSION = "0.1.0-initial.1"
 RELEASED_AT = "2026-07-19T09:20:31+09:00"
+INITIAL_RELEASE_FILES = {
+    "approval_manifest.json": (
+        13074,
+        "466d7af44cc36a9ee1ea1eed3d90f0e6fa1627fc57c03de5377c6f9f9fef5b6a",
+    ),
+    "compensation.sql": (
+        41710,
+        "6fde4e35e185453ca1bba42af4440fc0f935257efbc1701f84cc349ecedc2368",
+    ),
+    "kb_records.json": (
+        37208,
+        "831a0c01c9cdb08130febb122ebcad7d7b4fd9e7d846764d0d49d3e3c02402ec",
+    ),
+    "office_service_mappings.json": (
+        4057,
+        "361ba3f4024abdfc7f1d0b4c8107d3aff708e377ac309bc18beda7613bfccebd",
+    ),
+    "offices.json": (
+        2263,
+        "d83d48ff56cb945ddbb262e26c7d876dbc4b34af9b038048884057ab54e10b4e",
+    ),
+    "release_manifest.json": (
+        1605,
+        "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2",
+    ),
+    "seed.sql": (
+        75891,
+        "42d67828bb23c0eb0fa17ae2daa7d457fd71806b7cc796a54643dd975597783d",
+    ),
+}
+INITIAL_SCHEMA_FILES = {
+    "kb-records.schema.json": (
+        2564,
+        "97bd21438bbfc1a60c13de13106b9378961ddef20839c3227d88bcf75eae9527",
+    ),
+    "office-service-mappings.schema.json": (
+        1460,
+        "82853a80f7147cd9948580bec97a9bf5c765cf1956520680f205ebfd5d4d2bfa",
+    ),
+    "offices.schema.json": (
+        1885,
+        "7a251ba5fff8e5990788db010faf946d221b845089c2192ae5c0a122e632f280",
+    ),
+    "release-manifest.schema.json": (
+        2765,
+        "0b6cc2deb20cf25ea9b02059cc6400826304c0452ee957e3757a41679e91423e",
+    ),
+}
 EXPECTED_RUNTIME_ALLOWLIST = frozenset(
     {
         "scripts/data_seed_release.py",
@@ -458,6 +506,93 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         shutil.copytree(REPOSITORY_ROOT / "data", self.root / "data")
         self.draft = self.root / CANONICAL_DRAFT_RELATIVE
         self.projection = build_seed_projection(self.draft, RELEASE_VERSION)
+
+    def test_initial_release_and_v1_schema_bytes_are_frozen(self) -> None:
+        release_dir = self.root / "data/official/releases/0.1.0-initial.1"
+        for name, (length, digest) in INITIAL_RELEASE_FILES.items():
+            payload = (release_dir / name).read_bytes()
+            self.assertEqual(length, len(payload), name)
+            self.assertEqual(digest, hashlib.sha256(payload).hexdigest(), name)
+
+        schema_dir = self.root / "data/schemas/data-seed/v1"
+        for name, (length, digest) in INITIAL_SCHEMA_FILES.items():
+            payload = (schema_dir / name).read_bytes()
+            self.assertEqual(length, len(payload), name)
+            self.assertEqual(digest, hashlib.sha256(payload).hexdigest(), name)
+
+        profile = data_seed_release.release_profile(RELEASE_VERSION)
+        bundle = build_release_bundle(
+            self.root,
+            self.draft,
+            profile.version,
+            profile.released_at,
+        )
+        generated = data_seed_release.release_bundle_files(bundle)
+        self.assertEqual(set(INITIAL_RELEASE_FILES), set(generated))
+        for name, payload in generated.items():
+            self.assertEqual((release_dir / name).read_bytes(), payload, name)
+
+    def test_profiles_are_closed_and_successor_preserves_projection(self) -> None:
+        initial = data_seed_release.release_profile("0.1.0-initial.1")
+        successor = data_seed_release.release_profile("0.1.0-initial.2")
+
+        self.assertIsInstance(initial, data_seed_release.ReleaseProfile)
+        self.assertEqual("legacy-single-row", initial.membership_guard)
+        self.assertEqual("effective-option-union", successor.membership_guard)
+        self.assertEqual(
+            "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2",
+            successor.predecessor_manifest_sha256,
+        )
+        self.assertEqual("D-044", successor.decision_id)
+        self.assertEqual(
+            "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            successor.correction_reason,
+        )
+        self.assertEqual(
+            {"0.1.0-initial.1", "0.1.0-initial.2"},
+            set(data_seed_release.RELEASE_PROFILES),
+        )
+        self.assertEqual("0.1.0-initial.2", data_seed_release.RELEASE_VERSION)
+        self.assertEqual(
+            build_seed_projection(self.draft, initial.version),
+            build_seed_projection(self.draft, successor.version),
+        )
+        with self.assertRaisesRegex(ValueError, "RELEASE_VERSION_INVALID"):
+            data_seed_release.release_profile("0.1.0-initial.3")
+
+    def test_successor_bundle_uses_profile_metadata_and_correction(self) -> None:
+        profile = data_seed_release.SUCCESSOR_RELEASE_PROFILE
+        bundle = build_release_bundle(
+            self.root,
+            self.draft,
+            profile.version,
+            profile.released_at,
+        )
+
+        self.assertEqual(2, bundle.manifest["schema_version"])
+        self.assertEqual(profile.release_id, bundle.manifest["release_id"])
+        self.assertEqual(profile.version, bundle.manifest["release_version"])
+        self.assertEqual(profile.released_at_utc, bundle.manifest["released_at"])
+        self.assertEqual(profile.generator_id, bundle.manifest["generator"])
+        self.assertEqual(
+            {
+                "predecessor_release_version": "0.1.0-initial.1",
+                "predecessor_manifest_sha256": (
+                    "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2"
+                ),
+                "decision_id": "D-044",
+                "reason": "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            },
+            bundle.manifest["correction"],
+        )
+        for payload in (
+            bundle.kb_records_bytes,
+            bundle.offices_bytes,
+            bundle.office_service_mappings_bytes,
+        ):
+            document = json.loads(payload)
+            self.assertEqual(2, document["schema_version"])
+            self.assertEqual(profile.version, document["release_version"])
 
     def test_projection_is_exact_19_3_10_and_excludes_rejected_records(self) -> None:
         self.assertEqual(19, len(self.projection["kb_documents"]))

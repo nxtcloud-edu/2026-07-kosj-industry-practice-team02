@@ -1,4 +1,4 @@
-"""Pure, dependency-free generation for the DATA-SEED initial release.
+"""Pure, dependency-free generation for immutable DATA-SEED releases.
 
 This module validates approved DATA-001 input and deterministically projects
 release bytes.  It never publishes a release or writes a database/dispatcher.
@@ -62,15 +62,81 @@ EXCLUDED_RECORD_IDS = frozenset(
         "OFFICE-DODAM:BULKY_WASTE",
     }
 )
-RELEASE_VERSION = "0.1.0-initial.1"
-RELEASE_ID = "sejong-official-0.1.0-initial.1"
 SOURCE_DRAFT_VERSION = "0.1.0-draft.1"
-GENERATOR_ID = "data-seed-release-v1"
-GOVERNANCE_RELEASED_AT_UTC = "2026-07-19T00:20:31Z"
-GOVERNANCE_RELEASED_AT = "2026-07-19T09:20:31+09:00"
-CANONICAL_RELEASE_TOKEN = "data/official/releases/0.1.0-initial.1"
+
+
+@dataclass(frozen=True)
+class ReleaseProfile:
+    """Trusted generation and verification configuration for one release."""
+
+    version: str
+    release_id: str
+    released_at: str
+    released_at_utc: str
+    canonical_token: str
+    schema_token: str
+    generator_id: str
+    manifest_schema_version: int
+    membership_guard: str
+    predecessor_version: str | None = None
+    predecessor_manifest_sha256: str | None = None
+    decision_id: str | None = None
+    correction_reason: str | None = None
+
+
+INITIAL_RELEASE_PROFILE = ReleaseProfile(
+    version="0.1.0-initial.1",
+    release_id="sejong-official-0.1.0-initial.1",
+    released_at="2026-07-19T09:20:31+09:00",
+    released_at_utc="2026-07-19T00:20:31Z",
+    canonical_token="data/official/releases/0.1.0-initial.1",
+    schema_token="data/schemas/data-seed/v1",
+    generator_id="data-seed-release-v1",
+    manifest_schema_version=1,
+    membership_guard="legacy-single-row",
+)
+SUCCESSOR_RELEASE_PROFILE = ReleaseProfile(
+    version="0.1.0-initial.2",
+    release_id="sejong-official-0.1.0-initial.2",
+    released_at="2026-07-20T20:41:24+09:00",
+    released_at_utc="2026-07-20T11:41:24Z",
+    canonical_token="data/official/releases/0.1.0-initial.2",
+    schema_token="data/schemas/data-seed/v2",
+    generator_id="data-seed-release-v2",
+    manifest_schema_version=2,
+    membership_guard="effective-option-union",
+    predecessor_version="0.1.0-initial.1",
+    predecessor_manifest_sha256=(
+        "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2"
+    ),
+    decision_id="D-044",
+    correction_reason="POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+)
+RELEASE_PROFILES = {
+    profile.version: profile
+    for profile in (INITIAL_RELEASE_PROFILE, SUCCESSOR_RELEASE_PROFILE)
+}
+
+
+def release_profile(version: str) -> ReleaseProfile:
+    """Return one closed, code-owned release profile or fail closed."""
+
+    if not isinstance(version, str):
+        raise ValueError("RELEASE_VERSION_INVALID")
+    try:
+        return RELEASE_PROFILES[version]
+    except KeyError:
+        raise ValueError("RELEASE_VERSION_INVALID") from None
+
+
+RELEASE_VERSION = SUCCESSOR_RELEASE_PROFILE.version
+RELEASE_ID = SUCCESSOR_RELEASE_PROFILE.release_id
+GENERATOR_ID = SUCCESSOR_RELEASE_PROFILE.generator_id
+GOVERNANCE_RELEASED_AT_UTC = SUCCESSOR_RELEASE_PROFILE.released_at_utc
+GOVERNANCE_RELEASED_AT = SUCCESSOR_RELEASE_PROFILE.released_at
+CANONICAL_RELEASE_TOKEN = SUCCESSOR_RELEASE_PROFILE.canonical_token
 CANONICAL_RELEASE_RELATIVE_PATH = Path(CANONICAL_RELEASE_TOKEN)
-CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH = Path("data/schemas/data-seed/v1")
+CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH = Path(SUCCESSOR_RELEASE_PROFILE.schema_token)
 RELEASE_ARTIFACTS = (
     "approval_manifest.json",
     "compensation.sql",
@@ -196,6 +262,7 @@ class ReleaseIssue:
 class ReleaseBundle:
     """All deterministic bytes needed by the later publication task."""
 
+    profile: ReleaseProfile
     manifest: dict[str, object]
     approval_manifest_bytes: bytes
     kb_records_bytes: bytes
@@ -366,11 +433,11 @@ def build_release_bundle(
     derived_root = _repository_root_for_canonical_draft(draft_dir)
     if root != derived_root:
         raise ValueError("REPOSITORY_ROOT_MISMATCH")
-    _require_release_version(release_version)
+    profile = release_profile(release_version)
     snapshot = _capture_approved_snapshot(root, Path(draft_dir))
 
     normalized_released_at = _normalize_timestamp(released_at)
-    if normalized_released_at != GOVERNANCE_RELEASED_AT_UTC:
+    if normalized_released_at != profile.released_at_utc:
         raise ValueError("RELEASE_TIMESTAMP_INVALID")
     kb_records, offices, mappings, projection = _build_projected_records(
         snapshot, release_version
@@ -378,21 +445,21 @@ def build_release_bundle(
     approval_bytes = snapshot.approval_manifest_bytes
     kb_bytes = _release_json_bytes(
         {
-            "schema_version": 1,
+            "schema_version": profile.manifest_schema_version,
             "release_version": release_version,
             "records": kb_records,
         }
     )
     office_bytes = _release_json_bytes(
         {
-            "schema_version": 1,
+            "schema_version": profile.manifest_schema_version,
             "release_version": release_version,
             "records": offices,
         }
     )
     mapping_bytes = _release_json_bytes(
         {
-            "schema_version": 1,
+            "schema_version": profile.manifest_schema_version,
             "release_version": release_version,
             "records": mappings,
         }
@@ -411,8 +478,8 @@ def build_release_bundle(
         "compensation.sql": (0, compensation_bytes),
     }
     manifest: dict[str, object] = {
-        "schema_version": 1,
-        "release_id": RELEASE_ID,
+        "schema_version": profile.manifest_schema_version,
+        "release_id": profile.release_id,
         "release_version": release_version,
         "source_draft_version": SOURCE_DRAFT_VERSION,
         "released_at": normalized_released_at,
@@ -440,9 +507,17 @@ def build_release_bundle(
         },
         "seed_semantic_sha256": semantic_hash,
         "excluded_record_ids": sorted(EXCLUDED_RECORD_IDS),
-        "generator": GENERATOR_ID,
+        "generator": profile.generator_id,
     }
+    if profile.predecessor_version is not None:
+        manifest["correction"] = {
+            "predecessor_release_version": profile.predecessor_version,
+            "predecessor_manifest_sha256": profile.predecessor_manifest_sha256,
+            "decision_id": profile.decision_id,
+            "reason": profile.correction_reason,
+        }
     return ReleaseBundle(
+        profile=profile,
         manifest=manifest,
         approval_manifest_bytes=approval_bytes,
         kb_records_bytes=kb_bytes,
@@ -472,27 +547,38 @@ def verify_release_directory(
     repository_root: Path,
     release_dir: Path,
 ) -> dict[str, object]:
-    """Verify the exact canonical initial release or raise a stable failure."""
+    """Verify an exact canonical known release or raise a stable failure."""
 
     root = Path(repository_root).absolute()
-    canonical_release = (root / CANONICAL_RELEASE_RELATIVE_PATH).absolute()
     candidate = Path(release_dir).absolute()
-    if candidate != canonical_release or not _is_trusted_directory(root):
+    profile = _release_profile_for_canonical_path(root, candidate)
+    if profile is None or not _is_trusted_directory(root):
         raise ReleaseVerificationError(
             (ReleaseIssue("RELEASE_PATH_INVALID", "release", None, None),)
         )
-    return _verify_release_contents(root, candidate)
+    return _verify_release_contents(root, candidate, profile=profile)
 
 
 def _verify_release_contents(
     repository_root: Path,
     release_dir: Path,
     expected_bundle: ReleaseBundle | None = None,
+    *,
+    profile: ReleaseProfile | None = None,
 ) -> dict[str, object]:
     """Verify one trusted release directory from a single captured byte snapshot."""
 
     root = Path(repository_root).absolute()
     directory = Path(release_dir).absolute()
+    selected_profile = profile
+    if expected_bundle is not None:
+        if selected_profile is not None and selected_profile != expected_bundle.profile:
+            raise ReleaseVerificationError(
+                (ReleaseIssue("RELEASE_PROFILE_INVALID", "release", None, None),)
+            )
+        selected_profile = expected_bundle.profile
+    if selected_profile is None:
+        selected_profile = _release_profile_for_canonical_path(root, directory)
     if not _is_trusted_directory(root) or not _is_trusted_directory(directory):
         raise ReleaseVerificationError(
             (ReleaseIssue("RELEASE_PATH_INVALID", "release", None, None),)
@@ -532,7 +618,11 @@ def _verify_release_contents(
         except ValueError:
             _issue(issues, "RELEASE_JSON_INVALID", artifact, None, None)
 
-    schema_dir = root / CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH
+    if selected_profile is None:
+        _issue(issues, "RELEASE_PATH_INVALID", "release", None, None)
+        schema_dir = root / CANONICAL_RELEASE_SCHEMA_RELATIVE_PATH
+    else:
+        schema_dir = root / Path(selected_profile.schema_token)
     if not _is_trusted_directory(schema_dir):
         _issue(issues, "RELEASE_SCHEMA_INVALID", "release-schema", None, None)
     else:
@@ -564,11 +654,13 @@ def _verify_release_contents(
     bundle = expected_bundle
     if bundle is None:
         try:
+            if selected_profile is None:
+                raise ValueError("RELEASE_VERSION_INVALID")
             bundle = build_release_bundle(
                 root,
                 root / CANONICAL_DRAFT_RELATIVE_PATH,
-                RELEASE_VERSION,
-                GOVERNANCE_RELEASED_AT,
+                selected_profile.version,
+                selected_profile.released_at,
             )
         except (OSError, ValueError):
             _issue(
@@ -600,8 +692,8 @@ def _verify_release_contents(
             )
         )
     return {
-        "release_version": RELEASE_VERSION,
-        "release_id": RELEASE_ID,
+        "release_version": bundle.profile.version,
+        "release_id": bundle.profile.release_id,
         "counts": {
             "kb": projection.get("kb"),
             "office": projection.get("office"),
@@ -895,8 +987,19 @@ def _repository_root_for_canonical_draft(draft_dir: Path) -> Path:
 
 
 def _require_release_version(release_version: str) -> None:
-    if release_version != RELEASE_VERSION:
-        raise ValueError("RELEASE_VERSION_INVALID")
+    release_profile(release_version)
+
+
+def _release_profile_for_canonical_path(
+    repository_root: Path,
+    release_dir: Path,
+) -> ReleaseProfile | None:
+    root = Path(repository_root).absolute()
+    candidate = Path(release_dir).absolute()
+    for profile in RELEASE_PROFILES.values():
+        if candidate == (root / Path(profile.canonical_token)).absolute():
+            return profile
+    return None
 
 
 def _normalize_timestamp(value: object) -> str:
