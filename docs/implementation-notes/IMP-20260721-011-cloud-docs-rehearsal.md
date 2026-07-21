@@ -5,15 +5,18 @@
 - Type: docs
 - Status: Done — Draft PR only, not merged
 - Author/Agent: Codex Cloud rehearsal agent
-- Branch: codex/COLLAB-CLOUD-REHEARSAL-002-doc-check
-- Base commit: b61f676
+- GitHub PR branch: `codex/add-cloud-rehearsal-implementation-notes`
+- Cloud-reported internal task branch: `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`
+- Base commit: `b61f676`
+- Initial GitHub publication commit: `c84aed42df132f368b361cdd0780204e635d36f4`
+- Draft PR: `https://github.com/tskwak111/Sejong_AI/pull/3`
 - Related plan/ADR/RFP: `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md`, ADR-0019, D-047~D-057
 
 ## 1. 사용자 요청과 완료 기준
 
 ### 요청
 
-Corrected docs-only Cloud rehearsal for `COLLAB-CLOUD-REHEARSAL-002`: read `AGENTS.md` and the Codex Cloud collaboration transition plan, create exactly one new cloud implementation note via `scripts/new_implementation_note.py`, append exactly one row to `docs/implementation-notes/INDEX.md`, run the requested document/security/diff/status checks, commit on branch `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`, and create a Draft PR only.
+Corrected docs-only Cloud rehearsal for `COLLAB-CLOUD-REHEARSAL-002`: read `AGENTS.md` and the Codex Cloud collaboration transition plan, create exactly one new cloud implementation note via `scripts/new_implementation_note.py`, append exactly one row to `docs/implementation-notes/INDEX.md`, run the requested document/security/diff/status checks, commit in the Cloud task, publish the resulting change to a separate GitHub `codex/*` branch, and create a Draft PR only.
 
 ### Acceptance Criteria
 
@@ -31,7 +34,7 @@ Corrected docs-only Cloud rehearsal for `COLLAB-CLOUD-REHEARSAL-002`: read `AGEN
 |---|---|
 | Who — 누가 | Codex Cloud rehearsal agent created the note; human owner reviews the Draft PR. |
 | When — 언제 | 2026-07-21 KST during the corrected Cloud docs-only rehearsal. |
-| Where — 어디서 | Documentation only: `docs/implementation-notes/` and the current branch `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`. |
+| Where — 어디서 | Documentation only: `docs/implementation-notes/`; Cloud reported the internal task branch `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`, while GitHub published PR #3 from `codex/add-cloud-rehearsal-implementation-notes`. |
 | What — 무엇을 | Generated one implementation note with the repository script and appended one INDEX row. No product, contract, DB, CI, security policy, package, lockfile, data, deployment, Docker, Supabase, or DeepSeek change was made. |
 | Why — 왜 | Rehearse the secret-free Codex Cloud Draft-PR workflow while preserving the local-only gates and avoiding product behavior changes. |
 | How — 어떻게 | Read the repository instructions and Cloud collaboration plan, generated the note with `scripts/new_implementation_note.py`, filled the note, ran requested checks, reviewed `git diff --stat` and `git diff --name-only`, then committed and prepared a Draft PR. |
@@ -45,7 +48,7 @@ Corrected docs-only Cloud rehearsal for `COLLAB-CLOUD-REHEARSAL-002`: read `AGEN
   - `docs/implementation-notes/INDEX.md`
 - 기존 동작: documentation-only rehearsal trail existed through `IMP-20260721-010`; this task adds the corrected Cloud rehearsal note.
 - 발견한 충돌/부채: none requiring product or policy changes.
-- Git 상태: worktree was clean before generating this note; branch was created/switched to `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`.
+- Git 상태: the Cloud task reported a clean worktree and internal commit `9c53392`; GitHub publication created PR #3 from `codex/add-cloud-rehearsal-implementation-notes` with initial commit `c84aed42df132f368b361cdd0780204e635d36f4`. The differing identifiers are publication-layer identities, not evidence that the product files changed.
 
 ## 4. 미지의 영역·가정·인터뷰
 
@@ -53,6 +56,7 @@ Corrected docs-only Cloud rehearsal for `COLLAB-CLOUD-REHEARSAL-002`: read `AGEN
 |---|---|---|---|---|
 | A-CLOUD-002-001 | Scope | Task explicitly allowed only one new cloud implementation note and one INDEX append. | Followed exactly; no additional files touched. | Prevents accidental product/infra/security changes. |
 | A-CLOUD-002-002 | Local-only gates | Windows/Docker/Supabase/DeepSeek/local-only validation is outside Cloud rehearsal scope. | Marked Pending, not run. | Human/local operator must run those gates later if required. |
+| A-CLOUD-002-003 | Git identity | Cloud task output and GitHub publication use different branch/commit identifiers. | Record both explicitly; the GitHub PR branch and commit are authoritative for review/merge. | Prevents an inaccurate audit trail. |
 
 ## 5. 설계 결정과 대안
 
@@ -62,7 +66,7 @@ Use the existing implementation-note generator and keep the rehearsal evidence i
 
 ### 이유
 
-This matches the allowed-file boundary and proves Cloud can read repository instructions, run safe document checks, review the diff, commit, and open a Draft PR without using secrets or product infrastructure.
+This matches the allowed-file boundary and proves Cloud can read repository instructions, run safe document checks, review the diff, commit, and publish a Draft PR without using secrets or product infrastructure. GitHub PR #3 is the authoritative publication record.
 
 ### 고려했지만 선택하지 않은 대안
 
@@ -158,13 +162,14 @@ Rollback is documentation-only: revert this note file and remove the single appe
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
 
 - The note slug was generated by the repository helper as `cloud-docs-rehearsal`.
-- The INDEX row was generated/appended by the helper and left as a single appended row.
+- The INDEX row was generated/appended by the helper and then completed with task, version, Draft PR, and pending-gate evidence.
+- Cloud reported internal commit `9c53392`; GitHub PR #3 initially published equivalent docs-only content as `c84aed42df132f368b361cdd0780204e635d36f4` on `codex/add-cloud-rehearsal-implementation-notes`.
 
 ## 13. 인수인계·재현·롤백
 
 ### 재현
 
-1. Start from the branch `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`.
+1. For Cloud task reproduction, use the requested internal task branch `codex/COLLAB-CLOUD-REHEARSAL-002-doc-check`; for GitHub review, inspect PR #3 on `codex/add-cloud-rehearsal-implementation-notes`.
 2. Read `AGENTS.md` and `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md`.
 3. Run `python scripts/new_implementation_note.py --title "Cloud docs rehearsal" --task-id COLLAB-CLOUD-REHEARSAL-002 --type docs`.
 4. Fill the generated note with docs-only Cloud rehearsal evidence.
@@ -182,12 +187,12 @@ Review the Draft PR diff first, then decide whether to merge this docs-only evid
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - Pending: Windows/Docker/Supabase/DeepSeek/local-only gates.
-- Next step: human review of the Draft PR; no merge by Codex.
+- Next step: human review of Draft PR #3 after hosted checks pass; no merge by Codex.
 
 ## 15. 자체 리뷰
 
 - [x] 요청 충족
-- [x] 테스트/검증
+- [x] 범위 내 테스트/검증 — docs/diff checks PASS; PowerShell/local-only gates explicitly Pending
 - [x] source-of-truth/계약/버전 동기화 — no manifest/contract change required for docs-only rehearsal
 - [x] 개인정보 원문 노출 없음
 - [x] 구현 노트 INDEX 갱신
