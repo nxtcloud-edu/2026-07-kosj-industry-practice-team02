@@ -87,10 +87,12 @@
   실제 질문 입력·공식 KB 답변은 API-CHAT/WEB-CHAT/READY gate 이후에만 활성화한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
-- 저장소: private `tskwak111/Sejong_AI`에 current `main` history를 ordinary first push로 연결했고
-  local/remote `main`은 `5e09deccc7205503df07d938b6d4a88f4d5a327e`로 일치한다. repository는
-  private이며 hosted policy `29776352710`과 Frontend CI `29776352718`이 통과했다. `koregy`의
-  accepted write access·repository variable·read-only default Actions permissions도 검증됐다.
+- 저장소: private `tskwak111/Sejong_AI`에 `5e09deccc7205503df07d938b6d4a88f4d5a327e`를 ordinary
+  first push로 연결했고, PR #1 병합 뒤 현재 remote `origin/main`은
+  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. primary local `main`은 아직 pre-merge SHA이며
+  별도 worktree의 안전한 fast-forward 전까지 remote와 같다고 기록하지 않는다. repository는 private이고
+  post-merge hosted policy `29782433649`와 Frontend CI `29782433682`가 통과했다. `koregy`의 accepted
+  write access·repository variable·read-only default Actions permissions도 검증됐다.
   Task 5는 partial이며 teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이
   남는다. Q-GIT-004=A/D-053에 따라 author/committer history·SHA는 보존한다.
 - 협업 비용·강제 경계: Q-GIT-002=A로 GitHub Free·초기 0원을 유지한다. private repository의
@@ -105,8 +107,9 @@
   구현 노트 1개와 그 INDEX append뿐이다. 기존 note/INDEX 행·env/package/lockfile/config·공개
   계약·backend·DB·data·security·`.github`가 포함되면 사용자 검토로 승격한다.
 - Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. 사용자는
-  2026-07-21 GitHub UI에서 `Only select repositories / Sejong_AI`를 확인했다. Task 6은 App scope만
-  완료됐고 Cloud environment·docs-only Draft PR·사람 병합 evidence 전에는 partial이다. DeepSeek
+  2026-07-21 GitHub UI에서 `Only select repositories / Sejong_AI`를 확인했고 secret 없는
+  `sejong-ai-cloud-docs` environment를 저장했다. Task 6은 App scope와 environment creation까지
+  완료됐고 docs-only task·Draft PR·사람 병합 evidence 전에는 partial이다. DeepSeek
   key·DB DSN·context secret을 Cloud에 넣지 않으며 Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
 - 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
   remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.

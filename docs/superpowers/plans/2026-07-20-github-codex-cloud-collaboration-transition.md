@@ -21,18 +21,20 @@ Playwright toolchain, Codex Cloud.
 
 - Plan ID: `COLLAB-001`
 - Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
-  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope confirmed, Cloud
-  environment/Draft PR pending); Task 7 pending**
+  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope and Cloud environment
+  confirmed, docs-only task/Draft PR pending); Task 7 pending**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
 - Decision/ADR: D-047~D-057 / ADR-0019
 - Local authority at plan creation: branch `main`, HEAD
   `177dac810468f3cd5aaa4929a971cbde21b4deba`, remote 0.
 - External evidence state on 2026-07-21: approved owner `tskwak111`, private repository `Sejong_AI`,
-  and Frontend collaborator `koregy` are verified operational identifiers. `origin/main` and local
-  `main` resolve to `5e09deccc7205503df07d938b6d4a88f4d5a327e`; the initial ordinary push used only
-  `git push -u origin main`. Hosted policy run `29776352710` and frozen Frontend CI run `29776352718`
-  passed on that SHA. Private URLs and authentication details are intentionally not recorded.
+  and Frontend collaborator `koregy` are verified operational identifiers. The initial ordinary push
+  used only `git push -u origin main` at `5e09deccc7205503df07d938b6d4a88f4d5a327e`; after PR #1,
+  remote `origin/main` is `ce8a6085fb57670ca74e009ed45e3d02d784c24b` and its hosted policy
+  `29782433649` and Frontend CI `29782433682` passed. Primary local `main` remains on the pre-merge
+  SHA pending safe fast-forward in its own worktree and is not claimed equal. Private URLs and
+  authentication details are intentionally not recorded.
 - Q-GIT-004=A/D-053 preserves the current history and SHAs. Execution starts only after the user says
   `계획 승인, 구현 시작` or equivalent.
 - This plan does not authorize product code, public deployment, remote DB, schema migration, official
@@ -393,18 +395,20 @@ enforcement or rehearsal evidence. Do not advertise CI as an enforced security b
 2026-07-21 correction: connector visibility of public repositories cannot distinguish **All
 repositories** from **Only select repositories**, because a GitHub App always has at least read-only
 access to public GitHub repositories. The user confirmed **Only select repositories / `Sejong_AI`**
-on 2026-07-21. This completes the App-scope gate only; it is not Cloud environment, docs/test-only task,
-Draft-PR or manual-merge rehearsal evidence, which remain pending.
+on 2026-07-21. At that checkpoint this completed only the App-scope gate. The user subsequently saved
+the secret-free `sejong-ai-cloud-docs` environment; the docs/test-only task, Draft PR and manual-merge
+rehearsal evidence remain pending.
 
 - [x] User opened GitHub App settings and confirmed **Only select repositories / `Sejong_AI`**.
 
-**Remaining human browser steps:**
+**Completed environment setup and remaining human browser steps:**
 
-1. Open [Codex](https://chatgpt.com/codex) and connect GitHub.
-2. Create a Cloud environment for the repository.
-3. Pin Node `24.12.0`, Python `3.12.13` and pnpm `11.13.0` through repository files/setup.
-4. Leave agent internet access off unless a task proves a narrow allowlist is necessary.
-5. Add no DeepSeek key, DB DSN, context-token secret or citizen fixture.
+1. [x] Open [Codex](https://chatgpt.com/codex), connect GitHub and save `sejong-ai-cloud-docs` for the
+   repository with agent internet Off and no environment variable or secret.
+2. [ ] Run the first task and capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
+   `11.13.0` and uv `0.11.28` are active after the setup script.
+3. [ ] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
+4. [ ] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
 
 The setup script may install existing locked dependencies because setup has internet access. It must
 not print environment values and must not start Docker, a database or an external LLM request. Prefer:
@@ -474,14 +478,15 @@ Docker/local-only verification as pending for the user.
 - [ ] Mark COLLAB-001 Done only after remote, invite, CI and Cloud Draft PR rehearsal pass.
 - [x] Historical local-only closeout recorded remote 0, push 0 and hosted Actions 0 before external
   bootstrap; this was superseded by the 2026-07-21 Task 4/partial Task 5 evidence below. Cloud and
-  onboarding rehearsals remain pending; do not invent their evidence.
+  onboarding execution was pending at that checkpoint; do not invent later success evidence.
 - [x] Synchronize local scanner/workflow interfaces, security limits, contributor/handoff guidance,
   file index, changelog and collaboration-only versions.
 - [x] Keep DATA-SEED-002, PII-CONSUMER, `00700`, public deployment and local-only gates at their actual
   prior states.
 - [x] Run the scoped repository-doc/package/current-tree-secret/diff gates and review the final docs-only
   diff. Hosted policy and frozen Frontend CI passed; Task 5 MFA/recovery and the Task 7-owned first
-  PR-only/no-direct-main-push rehearsal plus Tasks 6~7 Cloud/onboarding rehearsals remain pending.
+  PR-only/no-direct-main-push rehearsal, Cloud docs-only task/Draft PR/manual merge and the remaining
+  Task 7 onboarding rehearsals remain pending.
 
 ## Verification matrix
 
@@ -575,12 +580,27 @@ successful external-state evidence.
   the first Task 7 PR-only/no-direct-main-push rehearsal are human-only Pending.
 - 2026-07-21: App-scope evidence interpretation corrected by D-056. Public repository visibility is
   normal even for selected-repository installation and does not prove over-broad scope. Human UI
-  confirmation of `Only select repositories / Sejong_AI` was later completed by D-057. Cloud
-  environment, docs/test-only task, `codex/...` Draft PR/manual merge and all Task 7 teammate
-  onboarding/self-merge/forbidden-scope rehearsals remain Pending. COLLAB-001 stays In Progress. Exact owner and teammate steps are in
+  confirmation of `Only select repositories / Sejong_AI` was later completed by D-057. At that
+  checkpoint Cloud environment, docs/test-only task, `codex/...` Draft PR/manual merge and all Task 7
+  teammate onboarding/self-merge/forbidden-scope rehearsals remained Pending. The next bullets record
+  subsequent evidence; COLLAB-001 stays In Progress. Exact owner and teammate steps are in
   `docs/handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md`.
 - 2026-07-21: user completed the App-scope check and merged PR #1. GitHub evidence confirms merge
   commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`; post-merge Collaboration policy `29782433649`
   and Frontend CI `29782433682` both passed on that SHA. Task 6 is partial. Teammate MFA/recovery is a
   recommended account and repository-supply-chain control before their first push, but does not block
   Cloud or backend work; no authentication value is collected.
+- 2026-07-21: user saved `sejong-ai-cloud-docs` on the universal image with cache On, agent internet
+  Off and no environment variables or secrets. The docs-only task composer uses remote `main` as its
+  base; actual setup exit, `codex/...` branch, Draft PR and human merge evidence remain Pending. The
+  Frontend kickoff handoff now provides the exact clone/runtime/baseline/onboarding PR message and
+  intentionally stops product coding until Task 7 evidence is reviewed.
+- 2026-07-21: first Cloud docs-only agent run reported internal commit `b080a89`, a two-file note/INDEX
+  diff, repository-doc and diff-check PASS, and truthful failure of the nonexistent requested
+  `scripts/check_current_tree_secrets.py`. Independent GitHub checks found no remote
+  `codex/COLLAB-CLOUD-REHEARSAL-001-doc-check` ref and no new PR; `make_pr` metadata is therefore not
+  Draft-PR evidence. The generated `IMP-20260721-003` also collides with the unpublished local
+  post-merge integration branch's existing 003. Do not publish or merge this run. Integrate the local
+  documentation branch first, then rerun from refreshed `main` with the real `pwsh -NoProfile -File
+  scripts/check_secret_patterns.ps1 -RepositoryRoot .` gate so the generator allocates the next remote
+  sequence and GitHub receives an actual Draft PR.

@@ -140,10 +140,11 @@ PR #1 병합 확인 뒤 진행한다. 공식 개요는
 3. `https://chatgpt.com/codex/settings/environments`로 이동해 **Create Environment**를 누른다.
 4. repository로 `tskwak111/Sejong_AI`를 선택한다.
 5. 환경 이름은 `sejong-ai-cloud-docs`로 한다.
-6. **Set package versions / 사전 설치된 패키지** UI는 major/minor만 표시할 수 있다. 이 화면에서는
-   Python `3.12`, Node.js `24`를 선택한다. Node.js `22`는 저장소의 `>=24 <25` 계약과 맞지 않으므로
-   선택하지 않는다. Node `24`가 목록에 없으면 저장하지 말고 선택지 화면을 owner에게 전달한다. exact
-   patch Node `24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`은 아래 setup에서 확인한다.
+6. **Set package versions / 사전 설치된 패키지**에서 Python `3.12`, Node.js `22`를 선택한다. 현재 UI가
+   제공하는 Node 선택지는 `22 / 20 / 18`뿐이다. 여기의 Node `22`는 컨테이너를 시작하기 위한 임시
+   bootstrap 값이며 저장소 실행 버전이 아니다. 최신 공식 `universal` image에는 Node 24도 `nvm`으로
+   설치되어 있으므로, 아래 setup script가 Node `24.12.0`을 설치·기본값으로 전환한 뒤에만 dependency를
+   설치한다. Ruby/Rust/Go/Bun/PHP/Java/Swift는 이 저장소에서 사용하지 않으므로 기본값을 유지한다.
 
 ### 4.2 Setup script
 
@@ -151,6 +152,16 @@ PR #1 병합 확인 뒤 진행한다. 공식 개요는
 
 ```bash
 set -euo pipefail
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+. "$NVM_DIR/nvm.sh"
+nvm install 24.12.0
+nvm alias default 24.12.0
+nvm use 24.12.0
+
+pyenv install -s 3.12.13
+pyenv global 3.12.13
+
 corepack enable
 corepack prepare pnpm@11.13.0 --activate
 test "$(node --version)" = "v24.12.0"
@@ -163,9 +174,16 @@ test "$("$UV_BIN" --version)" = "uv 0.11.28"
 "$UV_BIN" sync --project apps/api --frozen
 ```
 
-Setup은 별도 shell에서 실행되므로 `export`한 임시 값에 의존하지 않는다. dependency 설치를 위한 setup 인터넷은
-사용할 수 있지만, agent 작업 중 인터넷 접근은 **Off**로 둔다. 나중에 인터넷이 꼭 필요한 별도 작업이 생기면
-목적지 allowlist와 이유를 먼저 검토한다.
+`nvm alias default`와 `pyenv global`은 다음 shell에서도 exact runtime을 선택하도록 각 도구의 persistent
+설정을 바꾼다. 첫 `export NVM_DIR`은 setup shell에서 `nvm`을 불러오기 위한 값일 뿐 agent 단계의 임시
+환경변수로 의존하지 않는다. setup은 별도 shell에서 실행되며 dependency/runtime 설치를 위한 인터넷은 사용할
+수 있지만, agent 작업 중 인터넷 접근은 **Off**로 둔다. 나중에 인터넷이 꼭 필요한 별도 작업이 생기면 목적지
+allowlist와 이유를 먼저 검토한다.
+
+근거는 OpenAI의 [Cloud environment 설명](https://learn.chatgpt.com/docs/environments/cloud-environment),
+[`universal` Dockerfile](https://github.com/openai/codex-universal/blob/main/Dockerfile),
+[`setup_universal.sh`](https://github.com/openai/codex-universal/blob/main/setup_universal.sh)다. setup이 실패하면
+Node engine을 22로 낮추지 말고 secret이 없는 오류 출력만 보관해 owner에게 전달한다.
 
 ### 4.3 환경변수·비밀
 
@@ -200,7 +218,7 @@ scripts/new_implementation_note.py로 노트를 생성하고, Cloud 환경에서
 branch는 codex/COLLAB-CLOUD-REHEARSAL-001-doc-check를 사용하고 Draft PR만 만들어라. 병합하지 마라.
 실행할 검증:
 python -B scripts/check_repository_docs.py
-python -B scripts/check_current_tree_secrets.py --root .
+pwsh -NoProfile -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
 git diff --check
 git status --short
 ```
@@ -294,7 +312,7 @@ $NotePath
 git status --short
 git diff --check
 python -B scripts/check_repository_docs.py
-python -B scripts/check_current_tree_secrets.py --root .
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
 git add -- $NotePath docs/implementation-notes/INDEX.md
 git commit -m "docs(web): record frontend collaborator onboarding"
 git push -u origin feat/web-COLLAB-ONBOARDING-doc-check

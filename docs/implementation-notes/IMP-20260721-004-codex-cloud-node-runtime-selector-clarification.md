@@ -3,11 +3,16 @@
 - Date/Time (KST): 2026-07-21T07:15:35+09:00
 - Task ID: COLLAB-CLOUD-RUNTIME-UI
 - Type: documentation-environment-guidance
-- Status: Done — user runtime selection pending
+- Status: Superseded by IMP-20260721-005 after expanded dropdown evidence
 - Author/Agent: Codex primary agent
 - Branch: `codex/COLLAB-001-post-merge-evidence`
 - Base commit: `afce31d`
 - Related plan/ADR/RFP: COLLAB-001 plan, ADR-0019, D-010, D-057
+
+> **Successor correction:** 이 노트는 첫 screenshot만 본 당시의 기록이다. 후속 screenshot에서 Node 선택지가
+> `22 / 20 / 18`뿐임을 확인했으므로 아래의 “Node 24를 UI에서 선택” 지시는 실행하지 않는다. 현재 절차는
+> [IMP-20260721-005](IMP-20260721-005-codex-cloud-node-24-setup-fallback-after-selector-limit.md)와 owner
+> Cloud checklist의 Node 22 bootstrap + nvm Node 24.12.0 setup을 따른다.
 
 ## 1. 사용자 요청과 완료 기준
 

@@ -1,17 +1,172 @@
 # Handoff — Frontend Collaborator
 
 - Date: 2026-07-21 KST (prepared 2026-07-20; local automation status refreshed)
-- Status: private GitHub bootstrap, hosted CI and `koregy` write access verified; human clone/baseline,
-  MFA/recovery, first PR-only/self-merge, forbidden-scope and Cloud rehearsals pending
-- Canonical collaboration base: local and remote `main` /
-  `5e09deccc7205503df07d938b6d4a88f4d5a327e`
-- External evidence: private `tskwak111/Sejong_AI`, ordinary initial push only, policy run `29776352710`
-  PASS and Frontend CI run `29776352718` PASS; `koregy` accepted write access and the configured
-  repository variable match. MFA/recovery, Codex Cloud task/PR, human clone/baseline, first
-  PR-only/self-merge and forbidden-scope rehearsal are pending.
+- Status: private GitHub bootstrap, post-merge CI, selected-repository Codex App, saved secret-free Cloud
+  environment and `koregy` write access verified; human clone/baseline, MFA/recovery, first
+  PR-only/self-merge, forbidden-scope and Cloud Draft-PR rehearsals pending
+- Canonical teammate base: remote `origin/main` /
+  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`. Primary local `main` remains at the pre-merge
+  `5e09deccc7205503df07d938b6d4a88f4d5a327e` until its own worktree is safely fast-forwarded; this does
+  not change the teammate clone baseline.
+- External evidence: private `tskwak111/Sejong_AI`, PR #1 merge commit `ce8a608...`, post-merge policy
+  `29782433649` PASS and Frontend CI `29782433682` PASS; `koregy` accepted write access and the
+  configured repository variable match. `sejong-ai-cloud-docs` is saved with agent internet Off and
+  no env/secret. MFA/recovery, Cloud task/Draft PR, human clone/baseline, first PR-only/self-merge and
+  forbidden-scope rehearsal are pending.
 - Product: 세종 민원 AI 길잡이
 - Scope owner: Frontend 팀원
 - Architecture/contract/data/security owner: 사용자
+
+## 0. 사용자가 지금 팀원에게 그대로 보내는 첫 지시
+
+아래 메시지를 개인 채널로 보낸다. repository 주소 외에 token, password, MFA code, recovery code,
+`.env` 내용은 보내지 않는다.
+
+~~~text
+세종 민원 AI 길잡이의 Frontend 담당으로 참여해줘.
+
+오늘 첫 작업은 제품 화면 코딩이 아니라 COLLAB-ONBOARDING 리허설이야. 아래 절차가 모두 끝나고 내가
+확인하기 전에는 apps/web 제품 코드를 수정하지 말아줘.
+
+[보안 준비]
+1. GitHub 계정 2단계 인증(MFA)을 켜고 recovery code를 본인만 접근 가능한 곳에 보관해줘.
+2. 나에게는 "MFA/recovery 준비 완료"라고만 알려줘. 인증번호·recovery code·token·password는 보내지 마.
+3. commit author는 네 GitHub 계정의 verified email 또는 GitHub noreply email을 사용해. 내 email을 쓰지 마.
+
+[PowerShell — GitHub 로그인과 clone]
+git --version
+gh --version
+
+GitHub CLI가 없으면:
+winget install --id GitHub.cli -e
+
+새 PowerShell을 열고:
+gh auth login
+gh auth status
+gh repo clone tskwak111/Sejong_AI
+Set-Location Sejong_AI
+git switch main
+git pull --ff-only origin main
+git rev-parse HEAD
+git status --short
+
+gh auth login 선택은 GitHub.com → HTTPS → Login with a web browser야. PAT·password를 채팅이나 파일에
+적지 마. 현재 기준 remote main SHA는 ce8a6085fb57670ca74e009ed45e3d02d784c24b야. 다르면 임의로
+reset/force-push하지 말고 SHA만 알려줘.
+
+[반드시 읽을 문서]
+AGENTS.md
+apps/web/AGENTS.md
+docs/00_SOURCE_OF_TRUTH.md
+docs/source-of-truth/TEAM_DECISIONS.md
+docs/24_UI_STATE_MATRIX.md
+docs/05_API_AND_CONTRACTS.md
+TASKS.md
+docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md
+
+[고정 도구]
+Node v24.12.0, pnpm 11.13.0, uv 0.11.28, Python 3.12.13만 사용해.
+node --version
+corepack.cmd enable
+corepack.cmd prepare pnpm@11.13.0 --activate
+corepack.cmd pnpm --version
+
+Node가 v24.12.0이 아니면 작업을 멈추고 버전 출력만 알려줘. 공식 설치 페이지는
+https://nodejs.org/en/download/archive/v24.12.0 이야.
+
+uv가 없으면 공식 exact installer를 사용하고 새 PowerShell을 열어:
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.11.28/install.ps1 | iex"
+uv --version
+uv python install 3.12.13
+uv run --python 3.12.13 --no-project python --version
+
+[현재 frontend baseline — 하나라도 실패하면 제품 코드를 고치지 말고 중단]
+corepack.cmd pnpm install --frozen-lockfile --ignore-scripts
+corepack.cmd pnpm --filter @sejong-ai/shared-contracts generate:check
+corepack.cmd pnpm --filter @sejong-ai/shared-contracts test
+corepack.cmd pnpm --filter @sejong-ai/web lint
+corepack.cmd pnpm --filter @sejong-ai/web typecheck
+corepack.cmd pnpm --filter @sejong-ai/web test
+corepack.cmd pnpm --filter @sejong-ai/web build
+node scripts/check_web_bundle_secrets.mjs apps/web/.next
+corepack.cmd pnpm --dir tools/web-e2e install --frozen-lockfile --ignore-scripts
+corepack.cmd pnpm --dir tools/web-e2e exec playwright install chromium
+corepack.cmd pnpm --dir tools/web-e2e test
+node scripts/check_web_prod_dependency_boundary.mjs
+uv run --python 3.12.13 --no-project python -B scripts/check_repository_docs.py
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
+git diff --check
+git status --short
+
+실패하면 실패한 명령, 마지막 오류 20줄, node/pnpm/uv/Python 버전만 알려줘. 전체 로그나 .env 내용은
+보내지 마. 성공했다면 아래 onboarding PR만 만들어.
+
+[첫 문서-only PR]
+git switch main
+git pull --ff-only origin main
+git switch -c feat/web-COLLAB-ONBOARDING-doc-check
+$NotePath = uv run --python 3.12.13 --no-project python scripts/new_implementation_note.py --title "web frontend collaborator onboarding rehearsal" --task-id COLLAB-ONBOARDING --type web-onboarding
+$NotePath
+
+생성된 IMP-*-web-*.md를 실제 실행 결과로 채워. INDEX.md는 생성기가 맨 끝에 추가한 새 행 하나만
+유지해. 제품 코드나 기존 문서 행은 고치지 마.
+
+git status --short
+git diff --check
+uv run --python 3.12.13 --no-project python -B scripts/check_repository_docs.py
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
+git add -- $NotePath docs/implementation-notes/INDEX.md
+git commit -m "docs(web): record frontend collaborator onboarding"
+git diff --name-only origin/main...HEAD
+git push -u origin feat/web-COLLAB-ONBOARDING-doc-check
+gh pr create --fill --base main --head feat/web-COLLAB-ONBOARDING-doc-check
+gh pr checks --watch
+
+PR 변경 파일은 새 web 구현 노트 1개와 INDEX append 1개, 정확히 두 개여야 해. GitHub의
+Collaboration policy 결과가 FRONTEND_SELF_MERGE_ELIGIBLE이고 Frontend CI를 포함한 모든 check가
+green일 때만 GitHub 화면에서 Create a merge commit으로 직접 병합해. OWNER_REVIEW_REQUIRED,
+OPERATIONAL_ERROR, 실패·skipped check, 예상 밖 파일이 하나라도 있으면 병합하지 말고 나에게 알려줘.
+
+[완료 보고 형식]
+- MFA/recovery 준비: 완료/미완료 (code는 쓰지 않음)
+- clone HEAD SHA:
+- Node/pnpm/uv/Python 버전:
+- baseline: 각 명령 PASS/FAIL
+- PR 번호와 URL:
+- changed files 2개:
+- Collaboration policy 분류:
+- Frontend CI 결과:
+- merge commit SHA 또는 병합 중지 이유:
+
+이 onboarding 결과를 내가 확인할 때까지 forbidden-scope 리허설이나 실제 제품 코딩은 시작하지 마.
+~~~
+
+### 0.1 사용자가 팀원에게 함께 보내는 것
+
+- private repository 페이지 링크 1개 — 개인 채널
+- 위 메시지
+- 문의가 생기면 **비밀 없는 오류 마지막 20줄만** 보내 달라는 안내
+
+보내지 않는 것: PAT, password, MFA/recovery code, DeepSeek key, DB DSN, context secret, `.env`, 실제
+시민 질문·답변.
+
+### 0.2 팀원 회신 후 사용자가 확인할 것
+
+1. clone HEAD가 그 시점의 최신 `origin/main`인지 확인한다.
+2. baseline 명령이 모두 PASS인지 확인한다.
+3. PR diff가 신규 `IMP-*-web-*.md` 1개와 INDEX 마지막 행 1개뿐인지 확인한다.
+4. `FRONTEND_SELF_MERGE_ELIGIBLE`, Frontend CI green, merge commit을 확인한다.
+5. 확인 뒤에만 owner checklist section 8의 forbidden-scope **close-without-merge** 리허설을 별도 지시한다.
+6. 두 리허설 뒤 실제 frontend task를 한 번에 하나씩 발행한다.
+
+### 0.3 첫 실제 제품 작업의 대기 경계
+
+첫 실제 후보는 Lane F1의 fixture 기반 `/chat` 표현 계층이다. 하지만 현재 `apps/web/package.json`은
+`@sejong-ai/shared-contracts`를 소비 dependency로 선언하지 않고 shared package에도 public export가 없다.
+manifest/lockfile·공용 계약은 owner-review 영역이므로 팀원이 임의 relative import나 중복 public type을
+만들면 안 된다. onboarding 뒤 owner가 이 소비 경계를 준비·검토한 후 별도 `WEB-CHAT-FIXTURE-*` TASK와
+인수 기준을 내려야 한다. 그 전에는 실제 입력 전송, fetch, browser storage, 임의 endpoint/mock official
+data를 구현하지 않는다.
 
 ## 1. 먼저 읽을 문서
 
