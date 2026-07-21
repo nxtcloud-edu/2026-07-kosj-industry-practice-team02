@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-21T09:30:25+09:00
 - Task ID: COLLAB-CLOUD-REHEARSAL-001-TRIAGE
 - Type: documentation-github-cloud-evidence
-- Status: Done — Cloud run must not be published/merged; local docs integration then rerun pending
+- Status: Done — old Cloud run held; owner-review Draft PR #2 green/manual merge and rerun 002 pending
 - Author/Agent: Codex primary agent
 - Branch: codex/COLLAB-001-post-merge-evidence
 - Base commit: 4b473e2
@@ -147,6 +147,7 @@ Cloud internal commit/make_pr
 | final docs/secret/diff/JSON/note-ID checks | PASS | docs exit 0; secret finding 0; diff error 0; JSON valid; local duplicate ID 0 | terminal |
 | fresh remote branch/PR absence gate | PASS | matching branch 0, matching PR 0 | GitHub/terminal |
 | independent whole-diff review | initial FAIL → fixed | Critical 0; Important 3 fixed; Minor 1 fixed | review agent / active docs |
+| local integration publish | PASS / human pending | branch push and Draft PR #2 created; policy/Frontend CI PASS; merge 0 | private GitHub metadata |
 
 ### 미실행 검증과 이유
 
@@ -195,16 +196,16 @@ local integration branch의 notes/INDEX를 비교하고 generator의 `next_seque
 
 ### 다음 개발자 시작점
 
-local `codex/COLLAB-001-post-merge-evidence` docs를 완성·owner-reviewed PR로 통합한 후 remote main을 확인한다.
-그 다음 owner checklist의 corrected Cloud prompt를 새 task에서 실행한다.
+owner-review Draft PR #2를 사람이 검토·merge한 후 remote main을 확인한다. 그 다음 owner checklist의
+corrected Cloud rehearsal 002 prompt를 새 task에서 실행한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
 - Cloud commit/branch 내용은 remote에 없으므로 independent patch review가 아직 불가능하다.
-- local documentation branch가 크고 note 003~010을 포함하므로 먼저 final review/PR integration이 필요하다.
+- local documentation branch는 final review와 Draft PR #2 hosted checks를 통과했지만 인간 merge가 남았다.
 - independent review에서 old-run publish 지시, superseded setup script, hardcoded current main SHA와 Task 5/6
   오기를 발견해 corrected rerun/dynamic authority/Task 6 wording으로 교정했다.
-- 다음 한 단계: 현재 Cloud 결과 화면에서는 PR 생성을 누르지 않고 local docs integration을 진행한다.
+- 다음 한 단계: 기존 Cloud 결과 화면은 건드리지 않고 사용자가 Draft PR #2를 검토·merge한다.
 
 ## 15. 자체 리뷰
 

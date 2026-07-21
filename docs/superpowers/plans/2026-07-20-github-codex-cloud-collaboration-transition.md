@@ -596,3 +596,7 @@ successful external-state evidence.
   documentation branch first, then rerun from refreshed `main` with the real `pwsh -NoProfile -File
   scripts/check_secret_patterns.ps1 -RepositoryRoot .` gate so the generator allocates the next remote
   sequence and GitHub receives an actual Draft PR.
+- 2026-07-21: local post-merge evidence/frontend handoff integration branch was independently reviewed
+  at `c95056a` (Critical/Important/Minor 0), pushed as owner-review Draft PR #2, and its Collaboration
+  policy and Frontend CI summary passed. Human review/merge remains Pending; only after that merge may
+  corrected `COLLAB-CLOUD-REHEARSAL-002` run from refreshed `main` and create its own Draft PR.
