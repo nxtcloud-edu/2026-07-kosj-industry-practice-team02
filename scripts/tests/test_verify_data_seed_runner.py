@@ -851,6 +851,101 @@ exit 100
         self.assertNotIn(stdout_sentinel, combined)
         self.assertNotIn(stderr_sentinel, combined)
 
+    def test_nonzero_evidence_child_relays_only_exact_stable_failure_reason(
+        self,
+    ) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        with tempfile.TemporaryDirectory(prefix="sejong stable evidence child ") as directory:
+            child = Path(directory) / "stable-failure.cmd"
+            child.write_text(
+                "@echo off\r\n"
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "exit /b 2\r\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+            environment["SEJONG_DATA_SEED_EVIDENCE_CHILD"] = str(child)
+            command = r"""
+$child=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_CHILD')
+try {
+  Invoke-DataSeedEvidenceStep -Step 'VERIFY-DATA-SEED-CONCURRENCY-B' -FilePath $child -Arguments @() -WorkingDirectory (Get-Location).Path -TimeoutMilliseconds 5000
+}
+catch {
+  if($_.Exception.Data['step'] -cne 'VERIFY-DATA-SEED-CONCURRENCY-B'){exit 98}
+  if($_.Exception.Data['reason'] -cne 'CAPABILITY_WRITE_DID_NOT_BLOCK'){exit 99}
+  if([int]$_.Exception.Data['code'] -ne 2){exit 100}
+  Write-Output '[PASS] step=STUB-STABLE-FAILURE-RELAYED'
+  exit 0
+}
+exit 101
+"""
+            result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=STUB-STABLE-FAILURE-RELAYED", combined)
+        self.assertNotIn("CAPABILITY_WRITE_DID_NOT_BLOCK issues=1", combined)
+
+    def test_nonzero_evidence_child_rejects_payload_and_wrong_step(self) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        cases = {
+            "extra-line": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo synthetic-secret-payload\r\n"
+            ),
+            "extra-blank-line": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo.\r\n"
+            ),
+            "extra-stderr": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo synthetic-secret-stderr 1>&2\r\n"
+            ),
+            "wrong-step": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-A "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+            ),
+        }
+        for case, body in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory(
+                prefix="sejong rejected evidence child "
+            ) as directory:
+                child = Path(directory) / "rejected-failure.cmd"
+                child.write_text(
+                    "@echo off\r\n" + body + "exit /b 2\r\n",
+                    encoding="utf-8",
+                )
+                environment = os.environ.copy()
+                environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+                environment["SEJONG_DATA_SEED_EVIDENCE_CHILD"] = str(child)
+                command = r"""
+$child=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_CHILD')
+try {
+  Invoke-DataSeedEvidenceStep -Step 'VERIFY-DATA-SEED-CONCURRENCY-B' -FilePath $child -Arguments @() -WorkingDirectory (Get-Location).Path -TimeoutMilliseconds 5000
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'child'){exit 99}
+  Write-Output '[PASS] step=STUB-UNTRUSTED-FAILURE-REJECTED'
+  exit 0
+}
+exit 100
+"""
+                result = run_library_command(command, environment)
+
+            combined = result.stdout + result.stderr
+            self.assertEqual(0, result.returncode, combined)
+            self.assertIn("[PASS] step=STUB-UNTRUSTED-FAILURE-REJECTED", combined)
+            self.assertNotIn("synthetic-secret-payload", combined)
+            self.assertNotIn("synthetic-secret-stderr", combined)
+            self.assertNotIn("CAPABILITY_WRITE_DID_NOT_BLOCK issues=1", combined)
+
     def test_dynamic_pg_environment_is_saved_cleared_and_restored(self) -> None:
         environment = os.environ.copy()
         environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)

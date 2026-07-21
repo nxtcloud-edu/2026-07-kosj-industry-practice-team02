@@ -146,6 +146,7 @@ function Invoke-DataSeedChild {
         return [pscustomobject]@{
             ExitCode = [int]$process.ExitCode
             Output = [string]$stdoutTask.Result
+            ErrorOutput = [string]$stderrTask.Result
         }
     }
     catch {
@@ -167,7 +168,8 @@ function Invoke-DataSeedStep {
         [string[]]$Arguments,
         [string]$WorkingDirectory,
         [int]$TimeoutMilliseconds = 900000,
-        [switch]$SuppressPass
+        [switch]$SuppressPass,
+        [switch]$RelayStableFailure
     )
 
     [Console]::Out.WriteLine("[START] step=" + $Step)
@@ -192,12 +194,45 @@ function Invoke-DataSeedStep {
         if ($childCode -le 0) {
             $childCode = 2
         }
+        if ($RelayStableFailure) {
+            $stableReason = Get-DataSeedStableChildFailureReason `
+                -Step $Step `
+                -Output $result.Output `
+                -ErrorOutput $result.ErrorOutput
+            if (-not [string]::IsNullOrEmpty($stableReason)) {
+                Throw-DataSeedFailure -Step $Step -Reason $stableReason -Code $childCode
+            }
+        }
         Throw-DataSeedFailure -Step $Step -Reason "child" -Code $childCode
     }
     if (-not $SuppressPass) {
         [Console]::Out.WriteLine("[PASS] step=" + $Step)
     }
     return $result
+}
+
+function Get-DataSeedStableChildFailureReason {
+    param(
+        [string]$Step,
+        [string]$Output,
+        [string]$ErrorOutput
+    )
+
+    if (-not [string]::IsNullOrEmpty($ErrorOutput)) {
+        return $null
+    }
+    $escapedStep = [System.Text.RegularExpressions.Regex]::Escape($Step)
+    $pattern = '\A\[FAIL\] step=' + $escapedStep +
+        ' reason=(?<reason>[A-Z][A-Z0-9_]+) issues=1(?:\r\n|\n)?\z'
+    $match = [System.Text.RegularExpressions.Regex]::Match(
+        $Output,
+        $pattern,
+        [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+    if (-not $match.Success) {
+        return $null
+    }
+    return $match.Groups['reason'].Value
 }
 
 function Save-DataSeedEnvironment {
@@ -312,7 +347,8 @@ function Invoke-DataSeedEvidenceStep {
         -Arguments $Arguments `
         -WorkingDirectory $WorkingDirectory `
         -TimeoutMilliseconds $TimeoutMilliseconds `
-        -SuppressPass
+        -SuppressPass `
+        -RelayStableFailure
     Write-DataSeedEvidence -Step $Step -Output $result.Output
 }
 
