@@ -10,6 +10,7 @@ from pathlib import Path
 
 from scripts import check_collaboration_note_append as note_append
 from scripts import check_collaboration_scope as scope
+from scripts import data_staging_validation as staging_validation
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -250,7 +251,7 @@ class ScopePolicyUnitTests(unittest.TestCase):
             "database/schema.sql",
             "supabase/migrations/20260720.sql",
             "data/official/releases/0.1/kb.json",
-            "data/staging/data-001/draft/kb.json",
+            scope.DATA_STAGING_PREFIX + "data-001/draft/kb.json",
             "docs/source-of-truth/PRIVACY_POLICY.md",
             "docs/adr/0019-policy.md",
             "apps/web/src/generated/api.ts",
@@ -273,6 +274,28 @@ class ScopePolicyUnitTests(unittest.TestCase):
                     note_append_valid=False,
                 )
                 self.assertEqual(classification, scope.OWNER_REVIEW_REQUIRED)
+
+    def test_policy_and_tests_do_not_trigger_staging_scan_but_runtime_path_does(self) -> None:
+        issues: list[staging_validation.ValidationIssue] = []
+        staging_validation._scan_runtime_files(
+            [SCOPE_SCRIPT, Path(__file__)],
+            ROOT,
+            issues,
+        )
+        self.assertEqual([], issues)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture_root = Path(temporary_directory)
+            runtime_file = fixture_root / "apps" / "runtime.py"
+            runtime_file.parent.mkdir(parents=True)
+            runtime_file.write_text(
+                f'path = "{scope.DATA_STAGING_PREFIX}data-001"\n', encoding="utf-8"
+            )
+            staging_validation._scan_runtime_files(
+                [runtime_file], fixture_root, issues
+            )
+
+        self.assertEqual(["RUNTIME_STAGING_REFERENCE"], [issue.code for issue in issues])
 
     def test_mixed_delete_copy_unknown_empty_and_path_escape_fail_closed(self) -> None:
         cases = (
