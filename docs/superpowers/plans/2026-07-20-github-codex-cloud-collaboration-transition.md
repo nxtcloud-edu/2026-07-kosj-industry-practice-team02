@@ -21,8 +21,8 @@ Playwright toolchain, Codex Cloud.
 
 - Plan ID: `COLLAB-001`
 - Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
-  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope and Cloud environment
-  confirmed, docs-only task/Draft PR pending); Task 7 pending**
+  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope, secret-free environment,
+  docs-only PR/manual merge complete; exact runtime version evidence pending); Task 7 pending**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
 - Decision/ADR: D-047~D-057 / ADR-0019
@@ -405,10 +405,10 @@ rehearsal evidence remain pending.
 
 1. [x] Open [Codex](https://chatgpt.com/codex), connect GitHub and save `sejong-ai-cloud-docs` for the
    repository with agent internet Off and no environment variable or secret.
-2. [ ] Run the first task and capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
+2. [ ] Capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
    `11.13.0` and uv `0.11.28` are active after the setup script.
-3. [ ] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
-4. [ ] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
+3. [x] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
+4. [x] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
 
 The earlier inline setup example that assumed Node 24 was already selected is superseded. The UI's
 Node 22 bootstrap, `nvm` switch to exact Node `24.12.0`, `pyenv` switch to Python `3.12.13`, pnpm
@@ -421,10 +421,10 @@ Validate the exact Cloud image first; adjust only after capturing non-secret fai
 depend on a temporary setup-script `export` surviving into the agent phase; use the resolved persistent
 UV path or a Cloud environment PATH setting verified again in the agent task.
 
-- [ ] Run a docs/test-only Cloud task with explicit allowed/forbidden paths.
-- [ ] Confirm Codex honors `AGENTS.md`, creates a `codex/...` branch and Draft PR.
-- [ ] Confirm it does not merge, request secrets, call DeepSeek or claim local Docker evidence.
-- [ ] User reviews and merges the first Cloud PR manually.
+- [x] Run a docs/test-only Cloud task with explicit allowed/forbidden paths.
+- [x] Confirm Codex honors `AGENTS.md`, creates a `codex/...` branch and Draft PR.
+- [x] Confirm it does not merge, request secrets, call DeepSeek or claim local Docker evidence.
+- [x] User reviews and merges the first Cloud PR manually.
 
 Reusable Cloud prompt:
 
@@ -600,3 +600,15 @@ successful external-state evidence.
   at `c95056a` (Critical/Important/Minor 0), pushed as owner-review Draft PR #2, and its Collaboration
   policy and Frontend CI summary passed. Human review/merge remains Pending; only after that merge may
   corrected `COLLAB-CLOUD-REHEARSAL-002` run from refreshed `main` and create its own Draft PR.
+- 2026-07-21: user marked PR #2 ready and merged it. Independent GitHub evidence confirms merge commit
+  `b61f676dea3e22306508ba978385a18d948e7653`, remote `origin/main` at that commit, and successful
+  post-merge Collaboration policy and Frontend CI summaries. The next executable gate is corrected
+  `COLLAB-CLOUD-REHEARSAL-002`; the held rehearsal 001 result remains unpublished.
+- 2026-07-21: corrected rehearsal 002 was published as Draft PR #3 from actual GitHub branch
+  `codex/add-cloud-rehearsal-implementation-notes`. Its diff remains exactly note 011 plus one INDEX row and
+  hosted Collaboration policy/Frontend CI summaries passed after evidence correction. Cloud-reported internal
+  branch/commit and actual GitHub publication identifiers are both recorded; human review/manual merge remains.
+- 2026-07-21: user manually merged PR #3. Independent evidence confirms merge commit
+  `d54fd6fdc4c941eb083cd14ec5b2354e91f4a982`, fetched `origin/main` at the same SHA, Collaboration policy
+  run `29810047993` PASS and full Frontend CI run `29810048119` PASS. Task 6 now retains only exact Cloud
+  Node/Python/pnpm/uv version evidence; Task 5 MFA/recovery and Task 7 teammate rehearsals remain Pending.

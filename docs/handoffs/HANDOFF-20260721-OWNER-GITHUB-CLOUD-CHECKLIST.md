@@ -13,17 +13,18 @@ remote DB, DeepSeek 실호출, Docker/Supabase actual gate를 승인하거나 �
 
 ```text
 완료: GitHub App 범위 확인 + PR #1 병합 + secret-free Cloud 환경 저장
-현재: owner-review Draft PR #2 검토·병합
-  → refreshed main에서 corrected Cloud 문서-only 리허설 새로 실행
-  → 실제 Draft PR 검토·수동 병합
+완료: owner-review PR #2 검토·병합
+완료: corrected Cloud 문서-only 리허설, PR #3 사람 병합, post-merge CI PASS
+현재: Cloud exact runtime version evidence + teammate onboarding rehearsal
 병렬 가능: koregy MFA 확인 + onboarding·정책 리허설
   → 두 경로 증거 확인 → COLLAB-001 마감 판단
 ```
 
 - GitHub App 범위, PR #1과 Cloud 환경 저장은 완료됐다.
 - 첫 Cloud internal run `b080a89`/`make_pr` 결과는 remote branch나 Draft PR이 아니며 현재 게시하지 않는다.
-- Draft PR #2의 hosted policy/Frontend CI는 PASS했다. 이 PR을 사람이 검토·병합한 뒤 Cloud는 새 task에서
-  재실행한다. 팀원 MFA/onboarding은 독립적으로
+- PR #2는 merge commit `b61f676`으로 병합됐고 post-merge hosted policy/Frontend CI가 PASS했다. corrected
+  Cloud rehearsal은 PR #3 merge commit `d54fd6f`로 병합됐으며 정확히 두 문서만 변경하고 PR 및 post-merge
+  hosted checks가 PASS했다. Cloud exact runtime version evidence와 팀원 MFA/onboarding은 독립적으로
   진행할 수 있지만, published handoff가 필요하면 같은 문서 통합 뒤 시작한다.
 - 체크리스트를 읽었다는 사실만으로 Tasks 5~7을 완료 처리하지 않는다. 실제 PR·CI·사람 확인이 필요하다.
 

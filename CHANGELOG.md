@@ -4,6 +4,11 @@
 
 ### Added
 
+- Corrected Cloud rehearsal 002 integration evidence: PR #3 exact two-document scope, explicit Cloud-internal
+  versus GitHub publication identities, manual merge commit `d54fd6f`, and green PR/post-merge hosted checks
+- PR #2 merge/post-merge evidence: remote `main` advanced to merge commit `b61f676`, hosted collaboration
+  and frontend summaries passed, and the next Cloud action is corrected rehearsal 002 rather than the
+  held/unpublished rehearsal 001 result
 - Cloud rehearsal result triage: the first agent run produced an internal two-file commit and truthful
   missing-scanner failure, but independent GitHub evidence shows no remote branch or Draft PR; the run
   is held from publication because its generated note ID collides with the local integration branch,
