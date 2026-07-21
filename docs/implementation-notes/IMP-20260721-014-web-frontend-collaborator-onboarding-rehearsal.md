@@ -1,4 +1,4 @@
-# IMP-20260721-012 — web frontend collaborator onboarding rehearsal
+# IMP-20260721-014 — web frontend collaborator onboarding rehearsal
 
 - Date/Time (KST): 2026-07-21T16:33:16+09:00
 - Task ID: COLLAB-ONBOARDING
@@ -87,7 +87,7 @@ base/head SHA로 판정한다. 로컬은 자격 "형태"만 증명 가능.
 
 | 파일/영역 | 변경 내용 | 이유 |
 |---|---|---|
-| `docs/implementation-notes/IMP-20260721-012-web-frontend-collaborator-onboarding-rehearsal.md` | 신규 노트 추가(add-only) | onboarding 리허설 기록 |
+| `docs/implementation-notes/IMP-20260721-014-web-frontend-collaborator-onboarding-rehearsal.md` | 신규 노트 추가(add-only) | onboarding 리허설 기록 |
 | `docs/implementation-notes/INDEX.md` | 마지막 행 1줄 append | 노트 인덱싱, self-merge 허용 형태 유지 |
 
 ### 데이터 흐름/상태 변화
