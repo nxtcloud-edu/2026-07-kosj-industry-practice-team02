@@ -4,6 +4,15 @@
 
 ### Added
 
+- Cloud exact runtime evidence: Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`,
+  clean tree/docs PASS and zero file/commit/PR/secret/provider/DB/Docker/deployment use; COLLAB Task 6 complete
+- Post-COLLAB sequencing evidence: hold the existing teammate onboarding branch until its colliding note `012`
+  is synchronized and renamed to reserved `014`; run Cloud runtime evidence and approved DATA-SEED-002 in parallel
+- Corrected Cloud rehearsal 002 integration evidence: PR #3 exact two-document scope, explicit Cloud-internal
+  versus GitHub publication identities, manual merge commit `d54fd6f`, and green PR/post-merge hosted checks
+- PR #2 merge/post-merge evidence: remote `main` advanced to merge commit `b61f676`, hosted collaboration
+  and frontend summaries passed, and the next Cloud action is corrected rehearsal 002 rather than the
+  held/unpublished rehearsal 001 result
 - Cloud rehearsal result triage: the first agent run produced an internal two-file commit and truthful
   missing-scanner failure, but independent GitHub evidence shows no remote branch or Draft PR; the run
   is held from publication because its generated note ID collides with the local integration branch,
