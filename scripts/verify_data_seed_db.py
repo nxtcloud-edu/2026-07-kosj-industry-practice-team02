@@ -1,6 +1,6 @@
-"""Secret-free verification of the initial official seed in disposable local DBs.
+"""Secret-free verification of the successor official seed in disposable local DBs.
 
-This is an initial-release-only verification tool.  It reads release SQL into
+This is a successor-release-only verification tool.  It reads release SQL into
 memory, uses only the existing psycopg dependency, and never persists or emits a
 DSN.  The PowerShell runner is the supported orchestration boundary.
 """
@@ -24,12 +24,11 @@ if __package__ in {None, ""}:
 
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_RELATIVE_PATH,
-    CANONICAL_RELEASE_RELATIVE_PATH,
     KB_DOCUMENT_FIELDS,
     KB_QUESTION_EXAMPLE_FIELDS,
     OFFICE_FIELDS,
     OFFICE_SERVICE_MAPPING_FIELDS,
-    RELEASE_VERSION,
+    SUCCESSOR_RELEASE_PROFILE,
     ReleaseVerificationError,
     build_seed_projection,
     canonical_json_bytes,
@@ -39,6 +38,8 @@ from scripts.data_seed_release import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+RELEASE_VERSION = SUCCESSOR_RELEASE_PROFILE.version
+CANONICAL_RELEASE_RELATIVE_PATH = Path(SUCCESSOR_RELEASE_PROFILE.canonical_token)
 ADMIN_DSN_ENVIRONMENT = "SEJONG_ADMIN_DATABASE_URL"
 EXPECTED_ADMIN_IDENTITY = ("postgres", "127.0.0.1", 54322, "postgres")
 ALLOWED_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})

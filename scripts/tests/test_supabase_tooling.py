@@ -27,8 +27,11 @@ PATCHED_RUNTIME_RELATIVE = Path(
 )
 CONFIG_PATH = ROOT / "supabase" / "config.toml"
 SEED_PATH = ROOT / "supabase" / "seed.sql"
-RELEASE_SEED_PATH = (
+INITIAL_RELEASE_SEED_PATH = (
     ROOT / "data" / "official" / "releases" / "0.1.0-initial.1" / "seed.sql"
+)
+RELEASE_SEED_PATH = (
+    ROOT / "data" / "official" / "releases" / "0.1.0-initial.2" / "seed.sql"
 )
 PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
 SQL_RUNNER_PATH = ROOT / "scripts" / "run_database_sql.py"
@@ -1021,7 +1024,23 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_seed_dispatcher_matches_active_release_and_stays_db_disabled(self) -> None:
         config = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(RELEASE_SEED_PATH.read_bytes(), SEED_PATH.read_bytes())
+        self.assertEqual(
+            ROOT
+            / "data"
+            / "official"
+            / "releases"
+            / "0.1.0-initial.2"
+            / "seed.sql",
+            RELEASE_SEED_PATH,
+        )
+        if RELEASE_SEED_PATH.is_file():
+            self.assertEqual(RELEASE_SEED_PATH.read_bytes(), SEED_PATH.read_bytes())
+        else:
+            self.assertEqual(
+                INITIAL_RELEASE_SEED_PATH.read_bytes(),
+                SEED_PATH.read_bytes(),
+                "pre-publication dispatcher must remain byte-exact predecessor",
+            )
         self.assertFalse(config["db"]["seed"]["enabled"])
         self.assertEqual(["./seed.sql"], config["db"]["seed"]["sql_paths"])
 

@@ -15,7 +15,7 @@ import psycopg
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.data_seed_release import RELEASE_VERSION
+from scripts.data_seed_release import SUCCESSOR_RELEASE_PROFILE
 from scripts.verify_data_seed_db import (
     ADMIN_DSN_ENVIRONMENT,
     REPOSITORY_ROOT,
@@ -32,6 +32,7 @@ from scripts.verify_data_seed_db import (
 )
 
 
+RELEASE_VERSION = SUCCESSOR_RELEASE_PROFILE.version
 CAPABILITY_BEFORE_SEED = "capability-before-seed"
 SEED_BEFORE_CAPABILITY = "seed-before-capability"
 _SCENARIO_STEPS = {

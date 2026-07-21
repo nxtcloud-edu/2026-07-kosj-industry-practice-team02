@@ -501,11 +501,26 @@ class ReleaseAndOutputBoundaryTests(unittest.TestCase):
         self.assertEqual("a" * 64, loaded.semantic_sha256)
         self.assertEqual(19, loaded.counts["kb"])
 
-    def test_wrong_release_version_fails_before_release_read(self) -> None:
+    def test_known_broken_initial_release_fails_before_release_read(self) -> None:
         with mock.patch.object(verifier, "verify_release_directory") as verify:
             with self.assertRaisesRegex(ValueError, "RELEASE_VERSION_INVALID"):
-                verifier.load_verified_release(Path.cwd(), "0.1.0")
+                verifier.load_verified_release(Path.cwd(), "0.1.0-initial.1")
         verify.assert_not_called()
+
+    def test_cli_parsers_reject_known_broken_initial_release(self) -> None:
+        with self.assertRaisesRegex(ValueError, "CLI_ARGUMENTS_INVALID"):
+            verifier._parse_cli(
+                ["identity", "--release-version", "0.1.0-initial.1"]
+            )
+        with self.assertRaisesRegex(ValueError, "CLI_ARGUMENTS_INVALID"):
+            concurrency._parse_cli(
+                [
+                    "--scenario",
+                    concurrency.CAPABILITY_BEFORE_SEED,
+                    "--release-version",
+                    "0.1.0-initial.1",
+                ]
+            )
 
     def test_cli_output_never_contains_dsn_release_sql_or_exception_content(
         self,

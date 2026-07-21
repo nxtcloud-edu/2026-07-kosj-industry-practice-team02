@@ -277,12 +277,12 @@ function Write-DataSeedEvidence {
     )
 
     $patterns = @{
-        "VERIFY-DATA-SEED-IDENTITY" = '^\[PASS\] step=VERIFY-DATA-SEED-IDENTITY release=0\.1\.0-initial\.1 identity=exact$'
-        "VERIFY-DATA-SEED-FAILURE-ROLLBACK" = '^\[PASS\] step=VERIFY-DATA-SEED-FAILURE-ROLLBACK release=0\.1\.0-initial\.1 tables=8 partial=0$'
-        "VERIFY-DATA-SEED-CONCURRENCY-A" = '^\[PASS\] step=VERIFY-DATA-SEED-CONCURRENCY-A release=0\.1\.0-initial\.1 ordering=capability-before-lock seed_rows=0 capability_rows=1$'
-        "VERIFY-DATA-SEED-CONCURRENCY-B" = '^\[PASS\] step=VERIFY-DATA-SEED-CONCURRENCY-B release=0\.1\.0-initial\.1 ordering=lock-before-capability seed_complete=1 capability_rows=1$'
-        "VERIFY-DATA-SEED-SEED-CYCLE" = '^\[PASS\] step=VERIFY-DATA-SEED-SEED-CYCLE release=0\.1\.0-initial\.1 kb=19 office=3 mapping=10 replay=1 second_seed=blocked compensation_guard=blocked semantic_sha256=[0-9a-f]{64}$'
-        "VERIFY-DATA-SEED-FINAL" = '^\[PASS\] step=VERIFY-DATA-SEED-FINAL release=0\.1\.0-initial\.1 kb=19 office=3 mapping=10 citizen=19 exclusions=0 operational=0 semantic_sha256=[0-9a-f]{64}$'
+        "VERIFY-DATA-SEED-IDENTITY" = '^\[PASS\] step=VERIFY-DATA-SEED-IDENTITY release=0\.1\.0-initial\.2 identity=exact$'
+        "VERIFY-DATA-SEED-FAILURE-ROLLBACK" = '^\[PASS\] step=VERIFY-DATA-SEED-FAILURE-ROLLBACK release=0\.1\.0-initial\.2 tables=8 partial=0$'
+        "VERIFY-DATA-SEED-CONCURRENCY-A" = '^\[PASS\] step=VERIFY-DATA-SEED-CONCURRENCY-A release=0\.1\.0-initial\.2 ordering=capability-before-lock seed_rows=0 capability_rows=1$'
+        "VERIFY-DATA-SEED-CONCURRENCY-B" = '^\[PASS\] step=VERIFY-DATA-SEED-CONCURRENCY-B release=0\.1\.0-initial\.2 ordering=lock-before-capability seed_complete=1 capability_rows=1$'
+        "VERIFY-DATA-SEED-SEED-CYCLE" = '^\[PASS\] step=VERIFY-DATA-SEED-SEED-CYCLE release=0\.1\.0-initial\.2 kb=19 office=3 mapping=10 replay=1 second_seed=blocked compensation_guard=blocked semantic_sha256=[0-9a-f]{64}$'
+        "VERIFY-DATA-SEED-FINAL" = '^\[PASS\] step=VERIFY-DATA-SEED-FINAL release=0\.1\.0-initial\.2 kb=19 office=3 mapping=10 citizen=19 exclusions=0 operational=0 semantic_sha256=[0-9a-f]{64}$'
     }
     if (-not $patterns.ContainsKey($Step)) {
         Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
@@ -398,7 +398,7 @@ try {
         -Names (@("SEJONG_ADMIN_DATABASE_URL") + $libpqEnvironmentNames)
     Clear-DataSeedEnvironment -Names $libpqEnvironmentNames
 
-    if ($ReleaseVersion -cne "0.1.0-initial.1") {
+    if ($ReleaseVersion -cne "0.1.0-initial.2") {
         Throw-DataSeedFailure -Step "VALIDATE-DATA-SEED-ARGUMENTS" -Reason "RELEASE-VERSION-INVALID" -Code 2
     }
     if ($args.Count -ne 0) {
@@ -590,7 +590,7 @@ finally {
 
 if ($exitCode -eq 0) {
     [Console]::Out.WriteLine(
-        "[PASS] step=VERIFY-DATA-SEED release=0.1.0-initial.1"
+        "[PASS] step=VERIFY-DATA-SEED release=0.1.0-initial.2"
     )
 }
 exit $exitCode

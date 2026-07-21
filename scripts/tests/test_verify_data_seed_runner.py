@@ -55,14 +55,44 @@ Invoke-Expression $source.Substring(0,$index)
 
 
 class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
-    def test_accepts_only_exact_initial_release_version(self) -> None:
+    def test_accepts_only_exact_successor_release_version(self) -> None:
         source = read_runner()
         preamble = source.split("Set-StrictMode", 1)[0]
 
         self.assertEqual(re.findall(r"\[string\]\$(\w+)", preamble), ["ReleaseVersion"])
-        self.assertIn('"0.1.0-initial.1"', source)
+        self.assertIn('"0.1.0-initial.2"', source)
+        self.assertNotIn('"0.1.0-initial.1"', source)
         self.assertIn("RELEASE-VERSION-INVALID", source)
         self.assertNotIn("[switch]", preamble)
+
+    def test_known_broken_initial_release_is_rejected_before_runtime_work(self) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        result = subprocess.run(
+            [
+                POWERSHELL,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(RUNNER),
+                "-ReleaseVersion",
+                "0.1.0-initial.1",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(
+            "[FAIL] step=VALIDATE-DATA-SEED-ARGUMENTS "
+            "reason=RELEASE-VERSION-INVALID code=2",
+            result.stdout.strip(),
+        )
+        self.assertFalse(result.stderr)
 
     def test_uses_only_pinned_patched_supabase_and_exact_runtime_allowlist(
         self,
@@ -307,7 +337,7 @@ exit 0
         sentinel = "synthetic-evidence-secret-must-not-be-relayed"
         environment["SEJONG_DATA_SEED_EVIDENCE_SENTINEL"] = sentinel
         command = r"""
-$safe='[PASS] step=VERIFY-DATA-SEED-IDENTITY release=0.1.0-initial.1 identity=exact'
+$safe='[PASS] step=VERIFY-DATA-SEED-IDENTITY release=0.1.0-initial.2 identity=exact'
 Write-DataSeedEvidence -Step 'VERIFY-DATA-SEED-IDENTITY' -Output $safe
 $sentinel=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_SENTINEL')
 try {
@@ -326,7 +356,7 @@ exit 95
         self.assertEqual(0, result.returncode, combined)
         self.assertIn(
             "[PASS] step=VERIFY-DATA-SEED-IDENTITY "
-            "release=0.1.0-initial.1 identity=exact",
+            "release=0.1.0-initial.2 identity=exact",
             combined,
         )
         self.assertIn("[PASS] step=STUB-EVIDENCE-REJECTED", combined)
