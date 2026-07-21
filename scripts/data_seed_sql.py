@@ -113,15 +113,20 @@ def render_expected_rows(projection: Mapping[str, object]) -> str:
     return ",\n".join(definitions)
 
 
-def render_seed_sql(projection: Mapping[str, object]) -> bytes:
+def render_seed_sql(
+    projection: Mapping[str, object],
+    *,
+    membership_guard: str,
+) -> bytes:
     """Render deterministic fail-closed initial seed SQL."""
 
+    transaction_prefix = _transaction_prefix(membership_guard)
     rows = {
         table: _projection_rows(projection, table, fields)
         for table, fields in _TABLE_FIELDS.items()
     }
     sections = [
-        _transaction_prefix(),
+        transaction_prefix,
         _empty_preflight("DATA_SEED_DATABASE_NOT_EMPTY", LOCK_TABLES),
         _insert_values_statement(
             "kb_documents",
@@ -140,9 +145,14 @@ def render_seed_sql(projection: Mapping[str, object]) -> bytes:
     )
 
 
-def render_compensation_sql(projection: Mapping[str, object]) -> bytes:
+def render_compensation_sql(
+    projection: Mapping[str, object],
+    *,
+    membership_guard: str,
+) -> bytes:
     """Render deterministic disposable-local compensation SQL."""
 
+    transaction_prefix = _transaction_prefix(membership_guard)
     rows = {
         table: _projection_rows(projection, table, fields)
         for table, fields in _TABLE_FIELDS.items()
@@ -189,7 +199,7 @@ WHERE office.public_id IN (
   ) AS expected(public_id)
 );"""
     sections = [
-        _transaction_prefix(),
+        transaction_prefix,
         _empty_preflight(
             "DATA_SEED_COMPENSATION_OPERATIONAL_ROWS_PRESENT",
             OPERATIONAL_TABLES,
@@ -207,7 +217,15 @@ WHERE office.public_id IN (
     )
 
 
-def _transaction_prefix() -> str:
+def _transaction_prefix(membership_guard: str) -> str:
+    if membership_guard == "legacy-single-row":
+        return _legacy_single_row_transaction_prefix()
+    if membership_guard == "effective-option-union":
+        return _effective_option_union_transaction_prefix()
+    raise ValueError("MEMBERSHIP_GUARD_INVALID")
+
+
+def _legacy_single_row_transaction_prefix() -> str:
     locks = "\n".join(
         f"LOCK TABLE app_private.{table} IN ACCESS EXCLUSIVE MODE;"
         for table in LOCK_TABLES
@@ -250,6 +268,73 @@ BEGIN
     AND member_role.rolname = 'postgres';
 
   IF v_total_memberships <> 1 OR NOT v_membership_options_valid THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'DATA_SEED_MEMBERSHIP_INVALID';
+  END IF;
+END;
+$data_seed_assert_principal$;
+
+SET LOCAL ROLE sejong_schema_owner;
+
+DO $data_seed_assert_role_switch$
+BEGIN
+  IF NOT (
+    session_user = 'postgres'
+    AND current_user = 'sejong_schema_owner'
+    AND current_database() = 'postgres'
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'DATA_SEED_ROLE_SWITCH_INVALID';
+  END IF;
+END;
+$data_seed_assert_role_switch$;
+
+{locks}"""
+
+
+def _effective_option_union_transaction_prefix() -> str:
+    locks = "\n".join(
+        f"LOCK TABLE app_private.{table} IN ACCESS EXCLUSIVE MODE;"
+        for table in LOCK_TABLES
+    )
+    return f"""BEGIN;
+SET LOCAL standard_conforming_strings = on;
+SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';
+SELECT pg_catalog.pg_advisory_xact_lock({ADVISORY_LOCK_KEY});
+
+DO $data_seed_assert_principal$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS memberships
+    JOIN pg_catalog.pg_roles AS granted_role
+      ON granted_role.oid = memberships.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = memberships.member
+    WHERE granted_role.rolname = 'sejong_schema_owner'
+      AND member_role.rolname = 'postgres'
+      AND memberships.admin_option
+  )
+  OR NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS memberships
+    JOIN pg_catalog.pg_roles AS granted_role
+      ON granted_role.oid = memberships.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = memberships.member
+    WHERE granted_role.rolname = 'sejong_schema_owner'
+      AND member_role.rolname = 'postgres'
+      AND memberships.inherit_option
+  )
+  OR NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS memberships
+    JOIN pg_catalog.pg_roles AS granted_role
+      ON granted_role.oid = memberships.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = memberships.member
+    WHERE granted_role.rolname = 'sejong_schema_owner'
+      AND member_role.rolname = 'postgres'
+      AND memberships.set_option
+  ) THEN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'DATA_SEED_MEMBERSHIP_INVALID';
   END IF;
 END;

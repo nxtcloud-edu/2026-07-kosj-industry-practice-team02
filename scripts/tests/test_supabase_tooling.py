@@ -33,6 +33,10 @@ RELEASE_SEED_PATH = (
 PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
 SQL_RUNNER_PATH = ROOT / "scripts" / "run_database_sql.py"
 DATABASE_RUNNER_PATH = ROOT / "scripts" / "verify_database.ps1"
+CAPABILITY_MIGRATION_PATH = (
+    ROOT / "supabase" / "migrations" / "20260716000300_capabilities_and_functions.sql"
+)
+CAPABILITY_TEST_PATH = ROOT / "supabase" / "tests" / "database" / "003_capabilities_test.sql"
 EXPECTED_PIN = {
     "version": "2.109.1",
     "release": "v2.109.1",
@@ -46,6 +50,32 @@ EXPECTED_PIN = {
     "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16",
 }
 CHILD_OUTPUT_SENTINEL = "postgresql://synthetic.invalid/private-question-sentinel"
+
+
+class MembershipGuardStructureTests(unittest.TestCase):
+    def assert_independent_schema_owner_options(self, block: str) -> None:
+        for option in ("admin_option", "inherit_option", "set_option"):
+            self.assertEqual(1, block.count(f"memberships.{option}"), option)
+        self.assertNotIn(
+            "memberships.inherit_option\n      AND memberships.set_option",
+            block,
+        )
+
+    def test_migration_and_pgtap_use_three_independent_option_checks(self) -> None:
+        migration = CAPABILITY_MIGRATION_PATH.read_text(encoding="utf-8")
+        migration_block = migration.split("IF NOT EXISTS (", maxsplit=1)[1].split(
+            "OR NOT EXISTS (\n       SELECT 1 FROM pg_catalog.pg_auth_members AS memberships\n"
+            "       WHERE memberships.roleid = v_backend_oid",
+            maxsplit=1,
+        )[0]
+        self.assert_independent_schema_owner_options(migration_block)
+
+        pgtap = CAPABILITY_TEST_PATH.read_text(encoding="utf-8")
+        pgtap_block = pgtap.split("SELECT ok(", maxsplit=1)[1].split(
+            "'migration user keeps ADMIN, INHERIT, and SET for schema owner'",
+            maxsplit=1,
+        )[0]
+        self.assert_independent_schema_owner_options(pgtap_block)
 
 
 def powershell_executable() -> str:

@@ -43,6 +43,16 @@ SELECT ok(
     WHERE granted_role.rolname = 'sejong_schema_owner'
       AND member_role.rolname = CURRENT_USER
       AND memberships.inherit_option
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS memberships
+    JOIN pg_catalog.pg_roles AS granted_role
+      ON granted_role.oid = memberships.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = memberships.member
+    WHERE granted_role.rolname = 'sejong_schema_owner'
+      AND member_role.rolname = CURRENT_USER
       AND memberships.set_option
   ),
   'migration user keeps ADMIN, INHERIT, and SET for schema owner'

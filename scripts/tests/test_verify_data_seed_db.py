@@ -22,7 +22,7 @@ from scripts import verify_data_seed_db as verifier
 from scripts import test_data_seed_concurrency as concurrency
 
 
-RELEASE_VERSION = "0.1.0-initial.1"
+RELEASE_VERSION = "0.1.0-initial.2"
 SECRET_DSN = "postgresql://postgres:" + "synthetic-secret@127.0.0.1:54322/postgres"
 
 
@@ -113,7 +113,7 @@ class AdminDsnIdentityTests(unittest.TestCase):
         connection = _RowsConnection(
             {
                 "FROM pg_catalog.pg_auth_members": [
-                    ("postgres", "postgres", "postgres", 1, True)
+                    ("postgres", "postgres", "postgres", True, True, True)
                 ]
             }
         )
@@ -123,6 +123,62 @@ class AdminDsnIdentityTests(unittest.TestCase):
         statement = connection.statements[0]
         self.assertIn("COALESCE(", statement)
         self.assertNotIn("pg_catalog.coalesce", statement.lower())
+        self.assertEqual(3, statement.count("pg_catalog.bool_or"))
+        self.assertNotIn("pg_catalog.bool_and", statement)
+        self.assertNotIn("pg_catalog.count", statement)
+
+    def test_session_identity_rejects_each_missing_effective_option(self) -> None:
+        cases = (
+            (True, True, True, True),
+            (True, True, False, False),
+            (True, False, True, False),
+            (False, True, True, False),
+            (False, False, False, False),
+        )
+
+        for admin, inherit, set_option, accepted in cases:
+            with self.subTest(
+                admin=admin,
+                inherit=inherit,
+                set_option=set_option,
+            ):
+                connection = _RowsConnection(
+                    {
+                        "FROM pg_catalog.pg_auth_members": [
+                            (
+                                "postgres",
+                                "postgres",
+                                "postgres",
+                                admin,
+                                inherit,
+                                set_option,
+                            )
+                        ]
+                    }
+                )
+
+                if accepted:
+                    verifier._assert_session_identity(connection)
+                else:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "^DATABASE_SESSION_IDENTITY_INVALID$",
+                    ):
+                        verifier._assert_session_identity(connection)
+
+    def test_session_identity_rejects_zero_rows_without_catalog_disclosure(self) -> None:
+        connection = _RowsConnection({"FROM pg_catalog.pg_auth_members": []})
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^DATABASE_SESSION_IDENTITY_INVALID$",
+        ) as caught:
+            verifier._assert_session_identity(connection)
+
+        self.assertEqual(
+            "DATABASE_SESSION_IDENTITY_INVALID",
+            str(caught.exception),
+        )
 
     def test_dsn_identity_requires_exact_local_admin(self) -> None:
         accepted = verifier.parse_and_validate_dsn(SECRET_DSN)
@@ -417,7 +473,7 @@ class ReleaseAndOutputBoundaryTests(unittest.TestCase):
             release.mkdir(parents=True)
             summary = {
                 "release_version": RELEASE_VERSION,
-                "release_id": "sejong-official-0.1.0-initial.1",
+                "release_id": "sejong-official-0.1.0-initial.2",
                 "counts": {"kb": 19, "office": 3, "mapping": 10},
                 "seed_semantic_sha256": "a" * 64,
                 "seed_sql_bytes": b"BEGIN; SELECT 1; COMMIT;\n",

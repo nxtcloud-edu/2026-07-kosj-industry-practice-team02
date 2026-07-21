@@ -593,6 +593,14 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
             document = json.loads(payload)
             self.assertEqual(2, document["schema_version"])
             self.assertEqual(profile.version, document["release_version"])
+        for payload in (bundle.seed_sql_bytes, bundle.compensation_sql_bytes):
+            principal = payload.decode("utf-8").split(
+                "DO $data_seed_assert_principal$", maxsplit=1
+            )[1].split("$data_seed_assert_principal$;", maxsplit=1)[0]
+            self.assertEqual(1, principal.count("IF NOT EXISTS ("))
+            self.assertEqual(2, principal.count("OR NOT EXISTS ("))
+            self.assertNotIn("pg_catalog.bool_and", principal)
+            self.assertNotIn("pg_catalog.count", principal)
 
     def test_projection_is_exact_19_3_10_and_excludes_rejected_records(self) -> None:
         self.assertEqual(19, len(self.projection["kb_documents"]))
@@ -733,7 +741,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         )
         projection["kb_documents"][0]["answer_summary"] = "세종 O'Brien \\ 경로"
         projection["kb_documents"][0]["fee"] = None
-        sql = render_seed_sql(projection).decode("utf-8")
+        sql = render_seed_sql(
+            projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertIn("세종 O''Brien \\ 경로", sql)
         self.assertIn("'2026-07-18'::date", sql)
         self.assertIn("NULL::text", sql)
@@ -851,7 +862,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertNotIn(mutated_summary.encode("utf-8"), bundle.kb_records_bytes)
 
     def test_seed_sql_has_fixed_principal_lock_order_preflight_and_guards(self) -> None:
-        sql = render_seed_sql(self.projection).decode("utf-8")
+        sql = render_seed_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertTrue(sql.startswith("BEGIN;\n"))
         self.assertTrue(sql.endswith("COMMIT;\n"))
         self.assertIn("pg_advisory_xact_lock(20260719001)", sql)
@@ -894,8 +908,11 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertNotIn("format(", sql)
         self.assertIn("KB-WASTE-03", sql)
 
-    def test_membership_guard_counts_the_pair_before_checking_all_options(self) -> None:
-        sql = render_seed_sql(self.projection).decode("utf-8")
+    def test_legacy_membership_guard_counts_pair_before_checking_options(self) -> None:
+        sql = render_seed_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         query_start = sql.index("pg_catalog.count(*)")
         query_end = sql.index("IF v_total_memberships", query_start)
         membership_query = sql[query_start:query_end]
@@ -912,6 +929,32 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
             sql,
         )
 
+    def test_successor_guard_uses_three_independent_option_checks(self) -> None:
+        guard = data_seed_release.SUCCESSOR_RELEASE_PROFILE.membership_guard
+        payloads = (
+            render_seed_sql(self.projection, membership_guard=guard),
+            render_compensation_sql(self.projection, membership_guard=guard),
+        )
+
+        for payload in payloads:
+            sql = payload.decode("utf-8")
+            principal = sql.split(
+                "DO $data_seed_assert_principal$", maxsplit=1
+            )[1].split("$data_seed_assert_principal$;", maxsplit=1)[0]
+            self.assertEqual(1, principal.count("IF NOT EXISTS ("))
+            self.assertEqual(2, principal.count("OR NOT EXISTS ("))
+            for option in ("admin_option", "inherit_option", "set_option"):
+                self.assertEqual(1, principal.count(f"memberships.{option}"))
+            for forbidden in ("count(*)", "bool_and", "<> 1"):
+                self.assertNotIn(forbidden, principal)
+            self.assertIn("DATA_SEED_MEMBERSHIP_INVALID", principal)
+
+    def test_unknown_membership_guard_fails_closed(self) -> None:
+        for renderer in (render_seed_sql, render_compensation_sql):
+            with self.subTest(renderer=renderer.__name__):
+                with self.assertRaisesRegex(ValueError, "MEMBERSHIP_GUARD_INVALID"):
+                    renderer(self.projection, membership_guard="unsupported")
+
     def test_expected_rows_cover_every_seed_owned_column(self) -> None:
         expected = render_expected_rows(self.projection)
         for cte in (
@@ -927,7 +970,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertIn("department_label", expected)
 
     def test_compensation_is_guarded_and_deletes_in_fk_safe_order(self) -> None:
-        sql = render_compensation_sql(self.projection).decode("utf-8")
+        sql = render_compensation_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertIn("DATA_SEED_COMPENSATION_OPERATIONAL_ROWS_PRESENT", sql)
         self.assertGreaterEqual(sql.count("EXCEPT ALL"), 8)
         guard = sql.index("DATA_SEED_COMPENSATION_PROJECTION_MISMATCH")

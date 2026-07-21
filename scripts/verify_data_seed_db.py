@@ -340,15 +340,9 @@ SELECT
   session_user,
   current_user,
   current_database(),
-  pg_catalog.count(*)::integer,
-  COALESCE(
-    pg_catalog.bool_and(
-      memberships.admin_option
-      AND memberships.inherit_option
-      AND memberships.set_option
-    ),
-    false
-  )
+  COALESCE(pg_catalog.bool_or(memberships.admin_option), false),
+  COALESCE(pg_catalog.bool_or(memberships.inherit_option), false),
+  COALESCE(pg_catalog.bool_or(memberships.set_option), false)
 FROM pg_catalog.pg_auth_members AS memberships
 JOIN pg_catalog.pg_roles AS granted_role ON granted_role.oid = memberships.roleid
 JOIN pg_catalog.pg_roles AS member_role ON member_role.oid = memberships.member
@@ -357,7 +351,7 @@ WHERE granted_role.rolname = 'sejong_schema_owner'
 GROUP BY session_user, current_user, current_database()
 """.strip()
     ).fetchone()
-    if row != ("postgres", "postgres", "postgres", 1, True):
+    if row != ("postgres", "postgres", "postgres", True, True, True):
         raise ValueError("DATABASE_SESSION_IDENTITY_INVALID")
 
 

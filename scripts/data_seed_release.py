@@ -467,8 +467,14 @@ def build_release_bundle(
 
     from scripts.data_seed_sql import render_compensation_sql, render_seed_sql
 
-    seed_bytes = render_seed_sql(projection)
-    compensation_bytes = render_compensation_sql(projection)
+    seed_bytes = render_seed_sql(
+        projection,
+        membership_guard=profile.membership_guard,
+    )
+    compensation_bytes = render_compensation_sql(
+        projection,
+        membership_guard=profile.membership_guard,
+    )
     semantic_hash = semantic_sha256(projection)
     artifact_payloads = {
         "kb_records.json": (len(kb_records), kb_bytes),
