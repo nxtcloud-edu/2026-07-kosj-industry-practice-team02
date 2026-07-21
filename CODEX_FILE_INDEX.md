@@ -37,6 +37,9 @@
 | `docs/superpowers/plans/2026-07-18-data-001-staging-and-review-package.md` | DATA-001 DRAFT 20/3/12·validator·PM handoff와 Remediation 3 full-root verification 기록; official release/seed는 별도 DATA-SEED-001 |
 | `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md` | 승인된 private GitHub·Frontend 소유권·Cloud Draft-PR-only 협업 경계 |
 | `docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md` | Tasks 1~4 complete; Task 5 partial; App scope와 secret-free Cloud environment 저장 완료, docs-only Draft-PR/manual-merge와 teammate onboarding rehearsals pending |
+| `docs/discovery/MVP_001_FOUR_DAY_LOCAL_PRIVATE_AUDIT.md` | 7월 25일 local/private 핵심 루프의 권위·현재 코드/데이터 gap과 통합 회귀 감사 |
+| `docs/superpowers/specs/2026-07-22-four-day-local-private-core-loop-mvp-design.md` | Q-MVP-001=A로 승인된 19→20 ACTIVE 시민·관리자 수직 흐름과 defer 경계 |
+| `docs/superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md` | 날짜별·역할별 4일 TDD 실행계획과 일일 exit gate |
 
 ## 모든 작업 후 갱신할 파일
 

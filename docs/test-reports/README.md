@@ -9,4 +9,4 @@
   D-046 deferred `00700` public-release block
 - [DATA-SEED-001 actual disposable DB — blocked](DATA-SEED-001-LOCAL-VERIFICATION.md) — `.1`
   filesystem release/dispatcher는 verified, actual PostgreSQL은 seed write 전 grantor-option union 대
-  immutable single-row guard 충돌로 Blocked; D-044/ADR-0017의 `.2` successor spec·plan Review
+  immutable single-row guard 충돌로 Blocked; D-044/D-058/ADR-0017의 `.2` successor spec·plan Approved/In Progress

@@ -164,9 +164,10 @@ option을 가진 단일 row만 인정하기 때문이다. 따라서 PostgreSQL�
 Q-SEED-002=A/D-044로 기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected
 guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initial.2`로 새로
 게시한 뒤 actual cycle 전체를 재실행하는 방향을 확정했다. `.1` release와 v1 schema byte는
-수정·삭제하지 않는다. ADR-0017과 DATA-SEED-002 written specification/plan은 Review이고,
-사용자의 후속 plan 승인 전 `.2` 생성·dispatcher 교체·DB reset/import·official-data 승격은
-금지한다. 현재 pgTAP의 `INHERIT+SET` same-row 검사는 successor 실행에서 migration의 세 독립
+수정·삭제하지 않는다. ADR-0017과 DATA-SEED-002 written specification/plan은
+Q-MVP-001=A/D-058의 즉시 실행 지시로 Approved/In Progress다. `.2` 생성·dispatcher 교체·
+disposable DB reset/import는 승인됐지만 actual 전체 PASS 전 official-data 승격은 금지한다.
+현재 pgTAP의 `INHERIT+SET` same-row 검사는 successor 실행에서 migration의 세 독립
 `EXISTS` 의미로 정렬하되 assertion count와 runtime DB object는 바꾸지 않는다. 성공하더라도
 `/ready=200`은 별도 READY-001이 소유한다.
 
@@ -304,6 +305,23 @@ audit_logs
 | 7/22 | 역할·권한 검수 | 역할 전환·승인 모달 | 권한 차단·감사 이력 | 후보 출처 검토 | 승인 동작 |
 | 7/23 | 테스트 기준 | 품질 현황 탭 | 품질·성능 API | 표본 테스트 1차 | KPI 표시 |
 | 7/24 | 중간 리허설 | 모바일 통합 | 회귀·로컬 백업 | 실패 분석 | P0/P1 통합 완료 |
+
+### Q-MVP-001 가속 마일스톤: 7/22~7/25
+
+기존 주차표의 최종 범위는 유지하되 현재 저장소의 실제 선후관계에 맞춰 local/private 핵심 루프를
+아래 순서로 재배치한다. 상세 task/명령/담당 경계는 승인된
+`docs/superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md`가 소유한다.
+
+| 날짜 | Owner/BE·Data·Security | Frontend 팀원 | PM·QA | 일일 완료 gate |
+|---|---|---|---|---|
+| 7/22 | 통합 회귀 복구, DATA-SEED-002 `.2` | PR #4 `012→014`, `/chat` fixture states | 명세·표시 문구 확인 | staging/release green, `.2` reviewable |
+| 7/23 | actual 19 ACTIVE, PII/chat 계약·pure core | `/chat` fixture 완료·typed client 준비 | 19 official/계약 확인 | DATA actual와 chat core green |
+| 7/24 | chat API, event/admin API, 20번째 후보 backend | 실제 `/chat`, 최소 `/admin` | author/reviewer rehearsal | candidate approval atomic E2E |
+| 7/25 | 전체 회귀·보안·데모 | 390/430/desktop 접근성 수정 | 표본 20·회귀 1 판정 | 20 ACTIVE local demo PASS |
+
+7월 25일 gate에는 DeepSeek 품질 튜닝, 100명 부하, 자동 백업, public deployment, 고급 UI를
+포함하지 않는다. 이 항목은 4주차 P1에 남으며, 개인정보·ACTIVE·승인·출처·접근성 최소선은
+마일스톤에서도 필수다.
 
 ### 4주차: 7/27~7/31
 

@@ -473,11 +473,11 @@ Docker/local-only verification as pending for the user.
 
 ## Task 7: Onboard the frontend teammate with a no-product-change rehearsal
 
-2026-07-21 coordination hold: remote branch `feat/web-COLLAB-ONBOARDING-doc-check` was force-updated
-while audited (`2178405→9df362d→47472d9`) and PR #4 is now open/non-draft. Latest head is based on merged
-`main=d54fd6f` but uses implementation-note ID `IMP-20260721-012`, colliding with the owner evidence note
-`012` awaiting integration. Do not merge PR #4. Integrate owner notes `012/013/015`, then rename the
-teammate note/INDEX row to reserved ID `IMP-20260721-014`, run the gates and continue the PR.
+2026-07-22 correction evidence: owner PR #5 was merged at `9044ddb`. PR #4 was then updated with a
+merge-parent of that `main`, the teammate note/INDEX row was renamed to reserved ID
+`IMP-20260721-014`, and head `37dfc8b` now has exactly the new note plus one INDEX append relative to
+main. GitHub reports CLEAN/MERGEABLE and both hosted summaries are green. The coordination hold is
+resolved; Frontend collaborator/user merge is the remaining human action.
 
 - [ ] Team member clones the private repository and reads the handoff.
 - [ ] They reproduce the pinned runtime and current frontend baseline.

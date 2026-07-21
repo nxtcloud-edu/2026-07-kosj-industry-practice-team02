@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- User selected Q-SEED-002=A at governance time `2026-07-20T20:41:24+09:00`; this plan remains Review until separately approved.
+- User selected Q-SEED-002=A at governance time `2026-07-20T20:41:24+09:00`; Q-MVP-001=A/D-058 and immediate execution approved this plan on 2026-07-22.
 - Successor is exactly `0.1.0-initial.2`, release ID `sejong-official-0.1.0-initial.2`, generator `data-seed-release-v2`, UTC release time `2026-07-20T11:41:24Z`.
 - Source approval remains exact `PM-LOCAL-001`, `2026-07-19T02:06:19+09:00`, approval SHA-256 `466d7af44cc36a9ee1ea1eed3d90f0e6fa1627fc57c03de5377c6f9f9fef5b6a`.
 - Projection remains exact 19 KB, 3 offices, 10 mappings, semantic SHA-256 `c838a4aa5eb1675d93fbaebd99b63d823490eb172c64cc356c5f72114cc1e4eb`; excluded/mock rows remain 0.
@@ -30,10 +30,10 @@
 ## Status and approval boundary
 
 - Plan ID: `DATA-SEED-002-PLAN`
-- Status: **Review — execution not approved**
+- Status: **Approved / In Progress — Q-MVP-001=A/D-058**
 - Written specification candidate (Review): `docs/superpowers/specs/2026-07-20-data-seed-002-successor-release-correction-design.md`
 - Architecture decision: D-044 / ADR-0017
-- Execution starts only after the user says `계획 승인, 구현 시작` or equivalent.
+- Execution was authorized by the user's Q-MVP-001=A and `즉시 실행` instruction at `2026-07-22T02:10:11+09:00`.
 - That approval covers local filesystem release, `.1→.2` dispatcher replacement and disposable local
   reset/seed/compensation/replay. It does not cover Q-PII-002 consumer changes, `00700`, public
   deployment, WASTE-03, remote DB, volume deletion or `/ready=200`.

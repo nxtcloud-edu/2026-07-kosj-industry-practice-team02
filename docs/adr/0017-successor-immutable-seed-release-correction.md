@@ -1,6 +1,6 @@
 # ADR-0017: successor immutable seed release로 membership guard 교정
 
-- Status: Accepted; written specification and implementation plan in Review
+- Status: Accepted; written specification and implementation plan Approved/In Progress by D-058
 - Date: 2026-07-20
 - Deciders: 사용자, Codex
 - Related: Q-SEED-002, D-044, A-030, ADR-0015, ADR-0016, DATA-SEED-002
@@ -50,8 +50,9 @@ Q-SEED-002 선택지 A를 채택한다.
 9. 게시 뒤에도 실제 supported runner의 전체 failure rollback, concurrency A/B, seed,
    second-seed rejection, compensation guard, compensation, six-migration replay, final
    projection/citizen-read를 처음부터 다시 통과하기 전에는 `official_data`를 올리지 않는다.
-10. 이번 결정은 written specification과 plan 작성을 승인한 것이며 implementation execution을
-    승인하지 않는다. 사용자의 후속 plan 승인 전 `.2`, dispatcher, DB를 변경하지 않는다.
+10. 최초 D-044는 written specification과 plan 작성까지만 승인했다. 이후 Q-MVP-001=A/D-058의
+    `즉시 실행` 지시가 local `.2`, dispatcher와 disposable DB 실행을 승인했다. actual 전체 PASS
+    전 official-data 승격과 public/remote 실행은 계속 금지한다.
 
 ## Rejected alternatives
 

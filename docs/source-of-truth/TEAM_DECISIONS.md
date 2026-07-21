@@ -43,7 +43,8 @@
   런타임은 container 0·port 54322 listener 0으로 정리됐다. `.1` byte는 수정·삭제하지
   않는다. Q-SEED-002=A/D-044로 기존 effective-option union 권위를 유지하고 같은 승인
   projection의 immutable `0.1.0-initial.2` successor를 만드는 방향은 확정됐다. ADR-0017과
-  DATA-SEED-002 명세·계획은 Review이며 후속 plan 승인 전 `.2`·dispatcher·DB 변경은 0이다.
+  DATA-SEED-002 명세·계획은 Q-MVP-001=A/D-058의 즉시 실행 지시로 Approved/In Progress다.
+  `.1`·v1 불변과 actual 전체 PASS 전 official-data 승격 금지는 유지한다.
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -70,7 +71,7 @@
 - 이름·상세주소는 재현율 우선 보수적 마스킹; 답변 성공률 저하가 입증돼도 정밀도 우선 전환은 인간 재승인 후
 - 초기 runtime 마스커는 표준 라이브러리 기반 결정론적 typed rule engine으로 구현한다. 원문 값 없는 고정 토큰만 반환하고 안전한 결과를 만들 수 없으면 텍스트 저장·실패 질문 row·provider 호출을 금지하며 metadata-only event만 허용한다.
 - 시민 입력이 번호를 “공식 대표번호”라고 표시해도 그 label은 신뢰하지 않고 모든 phone-shaped value를 마스킹한다. 공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다.
-- 안전한 마스킹 text를 만들 수 없으면 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. 질문 text·source/context/office·provider·실패 질문 행·후보는 0이고 질문 없는 metadata event만 허용한다. 공개 계약과 DB enum은 별도 consumer 명세·forward migration 승인 전까지 현재 4개 값으로 유지한다.
+- 안전한 마스킹 text를 만들 수 없으면 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. 질문 text·source/context/office·provider·실패 질문 행·후보는 0이다. Q-MVP-001은 public response enum 동결을 승인했고, 7/25 local milestone에서는 DB event를 만들지 않는다. persistent metadata DB migration은 reserved public `00700` 이후 별도 승인·실행한다.
 - 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니며 실제 시민 질문의 DeepSeek 전송 금지는 유지한다.
 - DeepSeek 외부 호출은 local/private의 서버 검증 합성 fixture에만 허용; 실제 시민·PII·민감정보·공개 운영은 금지
 - 화면 transcript와 대화 token은 현재 탭 메모리에만 유지; 서버 세션·raw transcript·token 영속 저장 금지
@@ -147,6 +148,21 @@
   regression과 별도 배포 승인이 끝날 때까지 remote/public 배포, public admin/API,
   public backend DB credential 사용을 차단하고 local 기준선을 production-ready라고 부르지 않는다.
 
+## 2026-07-25 local/private 핵심 개선 루프 마일스톤
+
+- Q-MVP-001=A/D-058/ADR-0020으로 7월 25일 토요일까지 local/private demo-ready core loop를
+  우선 완료한다. 이는 최종 제품 범위 축소가 아니라 7월 31일 앞의 중간 인수 gate다.
+- 실행 순서는 owner PR 통합·Frontend PR #4 note-ID 교정, DATA-SEED-002 19 ACTIVE, PII/chat
+  계약, deterministic chat API와 `/chat`, 실패 질문·후보·별도 승인·20번째 ACTIVE, 최소
+  `/admin`, 표본 20·회귀 1·보안·데모다.
+- 7월 25일 뒤로 미루는 항목은 DeepSeek 품질 튜닝, 고급 UI polish, 100명 부하, 자동 백업,
+  public deployment와 deferred `00700`이다. 실제 시민 DeepSeek 전송과 public/remote 사용은
+  계속 금지한다.
+- 일정 단축으로도 PII 원문 0, ACTIVE/OFFICIAL-only, server-bound source, author≠reviewer,
+  official/mock 분리, 390/430 keyboard/contrast 최소선은 완화하지 않는다.
+- local/private `/admin`의 role selector는 demo actor 선택일 뿐 인증/RBAC가 아니다. public
+  mode에서는 server-side gate 없이 관리자 router와 UI를 노출하지 않는다.
+
 ## 제출 정보
 
 - 팀명: [직접 입력]
@@ -154,4 +170,4 @@
 - 대표 연락처: [직접 입력]
 - 제출일: [직접 입력]
 - 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.2.5
+- 문서 버전: v2.3.0

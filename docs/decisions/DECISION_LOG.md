@@ -58,6 +58,7 @@
 | D-055 | 2026-07-21 | COLLAB-001 external bootstrap evidence: private `tskwak111/Sejong_AI` was created and ordinary initial push aligned local/remote `main` at `5e09deccc7205503df07d938b6d4a88f4d5a327e`; policy `29776352710` and frozen Frontend CI `29776352718` passed. `koregy` accepted write access, `FRONTEND_COLLABORATOR_LOGIN=koregy`, private visibility, read-only default Actions permissions and the repository direct-push warning were verified. | Operational evidence recorded; COLLAB-001 remains In Progress. Teammate MFA/recovery, Codex App selected-repository-only restriction, Cloud environment/docs-test Draft PR/manual merge, and teammate clone/baseline/self-merge/forbidden-scope rehearsal are not complete. The App installation accesses other repositories, so it must be narrowed and confirmed to `Sejong_AI` only. No private URL, credential, CI-log content, product/API/DB/data/dependency/deployment change is recorded. | COLLAB-001 plan/ADR-0019, IMP-20260721-001 | 사용자 verified external evidence |
 | D-056 | 2026-07-21 | D-055의 Codex App 범위 해석을 정정한다. GitHub App은 `Only select repositories` 설치에서도 모든 public repository에 최소 read-only 접근할 수 있으므로 connector에 public repository가 보인다는 사실은 `All repositories` 증거가 아니다. | D-055의 remote/CI/collaborator 증거는 유지한다. App 범위 상태는 `미충족`이 아니라 `GitHub 설치 UI 사람 확인 대기`다. UI가 이미 `Only select repositories / Sejong_AI`이면 변경 없이 확인하고, `All repositories`일 때만 제한·저장한다. Cloud environment와 Draft-PR 리허설은 여전히 Pending이다. | GitHub official App installation/review docs, COLLAB owner checklist, IMP-20260721-002 | AI evidence correction; human UI confirmation pending |
 | D-057 | 2026-07-21 | 사용자가 GitHub App `Only select repositories / Sejong_AI` 설정과 PR #1 병합 완료를 확인했다. GitHub evidence로 PR #1 merge commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`와 그 SHA의 post-merge Collaboration policy `29782433649`, Frontend CI `29782433682` PASS를 검증했다. | Task 6의 App scope gate는 완료, Cloud environment/docs-only Draft PR/manual merge는 Pending이다. Task 5의 `koregy` MFA/recovery는 계정·repository 공급망 권고 gate이고 첫 Task 7 PR-only rehearsal과 함께 Pending이나 Cloud/backend 진행 블로커는 아니다. 인증 코드·복구 코드는 수집하지 않는다. | 사용자 완료 진술, GitHub PR/repository/Actions evidence, COLLAB owner checklist, IMP-20260721-003 | 사용자·AI verified operational evidence |
+| D-058 | 2026-07-22 | Q-MVP-001=A: 2026-07-25 토요일까지 local/private 핵심 개선 루프 MVP를 완료한다. 기존 4개 분야·20 ACTIVE KB·3페이지·승인형 개선 루프는 유지하고, owner 통합·PR #4 교정→DATA-SEED-002 19 ACTIVE→PII/chat 계약→template chat API와 Frontend→관리자 승인으로 20번째 ACTIVE→표본 20·회귀 1·보안/데모 순으로 실행한다. | Confirmed at `2026-07-22T02:10:11+09:00`. 사용자의 `즉시 실행`은 기존 DATA-SEED-002와 새 MVP-001 명세·계획을 승인한다. 실제 시민 DeepSeek, 품질 튜닝, 100명 부하, 자동 백업, 고급 UI, public/remote/`00700`은 7월 25일 뒤로 미루며 최종 백로그에서 삭제하지 않는다. privacy/ACTIVE/source/approval/accessibility gate는 완화하지 않는다. | Q-MVP-001, ADR-0020, MVP-001 audit/spec/plan | 사용자 |
 
 새 결정은 기존 값을 덮어쓰지 않고 새 행과 ADR/노트 링크를 추가한다.
 Q-SEC-004/A-022와 Q-SEC-005/A-023은 각각 D-029/D-030으로 결정됐지만 실제 보정이 불충분했다.
@@ -70,8 +71,9 @@ written specification은 확정됐고 D-039로 실행계획까지 승인됐다. 
   grantor-option union 대 `.1` single-row guard 충돌로 Blocked였다. 사용자는 D-044에서 successor
   `.2`를 선택했고 명세·계획 작성까지만 승인했다. D-040은 과거 미결정 상태에서 의도적으로
   생성하지 않았으며 번호를 소급 채우지 않는다. D-045는 privacy consumer의 시민 동작을,
-  D-046은 public-preparation 보안 방향을 확정했다. active contract/DB migration은 각각 별도
-  명세·계획·승인까지 불변이고, DATA-SEED-002도 plan 승인 전 실행하지 않는다. D-037의 static
+  D-046은 public-preparation 보안 방향을 확정했다. 이후 D-058/Q-MVP-001이 DATA-SEED-002와
+  local/private core-loop 명세·계획을 승인해 실행을 시작했다. privacy response contract는
+  D-058 범위에서 동결하되 persistent metadata DB migration과 public `00700`은 별도다. D-037의 static
   WEB-HOME/chat shell은 구현·검증 완료됐다. DB-001은 disposable `0.3.0-local`로 완료됐지만
   D-046의 `00700` 구현·검증 전에는 public release를 계속 차단한다. D-047~D-053은 source-control
   collaboration의 방향과 권한을 확정했으며 실제 private remote·CI·invite·Cloud 연결은 승인된

@@ -4,6 +4,8 @@
 
 ### Added
 
+- Q-MVP-001 four-day local/private milestone: D-058/ADR-0020, 2026-07-25 19→20 ACTIVE core-loop
+  scope, date/role plan, DATA-SEED-002 execution approval and explicit post-Saturday deferrals
 - Cloud exact runtime evidence: Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`,
   clean tree/docs PASS and zero file/commit/PR/secret/provider/DB/Docker/deployment use; COLLAB Task 6 complete
 - Post-COLLAB sequencing evidence: hold the existing teammate onboarding branch until its colliding note `012`

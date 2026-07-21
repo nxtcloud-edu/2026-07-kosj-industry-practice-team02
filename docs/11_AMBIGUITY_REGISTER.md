@@ -33,8 +33,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
 | A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
-| A-030 | A / Blocker | official seed correction | Resolved decision / spec·plan Review | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044 / ADR-0017. 후속 plan 승인 전 `.2`/dispatcher/DB 실행 0 |
-| A-031 | B / High | unresolved PII consumer response | Resolved behavior / consumer implementation deferred | Q-PII-002=A: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045 / ADR-0004. 별도 public contract+forward DB migration 명세·승인 전 route 차단 |
+| A-030 | A / Blocker | official seed correction | Resolved / spec·plan Approved/In Progress | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044/D-058 / ADR-0017/0020. Q-MVP-001 즉시 실행 승인; actual PASS 전 official-data 승격 0 |
+| A-031 | B / High | unresolved PII consumer response | Resolved / MVP consumer plan approved | Q-PII-002=A: contract에 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045/D-058 / ADR-0004/0020. local milestone은 failed row·DB event 0; persistent metadata migration은 reserved `00700` 이후 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
 | A-033 | A | Git source remote·access | Resolved / App scope confirmed | private `tskwak111/Sejong_AI`, merge commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`, post-merge hosted CI, `koregy` write/variable과 사용자의 GitHub UI `Only select repositories / Sejong_AI` 확인을 기록했다 | D-047/D-053~D-057 / ADR-0019 |
 | A-034 | A | Frontend ownership | Resolved | Q-OWN-001=A: 인간 팀원이 세 페이지·typed client·화면 상태·반응형·접근성·frontend unit/E2E 전체 소유 | D-048 / frontend handoff; contract/backend/DB/data/security는 owner 요청 |
@@ -43,6 +43,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-037 | A | Codex Cloud merge·secret | Resolved policy | Q-CLOUD-001=A: Cloud는 branch+Draft PR만, 사람이 merge; secret·DeepSeek·Docker actual 없음 | D-051 / ADR-0019 |
 | A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Tasks 1~4 완료, Task 5 partial, Task 6 partial, Task 7 pending. App scope·PR #1 merge/post-merge CI·secret-free Cloud environment 저장은 확인됐고 teammate MFA/recovery·첫 PR-only rehearsal, Cloud docs-only task/Draft PR/manual merge와 나머지 Task 7 rehearsal이 남았다 | D-052~D-057 / collaboration design and plan |
 | A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
+| A-040 | A / Blocker | 7/25 MVP scope·schedule | Resolved / execution In Progress | Q-MVP-001=A: 최종 범위를 삭제하지 않고 local/private 19→20 ACTIVE 핵심 루프를 7/25 중간 마일스톤으로 고정; DATA-SEED-002와 MVP-001 plan 즉시 실행 | D-058/ADR-0020. DeepSeek tuning·100명·자동 backup·고급 UI·public deploy는 7/25 뒤 P1, 안전 gate는 유지 |
 
 ## 우선도 정의
 
@@ -51,7 +52,8 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 열린 인간 결정형 A/Blocker는 0개다. A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
+현재 열린 인간 결정형 A/Blocker는 0개다. A-040/Q-MVP-001은 2026-07-22 D-058로 해결됐고,
+A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
 사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
 보존한다. COLLAB-001은 Task 4 완료와 Task 5 partial external evidence를 기록했고, private
 owner/repository/collaborator identifiers, Codex App의 `Sejong_AI` 단일-repository 제한과 secret-free
@@ -59,14 +61,16 @@ Cloud environment 저장은 확인됐다. 남은 외부 gate는 teammate MFA/rec
 PR-only/no-direct-main-push rehearsal, Cloud docs-only task/Draft PR/manual merge 및 teammate
 onboarding/self-merge/forbidden-scope rehearsal이다. AI가 이 남은 성공 증거를 추정하지 않는다.
 A-032/Q-PII-003은 2026-07-20 D-043으로 해결돼 AI-001A pure core 실행이 승인됐다.
-A-031/Q-PII-002의 시민 동작은 D-045로 해결됐다. route/consumer activation은 공개 계약과
-forward DB migration을 함께 다루는 별도 명세·승인 전까지 Blocked다.
+A-031/Q-PII-002의 시민 동작은 D-045로 해결됐고 Q-MVP-001/D-058이 local consumer·공개
+response enum 실행을 승인했다. local milestone은 개인정보 unresolved DB event를 만들지 않으며,
+persistent metadata migration은 reserved public `00700` 이후 별도 승인한다.
 A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
 2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
 byte-active dispatcher를 완료했지만 `[db.seed].enabled=false`다. Task 6 actual DB cycle은 seed write
 전 grantor별 effective-option union 권위와 `.1` single-row guard 충돌로 Blocked다. 인간 결정 전
 `.1`·role/grant·migration을 바꾸지 않고 `official_data=0.0.0-not-populated`, `/ready=503`을
-  유지했다. Q-SEED-002=A/D-044가 `.2` successor 방향을 해결했지만 plan 승인 전 실행하지 않는다.
+  유지했다. Q-SEED-002=A/D-044가 `.2` successor 방향을 해결했고 Q-MVP-001=A/D-058이
+  명세·계획의 즉시 실행을 승인했다.
   Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
@@ -152,8 +156,8 @@ Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게
   membership를 바꾸는 보안/스키마 변경이므로 별도 migration, rollback, replay, 배포 검토가
   필요하다.
 - 당신의 추천안: A. 권위 계약을 하나로 유지하고 immutable correction 정책을 지킨다.
-- 실행 경계: written specification/plan은 Review다. 후속 plan 승인 전 `.2`, dispatcher,
-  disposable DB와 official-data version을 변경하지 않는다.
+- 실행 경계: Q-MVP-001=A/D-058로 written specification/plan이 Approved/In Progress가 됐다.
+  `.2`, dispatcher와 disposable DB actual은 실행하되 전체 PASS 전 official-data version을 변경하지 않는다.
 - 영향 범위: A는 successor official release/schema/manifest/generator/dispatcher·actual test·lineage/version 승인에,
   B는 그에 더해 DB migration/compensation/pgTAP/role security/deployment에 영향을 준다. 두 선택 모두
   `.1` byte, public API, citizen 답변, READY 활성을 자동 변경하지 않는다.
