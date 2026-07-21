@@ -36,12 +36,12 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-030 | A / Blocker | official seed correction | Resolved decision / spec·plan Review | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044 / ADR-0017. 후속 plan 승인 전 `.2`/dispatcher/DB 실행 0 |
 | A-031 | B / High | unresolved PII consumer response | Resolved behavior / consumer implementation deferred | Q-PII-002=A: 후속 contract에서 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045 / ADR-0004. 별도 public contract+forward DB migration 명세·승인 전 route 차단 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
-| A-033 | A | Git source remote·access | Resolved / Task 4 verified; Task 6 human confirmation pending | private `tskwak111/Sejong_AI`, exact matching `main` SHA, ordinary initial push, `koregy` accepted write access와 variable을 검증했다. 공개 repository 가시성은 App 설치 범위를 증명하거나 반증하지 않으며, GitHub UI의 `Only select repositories / Sejong_AI` 확인만 남았다 | D-047/D-053~D-056 / ADR-0019 |
+| A-033 | A | Git source remote·access | Resolved / App scope confirmed | private `tskwak111/Sejong_AI`, merge commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`, post-merge hosted CI, `koregy` write/variable과 사용자의 GitHub UI `Only select repositories / Sejong_AI` 확인을 기록했다 | D-047/D-053~D-057 / ADR-0019 |
 | A-034 | A | Frontend ownership | Resolved | Q-OWN-001=A: 인간 팀원이 세 페이지·typed client·화면 상태·반응형·접근성·frontend unit/E2E 전체 소유 | D-048 / frontend handoff; contract/backend/DB/data/security는 owner 요청 |
 | A-035 | B | GitHub plan·enforcement | Resolved | Q-GIT-002=A: GitHub Free·0원, private branch protection/CODEOWNERS 강제를 전제하지 않음 | D-049 / ADR-0019; PR·CI·scope policy와 사람 규칙, Pro 전환은 재승인 |
 | A-036 | B | Frontend merge | Resolved policy | Q-GIT-003=B: 허용 frontend-only green PR은 팀원 자가 병합, 경계 밖은 사용자 검토 | D-050 / ADR-0019; GitHub Free 기술적 완전 강제 아님 |
 | A-037 | A | Codex Cloud merge·secret | Resolved policy | Q-CLOUD-001=A: Cloud는 branch+Draft PR만, 사람이 merge; secret·DeepSeek·Docker actual 없음 | D-051 / ADR-0019 |
-| A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Task 4는 완료, Task 5는 partial이다. teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal, repository-limited Codex App, Cloud Draft PR/manual merge와 나머지 Task 7 rehearsal은 Pending이다 | D-052~D-055 / collaboration design and plan |
+| A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Tasks 1~4 완료, Task 5 partial, Task 6 partial, Task 7 pending. App scope·PR #1 merge/post-merge CI·secret-free Cloud environment 저장은 확인됐고 teammate MFA/recovery·첫 PR-only rehearsal, Cloud docs-only task/Draft PR/manual merge와 나머지 Task 7 rehearsal이 남았다 | D-052~D-057 / collaboration design and plan |
 | A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
 
 ## 우선도 정의
@@ -54,10 +54,10 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 현재 열린 인간 결정형 A/Blocker는 0개다. A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
 사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
 보존한다. COLLAB-001은 Task 4 완료와 Task 5 partial external evidence를 기록했고, private
-owner/repository/collaborator identifiers는 기록됐다. 남은 외부 gate는 teammate MFA/recovery와
-첫 Task 7 PR-only/no-direct-main-push rehearsal, Codex App의
-`Sejong_AI` 단일-repository 제한 확인, Cloud Draft PR/manual merge 및 teammate onboarding/self-merge/
-forbidden-scope rehearsal이다. AI가 이 남은 성공 증거를 추정하지 않는다.
+owner/repository/collaborator identifiers, Codex App의 `Sejong_AI` 단일-repository 제한과 secret-free
+Cloud environment 저장은 확인됐다. 남은 외부 gate는 teammate MFA/recovery와 첫 Task 7
+PR-only/no-direct-main-push rehearsal, Cloud docs-only task/Draft PR/manual merge 및 teammate
+onboarding/self-merge/forbidden-scope rehearsal이다. AI가 이 남은 성공 증거를 추정하지 않는다.
 A-032/Q-PII-003은 2026-07-20 D-043으로 해결돼 AI-001A pure core 실행이 승인됐다.
 A-031/Q-PII-002의 시민 동작은 D-045로 해결됐다. route/consumer activation은 공개 계약과
 forward DB migration을 함께 다루는 별도 명세·승인 전까지 Blocked다.
@@ -88,8 +88,8 @@ A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat 
 ## 현재 열린 인터뷰 질문
 
 없음. D-053으로 A-039/Q-GIT-004가 해결됐고 D-054로 COLLAB-001 실행계획이 승인됐다. Task 4와
-Task 5는 partial이며, MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push, Cloud/onboarding
-rehearsal은 설계 질문이 아닌 인간 실행 증거로 남는다.
+Task 5는 partial이며, MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push, Cloud docs-only
+task/Draft PR/manual merge 및 나머지 onboarding rehearsal은 설계 질문이 아닌 인간 실행 증거로 남는다.
 
 ## 2026-07-20 해결된 인터뷰 질문
 

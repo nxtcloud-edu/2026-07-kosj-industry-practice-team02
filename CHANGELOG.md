@@ -4,6 +4,23 @@
 
 ### Added
 
+- Cloud rehearsal result triage: the first agent run produced an internal two-file commit and truthful
+  missing-scanner failure, but independent GitHub evidence shows no remote branch or Draft PR; the run
+  is held from publication because its generated note ID collides with the local integration branch,
+  and the next run must use the actual PowerShell current-tree scanner after local docs integration
+- Frontend owner-to-teammate kickoff handoff with a copy/paste security preflight, GitHub clone,
+  exact Node/pnpm/uv/Python provisioning, full frontend baseline, two-file onboarding PR/self-merge
+  gate and structured completion report; remote `main`/local pre-merge divergence is now recorded
+  truthfully and product coding waits for the shared-contract consumption boundary
+- Codex Cloud runtime fallback for the selector's actual Node `22 / 20 / 18` limit: use Python `3.12`
+  and temporary Node `22`, then persist exact Node `24.12.0`/Python `3.12.13` with nvm/pyenv before
+  frozen pnpm/uv installs; screenshot evidence confirms universal/manual setup, empty env/secrets, enabled
+  cache and the visible nvm/pyenv prefix; the `sejong-ai-cloud-docs` environment is now saved with agent
+  internet Off, and the first rehearsal starts from `main` while writing only to its requested `codex/*`
+  task branch; first-task setup execution and Draft-PR evidence remain pending
+- D-057 COLLAB-001 post-merge evidence: user-confirmed `Only select repositories / Sejong_AI`, PR #1
+  merge commit and green post-merge collaboration/frontend Actions; App scope is complete while Cloud
+  Draft-PR and teammate MFA/onboarding evidence remain pending
 - COLLAB-001 owner/teammate execution checklist for GitHub App UI confirmation, MFA/recovery,
   bootstrap PR merge, no-secret Codex Cloud Draft-PR rehearsal, Frontend clone/baseline/self-merge and
   forbidden-scope close-without-merge rehearsal; D-056 corrects the earlier inference that public

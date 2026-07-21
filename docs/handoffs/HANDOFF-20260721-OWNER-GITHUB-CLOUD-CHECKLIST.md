@@ -2,7 +2,8 @@
 
 - 대상: 저장소 소유자 `tskwak111`, Frontend 협업자 `koregy`
 - 적용 저장소 식별자: `tskwak111/Sejong_AI` (private)
-- 상태: Task 4 완료, Task 5 일부 완료, Tasks 6~7 대기
+- 상태: Task 4 완료, Task 5 일부 완료, Task 6 일부 완료, Task 7 대기. 첫 Cloud internal run은
+  원격 미게시 상태로 HOLD하며 corrected rerun이 필요하다.
 - 원칙: `main` 직접 push 금지, Codex Cloud는 Draft PR까지만, 비밀·시민 원문은 GitHub/Cloud에 입력하지 않음
 
 이 문서는 사람이 실제 화면에서 해야 하는 COLLAB-001 후속 작업을 실행 순서대로 설명한다. 공개 배포,
@@ -11,18 +12,19 @@ remote DB, DeepSeek 실호출, Docker/Supabase actual gate를 승인하거나 �
 ## 0. 가장 빠른 실행 순서
 
 ```text
-지금: GitHub App 설정 확인 ─┐
-                           ├─> PR #1 검토·병합
-지금: koregy MFA 확인 ──────┘
-
-PR #1 병합 뒤: Codex Cloud 문서-only 리허설 ─┐
-                                             ├─> 두 PR 증거 확인 → COLLAB-001 마감 판단
-PR #1 병합 뒤: koregy 온보딩·정책 리허설 ────┘
+완료: GitHub App 범위 확인 + PR #1 병합 + secret-free Cloud 환경 저장
+현재: owner-review Draft PR #2 검토·병합
+  → refreshed main에서 corrected Cloud 문서-only 리허설 새로 실행
+  → 실제 Draft PR 검토·수동 병합
+병렬 가능: koregy MFA 확인 + onboarding·정책 리허설
+  → 두 경로 증거 확인 → COLLAB-001 마감 판단
 ```
 
-- GitHub App 확인과 `koregy` MFA 확인은 서로 독립이므로 동시에 해도 된다.
-- PR #1은 App 설정이 `Only select repositories / Sejong_AI`임을 확인한 뒤 병합한다.
-- Cloud와 팀원 리허설은 PR #1의 협업 정책 파일이 `main`에 들어간 뒤 서로 병렬로 진행한다.
+- GitHub App 범위, PR #1과 Cloud 환경 저장은 완료됐다.
+- 첫 Cloud internal run `b080a89`/`make_pr` 결과는 remote branch나 Draft PR이 아니며 현재 게시하지 않는다.
+- Draft PR #2의 hosted policy/Frontend CI는 PASS했다. 이 PR을 사람이 검토·병합한 뒤 Cloud는 새 task에서
+  재실행한다. 팀원 MFA/onboarding은 독립적으로
+  진행할 수 있지만, published handoff가 필요하면 같은 문서 통합 뒤 시작한다.
 - 체크리스트를 읽었다는 사실만으로 Tasks 5~7을 완료 처리하지 않는다. 실제 PR·CI·사람 확인이 필요하다.
 
 ## 1. 저장소 소유자 — GitHub App 범위 확인
@@ -140,9 +142,11 @@ PR #1 병합 확인 뒤 진행한다. 공식 개요는
 3. `https://chatgpt.com/codex/settings/environments`로 이동해 **Create Environment**를 누른다.
 4. repository로 `tskwak111/Sejong_AI`를 선택한다.
 5. 환경 이름은 `sejong-ai-cloud-docs`로 한다.
-6. Runtime/package 설정에서 선택할 수 있으면 Node `24.12.0`, Python `3.12.13`을 지정한다. exact patch를
-   선택할 수 없는 UI라면 임의로 계속하지 말고 setup 검증 결과를 확인한다. pnpm과 uv도 아래 setup에서
-   exact 버전을 확인한다.
+6. **Set package versions / 사전 설치된 패키지**에서 Python `3.12`, Node.js `22`를 선택한다. 현재 UI가
+   제공하는 Node 선택지는 `22 / 20 / 18`뿐이다. 여기의 Node `22`는 컨테이너를 시작하기 위한 임시
+   bootstrap 값이며 저장소 실행 버전이 아니다. 최신 공식 `universal` image에는 Node 24도 `nvm`으로
+   설치되어 있으므로, 아래 setup script가 Node `24.12.0`을 설치·기본값으로 전환한 뒤에만 dependency를
+   설치한다. Ruby/Rust/Go/Bun/PHP/Java/Swift는 이 저장소에서 사용하지 않으므로 기본값을 유지한다.
 
 ### 4.2 Setup script
 
@@ -150,6 +154,16 @@ PR #1 병합 확인 뒤 진행한다. 공식 개요는
 
 ```bash
 set -euo pipefail
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+. "$NVM_DIR/nvm.sh"
+nvm install 24.12.0
+nvm alias default 24.12.0
+nvm use 24.12.0
+
+pyenv install -s 3.12.13
+pyenv global 3.12.13
+
 corepack enable
 corepack prepare pnpm@11.13.0 --activate
 test "$(node --version)" = "v24.12.0"
@@ -162,9 +176,16 @@ test "$("$UV_BIN" --version)" = "uv 0.11.28"
 "$UV_BIN" sync --project apps/api --frozen
 ```
 
-Setup은 별도 shell에서 실행되므로 `export`한 임시 값에 의존하지 않는다. dependency 설치를 위한 setup 인터넷은
-사용할 수 있지만, agent 작업 중 인터넷 접근은 **Off**로 둔다. 나중에 인터넷이 꼭 필요한 별도 작업이 생기면
-목적지 allowlist와 이유를 먼저 검토한다.
+`nvm alias default`와 `pyenv global`은 다음 shell에서도 exact runtime을 선택하도록 각 도구의 persistent
+설정을 바꾼다. 첫 `export NVM_DIR`은 setup shell에서 `nvm`을 불러오기 위한 값일 뿐 agent 단계의 임시
+환경변수로 의존하지 않는다. setup은 별도 shell에서 실행되며 dependency/runtime 설치를 위한 인터넷은 사용할
+수 있지만, agent 작업 중 인터넷 접근은 **Off**로 둔다. 나중에 인터넷이 꼭 필요한 별도 작업이 생기면 목적지
+allowlist와 이유를 먼저 검토한다.
+
+근거는 OpenAI의 [Cloud environment 설명](https://learn.chatgpt.com/docs/environments/cloud-environment),
+[`universal` Dockerfile](https://github.com/openai/codex-universal/blob/main/Dockerfile),
+[`setup_universal.sh`](https://github.com/openai/codex-universal/blob/main/setup_universal.sh)다. setup이 실패하면
+Node engine을 22로 낮추지 말고 secret이 없는 오류 출력만 보관해 owner에게 전달한다.
 
 ### 4.3 환경변수·비밀
 
@@ -179,10 +200,15 @@ Setup은 별도 shell에서 실행되므로 `export`한 임시 값에 의존하�
 
 ## 5. 저장소 소유자 — 첫 Codex Cloud Draft PR 리허설
 
-새 Cloud 작업을 만들고 아래 프롬프트를 그대로 붙여 넣는다.
+> **현재 HOLD:** 기존 `COLLAB-CLOUD-REHEARSAL-001` 결과에서 **Create/Open pull request를 누르지
+> 않는다.** 그 run은 존재하지 않는 scanner 경로를 실행했고 local integration branch와 note ID가
+> 충돌한다. local post-merge 문서 PR을 `main`에 병합한 뒤, environment cache를 reset하고 아래
+> `COLLAB-CLOUD-REHEARSAL-002`를 **새 작업**으로 실행한다.
+
+refreshed `main`을 확인한 뒤 새 Cloud 작업을 만들고 아래 프롬프트를 그대로 붙여 넣는다.
 
 ```text
-TASK COLLAB-CLOUD-REHEARSAL-001 — docs-only Cloud rehearsal
+TASK COLLAB-CLOUD-REHEARSAL-002 — corrected docs-only Cloud rehearsal
 
 먼저 AGENTS.md와 docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md를 읽어라.
 
@@ -196,10 +222,10 @@ contracts, apps/api, apps/web, database, supabase, official/staging data, securi
 scripts/new_implementation_note.py로 노트를 생성하고, Cloud 환경에서 AGENTS를 읽고 문서 검사와 diff 검토를
 수행했다는 사실만 기록하라. Windows/Docker/Supabase/DeepSeek/local-only gate는 Pending으로 명시하라.
 
-branch는 codex/COLLAB-CLOUD-REHEARSAL-001-doc-check를 사용하고 Draft PR만 만들어라. 병합하지 마라.
+branch는 codex/COLLAB-CLOUD-REHEARSAL-002-doc-check를 사용하고 Draft PR만 만들어라. 병합하지 마라.
 실행할 검증:
 python -B scripts/check_repository_docs.py
-python -B scripts/check_current_tree_secrets.py --root .
+pwsh -NoProfile -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
 git diff --check
 git status --short
 ```
@@ -207,7 +233,7 @@ git status --short
 ### 결과 확인
 
 1. Cloud 작업 결과의 diff에서 새 `IMP-*-cloud-*.md` 1개와 INDEX append 1개만 있는지 확인한다.
-2. Cloud UI의 **Create/Open pull request**를 눌러 PR을 만든다.
+2. 이 corrected rerun의 결과임을 확인한 뒤에만 Cloud UI의 **Create/Open pull request**를 눌러 PR을 만든다.
 3. 반드시 **Draft** 상태인지 확인한다. Ready로 열렸다면 즉시 **Convert to draft**한다.
 4. 병합하지 말고 PR 번호만 소유자 Codex 작업에 알려 준다.
 
@@ -293,7 +319,7 @@ $NotePath
 git status --short
 git diff --check
 python -B scripts/check_repository_docs.py
-python -B scripts/check_current_tree_secrets.py --root .
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
 git add -- $NotePath docs/implementation-notes/INDEX.md
 git commit -m "docs(web): record frontend collaborator onboarding"
 git push -u origin feat/web-COLLAB-ONBOARDING-doc-check

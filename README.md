@@ -51,9 +51,10 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   자가 병합, Codex Cloud Draft-PR-only 운영 명세와
   [COLLAB-001 실행계획](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md)은
   승인·부분 실행됐다. private `tskwak111/Sejong_AI` bootstrap, matching `main`, hosted policy/Frontend
-  CI와 `koregy` write/variable evidence는 검증됐다. Task 5는 부분 완료로, teammate MFA/recovery와
-  첫 Task 7 PR-only/no-direct-main-push rehearsal이 남았다. repository-limited Codex App, Cloud
-  Draft-PR/manual merge와 Frontend onboarding rehearsal도 Pending이다. Q-GIT-004=A로 본인 author
+  CI와 `koregy` write/variable evidence는 검증됐다. PR #1 merge와 post-merge CI, Codex App
+  `Only select repositories / Sejong_AI` 사용자 확인도 완료됐다. Task 5는 부분 완료로 teammate
+  MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이 남았고, Cloud Draft-PR/manual
+  merge와 Frontend onboarding rehearsal도 Pending이다. Q-GIT-004=A로 본인 author
   email의 private collaborator 공개와 기존 history·SHA 보존은 확정됐다.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
 - 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
