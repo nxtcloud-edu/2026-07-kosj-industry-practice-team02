@@ -319,8 +319,10 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
         self.assertIn("NOT locks.granted", concurrency.LOCK_WAIT_QUERY)
         self.assertIn("locks.locktype", concurrency.LOCK_WAIT_QUERY)
         self.assertIn(
-            "locks.relation::pg_catalog.regclass::text", concurrency.LOCK_WAIT_QUERY
+            "locks.relation = 'app_private.interaction_events'::pg_catalog.regclass",
+            concurrency.LOCK_WAIT_QUERY,
         )
+        self.assertNotIn("regclass::text", concurrency.LOCK_WAIT_QUERY)
         self.assertIn("locks.mode", concurrency.LOCK_WAIT_QUERY)
         self.assertNotIn("pg_stat_activity", concurrency.LOCK_WAIT_QUERY)
         self.assertEqual(
@@ -333,27 +335,27 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
             (
                 [999],
                 "relation",
-                "app_private.interaction_events",
+                True,
                 "RowShareLock",
                 False,
             ),
-            ([701], "relation", "app_private.audit_logs", "RowShareLock", False),
+            ([701], "relation", False, "RowShareLock", False),
             (
                 [701],
                 "relation",
-                "app_private.interaction_events",
+                True,
                 "RowExclusiveLock",
                 False,
             ),
             (
                 [701],
                 "relation",
-                "app_private.interaction_events",
+                True,
                 "RowShareLock",
                 True,
             ),
-            ([701], "advisory", None, "ExclusiveLock", False),
-            ([701], "relation", "app_private.interaction_events", "RowShareLock"),
+            ([701], "advisory", False, "ExclusiveLock", False),
+            ([701], "relation", True, "RowShareLock"),
         )
         for row in unrelated_rows:
             with self.subTest(row=row):
@@ -394,7 +396,7 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                 (
                     [701],
                     "relation",
-                    "app_private.interaction_events",
+                    True,
                     "RowShareLock",
                     False,
                 )

@@ -61,7 +61,7 @@ LOCK_WAIT_QUERY = """
 SELECT
   pg_catalog.pg_blocking_pids(%s),
   locks.locktype,
-  locks.relation::pg_catalog.regclass::text,
+  locks.relation = 'app_private.interaction_events'::pg_catalog.regclass,
   locks.mode,
   locks.granted
 FROM pg_catalog.pg_locks AS locks
@@ -147,12 +147,12 @@ def _wait_until_lock_blocked(
         for row in rows:
             if len(row) != 5:
                 continue
-            blockers, locktype, relation, mode, granted = row
+            blockers, locktype, relation_matches, mode, granted = row
             if (
                 isinstance(blockers, (list, tuple))
                 and seed_backend_pid in blockers
                 and locktype == "relation"
-                and relation == "app_private.interaction_events"
+                and relation_matches is True
                 and mode == CAPABILITY_FIRST_ACCESS_LOCK_MODE
                 and granted is False
             ):
