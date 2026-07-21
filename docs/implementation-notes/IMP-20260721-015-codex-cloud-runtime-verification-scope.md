@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-21T16:43:00+09:00
 - Task ID: COLLAB-CLOUD-RUNTIME-EVIDENCE-001
 - Type: documentation-environment-handoff
-- Status: Done — read-only Cloud prompt prepared; human execution Pending
+- Status: Done — actual read-only Cloud runtime evidence PASS
 - Author/Agent: Codex primary agent
 - Branch: `codex/COLLAB-001-pr2-merge-evidence`
 - Base commit: `b64f4c4`
@@ -39,13 +39,13 @@
 - 관련 파일: COLLAB plan Task 6, owner Cloud checklist, `AGENTS.md`.
 - 기존 동작: secret-free Cloud environment와 docs-only Draft PR/manual merge는 검증됐다.
 - 발견한 충돌/부채: exact Node `24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28` 실제 출력이 tracked evidence에 없다.
-- Git 상태: local docs branch clean before this request; Cloud execution itself is Pending.
+- Git 상태: local docs branch clean before this request. User-reported Cloud result has files/commit/PR 0 and `HEAD=d54fd6f`, matching independently fetched `origin/main`.
 
 ## 4. 미지의 영역·가정·인터뷰
 
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
-| CLOUD-RUNTIME-001 | Human execution | Cloud runtime actual values | mismatch면 설치/수정하지 않고 실제 값과 실패 명령만 보고 | supply-chain reproducibility |
+| CLOUD-RUNTIME-001 | Resolved | Cloud runtime actual values | Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28` PASS | supply-chain reproducibility |
 | CLOUD-RUNTIME-002 | Security | 환경 전체 출력은 secret 노출 가능 | `env`, `printenv`, `.env` 열람 금지 | credential confidentiality |
 | CLOUD-RUNTIME-003 | Scope | no-change task가 branch/PR을 만들 필요가 있는가 | 파일 변경·commit·PR 모두 금지 | note sequence/PR churn 방지 |
 
@@ -72,7 +72,7 @@ Cloud PR rehearsal은 이미 완료됐고 남은 Task 6 gap은 exact runtime 출
 |---|---|---|
 | COLLAB plan | exact read-only Cloud prompt 추가 | canonical reproduction |
 | this note/INDEX | 사용자 안내와 경계 기록 | request-level audit |
-| manifest | docs `2.10.3→2.10.4` | lineage |
+| manifest | prompt docs `2.10.3→2.10.4`, actual evidence `2.10.4→2.10.5` | lineage |
 
 ### 데이터 흐름/상태 변화
 
@@ -102,7 +102,7 @@ Cloud setup/cache
 | Mock data | 0.0.0-not-populated | unchanged | no fixture |
 | Prompt set | 0.0.2-deepseek-v4-flash-selected | unchanged | no provider call |
 | Test suite | 1.0.0-collaboration | unchanged | existing docs check only |
-| Docs | 2.10.3 | 2.10.4 | Cloud runtime handoff |
+| Docs | 2.10.3 | 2.10.5 | Cloud runtime prompt and actual PASS evidence |
 
 ## 8. 명령과 테스트 증거
 
@@ -112,10 +112,17 @@ Cloud setup/cache
 | `codex mcp add openaiDeveloperDocs --url https://developers.openai.com/mcp` | PASS | global docs MCP registered | terminal; app restart may be needed |
 | official-domain fallback search | Partial | official Codex use-case page found; environment-specific claims not derived from it | official OpenAI docs |
 | repository plan/prompt review | PASS | Task 6 exact versions and local-only boundaries confirmed | tracked COLLAB plan |
+| user-provided Cloud `node --version` | PASS | expected/actual `v24.12.0` | Cloud result |
+| user-provided Cloud `python --version` | PASS | expected/actual `Python 3.12.13` | Cloud result |
+| user-provided Cloud `pnpm --version` | PASS | expected/actual `11.13.0` | Cloud result |
+| user-provided Cloud `uv --version` | PASS | expected `uv 0.11.28`; actual `uv 0.11.28 (x86_64-unknown-linux-gnu)` | Cloud result |
+| user-provided Cloud git/docs checks | PASS | HEAD `d54fd6f`; status empty; diff exit 0; repository docs PASS | Cloud result |
+| user-provided zero-use confirmation | PASS | files/commit/PR 0; secret/provider/DB/Docker/deployment use 0 | Cloud result |
+| `git fetch`; `origin/main`; GitHub PR list | PASS | `origin/main=d54fd6f...`; no new Cloud PR/commit observed | independent local/GitHub evidence |
 
 ### 미실행 검증과 이유
 
-- Cloud runtime commands: user must submit the task in Cloud; Pending.
+- Cloud output was supplied by the user; the Cloud container itself is not directly accessible from this local task, so exact runtime lines are accepted as user-provided execution evidence and cross-checked against remote HEAD/no-new-PR state.
 - product/API/DB/browser tests: repository behavior change 0.
 - DeepSeek/Supabase/Docker: explicitly prohibited in this Cloud task.
 
@@ -133,8 +140,7 @@ Cloud setup/cache
 
 ## 11. 인간이 반드시 알아야 하거나 승인할 내용
 
-- Cloud 새 task에 아래 canonical prompt를 붙여 넣어야 실제 evidence가 완료된다.
-- task 결과에서 값이 다르면 수정하지 말고 결과를 owner Codex에게 전달한다.
+- Task 6 exact runtime evidence is complete; no rerun is required unless the Cloud environment/setup changes.
 - DeepSeek API key는 Cloud에 넣지 않는다.
 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
@@ -154,18 +160,18 @@ Cloud에서 `sejong-ai-cloud-docs`와 base `main`을 선택하고 COLLAB plan의
 
 ### 다음 개발자 시작점
 
-Cloud result의 네 version과 clean-tree/docs-check 결과를 그대로 수집하고 Task 6 status를 갱신한다.
+Task 6을 완료로 유지하고 Cloud environment/setup 변경 시 같은 read-only prompt를 재사용한다.
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- Pending: actual Cloud runtime output.
+- Complete: actual Cloud runtime output and zero-use confirmation.
 - Local-only: DATA-SEED-002 actual DB, Docker/Supabase, DeepSeek actual.
-- Next: user runs the prompt and returns the textual summary or screenshot.
+- Next: PR #4 note-ID correction/onboarding; DATA-SEED-002 remains separately approval-gated.
 
 ## 15. 자체 리뷰
 
 - [x] 요청 충족
-- [x] 테스트/검증 — prompt/document checks; actual Cloud run Pending 명시
+- [x] 테스트/검증 — user-provided actual Cloud PASS plus independent remote HEAD/no-new-Cloud-PR cross-check
 - [x] source-of-truth/계약/버전 동기화
 - [x] 개인정보 원문 노출 없음
 - [x] 구현 노트 INDEX 갱신

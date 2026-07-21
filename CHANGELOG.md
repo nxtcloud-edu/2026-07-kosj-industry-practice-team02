@@ -4,6 +4,8 @@
 
 ### Added
 
+- Cloud exact runtime evidence: Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`,
+  clean tree/docs PASS and zero file/commit/PR/secret/provider/DB/Docker/deployment use; COLLAB Task 6 complete
 - Post-COLLAB sequencing evidence: hold the existing teammate onboarding branch until its colliding note `012`
   is synchronized and renamed to reserved `014`; run Cloud runtime evidence and approved DATA-SEED-002 in parallel
 - Corrected Cloud rehearsal 002 integration evidence: PR #3 exact two-document scope, explicit Cloud-internal

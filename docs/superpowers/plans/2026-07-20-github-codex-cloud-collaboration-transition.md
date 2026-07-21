@@ -21,8 +21,7 @@ Playwright toolchain, Codex Cloud.
 
 - Plan ID: `COLLAB-001`
 - Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
-  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope, secret-free environment,
-  docs-only PR/manual merge complete; exact runtime version evidence pending); Task 7 pending**
+  PR-only/no-direct-main-push rehearsal pending); Task 6 complete; Task 7 HOLD for note-ID correction**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
 - Decision/ADR: D-047~D-057 / ADR-0019
@@ -405,7 +404,7 @@ rehearsal evidence remain pending.
 
 1. [x] Open [Codex](https://chatgpt.com/codex), connect GitHub and save `sejong-ai-cloud-docs` for the
    repository with agent internet Off and no environment variable or secret.
-2. [ ] Capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
+2. [x] Capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
    `11.13.0` and uv `0.11.28` are active after the setup script.
 3. [x] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
 4. [x] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
@@ -475,10 +474,10 @@ Docker/local-only verification as pending for the user.
 ## Task 7: Onboard the frontend teammate with a no-product-change rehearsal
 
 2026-07-21 coordination hold: remote branch `feat/web-COLLAB-ONBOARDING-doc-check` was force-updated
-while audited (`2178405→9df362d→47472d9`) and still has no PR. Latest head is based on merged
-`main=d54fd6f` but now uses implementation-note ID `IMP-20260721-012`, colliding with the owner evidence
-note `012` awaiting integration. Do not open the teammate PR yet. Integrate owner notes `012/013`, then
-rename the teammate note/INDEX row to reserved ID `IMP-20260721-014`, run the gates and open the PR.
+while audited (`2178405→9df362d→47472d9`) and PR #4 is now open/non-draft. Latest head is based on merged
+`main=d54fd6f` but uses implementation-note ID `IMP-20260721-012`, colliding with the owner evidence note
+`012` awaiting integration. Do not merge PR #4. Integrate owner notes `012/013/015`, then rename the
+teammate note/INDEX row to reserved ID `IMP-20260721-014`, run the gates and continue the PR.
 
 - [ ] Team member clones the private repository and reads the handoff.
 - [ ] They reproduce the pinned runtime and current frontend baseline.
@@ -652,3 +651,7 @@ successful external-state evidence.
   `d54fd6fdc4c941eb083cd14ec5b2354e91f4a982`, fetched `origin/main` at the same SHA, Collaboration policy
   run `29810047993` PASS and full Frontend CI run `29810048119` PASS. Task 6 now retains only exact Cloud
   Node/Python/pnpm/uv version evidence; Task 5 MFA/recovery and Task 7 teammate rehearsals remain Pending.
+- 2026-07-21: user supplied the read-only Cloud runtime result: Node `v24.12.0`, Python `3.12.13`, pnpm
+  `11.13.0`, uv `0.11.28`, HEAD `d54fd6f`, empty status, zero diff and repository docs PASS, with files,
+  commit, PR and secret/provider/DB/Docker/deployment use all 0. Fetched `origin/main` independently matches
+  `d54fd6f` and no new Cloud PR/commit was observed. Task 6 is complete.
