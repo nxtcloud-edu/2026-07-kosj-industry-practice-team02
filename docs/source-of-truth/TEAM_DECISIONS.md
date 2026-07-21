@@ -88,11 +88,11 @@
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
 - 저장소: private `tskwak111/Sejong_AI`에 `5e09deccc7205503df07d938b6d4a88f4d5a327e`를 ordinary
-  first push로 연결했고, PR #1 병합 뒤 현재 remote `origin/main`은
-  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. primary local `main`은 아직 pre-merge SHA이며
-  별도 worktree의 안전한 fast-forward 전까지 remote와 같다고 기록하지 않는다. repository는 private이고
-  post-merge hosted policy `29782433649`와 Frontend CI `29782433682`가 통과했다. `koregy`의 accepted
-  write access·repository variable·read-only default Actions permissions도 검증됐다.
+  first push로 연결했고, PR #1 historical merge SHA는
+  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 현재 remote authority는 `git fetch origin` 뒤
+  `origin/main`으로 확인하며 별도 worktree의 local `main`과 같다고 전제하지 않는다. repository는 private이고
+  PR #1 SHA의 post-merge hosted policy `29782433649`와 Frontend CI `29782433682`가 통과했다.
+  `koregy`의 accepted write access·repository variable·read-only default Actions permissions도 검증됐다.
   Task 5는 partial이며 teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이
   남는다. Q-GIT-004=A/D-053에 따라 author/committer history·SHA는 보존한다.
 - 협업 비용·강제 경계: Q-GIT-002=A로 GitHub Free·초기 0원을 유지한다. private repository의

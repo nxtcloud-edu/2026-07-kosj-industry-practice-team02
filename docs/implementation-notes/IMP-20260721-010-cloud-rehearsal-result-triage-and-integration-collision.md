@@ -83,6 +83,8 @@ Cloud commit은 remote에 없으므로 Draft PR evidence가 아니며, 현재 �
 | 파일/영역 | 변경 내용 | 이유 |
 |---|---|---|
 | TASKS/COLLAB plan | internal run과 actual remote absence, hold/rerun order | status truthfulness |
+| owner checklist/frontend handoff/source-of-truth | old run explicit HOLD, corrected rehearsal 002, canonical setup link, dynamic `origin/main` comparison | reviewer-found stale instructions 제거 |
+| IMP-007 | saved Cloud environment를 Task 6 evidence로 교정 | task ownership accuracy |
 | CHANGELOG/manifest | triage 기록, docs 2.10.1 | lineage |
 | this note/INDEX | 6W1H evidence and next action | request-level handoff |
 
@@ -144,6 +146,7 @@ Cloud internal commit/make_pr
 | `new_implementation_note.py` sequence inspection | PASS | filesystem max+1; concurrent branches can collide | source inspection |
 | final docs/secret/diff/JSON/note-ID checks | PASS | docs exit 0; secret finding 0; diff error 0; JSON valid; local duplicate ID 0 | terminal |
 | fresh remote branch/PR absence gate | PASS | matching branch 0, matching PR 0 | GitHub/terminal |
+| independent whole-diff review | initial FAIL → fixed | Critical 0; Important 3 fixed; Minor 1 fixed | review agent / active docs |
 
 ### 미실행 검증과 이유
 
@@ -199,6 +202,8 @@ local `codex/COLLAB-001-post-merge-evidence` docs를 완성·owner-reviewed PR�
 
 - Cloud commit/branch 내용은 remote에 없으므로 independent patch review가 아직 불가능하다.
 - local documentation branch가 크고 note 003~010을 포함하므로 먼저 final review/PR integration이 필요하다.
+- independent review에서 old-run publish 지시, superseded setup script, hardcoded current main SHA와 Task 5/6
+  오기를 발견해 corrected rerun/dynamic authority/Task 6 wording으로 교정했다.
 - 다음 한 단계: 현재 Cloud 결과 화면에서는 PR 생성을 누르지 않고 local docs integration을 진행한다.
 
 ## 15. 자체 리뷰

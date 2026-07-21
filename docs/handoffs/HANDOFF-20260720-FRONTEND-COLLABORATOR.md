@@ -4,10 +4,9 @@
 - Status: private GitHub bootstrap, post-merge CI, selected-repository Codex App, saved secret-free Cloud
   environment and `koregy` write access verified; human clone/baseline, MFA/recovery, first
   PR-only/self-merge, forbidden-scope and Cloud Draft-PR rehearsals pending
-- Canonical teammate base: remote `origin/main` /
-  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`. Primary local `main` remains at the pre-merge
-  `5e09deccc7205503df07d938b6d4a88f4d5a327e` until its own worktree is safely fast-forwarded; this does
-  not change the teammate clone baseline.
+- Canonical teammate base: clone/pull 시점의 최신 remote `origin/main`. 로컬 `main`과 `origin/main`을
+  명령으로 비교하며 특정 SHA를 현재값으로 고정하지 않는다. PR #1의 historical merge SHA는
+  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다.
 - External evidence: private `tskwak111/Sejong_AI`, PR #1 merge commit `ce8a608...`, post-merge policy
   `29782433649` PASS and Frontend CI `29782433682` PASS; `koregy` accepted write access and the
   configured repository variable match. `sejong-ai-cloud-docs` is saved with agent internet Off and
@@ -47,12 +46,16 @@ gh repo clone tskwak111/Sejong_AI
 Set-Location Sejong_AI
 git switch main
 git pull --ff-only origin main
-git rev-parse HEAD
+$LocalHead = git rev-parse HEAD
+$RemoteHead = git rev-parse origin/main
+$LocalHead
+$RemoteHead
+if ($LocalHead -ne $RemoteHead) { throw "local main is not the fetched origin/main" }
 git status --short
 
 gh auth login 선택은 GitHub.com → HTTPS → Login with a web browser야. PAT·password를 채팅이나 파일에
-적지 마. 현재 기준 remote main SHA는 ce8a6085fb57670ca74e009ed45e3d02d784c24b야. 다르면 임의로
-reset/force-push하지 말고 SHA만 알려줘.
+적지 마. `git pull --ff-only` 뒤 `$LocalHead`와 `$RemoteHead`가 같아야 해. 다르면 임의로
+reset/force-push하지 말고 두 SHA만 알려줘.
 
 [반드시 읽을 문서]
 AGENTS.md

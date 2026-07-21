@@ -48,7 +48,7 @@
 
 | ID | 구분 | 내용 | 결정/기본값 | 영향 |
 |---|---|---|---|---|
-| CLOUD-SAVED-001 | Verified | environment 저장 여부 | saved detail page로 확인 | Task 5 partial evidence |
+| CLOUD-SAVED-001 | Verified | environment 저장 여부 | saved detail page로 확인 | Task 6 partial evidence |
 | CLOUD-SAVED-002 | Verified | safe visible settings | universal/cache On/internet Off/env-secret empty | security boundary |
 | CLOUD-SAVED-003 | Pending | full script tail와 actual setup exit | 첫 task에서 fail-fast output 확인 | runtime gate |
 | CLOUD-SAVED-004 | Pending | Cloud Draft PR | docs-only rehearsal 후 PR 번호 증거 | Task 6 |

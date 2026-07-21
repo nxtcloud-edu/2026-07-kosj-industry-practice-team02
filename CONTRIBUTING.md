@@ -26,11 +26,11 @@ feat/web-WEB-CHAT-001-answer-states
 
 Q-GIT/Q-COLLAB 결정에 따라 private `tskwak111/Sejong_AI` source remote가 연결됐다. 최초 push는
 `5e09deccc7205503df07d938b6d4a88f4d5a327e`에서 보통의 `git push -u origin main`만 사용했고,
-PR #1 병합 뒤 canonical remote `main`은 `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 해당 SHA의
-hosted policy `29782433649`와 Frontend CI `29782433682`가 통과했다. primary local `main`은 자체
-worktree에서 안전하게 fast-forward하기 전까지 초기 SHA에 남아 있으므로 local/remote가 같다고 전제하지
-않는다. `koregy`의 accepted write access, `FRONTEND_COLLABORATOR_LOGIN=koregy`, read-only default
-Actions permissions와 repository-description direct-push warning은 확인됐다.
+PR #1의 historical merge SHA는 `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 해당 SHA의 hosted
+policy `29782433649`와 Frontend CI `29782433682`가 통과했다. 현재 remote 기준은 고정 SHA가 아니라
+`git fetch origin` 뒤 `origin/main`으로 확인하고, 각 worktree local `main`이 같다고 전제하지 않는다.
+`koregy`의 accepted write access, `FRONTEND_COLLABORATOR_LOGIN=koregy`, read-only default Actions
+permissions와 repository-description direct-push warning은 확인됐다.
 MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal은 팀원이 직접 확인해야 한다.
 Codex App의 **Only select repositories / `Sejong_AI`**와 secret-free `sejong-ai-cloud-docs` 환경 저장은
 확인됐다. Cloud docs-only task/Draft PR/manual merge 및 teammate self-merge rehearsal은 아직 없다.

@@ -31,10 +31,10 @@ Playwright toolchain, Codex Cloud.
 - External evidence state on 2026-07-21: approved owner `tskwak111`, private repository `Sejong_AI`,
   and Frontend collaborator `koregy` are verified operational identifiers. The initial ordinary push
   used only `git push -u origin main` at `5e09deccc7205503df07d938b6d4a88f4d5a327e`; after PR #1,
-  remote `origin/main` is `ce8a6085fb57670ca74e009ed45e3d02d784c24b` and its hosted policy
-  `29782433649` and Frontend CI `29782433682` passed. Primary local `main` remains on the pre-merge
-  SHA pending safe fast-forward in its own worktree and is not claimed equal. Private URLs and
-  authentication details are intentionally not recorded.
+  historical merge SHA is `ce8a6085fb57670ca74e009ed45e3d02d784c24b`, whose hosted policy
+  `29782433649` and Frontend CI `29782433682` passed. Resolve current remote authority dynamically as
+  `origin/main` after fetch; do not claim any worktree's local `main` is equal without checking. Private
+  URLs and authentication details are intentionally not recorded.
 - Q-GIT-004=A/D-053 preserves the current history and SHAs. Execution starts only after the user says
   `계획 승인, 구현 시작` or equivalent.
 - This plan does not authorize product code, public deployment, remote DB, schema migration, official
@@ -410,20 +410,12 @@ rehearsal evidence remain pending.
 3. [ ] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
 4. [ ] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
 
-The setup script may install existing locked dependencies because setup has internet access. It must
-not print environment values and must not start Docker, a database or an external LLM request. Prefer:
-
-```bash
-corepack enable
-corepack prepare pnpm@11.13.0 --activate
-test "$(node --version)" = "v24.12.0"
-test "$(corepack pnpm --version)" = "11.13.0"
-corepack pnpm install --frozen-lockfile --ignore-scripts
-python -m pip install --disable-pip-version-check --user uv==0.11.28
-UV_BIN="$(python -c 'import site; print(site.USER_BASE)')/bin/uv"
-test "$("$UV_BIN" --version)" = "uv 0.11.28"
-"$UV_BIN" sync --project apps/api --frozen
-```
+The earlier inline setup example that assumed Node 24 was already selected is superseded. The UI's
+Node 22 bootstrap, `nvm` switch to exact Node `24.12.0`, `pyenv` switch to Python `3.12.13`, pnpm
+`11.13.0`, uv `0.11.28` and frozen installs are defined in the canonical
+[`owner GitHub/Cloud checklist`](../../handoffs/HANDOFF-20260721-OWNER-GITHUB-CLOUD-CHECKLIST.md).
+That script may install existing locked dependencies because setup has internet access, but it must not
+print environment values or start Docker, a database or an external LLM request.
 
 Validate the exact Cloud image first; adjust only after capturing non-secret failure evidence. Do not
 depend on a temporary setup-script `export` surviving into the agent phase; use the resolved persistent

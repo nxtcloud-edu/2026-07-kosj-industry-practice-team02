@@ -189,10 +189,10 @@ guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initi
 ### 저장소·협업·변경 통합
 
 - current history는 private `tskwak111/Sejong_AI` monorepo에 연결됐다. initial push SHA는
-  `5e09deccc7205503df07d938b6d4a88f4d5a327e`, PR #1 뒤 canonical remote `main`은
-  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. post-merge policy and frozen Frontend CI hosted
-  runs passed, and `koregy` collaborator write/variable evidence is verified. primary local `main`은
-  자체 worktree에서 safe fast-forward하기 전까지 pre-merge SHA이므로 remote와 같다고 주장하지 않는다.
+  `5e09deccc7205503df07d938b6d4a88f4d5a327e`, PR #1 historical merge SHA는
+  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 해당 SHA의 post-merge policy and frozen Frontend CI
+  hosted runs passed, and `koregy` collaborator write/variable evidence is verified. current remote
+  authority는 `git fetch origin` 뒤 `origin/main`으로 동적 확인하며 어떤 local `main`도 같다고 전제하지 않는다.
   Task 5 is partial: teammate MFA/recovery and the first Task 7 PR-only/no-direct-main-push rehearsal are
   human-only Pending. Q-GIT-004=A/D-053의 author/committer history·SHA 보존은 유지한다.
   COLLAB-001은 남은 Task 6~7 rehearsal까지 In Progress다.
