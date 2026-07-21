@@ -323,6 +323,10 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
         )
         self.assertIn("locks.mode", concurrency.LOCK_WAIT_QUERY)
         self.assertNotIn("pg_stat_activity", concurrency.LOCK_WAIT_QUERY)
+        self.assertEqual(
+            "RowShareLock",
+            getattr(concurrency, "CAPABILITY_FIRST_ACCESS_LOCK_MODE", None),
+        )
 
     def test_concurrency_wait_rejects_wrong_blocker_relation_or_mode(self) -> None:
         unrelated_rows = (
@@ -330,12 +334,26 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                 [999],
                 "relation",
                 "app_private.interaction_events",
+                "RowShareLock",
+                False,
+            ),
+            ([701], "relation", "app_private.audit_logs", "RowShareLock", False),
+            (
+                [701],
+                "relation",
+                "app_private.interaction_events",
                 "RowExclusiveLock",
                 False,
             ),
-            ([701], "relation", "app_private.audit_logs", "RowExclusiveLock", False),
-            ([701], "relation", "app_private.interaction_events", "ShareLock", False),
+            (
+                [701],
+                "relation",
+                "app_private.interaction_events",
+                "RowShareLock",
+                True,
+            ),
             ([701], "advisory", None, "ExclusiveLock", False),
+            ([701], "relation", "app_private.interaction_events", "RowShareLock"),
         )
         for row in unrelated_rows:
             with self.subTest(row=row):
@@ -354,6 +372,22 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                     ):
                         concurrency._wait_until_lock_blocked(connection, 702)
 
+    def test_concurrency_wait_rejects_missing_lock_rows(self) -> None:
+        connection = _LockProbeConnection([])
+        with (
+            mock.patch.object(
+                concurrency.time,
+                "monotonic",
+                side_effect=[0.0, 1.0, 6.0],
+            ),
+            mock.patch.object(concurrency.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "CAPABILITY_WRITE_DID_NOT_BLOCK",
+            ):
+                concurrency._wait_until_lock_blocked(connection, 702)
+
     def test_concurrency_wait_accepts_only_direct_seed_relation_lock(self) -> None:
         connection = _LockProbeConnection(
             [
@@ -361,13 +395,20 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                     [701],
                     "relation",
                     "app_private.interaction_events",
-                    "RowExclusiveLock",
+                    "RowShareLock",
                     False,
                 )
             ]
         )
-        with mock.patch.object(concurrency.time, "monotonic", side_effect=[0.0, 1.0]):
-            concurrency._wait_until_lock_blocked(connection, 702)
+        with mock.patch.object(
+            concurrency.time,
+            "monotonic",
+            side_effect=[0.0, 1.0, 6.0],
+        ):
+            try:
+                concurrency._wait_until_lock_blocked(connection, 702)
+            except ValueError as error:
+                self.fail(f"exact first-access relation lock was rejected: {error}")
 
         self.assertEqual(1, len(connection.calls))
         self.assertEqual((702, 702), connection.calls[0][1])
