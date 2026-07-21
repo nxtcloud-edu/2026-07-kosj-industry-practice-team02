@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-22T01:30:56+09:00
 - Task ID: COLLAB-OWNER-PR-001
 - Type: documentation-github-publication
-- Status: Draft
+- Status: Done
 - Author/Agent: Codex (owner lane)
 - Branch: codex/COLLAB-001-pr2-merge-evidence
 - Base commit: 592e309
@@ -124,14 +124,17 @@
 | `python -B scripts/check_repository_docs.py` | PASS | publication 전 | local output |
 | Windows PowerShell current-tree secret-pattern scan | PASS | publication 전 | local output |
 | repository-doc/collaboration-scope/history-scanner unit tests | PASS: 65, skipped: 1, failure/error: 0 | 38.504s | local output |
-| committed-tree history/scope/fsck/diff gates | Pending | publication 전 | local output |
-| branch push | Pending | publication 단계 | private origin |
-| Draft PR creation | Pending | publication 단계 | GitHub |
-| hosted checks | Pending | PR push 뒤 | GitHub Actions |
+| first/second proposed-path shell checks | 안전 중단: prefix anchor 오류, 이어서 한글 `core.quotePath` quoting 미정규화 | push 전 2회 | local output; repository diff 문제 아님 |
+| corrected committed-tree gate | PASS: docs/current-tree secret/reachable-history secret/JSON/diff/fsck/note-ID/path allowlist | 15 paths | local output |
+| collaboration scope | PASS with expected `OWNER_REVIEW_REQUIRED` | 15 changes/15 paths | local output |
+| `git push -u origin codex/COLLAB-001-pr2-merge-evidence` | PASS; remote branch created and upstream set | SHA `5feff0b186747c6b5434a09bca0b511264ec78a5` | private origin |
+| Draft PR creation and metadata query | PASS; PR #5 OPEN/Draft, `main` base, expected head, MERGEABLE | 15 files | GitHub |
+| remote SHA comparison | PASS; local HEAD=remote branch=PR head `5feff0b...` at initial publication | 3-way exact | Git/GitHub metadata |
+| initial hosted checks | Frontend CI summary PASS, scope detection PASS, frontend/browser SKIPPED as docs-only; trusted policy IN_PROGRESS at capture | PR #5 initial SHA | GitHub Actions |
 
 ### 미실행 검증과 이유
 
-- committed-tree history/scope/remote/hosted 결과는 아직 Pending이며 실행 뒤 actual 결과로 갱신한다.
+- latest follow-up evidence commit push 뒤 hosted Collaboration policy의 최종 green은 아직 Pending이다.
 - 제품 build/API/DB/Docker/DeepSeek actual은 proposed diff가 docs-only이므로 이 게시 요청의 완료 gate가 아니다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
@@ -156,8 +159,9 @@
 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
 
-- exact publication SHA와 PR 번호는 외부 작업 성공 뒤 note에 추가한다.
+- initial publication commit은 `5feff0b186747c6b5434a09bca0b511264ec78a5`, Draft owner-review PR은 #5다.
 - owner PR은 Collaboration policy상 `OWNER_REVIEW_REQUIRED`가 정상 기대값이다.
+- 두 번의 path allowlist 중단은 ad-hoc PowerShell 검증식의 진단 오류였다. 첫 번째는 `docs/` prefix 뒤 `.*` 누락, 두 번째는 Git의 한글 경로 quoting 미정규화였고 `git -c core.quotePath=false`로 고친 전체 gate가 exit 0을 확인했다. 두 실패 모두 push 전에 발생했다.
 
 ## 13. 인수인계·재현·롤백
 
@@ -179,13 +183,13 @@
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- pre-push/remote SHA/PR/hosted check 결과가 아직 Pending이다.
+- PR #5는 Draft이며 latest follow-up push 이후 hosted checks 최종 green과 인간 review/merge가 Pending이다.
 - PR #4와 MFA/recovery human-only evidence가 남아 있다.
 
 ## 15. 자체 리뷰
 
-- [ ] 요청 충족
-- [ ] 테스트/검증
+- [x] 요청 충족
+- [x] 테스트/검증
 - [x] source-of-truth/계약/버전 동기화
 - [x] 개인정보 원문 노출 없음
 - [x] 구현 노트 INDEX 갱신
