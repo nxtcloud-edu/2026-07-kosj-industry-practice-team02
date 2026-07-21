@@ -426,6 +426,40 @@ UV path or a Cloud environment PATH setting verified again in the agent task.
 - [x] Confirm it does not merge, request secrets, call DeepSeek or claim local Docker evidence.
 - [x] User reviews and merges the first Cloud PR manually.
 
+Exact runtime evidence task (no repository changes, commit or PR):
+
+```text
+TASK COLLAB-CLOUD-RUNTIME-EVIDENCE-001 — read-only exact runtime check
+
+Use environment `sejong-ai-cloud-docs` and base `main`.
+Read AGENTS.md and
+docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md first.
+
+Do not modify, create, rename or delete any file. Do not commit, push or create a PR.
+Do not install or upgrade anything. Do not run env/printenv/set, inspect .env files,
+request or print secrets, call DeepSeek, start Docker/Supabase/DB, or deploy.
+
+Run only:
+node --version
+python --version
+pnpm --version
+uv --version
+git rev-parse --short HEAD
+git status --short
+git diff --exit-code
+python -B scripts/check_repository_docs.py
+
+Expected runtime:
+- Node v24.12.0
+- Python 3.12.13
+- pnpm 11.13.0
+- uv 0.11.28
+
+If any value differs or a command is missing, stop without fixing it and report the
+actual value/error. Finish with a compact PASS/FAIL table and explicitly confirm:
+files changed 0, commit 0, PR 0, secret/provider/DB/Docker/deployment use 0.
+```
+
 Reusable Cloud prompt:
 
 ```text
