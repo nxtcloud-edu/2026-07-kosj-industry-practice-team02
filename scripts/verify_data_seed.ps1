@@ -429,6 +429,15 @@ function Assert-DataSeedRuntimeAbsent {
     [Console]::Out.WriteLine("[PASS] step=" + $step)
 }
 
+function Test-DataSeedOrdinalEqual {
+    param(
+        [AllowNull()][string]$Actual,
+        [AllowNull()][string]$Expected
+    )
+
+    return [string]::Equals($Actual, $Expected, [StringComparison]::Ordinal)
+}
+
 function Test-DataSeedLoopbackPortBinding {
     param([object]$Ports)
 
@@ -436,15 +445,24 @@ function Test-DataSeedLoopbackPortBinding {
         return $false
     }
     $publishedPorts = @($Ports.PSObject.Properties)
-    if ($publishedPorts.Count -ne 1 -or $publishedPorts[0].Name -cne "5432/tcp") {
+    if (
+        $publishedPorts.Count -ne 1 -or
+        -not (Test-DataSeedOrdinalEqual `
+            -Actual $publishedPorts[0].Name `
+            -Expected "5432/tcp")
+    ) {
         return $false
     }
     $bindings = @($publishedPorts[0].Value)
     return (
         $bindings.Count -eq 1 -and
         $null -ne $bindings[0] -and
-        [string]$bindings[0].HostIp -ceq "127.0.0.1" -and
-        [string]$bindings[0].HostPort -ceq "54322"
+        (Test-DataSeedOrdinalEqual `
+            -Actual ([string]$bindings[0].HostIp) `
+            -Expected "127.0.0.1") -and
+        (Test-DataSeedOrdinalEqual `
+            -Actual ([string]$bindings[0].HostPort) `
+            -Expected "54322")
     )
 }
 
@@ -474,13 +492,30 @@ function Assert-DataSeedOwnedRuntime {
         if ($actualName.StartsWith("/", [System.StringComparison]::Ordinal)) {
             $actualName = $actualName.Substring(1)
         }
+        if (-not (Test-DataSeedOrdinalEqual `
+            -Actual $NetworkName `
+            -Expected "sejong-ai-local-loopback")) {
+            Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
+        }
+        $configuredNetwork = [string]$container.HostConfig.NetworkMode
+        $resetNetwork = "supabase_network_" + $ProjectId
+        $configuredNetworkAllowed = (
+            (Test-DataSeedOrdinalEqual `
+                -Actual $configuredNetwork `
+                -Expected $NetworkName) -or
+            (Test-DataSeedOrdinalEqual `
+                -Actual $configuredNetwork `
+                -Expected $resetNetwork)
+        )
         if (
-            $actualName -cne $ExpectedContainerName -or
+            -not (Test-DataSeedOrdinalEqual `
+                -Actual $actualName `
+                -Expected $ExpectedContainerName) -or
             $null -eq $container.State -or
             $null -eq $container.Config -or
             $null -eq $container.Config.Labels -or
             $null -eq $container.HostConfig -or
-            $container.HostConfig.NetworkMode -cne $NetworkName -or
+            -not $configuredNetworkAllowed -or
             -not (Test-DataSeedLoopbackPortBinding -Ports $container.HostConfig.PortBindings)
         ) {
             Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
@@ -497,10 +532,25 @@ function Assert-DataSeedOwnedRuntime {
         $running = [bool]$runningProperty.Value
         $status = [string]$statusProperty.Value
         if (
-            ($running -and $status -cne "running") -or
+            (
+                $running -and
+                -not (Test-DataSeedOrdinalEqual `
+                    -Actual $status `
+                    -Expected "running")
+            ) -or
             (
                 -not $running -and
-                $status -cnotin @("created", "exited", "dead")
+                -not (
+                    (Test-DataSeedOrdinalEqual `
+                        -Actual $status `
+                        -Expected "created") -or
+                    (Test-DataSeedOrdinalEqual `
+                        -Actual $status `
+                        -Expected "exited") -or
+                    (Test-DataSeedOrdinalEqual `
+                        -Actual $status `
+                        -Expected "dead")
+                )
             )
         ) {
             Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
@@ -508,7 +558,12 @@ function Assert-DataSeedOwnedRuntime {
         $projectLabel = $container.Config.Labels.PSObject.Properties[
             "com.supabase.cli.project"
         ]
-        if ($null -eq $projectLabel -or $projectLabel.Value -cne $ProjectId) {
+        if (
+            $null -eq $projectLabel -or
+            -not (Test-DataSeedOrdinalEqual `
+                -Actual ([string]$projectLabel.Value) `
+                -Expected $ProjectId)
+        ) {
             Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
         }
         if ($running) {
@@ -520,7 +575,12 @@ function Assert-DataSeedOwnedRuntime {
                 Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
             }
             $networks = @($container.NetworkSettings.Networks.PSObject.Properties)
-            if ($networks.Count -ne 1 -or $networks[0].Name -cne $NetworkName) {
+            if (
+                $networks.Count -ne 1 -or
+                -not (Test-DataSeedOrdinalEqual `
+                    -Actual $networks[0].Name `
+                    -Expected $configuredNetwork)
+            ) {
                 Throw-DataSeedFailure -Step $Step -Reason "invalid" -Code 2
             }
         }

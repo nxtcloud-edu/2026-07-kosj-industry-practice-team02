@@ -367,6 +367,55 @@ exit 0
         self.assertNotIn("aaaaaaaaaaaa", combined)
         self.assertNotIn(environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"], combined)
 
+    def test_exact_reset_owned_runtime_is_stopped_and_output_is_content_free(
+        self,
+    ) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"] = (
+            "synthetic-reset-container-secret-must-not-be-relayed"
+        )
+        command = r"""
+$script:listCalls=0
+$script:stopCalls=0
+$script:exactStop=$false
+$sentinel=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_INSPECT_SENTINEL')
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $script:listCalls+=1
+    if($script:listCalls -eq 1){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    $json='{"Name":"/supabase_db_sejong-ai-local","State":{"Running":true,"Status":"running"},"Config":{"Labels":{"com.supabase.cli.project":"sejong-ai-local","sentinel":"'+$sentinel+'"}},"HostConfig":{"NetworkMode":"supabase_network_sejong-ai-local","PortBindings":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}},"NetworkSettings":{"Networks":{"supabase_network_sejong-ai-local":{}},"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}}}'
+    return [pscustomobject]@{ExitCode=0;Output=$json}
+  }
+  if($Arguments[0] -ceq 'stop') {
+    $script:stopCalls+=1
+    $script:exactStop=(
+      $Arguments.Count -eq 3 -and
+      $Arguments[1] -ceq '--project-id' -and
+      $Arguments[2] -ceq 'sejong-ai-local'
+    )
+    return [pscustomobject]@{ExitCode=0;Output=$sentinel}
+  }
+  exit 112
+}
+Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+if($script:listCalls -ne 2 -or $script:stopCalls -ne 1 -or -not $script:exactStop){exit 113}
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[START] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertIn("[PASS] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertNotIn("aaaaaaaaaaaa", combined)
+        self.assertNotIn(environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"], combined)
+
     def test_exact_stopped_owned_runtime_is_cleaned_without_resolved_fields(self) -> None:
         environment = os.environ.copy()
         environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
@@ -407,6 +456,11 @@ exit 0
         base_environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
         command = r"""
 $case=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_CLEANUP_CASE')
+$requestedNetwork=if($case -ceq 'requested-initial-soft-hyphen'){
+  'sejong-ai-local'+[char]0x00ad+'-loopback'
+}else{
+  'sejong-ai-local-loopback'
+}
 $script:stopCalls=0
 function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
 function Invoke-DataSeedChild {
@@ -417,16 +471,64 @@ function Invoke-DataSeedChild {
   }
   if($Arguments[0] -ceq 'inspect') {
     if($case -ceq 'malformed'){return [pscustomobject]@{ExitCode=0;Output='{not-json'}}
-    $name=if($case -ceq 'wrong-name'){'not-owned'}else{'supabase_db_sejong-ai-local'}
-    $label=if($case -ceq 'wrong-label'){'not-owned'}else{'sejong-ai-local'}
-    $network=if($case -ceq 'wrong-network'){'not-owned'}else{'sejong-ai-local-loopback'}
+    $name=if($case -ceq 'wrong-name'){
+      'not-owned'
+    }elseif($case -ceq 'name-soft-hyphen'){
+      'supabase_db_'+[char]0x00ad+'sejong-ai-local'
+    }else{
+      'supabase_db_sejong-ai-local'
+    }
+    $label=if($case -ceq 'wrong-label'){
+      'not-owned'
+    }elseif($case -ceq 'label-zero-width-non-joiner'){
+      'sejong-ai'+[char]0x200c+'-local'
+    }else{
+      'sejong-ai-local'
+    }
+    $network=if($case -ceq 'wrong-network'){
+      'not-owned'
+    }elseif($case -ceq 'reset-prefix-confusable'){
+      'prefix-supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'reset-suffix-confusable'){
+      'supabase_network_sejong-ai-local-suffix'
+    }elseif($case -ceq 'configured-reset-soft-hyphen'){
+      'supabase_network_'+[char]0x00ad+'sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-zero-width-non-joiner'){
+      'supabase_network_'+[char]0x200c+'sejong-ai-local'
+    }elseif($case -cin @('resolved-reset-soft-hyphen','resolved-reset-zero-width-non-joiner')){
+      'supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-resolved-initial'){
+      'supabase_network_sejong-ai-local'
+    }else{
+      $requestedNetwork
+    }
+    $resolvedNetwork=if($case -ceq 'configured-initial-resolved-reset'){
+      'supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-resolved-initial'){
+      'sejong-ai-local-loopback'
+    }elseif($case -ceq 'resolved-reset-soft-hyphen'){
+      'supabase_network_'+[char]0x00ad+'sejong-ai-local'
+    }elseif($case -ceq 'resolved-reset-zero-width-non-joiner'){
+      'supabase_network_'+[char]0x200c+'sejong-ai-local'
+    }else{
+      $network
+    }
     $port=if($case -ceq 'wrong-port'){'54323'}else{'54322'}
     $hostIp=if($case -ceq 'wrong-host-ip'){'0.0.0.0'}else{'127.0.0.1'}
     $running=if($case -ceq 'invalid-status'){'false'}else{'true'}
-    $status=if($case -ceq 'invalid-status'){'removing'}else{'running'}
-    $networkEntries='"'+$network+'":{}'
+    $status=if($case -ceq 'invalid-status'){
+      'removing'
+    }elseif($case -ceq 'status-soft-hyphen'){
+      'run'+[char]0x00ad+'ning'
+    }else{
+      'running'
+    }
+    $networkEntries='"'+$resolvedNetwork+'":{}'
     if($case -ceq 'extra-network'){$networkEntries+=',"unexpected-network":{}'}
-    $portEntries='"5432/tcp":[{"HostIp":"'+$hostIp+'","HostPort":"'+$port+'"}]'
+    $portName=if($case -ceq 'port-name-soft-hyphen'){'5432/'+[char]0x00ad+'tcp'}else{'5432/tcp'}
+    if($case -ceq 'host-ip-zero-width-non-joiner'){$hostIp='127.0.0.'+[char]0x200c+'1'}
+    if($case -ceq 'host-port-soft-hyphen'){$port='543'+[char]0x00ad+'22'}
+    $portEntries='"'+$portName+'":[{"HostIp":"'+$hostIp+'","HostPort":"'+$port+'"}]'
     if($case -ceq 'extra-port'){$portEntries+=',"9999/tcp":[{"HostIp":"127.0.0.1","HostPort":"59999"}]'}
     $json='{"Name":"/'+$name+'","State":{"Running":'+$running+',"Status":"'+$status+'"},"Config":{"Labels":{"com.supabase.cli.project":"'+$label+'"}},"HostConfig":{"NetworkMode":"'+$network+'","PortBindings":{'+$portEntries+'}},"NetworkSettings":{"Networks":{'+$networkEntries+'},"Ports":{'+$portEntries+'}}}'
     return [pscustomobject]@{ExitCode=0;Output=$json}
@@ -435,7 +537,7 @@ function Invoke-DataSeedChild {
   return [pscustomobject]@{ExitCode=0;Output=''}
 }
 try {
-  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName $requestedNetwork -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
 }
 catch {
   if($_.Exception.Data['reason'] -cne 'invalid'){exit 87}
@@ -449,13 +551,28 @@ exit 89
             "multiple",
             "malformed",
             "wrong-name",
+            "name-soft-hyphen",
             "wrong-label",
+            "label-zero-width-non-joiner",
             "wrong-network",
+            "requested-initial-soft-hyphen",
+            "reset-prefix-confusable",
+            "reset-suffix-confusable",
+            "configured-reset-soft-hyphen",
+            "configured-reset-zero-width-non-joiner",
+            "resolved-reset-soft-hyphen",
+            "resolved-reset-zero-width-non-joiner",
+            "configured-initial-resolved-reset",
+            "configured-reset-resolved-initial",
             "wrong-port",
             "wrong-host-ip",
+            "port-name-soft-hyphen",
+            "host-ip-zero-width-non-joiner",
+            "host-port-soft-hyphen",
             "extra-port",
             "extra-network",
             "invalid-status",
+            "status-soft-hyphen",
         ):
             with self.subTest(case=case):
                 environment = base_environment.copy()
