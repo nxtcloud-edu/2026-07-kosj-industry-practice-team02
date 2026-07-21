@@ -34,17 +34,18 @@
 - DATA-SEED architecture: initial version `0.1.0-initial.1`의 immutable filesystem release와
   기존 schema용 empty-local transactional seed. written specification은
   `2026-07-19T09:20:31+09:00`, 실행계획은 `2026-07-19T09:52:08+09:00` 승인됐다.
-- DATA-SEED actual status: `.1` filesystem release는 19/3/10으로 게시·검증됐고
-  `supabase/seed.sql`은 release seed와 byte-identical이며 `[db.seed].enabled=false`다. 2026-07-20
-  actual DB cycle은 seed write 전, PostgreSQL 17 grantor별 membership option을 효과적 union으로
-  인정하는 migration 권위와 불변 `.1` single-row guard 충돌로 Blocked다. 현재 pgTAP은 실제
-  두-row 상태를 통과하지만 `INHERIT+SET`을 같은 row에 묶으므로 successor 실행에서 정렬한다.
-  citizen-visible ACTIVE data·READY·AI 승격은 없고 `official_data=0.0.0-not-populated`다.
-  런타임은 container 0·port 54322 listener 0으로 정리됐다. `.1` byte는 수정·삭제하지
-  않는다. Q-SEED-002=A/D-044로 기존 effective-option union 권위를 유지하고 같은 승인
-  projection의 immutable `0.1.0-initial.2` successor를 만드는 방향은 확정됐다. ADR-0017과
-  DATA-SEED-002 명세·계획은 Q-MVP-001=A/D-058의 즉시 실행 지시로 Approved/In Progress다.
-  `.1`·v1 불변과 actual 전체 PASS 전 official-data 승격 금지는 유지한다.
+- DATA-SEED actual status: historical `.1`을 보존한 채 같은 승인 19/3/10 projection의 immutable
+  `0.1.0-initial.2` successor와 strict v2 schema가 게시·독립 검토·byte 검증됐고,
+  `supabase/seed.sql`은 `.2` seed와 byte-identical이며 `[db.seed].enabled=false`다. 지원된 actual
+  local DB 실행 3회는 baseline·identity·forced rollback·concurrency A까지 통과한 뒤 concurrency
+  B에서 멈췄다. 세 번째 bounded diagnostic의 exact reason은
+  `CAPABILITY_WRITE_DID_NOT_BLOCK`이고 cleanup은 PASS했다. 따라서 PostgreSQL ACTIVE 19,
+  citizen-visible data, READY·AI 승격을 주장하지 않으며
+  `official_data=0.0.0-not-populated`다. relation-name observer의 OID-equality 교정 `eb74ac8`은
+  독립 검토 0/0/0과 commit을 마쳤고 별도 실행 결정 전 추가 actual run은 승인되지 않았다.
+  `.1`·`.2`·v1 불변과 actual 전체
+  PASS 전 official-data 승격 금지는 유지한다. 이 DB blocker와 독립적인 MVP PII/chat 계약·pure
+  core lane은 계속 진행한다.
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -129,7 +130,7 @@
   282, integration 8/8, 6단계 compensation/absence/reset/replay, final container 0/0·volume delete 0을
   통과했다. `73f300b` bounded child process-tree remediation과 독립 review 0/0/0, final-code DB
   revalidation도 통과했다. 이는 DB schema 기준선 근거다. 현재 filesystem dispatcher는
-  `.1` seed byte를 담고 있지만 자동 seed는 disabled고 actual import는 DATA-SEED blocker로 미도달이다.
+  `.2` seed byte와 정확히 같지만 자동 seed는 disabled고 actual import는 DATA-SEED blocker로 미도달이다.
   공식/mock DB row는 0이고 `/ready=503`을 유지한다. production-ready 표현은 금지한다.
 - DB local port 경계: Docker Engine 28+와 actual single `127.0.0.1:54322` binding이 필수다.
   Q-SEC-004=A/D-029의 `default-local-port-binding`과 Q-SEC-005=A/D-030의

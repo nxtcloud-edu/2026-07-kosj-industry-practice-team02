@@ -66,13 +66,16 @@ A-024/Q-SEC-006은 D-031/ADR-0013, A-025/Q-TOOL-001은 D-032/ADR-0014로 해결�
 수정 계획 승인 뒤 runtime/full gate까지 local에서 구현·검증됐다. Q-DATA-002/A-026은
 D-033/ADR-0015로 해결되고 DRAFT 20/3/12를 거쳐 D-035의 exact reviewer/disposition/time과
 canonical APPROVED 19/3/10 evidence까지 materialize·검증됐다. D-036/D-038로 DATA-SEED architecture와
-written specification은 확정됐고 D-039로 실행계획까지 승인됐다. 실행 결과 Task 5
-  filesystem release/dispatcher와 Task 7A offline gate는 완료됐지만 Task 6 actual DB import는 seed write 전
-  grantor-option union 대 `.1` single-row guard 충돌로 Blocked였다. 사용자는 D-044에서 successor
-  `.2`를 선택했고 명세·계획 작성까지만 승인했다. D-040은 과거 미결정 상태에서 의도적으로
-  생성하지 않았으며 번호를 소급 채우지 않는다. D-045는 privacy consumer의 시민 동작을,
-  D-046은 public-preparation 보안 방향을 확정했다. 이후 D-058/Q-MVP-001이 DATA-SEED-002와
-  local/private core-loop 명세·계획을 승인해 실행을 시작했다. privacy response contract는
+written specification은 확정됐고 D-039로 실행계획까지 승인됐다. Task 5의 historical `.1` 뒤
+D-044와 D-058에 따라 corrected immutable `.2` successor가 게시·검증됐다. 지원된 actual 실행
+3회는 concurrency A까지 통과하고 B에서 멈췄으며 bounded diagnostic reason은
+`CAPABILITY_WRITE_DID_NOT_BLOCK`, cleanup은 PASS였다. PostgreSQL ACTIVE 19와 READY는 주장하지
+않고 `official_data=0.0.0-not-populated`를 유지한다. OID-equality observer correction
+`eb74ac8`은 독립 검토 0/0/0·commit 완료이며 별도 실행 결정 전 추가 actual run은 없다.
+D-040은 과거 미결정 상태에서 의도적으로
+생성하지 않았으며 번호를 소급 채우지 않는다. D-045는 privacy consumer의 시민 동작을,
+D-046은 public-preparation 보안 방향을 확정했다. D-058/Q-MVP-001의 non-DB core-loop lane은
+DATA blocker와 독립적으로 계속 진행한다. privacy response contract는
   D-058 범위에서 동결하되 persistent metadata DB migration과 public `00700`은 별도다. D-037의 static
   WEB-HOME/chat shell은 구현·검증 완료됐다. DB-001은 disposable `0.3.0-local`로 완료됐지만
   D-046의 `00700` 구현·검증 전에는 public release를 계속 차단한다. D-047~D-053은 source-control

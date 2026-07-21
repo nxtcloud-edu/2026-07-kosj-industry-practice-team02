@@ -53,4 +53,3 @@
 - DATA-SEED-002 actual DB가 approved plan 안에서 복구 불가능한 새 보안/데이터 결정에 막힐 때
 - 공개 배포·remote DB·실제 시민 provider 사용을 요구할 때
 - 7월 25일 이후 100명·백업·고급 UI의 우선순위를 다시 배치할 때
-

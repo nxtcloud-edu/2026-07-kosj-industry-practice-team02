@@ -4,6 +4,12 @@
 
 ### Added
 
+- DATA-SEED-002 immutable `0.1.0-initial.2` release, strict v2 schemas, independently reviewed
+  create-once publication, byte-identical local dispatcher and exact predecessor/successor lineage.
+  Three supported actual local runs reached concurrency A; the bounded diagnostic isolated
+  concurrency B as `CAPABILITY_WRITE_DID_NOT_BLOCK`, cleanup passed, and no DB/READY/official-data
+  promotion was claimed. Commit `eb74ac8` passed independent 0/0/0 review for the relation
+  OID-equality observer correction; no further actual run is authorized yet.
 - Q-MVP-001 four-day local/private milestone: D-058/ADR-0020, 2026-07-25 19→20 ACTIVE core-loop
   scope, date/role plan, DATA-SEED-002 execution approval and explicit post-Saturday deferrals
 - Cloud exact runtime evidence: Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`,
@@ -55,9 +61,10 @@
   collaborator에게 보여도 괜찮음을 확인해 현재 history·SHA 보존과 noreply rewrite 0을 확정;
   당시 COLLAB-001을 Review로 전환했고, 이후 D-054 실행 승인 전까지 remote/commit/push/CI/invite/App
   변경 0
-- Q-SEED-002=A/D-044 and ADR-0017 successor correction specification/plan: preserve immutable `.1`,
-  create reviewed `.2` with the PostgreSQL 17 effective membership-option union, and require the full
-  disposable-local cycle before official-data promotion; no successor artifact or DB mutation yet
+- Q-SEED-002=A/D-044 and ADR-0017 successor correction execution: preserve immutable `.1`, publish
+  reviewed `.2` with the PostgreSQL 17 effective membership-option union, and require the full
+  disposable-local cycle before official-data promotion; `.2` is published while actual DB import
+  remains blocked before seed-cycle completion
 - Q-PII-002=A/D-045 privacy-safe public behavior: future HTTP 200 `PRIVACY_UNRESOLVED` rephrase
   outcome with no text/failed row/provider/source/context; active contract and DB remain unchanged
   pending a separate consumer specification and forward-migration approval
@@ -135,7 +142,7 @@
   adapter, and public deployment behind their existing independent blockers
 - Resolved A-032 and moved AI-001A from Review to Ready while keeping parent AI-001, official seed/readiness, unresolved-PII consumer behavior, and public deployment blocked by their existing independent gates
 - Clarified the source-of-truth privacy boundary: successful masking is necessary but not sufficient for storage or synthetic-provider use; unresolved PII forbids failed-question text/row and provider calls, while actual citizen DeepSeek transmission remains prohibited
-- Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged. The `.1` filesystem release and dispatcher are now published/verified, but actual DB rows, ACTIVE reads, readiness and `official_data` promotion remain blocked.
+- Materialized PM-LOCAL-001's exact 35-record DATA-001 review evidence at `2026-07-19T02:06:19+09:00`: KB approve 19/withhold 1, office approve 3, mapping approve 10/reject 2. Immutable content hashes remain unchanged. Corrected `.2` filesystem release and dispatcher are published/verified, but three actual runs did not pass concurrency B, so DB rows, ACTIVE reads, readiness and `official_data` promotion remain blocked.
 - Pinned the approved development baseline to Node 24.x+pnpm and Python 3.12+uv; installation begins in Phase 1 after the user's 2026-07-15 approval
 - Clarified local-first/zero-infrastructure-budget as the active target and managed hosting as separately approved future work
 - Updated OpenAPI and logical DB drafts to 0.2.0: failed-question text expires after 30 days while metadata and candidate links remain
@@ -192,10 +199,9 @@
 
 ### Pending
 
-- A-030/Q-SEED-002 human decision. Recommended/default A is a separately PM/technically approved
-  immutable `0.1.0-initial.2` with the same 19/3/10 data and corrected effective-union guard; B is a
-  new versioned DB migration that normalizes grantor-specific memberships. Neither option is
-  implemented without an answer; DATA-SEED/READY/AI remain Blocked
+- DATA-SEED-002 separate execution decision before any fourth actual run of reviewed relation
+  OID-equality correction `eb74ac8`. The last diagnostic reason is
+  `CAPABILITY_WRITE_DID_NOT_BLOCK`; the full DB gate remains Blocked while non-DB MVP lanes continue
 - Full actual disposable PostgreSQL seed/rollback/concurrency/compensation/replay/citizen-read cycle;
   `official_data` remains `0.0.0-not-populated` until every gate passes
 - Deployment accounts and URLs

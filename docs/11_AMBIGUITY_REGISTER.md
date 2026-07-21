@@ -33,7 +33,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
 | A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
-| A-030 | A / Blocker | official seed correction | Resolved / spec·plan Approved/In Progress | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지하고 immutable `.2` successor로 교정; 현재 narrower pgTAP predicate도 같은 의미로 정렬 | D-044/D-058 / ADR-0017/0020. Q-MVP-001 즉시 실행 승인; actual PASS 전 official-data 승격 0 |
+| A-030 | A / Blocker | official seed correction | Resolved decision / `.2` published; actual DB Blocked | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지한 immutable `.2` successor는 게시·검증 완료. actual 3회는 concurrency A 뒤 B에서 실패했고 diagnostic reason은 `CAPABILITY_WRITE_DID_NOT_BLOCK` | D-044/D-058 / ADR-0017/0020. OID-equality observer `eb74ac8` 독립 검토 0/0/0·commit 완료; 별도 실행 결정 전 추가 actual run 0, actual 전체 PASS 전 official-data 승격 0 |
 | A-031 | B / High | unresolved PII consumer response | Resolved / MVP consumer plan approved | Q-PII-002=A: contract에 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045/D-058 / ADR-0004/0020. local milestone은 failed row·DB event 0; persistent metadata migration은 reserved `00700` 이후 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
 | A-033 | A | Git source remote·access | Resolved / App scope confirmed | private `tskwak111/Sejong_AI`, merge commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`, post-merge hosted CI, `koregy` write/variable과 사용자의 GitHub UI `Only select repositories / Sejong_AI` 확인을 기록했다 | D-047/D-053~D-057 / ADR-0019 |
@@ -66,11 +66,13 @@ response enum 실행을 승인했다. local milestone은 개인정보 unresolved
 persistent metadata migration은 reserved public `00700` 이후 별도 승인한다.
 A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
 2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
-byte-active dispatcher를 완료했지만 `[db.seed].enabled=false`다. Task 6 actual DB cycle은 seed write
-전 grantor별 effective-option union 권위와 `.1` single-row guard 충돌로 Blocked다. 인간 결정 전
-`.1`·role/grant·migration을 바꾸지 않고 `official_data=0.0.0-not-populated`, `/ready=503`을
-  유지했다. Q-SEED-002=A/D-044가 `.2` successor 방향을 해결했고 Q-MVP-001=A/D-058이
-  명세·계획의 즉시 실행을 승인했다.
+byte-active dispatcher를 완료했고 `[db.seed].enabled=false`다. Q-SEED-002=A/D-044와
+Q-MVP-001=A/D-058에 따라 corrected immutable `.2` successor도 게시·검증됐다. actual 실행 3회는
+모두 concurrency A 뒤 B에서 멈췄고 bounded diagnostic reason은
+`CAPABILITY_WRITE_DID_NOT_BLOCK`, cleanup은 PASS였다. PostgreSQL ACTIVE 19를 주장하지 않고
+`official_data=0.0.0-not-populated`, `/ready=503`을 유지한다. OID-equality observer correction
+`eb74ac8`은 독립 검토 0/0/0·commit 완료이며 별도 실행 결정 전 추가 actual run은 없다.
+non-DB MVP lane은 계속 진행한다.
   Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
 real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
@@ -157,7 +159,9 @@ Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게
   필요하다.
 - 당신의 추천안: A. 권위 계약을 하나로 유지하고 immutable correction 정책을 지킨다.
 - 실행 경계: Q-MVP-001=A/D-058로 written specification/plan이 Approved/In Progress가 됐다.
-  `.2`, dispatcher와 disposable DB actual은 실행하되 전체 PASS 전 official-data version을 변경하지 않는다.
+  이 승인으로 `.2`와 dispatcher 게시 및 disposable DB actual 3회가 실행됐지만 concurrency B에서
+  Blocked됐다. 현재 `eb74ac8`까지 검토·commit됐고, 별도 실행 결정 전 네 번째 actual run은 없다.
+  전체 PASS 전 official-data version을 변경하지 않는다.
 - 영향 범위: A는 successor official release/schema/manifest/generator/dispatcher·actual test·lineage/version 승인에,
   B는 그에 더해 DB migration/compensation/pgTAP/role security/deployment에 영향을 준다. 두 선택 모두
   `.1` byte, public API, citizen 답변, READY 활성을 자동 변경하지 않는다.

@@ -63,8 +63,16 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   integration 8/8을 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
   `database/schema-v1.draft.sql`이다.
 - Windows PowerShell 5.1+ root gate와 별도 Docker DB gate가 exact runtime, frozen install,
-  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. 공식 승인 seed가 0이므로
-  `/ready=503`은 의도한 정상 상태다.
+  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. local DB에 반영된 공식
+  seed row가 0이므로 `/ready=503`은 의도한 정상 상태다.
+- DATA-SEED-002의 immutable `0.1.0-initial.2` filesystem release와 byte-identical local
+  dispatcher는 게시·검증됐다. 지원된 actual local DB 실행 3회는 모두 concurrency A까지
+  통과했지만 concurrency B에서 멈췄고, 진단 실행의 exact stable reason은
+  `CAPABILITY_WRITE_DID_NOT_BLOCK`였다. 마지막 두 실행의 cleanup은 PASS했으며 현재
+  PostgreSQL ACTIVE 19/READY를 주장하지 않고 `official_data=0.0.0-not-populated`를 유지한다.
+  relation OID-equality observer 교정은 `eb74ac8`로 독립 검토 0/0/0과 commit까지 끝났지만
+  추가 actual 실행은 아직 승인되지 않았다. 이 DB blocker와 독립적인 PII/chat 계약·pure-core
+  MVP 작업은 계속 진행한다.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
 - `contracts/`의 API spec revision은 2.0.1-draft다. DB executable authority는 timestamp
   migrations이며 `database/`의 `0.3.0-local` projection은 실제 검증된 local 기준선의 읽기용

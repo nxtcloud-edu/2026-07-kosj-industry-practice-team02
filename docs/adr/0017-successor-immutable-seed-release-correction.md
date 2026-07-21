@@ -1,6 +1,6 @@
 # ADR-0017: successor immutable seed release로 membership guard 교정
 
-- Status: Accepted; written specification and implementation plan Approved/In Progress by D-058
+- Status: Accepted; immutable `.2` published, actual database verification Blocked
 - Date: 2026-07-20
 - Deciders: 사용자, Codex
 - Related: Q-SEED-002, D-044, A-030, ADR-0015, ADR-0016, DATA-SEED-002
@@ -54,6 +54,20 @@ Q-SEED-002 선택지 A를 채택한다.
     `즉시 실행` 지시가 local `.2`, dispatcher와 disposable DB 실행을 승인했다. actual 전체 PASS
     전 official-data 승격과 public/remote 실행은 계속 금지한다.
 
+## Current execution status
+
+- Immutable `0.1.0-initial.2`, strict v2 schemas and the byte-identical local dispatcher were
+  published and verified after independent technical review. Historical `.1`/v1 bytes remain exact.
+- Three supported actual local DB runs passed baseline, identity, forced rollback and concurrency A,
+  then stopped at concurrency B. The bounded diagnostic run returned exact stable reason
+  `CAPABILITY_WRITE_DID_NOT_BLOCK`; cleanup passed and restored exact-owned container/listener 0.
+- Seed-cycle, PostgreSQL 19/3/10 counts, citizen-visible ACTIVE 19, final semantic hash and READY were
+  not reached and are not claimed. `official_data=0.0.0-not-populated` and `/ready=503` remain.
+- Static diagnosis found a search-path-sensitive relation-name observer. Its OID-equality correction
+  `eb74ac8` passed 25/25 tests and independent Critical/Important/Minor `0/0/0` review, then was
+  committed. This ADR does not authorize another actual run; a separate execution decision is still
+  required. Non-DB MVP lanes may continue independently.
+
 ## Rejected alternatives
 
 ### B — grantor-specific membership를 한 row로 정규화
@@ -78,8 +92,9 @@ immutable SQL 자체가 같은 catalog에서 실패하므로 문제를 해결하
   successor다.
 - 데이터 내용과 `seed_semantic_sha256`은 같아야 하지만 release JSON/SQL/manifest byte hash는
   version과 guard가 달라 새 값이어야 한다.
-- actual cycle이 모두 통과하면 `official_data=0.1.0-initial.2`로 승격할 수 있다. `/ready=200`
-  전환은 별도 READY-001이 소유하므로 계속 503이다.
+- actual cycle이 모두 통과하면 `official_data=0.1.0-initial.2`로 승격할 수 있다. 현재 세 실행은
+  concurrency B에서 Blocked이므로 승격하지 않는다. `/ready=200` 전환은 별도 READY-001이
+  소유하므로 계속 503이다.
 - local/private actual DB cycle만 허용한다. Q-SEC-003의 `00700` 구현과 public deployment는
   별도 gate다.
 
@@ -91,8 +106,8 @@ immutable SQL 자체가 같은 catalog에서 실패하므로 문제를 해결하
   확인한다.
 - `.2`가 정상 게시된 뒤에는 삭제하거나 수정하지 않는다. 새 결함은 `.3` successor로
   교정한다.
-- actual DB cycle 성공 전 문서 결정을 철회하면 docs/plan commit만 revert하고 `.1` byte는
-  그대로 둔다.
+- actual DB cycle 성공 전 문서 결정을 철회하더라도 게시된 `.1`과 `.2` byte는 그대로 둔다.
+  교정이 필요하면 별도 승인된 immutable `.3`를 만든다.
 
 ## Validation
 

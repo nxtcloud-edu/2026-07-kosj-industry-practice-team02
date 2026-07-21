@@ -81,7 +81,9 @@ deterministic template를 사용한다.
 ## 6. context token
 
 - HMAC-SHA-256, 900초, server secret은 local env에만 둔다.
-- claims allowlist: schema version, issued/expiry epoch, last intent, selected region, last ACTIVE KB IDs.
+- claims allowlist: schema version, issued/expiry epoch, last intent, selected region, answer status,
+  optional followup-option ID. ADR-0010과 개인정보 정책의 더 좁은 기존 경계를 따라 ACTIVE KB ID는
+  넣지 않는다.
 - 질문·답변·masked text·PII·URL·source fact·actor/role은 넣지 않는다.
 - invalid/expired/tampered token은 오류나 로그 없이 context 없음으로 reset한다.
 - FALLBACK은 token을 반환하지 않는다. browser storage와 서버 DB/log에 token을 저장하지 않는다.
@@ -145,4 +147,3 @@ INSUFFICIENT_GROUNDING event
 Q-MVP-001=A는 이 문서와 실행계획, DATA-SEED-002 실행, 위 local/private public-contract draft
 변경을 승인한다. 팀원 계정 MFA/PR 병합, PM 역할의 20번째 source 검수, public/remote/DeepSeek
 citizen/새 dependency/데이터 삭제 권한은 포함하지 않는다.
-

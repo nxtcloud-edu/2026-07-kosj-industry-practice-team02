@@ -153,23 +153,19 @@ activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확
 정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세는
 `2026-07-19T09:20:31+09:00`, 실행계획은 `2026-07-19T09:52:08+09:00` 승인됐다.
 
-Task 5는 `.1` filesystem release 19/3/10을 게시·검증하고 byte-identical local
-dispatcher를 활성화했다. `[db.seed].enabled=false`는 유지된다. Task 6 actual disposable
-PostgreSQL 17 cycle은 seed write 전 identity guard에서 Blocked다. migration은 grantor별 row의
-ADMIN/INHERIT/SET effective union을 권위로 삼지만 불변 `.1` seed/compensation은 모든
-option을 가진 단일 row만 인정하기 때문이다. 따라서 PostgreSQL에 승인 row가 삽입된
-근거, citizen-visible ACTIVE data, READY/AI 승격은 없고 `official_data`는
-`0.0.0-not-populated`다. runtime은 container 0·port 54322 listener 0으로 정리됐다.
+Q-SEED-002=A/D-044와 Q-MVP-001=A/D-058에 따라 historical `.1`과 v1 schema byte를 보존하면서
+같은 PM 승인 19/3/10을 corrected effective-option union guard·strict v2 schema·new manifest에
+묶은 immutable `0.1.0-initial.2`를 게시했다. 독립 기술 검토와 create-once/byte 검증을 통과했고
+`supabase/seed.sql`은 `.2`와 byte-identical하며 `[db.seed].enabled=false`다.
 
-Q-SEED-002=A/D-044로 기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected
-guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initial.2`로 새로
-게시한 뒤 actual cycle 전체를 재실행하는 방향을 확정했다. `.1` release와 v1 schema byte는
-수정·삭제하지 않는다. ADR-0017과 DATA-SEED-002 written specification/plan은
-Q-MVP-001=A/D-058의 즉시 실행 지시로 Approved/In Progress다. `.2` 생성·dispatcher 교체·
-disposable DB reset/import는 승인됐지만 actual 전체 PASS 전 official-data 승격은 금지한다.
-현재 pgTAP의 `INHERIT+SET` same-row 검사는 successor 실행에서 migration의 세 독립
-`EXISTS` 의미로 정렬하되 assertion count와 runtime DB object는 바꾸지 않는다. 성공하더라도
-`/ready=200`은 별도 READY-001이 소유한다.
+Task 6의 지원된 actual disposable PostgreSQL 17 실행은 총 3회 모두 baseline·identity·forced
+rollback·concurrency A까지 통과한 뒤 concurrency B에서 중단됐다. 세 번째 bounded diagnostic이
+확인한 exact reason은 `CAPABILITY_WRITE_DID_NOT_BLOCK`이고 cleanup은 PASS했다. 이 결과는
+19/3/10 DB import, citizen-visible ACTIVE 19, READY/AI 또는 final semantic hash 근거가 아니다.
+따라서 `official_data=0.0.0-not-populated`, `/ready=503`을 유지한다. relation observer의
+search-path-sensitive name 비교를 OID equality로 교정한 `eb74ac8`은 독립 검토 0/0/0과 commit을
+마쳤으며 별도 실행 결정 전 추가 actual run은 금지한다. `/ready=200`은 full actual PASS 뒤에도 별도 READY-001이
+소유한다. DATA-SEED blocker와 독립적인 PII/chat 계약·pure-core MVP lane은 병렬로 계속한다.
 
 ## 7. 시스템 설계
 
