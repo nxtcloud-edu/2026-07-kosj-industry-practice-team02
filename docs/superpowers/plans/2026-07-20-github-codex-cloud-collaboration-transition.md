@@ -21,8 +21,7 @@ Playwright toolchain, Codex Cloud.
 
 - Plan ID: `COLLAB-001`
 - Status: **In Progress — Tasks 1~4 complete; Task 5 partial (MFA/recovery and the first
-  PR-only/no-direct-main-push rehearsal pending); Task 6 partial (App scope and Cloud environment
-  confirmed, docs-only task/Draft PR pending); Task 7 pending**
+  PR-only/no-direct-main-push rehearsal pending); Task 6 complete; Task 7 HOLD for note-ID correction**
 - Approved written design:
   `docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md`
 - Decision/ADR: D-047~D-057 / ADR-0019
@@ -405,10 +404,10 @@ rehearsal evidence remain pending.
 
 1. [x] Open [Codex](https://chatgpt.com/codex), connect GitHub and save `sejong-ai-cloud-docs` for the
    repository with agent internet Off and no environment variable or secret.
-2. [ ] Run the first task and capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
+2. [x] Capture setup evidence that exact Node `24.12.0`, Python `3.12.13`, pnpm
    `11.13.0` and uv `0.11.28` are active after the setup script.
-3. [ ] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
-4. [ ] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
+3. [x] Keep agent internet access off unless a later task proves a narrow allowlist is necessary.
+4. [x] Keep DeepSeek key, DB DSN, context-token secret and citizen fixtures absent.
 
 The earlier inline setup example that assumed Node 24 was already selected is superseded. The UI's
 Node 22 bootstrap, `nvm` switch to exact Node `24.12.0`, `pyenv` switch to Python `3.12.13`, pnpm
@@ -421,10 +420,44 @@ Validate the exact Cloud image first; adjust only after capturing non-secret fai
 depend on a temporary setup-script `export` surviving into the agent phase; use the resolved persistent
 UV path or a Cloud environment PATH setting verified again in the agent task.
 
-- [ ] Run a docs/test-only Cloud task with explicit allowed/forbidden paths.
-- [ ] Confirm Codex honors `AGENTS.md`, creates a `codex/...` branch and Draft PR.
-- [ ] Confirm it does not merge, request secrets, call DeepSeek or claim local Docker evidence.
-- [ ] User reviews and merges the first Cloud PR manually.
+- [x] Run a docs/test-only Cloud task with explicit allowed/forbidden paths.
+- [x] Confirm Codex honors `AGENTS.md`, creates a `codex/...` branch and Draft PR.
+- [x] Confirm it does not merge, request secrets, call DeepSeek or claim local Docker evidence.
+- [x] User reviews and merges the first Cloud PR manually.
+
+Exact runtime evidence task (no repository changes, commit or PR):
+
+```text
+TASK COLLAB-CLOUD-RUNTIME-EVIDENCE-001 — read-only exact runtime check
+
+Use environment `sejong-ai-cloud-docs` and base `main`.
+Read AGENTS.md and
+docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md first.
+
+Do not modify, create, rename or delete any file. Do not commit, push or create a PR.
+Do not install or upgrade anything. Do not run env/printenv/set, inspect .env files,
+request or print secrets, call DeepSeek, start Docker/Supabase/DB, or deploy.
+
+Run only:
+node --version
+python --version
+pnpm --version
+uv --version
+git rev-parse --short HEAD
+git status --short
+git diff --exit-code
+python -B scripts/check_repository_docs.py
+
+Expected runtime:
+- Node v24.12.0
+- Python 3.12.13
+- pnpm 11.13.0
+- uv 0.11.28
+
+If any value differs or a command is missing, stop without fixing it and report the
+actual value/error. Finish with a compact PASS/FAIL table and explicitly confirm:
+files changed 0, commit 0, PR 0, secret/provider/DB/Docker/deployment use 0.
+```
 
 Reusable Cloud prompt:
 
@@ -439,6 +472,12 @@ Docker/local-only verification as pending for the user.
 ```
 
 ## Task 7: Onboard the frontend teammate with a no-product-change rehearsal
+
+2026-07-21 coordination hold: remote branch `feat/web-COLLAB-ONBOARDING-doc-check` was force-updated
+while audited (`2178405→9df362d→47472d9`) and PR #4 is now open/non-draft. Latest head is based on merged
+`main=d54fd6f` but uses implementation-note ID `IMP-20260721-012`, colliding with the owner evidence note
+`012` awaiting integration. Do not merge PR #4. Integrate owner notes `012/013/015`, then rename the
+teammate note/INDEX row to reserved ID `IMP-20260721-014`, run the gates and continue the PR.
 
 - [ ] Team member clones the private repository and reads the handoff.
 - [ ] They reproduce the pinned runtime and current frontend baseline.
@@ -600,3 +639,19 @@ successful external-state evidence.
   at `c95056a` (Critical/Important/Minor 0), pushed as owner-review Draft PR #2, and its Collaboration
   policy and Frontend CI summary passed. Human review/merge remains Pending; only after that merge may
   corrected `COLLAB-CLOUD-REHEARSAL-002` run from refreshed `main` and create its own Draft PR.
+- 2026-07-21: user marked PR #2 ready and merged it. Independent GitHub evidence confirms merge commit
+  `b61f676dea3e22306508ba978385a18d948e7653`, remote `origin/main` at that commit, and successful
+  post-merge Collaboration policy and Frontend CI summaries. The next executable gate is corrected
+  `COLLAB-CLOUD-REHEARSAL-002`; the held rehearsal 001 result remains unpublished.
+- 2026-07-21: corrected rehearsal 002 was published as Draft PR #3 from actual GitHub branch
+  `codex/add-cloud-rehearsal-implementation-notes`. Its diff remains exactly note 011 plus one INDEX row and
+  hosted Collaboration policy/Frontend CI summaries passed after evidence correction. Cloud-reported internal
+  branch/commit and actual GitHub publication identifiers are both recorded; human review/manual merge remains.
+- 2026-07-21: user manually merged PR #3. Independent evidence confirms merge commit
+  `d54fd6fdc4c941eb083cd14ec5b2354e91f4a982`, fetched `origin/main` at the same SHA, Collaboration policy
+  run `29810047993` PASS and full Frontend CI run `29810048119` PASS. Task 6 now retains only exact Cloud
+  Node/Python/pnpm/uv version evidence; Task 5 MFA/recovery and Task 7 teammate rehearsals remain Pending.
+- 2026-07-21: user supplied the read-only Cloud runtime result: Node `v24.12.0`, Python `3.12.13`, pnpm
+  `11.13.0`, uv `0.11.28`, HEAD `d54fd6f`, empty status, zero diff and repository docs PASS, with files,
+  commit, PR and secret/provider/DB/Docker/deployment use all 0. Fetched `origin/main` independently matches
+  `d54fd6f` and no new Cloud PR/commit was observed. Task 6 is complete.
