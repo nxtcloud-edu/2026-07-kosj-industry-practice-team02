@@ -440,6 +440,12 @@ Docker/local-only verification as pending for the user.
 
 ## Task 7: Onboard the frontend teammate with a no-product-change rehearsal
 
+2026-07-21 coordination hold: remote branch `feat/web-COLLAB-ONBOARDING-doc-check` was force-updated
+while audited (`2178405→9df362d→47472d9`) and still has no PR. Latest head is based on merged
+`main=d54fd6f` but now uses implementation-note ID `IMP-20260721-012`, colliding with the owner evidence
+note `012` awaiting integration. Do not open the teammate PR yet. Integrate owner notes `012/013`, then
+rename the teammate note/INDEX row to reserved ID `IMP-20260721-014`, run the gates and open the PR.
+
 - [ ] Team member clones the private repository and reads the handoff.
 - [ ] They reproduce the pinned runtime and current frontend baseline.
 - [ ] They open `feat/web-COLLAB-ONBOARDING-doc-check` with exactly one newly added

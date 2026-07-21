@@ -4,6 +4,8 @@
 
 ### Added
 
+- Post-COLLAB sequencing evidence: hold the existing teammate onboarding branch until its colliding note `012`
+  is synchronized and renamed to reserved `014`; run Cloud runtime evidence and approved DATA-SEED-002 in parallel
 - Corrected Cloud rehearsal 002 integration evidence: PR #3 exact two-document scope, explicit Cloud-internal
   versus GitHub publication identities, manual merge commit `d54fd6f`, and green PR/post-merge hosted checks
 - PR #2 merge/post-merge evidence: remote `main` advanced to merge commit `b61f676`, hosted collaboration
