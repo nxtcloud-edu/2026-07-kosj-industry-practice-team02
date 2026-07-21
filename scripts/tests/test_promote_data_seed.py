@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 from scripts import promote_data_seed
+from scripts.data_staging_validation import CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS
 from scripts.promote_data_seed import cli
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_TOKEN,
@@ -42,6 +43,17 @@ EXPECTED_FILES = {
     "release_manifest.json",
     "seed.sql",
 }
+PREPUBLICATION_FIXTURE_DIRECTORIES = (
+    Path(CANONICAL_DRAFT),
+    Path("data/schemas/data-001/v1"),
+    Path(INITIAL_RELEASE_PROFILE.schema_token),
+    Path(SUCCESSOR_RELEASE_PROFILE.schema_token),
+    Path(INITIAL_RELEASE),
+)
+PREPUBLICATION_FIXTURE_FILES = (
+    Path("data/official/kb_source_registry.csv"),
+    *(Path(relative_path) for relative_path in CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS),
+)
 
 
 class DirectEntrypointTests(unittest.TestCase):
@@ -73,7 +85,14 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.root = Path(self.temporary_directory.name) / "repository"
-        shutil.copytree(REPOSITORY_ROOT / "data", self.root / "data")
+        for relative_path in PREPUBLICATION_FIXTURE_DIRECTORIES:
+            destination = self.root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(REPOSITORY_ROOT / relative_path, destination)
+        for relative_path in PREPUBLICATION_FIXTURE_FILES:
+            destination = self.root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPOSITORY_ROOT / relative_path, destination)
         (self.root / "supabase").mkdir(parents=True)
         self.initial_release = self.root / INITIAL_RELEASE
         (self.root / "supabase" / "seed.sql").write_bytes(
@@ -111,6 +130,21 @@ class PromoteDataSeedTests(unittest.TestCase):
             with redirect_stdout(output):
                 result = cli(arguments)
         return result, output.getvalue()
+
+    def test_default_fixture_starts_from_exact_initial_predecessor(self) -> None:
+        canonical_initial_release = REPOSITORY_ROOT / INITIAL_RELEASE
+        expected_dispatcher = (canonical_initial_release / "seed.sql").read_bytes()
+
+        self.assertTrue(self.initial_release.is_dir())
+        self.assertEqual(
+            self.hash_tree(canonical_initial_release),
+            self.hash_tree(self.initial_release),
+        )
+        self.assertFalse(self.release.exists())
+        self.assertEqual(expected_dispatcher, self.dispatcher.read_bytes())
+        for relative_path in CANONICAL_SOURCE_AUDIT_RELATIVE_PATHS:
+            with self.subTest(source_audit=relative_path):
+                self.assertTrue((self.root / relative_path).is_file())
 
     def prepare_valid_release(self) -> None:
         result, output = self.run_cli(self.prepare_args())
