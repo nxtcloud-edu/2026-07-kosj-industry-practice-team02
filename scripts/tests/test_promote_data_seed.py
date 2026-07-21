@@ -18,19 +18,20 @@ from scripts import promote_data_seed
 from scripts.promote_data_seed import cli
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_TOKEN,
+    INITIAL_RELEASE_PROFILE,
     RELEASE_VERSION,
+    SUCCESSOR_RELEASE_PROFILE,
     verify_release_directory,
 )
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_DRAFT = CANONICAL_DRAFT_TOKEN
-CANONICAL_RELEASE = "data/official/releases/0.1.0-initial.1"
-RELEASED_AT = "2026-07-19T09:20:31+09:00"
-INITIAL_DISPATCHER_BYTES = (
-    b"-- DB-001 deliberately contains no official or mock seed.\n"
-    b"-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.\n"
-    b"-- An empty approved-data set must keep /ready at HTTP 503.\n"
+INITIAL_RELEASE = INITIAL_RELEASE_PROFILE.canonical_token
+CANONICAL_RELEASE = SUCCESSOR_RELEASE_PROFILE.canonical_token
+RELEASED_AT = SUCCESSOR_RELEASE_PROFILE.released_at
+DATA_FREE_DISPATCHER_BYTES = (
+    b"-- data-free dispatcher is not an approved successor predecessor\n"
 )
 EXPECTED_FILES = {
     "approval_manifest.json",
@@ -72,13 +73,12 @@ class PromoteDataSeedTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.root = Path(self.temporary_directory.name) / "repository"
-        shutil.copytree(
-            REPOSITORY_ROOT / "data",
-            self.root / "data",
-            ignore=shutil.ignore_patterns("releases"),
-        )
+        shutil.copytree(REPOSITORY_ROOT / "data", self.root / "data")
         (self.root / "supabase").mkdir(parents=True)
-        (self.root / "supabase" / "seed.sql").write_bytes(INITIAL_DISPATCHER_BYTES)
+        self.initial_release = self.root / INITIAL_RELEASE
+        (self.root / "supabase" / "seed.sql").write_bytes(
+            (self.initial_release / "seed.sql").read_bytes()
+        )
         shutil.copy2(
             REPOSITORY_ROOT / "supabase" / "config.toml",
             self.root / "supabase" / "config.toml",
@@ -116,7 +116,7 @@ class PromoteDataSeedTests(unittest.TestCase):
         result, output = self.run_cli(self.prepare_args())
         self.assertEqual(0, result, output)
         self.assertEqual(
-            "[PASS] step=PREPARE-DATA-SEED release=0.1.0-initial.1 "
+            "[PASS] step=PREPARE-DATA-SEED release=0.1.0-initial.2 "
             "kb=19 office=3 mapping=10\n",
             output,
         )
@@ -188,6 +188,15 @@ class PromoteDataSeedTests(unittest.TestCase):
         )
 
         result, output = self.run_cli(self.release_args("verify-release"))
+        self.assertEqual(0, result, output)
+        self.assertEqual(
+            "[PASS] step=VERIFY-DATA-SEED-RELEASE release=0.1.0-initial.2 issues=0\n",
+            output,
+        )
+
+        result, output = self.run_cli(
+            self.release_args("verify-release", INITIAL_RELEASE)
+        )
         self.assertEqual(0, result, output)
         self.assertEqual(
             "[PASS] step=VERIFY-DATA-SEED-RELEASE release=0.1.0-initial.1 issues=0\n",
@@ -466,6 +475,15 @@ class PromoteDataSeedTests(unittest.TestCase):
                 "--released-at",
                 RELEASED_AT,
             ],
+            "historical_version": [
+                "prepare",
+                "--draft-dir",
+                CANONICAL_DRAFT,
+                "--release-version",
+                INITIAL_RELEASE_PROFILE.version,
+                "--released-at",
+                INITIAL_RELEASE_PROFILE.released_at,
+            ],
             "timestamp_alias": [
                 "prepare",
                 "--draft-dir",
@@ -489,11 +507,11 @@ class PromoteDataSeedTests(unittest.TestCase):
         release_hash = self.hash_tree(self.release)
         candidates = (
             str(self.release),
-            "data/official/releases/./0.1.0-initial.1",
-            "data/official/releases/x/../0.1.0-initial.1",
-            r"data\official\releases\0.1.0-initial.1",
-            "Data/official/releases/0.1.0-initial.1",
-            "data/official/releases/0.1.0-initial.1/",
+            "data/official/releases/./0.1.0-initial.2",
+            "data/official/releases/x/../0.1.0-initial.2",
+            r"data\official\releases\0.1.0-initial.2",
+            "Data/official/releases/0.1.0-initial.2",
+            "data/official/releases/0.1.0-initial.2/",
             "data/official/releases/0.1.0-initial-1",
         )
         for command, step in (
@@ -538,7 +556,7 @@ class PromoteDataSeedTests(unittest.TestCase):
             / "data"
             / "schemas"
             / "data-seed"
-            / "v1"
+            / "v2"
             / "release-manifest.schema.json"
         )
         schema_bytes = schema_path.read_bytes()
@@ -670,7 +688,7 @@ class PromoteDataSeedTests(unittest.TestCase):
 
         self.assertEqual(0, result, output)
         self.assertEqual(
-            "[PASS] step=ACTIVATE-LOCAL-SEED release=0.1.0-initial.1 changed=1\n",
+            "[PASS] step=ACTIVATE-LOCAL-SEED release=0.1.0-initial.2 changed=1\n",
             output,
         )
         self.assertEqual(
@@ -685,16 +703,50 @@ class PromoteDataSeedTests(unittest.TestCase):
         result, output = self.run_cli(self.release_args("activate-local-seed"))
         self.assertEqual(0, result, output)
         self.assertEqual(
-            "[PASS] step=ACTIVATE-LOCAL-SEED release=0.1.0-initial.1 changed=0\n",
+            "[PASS] step=ACTIVATE-LOCAL-SEED release=0.1.0-initial.2 changed=0\n",
             output,
         )
 
         result, output = self.run_cli(self.release_args("verify-local-seed"))
         self.assertEqual(0, result, output)
         self.assertEqual(
-            "[PASS] step=VERIFY-LOCAL-SEED release=0.1.0-initial.1 active=1\n",
+            "[PASS] step=VERIFY-LOCAL-SEED release=0.1.0-initial.2 active=1\n",
             output,
         )
+
+    def test_historical_release_is_verify_only_and_never_activatable(self) -> None:
+        before = self.dispatcher.read_bytes()
+
+        result, output = self.run_cli(
+            self.release_args("verify-release", INITIAL_RELEASE)
+        )
+        self.assertEqual(0, result, output)
+        self.assertEqual(
+            "[PASS] step=VERIFY-DATA-SEED-RELEASE release=0.1.0-initial.1 issues=0\n",
+            output,
+        )
+
+        for command, step in (
+            ("activate-local-seed", "ACTIVATE-LOCAL-SEED"),
+            ("verify-local-seed", "VERIFY-LOCAL-SEED"),
+        ):
+            with self.subTest(command=command):
+                result, output = self.run_cli(
+                    self.release_args(command, INITIAL_RELEASE)
+                )
+                self.assertEqual(2, result)
+                self.assert_stable_failure(output, step)
+                self.assertEqual(before, self.dispatcher.read_bytes())
+
+    def test_data_free_dispatcher_is_not_an_upgrade_predecessor(self) -> None:
+        self.prepare_valid_release()
+        self.dispatcher.write_bytes(DATA_FREE_DISPATCHER_BYTES)
+
+        result, output = self.run_cli(self.release_args("activate-local-seed"))
+
+        self.assertEqual(2, result)
+        self.assert_stable_failure(output, "ACTIVATE-LOCAL-SEED")
+        self.assertEqual(DATA_FREE_DISPATCHER_BYTES, self.dispatcher.read_bytes())
 
     def test_unrelated_dispatcher_drift_fails_closed_without_byte_change(self) -> None:
         self.prepare_valid_release()
@@ -1130,6 +1182,7 @@ class PromoteDataSeedTests(unittest.TestCase):
     ) -> None:
         releases = self.root / "data" / "official" / "releases"
         official = releases.parent
+        shutil.rmtree(releases)
         self.assertFalse(releases.exists())
         flushed: list[Path] = []
 
@@ -1150,6 +1203,7 @@ class PromoteDataSeedTests(unittest.TestCase):
     ) -> None:
         releases = self.root / "data" / "official" / "releases"
         official = releases.parent
+        shutil.rmtree(releases)
         self.assertFalse(releases.exists())
 
         with mock.patch(

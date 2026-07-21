@@ -464,6 +464,85 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
         self.assertEqual(3, offices["properties"]["records"]["minItems"])
         self.assertEqual(10, mappings["properties"]["records"]["minItems"])
 
+    def test_successor_schemas_are_strict_and_only_extend_version_lineage(self) -> None:
+        schema_root = self.root / "data" / "schemas" / "data-seed"
+        v1 = {
+            path.name: json.loads(path.read_text(encoding="utf-8"))
+            for path in (schema_root / "v1").glob("*.schema.json")
+        }
+        v2 = {
+            path.name: json.loads(path.read_text(encoding="utf-8"))
+            for path in (schema_root / "v2").glob("*.schema.json")
+        }
+        self.assertEqual(set(v1), set(v2))
+
+        for name, schema in v2.items():
+            self.assertFalse(schema["additionalProperties"], name)
+            self.assertEqual(2, schema["properties"]["schema_version"]["const"], name)
+            self.assertEqual(
+                "0.1.0-initial.2",
+                schema["properties"]["release_version"]["const"],
+                name,
+            )
+
+        correction = v2["release-manifest.schema.json"]["properties"]["correction"]
+        self.assertFalse(correction["additionalProperties"])
+        self.assertEqual(
+            [
+                "predecessor_release_version",
+                "predecessor_manifest_sha256",
+                "decision_id",
+                "reason",
+            ],
+            correction["required"],
+        )
+        self.assertEqual(
+            {
+                "predecessor_release_version": "0.1.0-initial.1",
+                "predecessor_manifest_sha256": (
+                    "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2"
+                ),
+                "decision_id": "D-044",
+                "reason": "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            },
+            {
+                field: property_schema["const"]
+                for field, property_schema in correction["properties"].items()
+            },
+        )
+
+        for name in (
+            "kb-records.schema.json",
+            "offices.schema.json",
+            "office-service-mappings.schema.json",
+        ):
+            normalized = json.loads(json.dumps(v2[name]))
+            normalized["title"] = v1[name]["title"]
+            normalized["properties"]["schema_version"]["const"] = 1
+            normalized["properties"]["release_version"]["const"] = (
+                "0.1.0-initial.1"
+            )
+            self.assertEqual(v1[name], normalized, name)
+
+        normalized_manifest = json.loads(
+            json.dumps(v2["release-manifest.schema.json"])
+        )
+        initial_manifest = v1["release-manifest.schema.json"]
+        normalized_manifest["title"] = initial_manifest["title"]
+        normalized_manifest["required"].remove("correction")
+        normalized_manifest["properties"].pop("correction")
+        normalized_manifest["properties"]["schema_version"]["const"] = 1
+        normalized_manifest["properties"]["release_id"]["const"] = (
+            "sejong-official-0.1.0-initial.1"
+        )
+        normalized_manifest["properties"]["release_version"]["const"] = (
+            "0.1.0-initial.1"
+        )
+        normalized_manifest["properties"]["generator"]["const"] = (
+            "data-seed-release-v1"
+        )
+        self.assertEqual(initial_manifest, normalized_manifest)
+
     def test_release_tool_is_the_only_new_staging_scanner_exception(self) -> None:
         self.assertEqual(
             EXPECTED_RUNTIME_ALLOWLIST, staging_validation._RUNTIME_ALLOWLIST

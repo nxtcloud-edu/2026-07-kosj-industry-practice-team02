@@ -1,4 +1,4 @@
-"""Guarded publication CLI for the initial DATA-SEED official release."""
+"""Guarded publication CLI for immutable DATA-SEED official releases."""
 
 from __future__ import annotations
 
@@ -20,12 +20,14 @@ from scripts.data_seed_release import (
     CANONICAL_DRAFT_RELATIVE_PATH,
     CANONICAL_DRAFT_TOKEN,
     CANONICAL_RELEASE_RELATIVE_PATH,
-    CANONICAL_RELEASE_TOKEN,
     GOVERNANCE_RELEASED_AT,
+    INITIAL_RELEASE_PROFILE,
     RELEASE_ARTIFACTS,
     RELEASE_VERSION,
     ReleaseBundle,
+    ReleaseProfile,
     ReleaseVerificationError,
+    SUCCESSOR_RELEASE_PROFILE,
     _verify_release_contents,
     build_release_bundle,
     release_bundle_files,
@@ -39,11 +41,10 @@ VERIFY_RELEASE_STEP = "VERIFY-DATA-SEED-RELEASE"
 ACTIVATE_STEP = "ACTIVATE-LOCAL-SEED"
 VERIFY_LOCAL_STEP = "VERIFY-LOCAL-SEED"
 CLI_STEP = "DATA-SEED-CLI"
-INITIAL_DISPATCHER_BYTES = (
-    b"-- DB-001 deliberately contains no official or mock seed.\n"
-    b"-- DATA-001 and DATA-SEED-001 own PM-approved data and versioned lineage.\n"
-    b"-- An empty approved-data set must keep /ready at HTTP 503.\n"
-)
+_PROFILE_BY_CANONICAL_TOKEN = {
+    profile.canonical_token: profile
+    for profile in (INITIAL_RELEASE_PROFILE, SUCCESSOR_RELEASE_PROFILE)
+}
 _COMMAND_STEPS = {
     "prepare": PREPARE_STEP,
     "verify-release": VERIFY_RELEASE_STEP,
@@ -79,26 +80,30 @@ def cli(argv: Sequence[str]) -> int:
             _require_exact_prepare_values(values)
             _prepare(root)
             print(
-                "[PASS] step=PREPARE-DATA-SEED release=0.1.0-initial.1 "
+                "[PASS] step=PREPARE-DATA-SEED release=0.1.0-initial.2 "
                 "kb=19 office=3 mapping=10"
             )
         else:
-            _require_exact_release_value(values)
+            profile = _require_exact_release_value(command, values)
+            release_dir = root / Path(profile.canonical_token)
             if command == "verify-release":
-                verify_release_directory(root, root / CANONICAL_RELEASE_RELATIVE_PATH)
+                verify_release_directory(root, release_dir)
                 print(
                     "[PASS] step=VERIFY-DATA-SEED-RELEASE "
-                    "release=0.1.0-initial.1 issues=0"
+                    f"release={profile.version} issues=0"
                 )
             elif command == "activate-local-seed":
                 changed = _activate_local_seed(root)
                 print(
                     "[PASS] step=ACTIVATE-LOCAL-SEED "
-                    f"release=0.1.0-initial.1 changed={changed}"
+                    f"release={profile.version} changed={changed}"
                 )
             else:
                 _verify_local_seed(root)
-                print("[PASS] step=VERIFY-LOCAL-SEED release=0.1.0-initial.1 active=1")
+                print(
+                    "[PASS] step=VERIFY-LOCAL-SEED "
+                    f"release={profile.version} active=1"
+                )
         return 0
     except ReleaseVerificationError as error:
         _print_failure(step, error.reason, len(error.issues))
@@ -155,9 +160,17 @@ def _require_exact_prepare_values(values: Mapping[str, str]) -> None:
         raise _CliFailure("RELEASE_TIMESTAMP_INVALID")
 
 
-def _require_exact_release_value(values: Mapping[str, str]) -> None:
-    if values.get("--release-dir") != CANONICAL_RELEASE_TOKEN:
+def _require_exact_release_value(
+    command: str,
+    values: Mapping[str, str],
+) -> ReleaseProfile:
+    token = values.get("--release-dir")
+    profile = _PROFILE_BY_CANONICAL_TOKEN.get(token)
+    if profile is None:
         raise _CliFailure("RELEASE_PATH_INVALID")
+    if command != "verify-release" and profile != SUCCESSOR_RELEASE_PROFILE:
+        raise _CliFailure("RELEASE_PATH_INVALID")
+    return profile
 
 
 def _prepare(root: Path) -> None:
@@ -345,7 +358,14 @@ def _activate_local_seed(root: Path) -> int:
     )
     if previous == desired:
         return 0
-    if previous != INITIAL_DISPATCHER_BYTES:
+    predecessor_summary = verify_release_directory(
+        root,
+        root / Path(INITIAL_RELEASE_PROFILE.canonical_token),
+    )
+    predecessor = predecessor_summary.get("seed_sql_bytes")
+    if not isinstance(predecessor, bytes):
+        raise _CliFailure("VERIFIED_PREDECESSOR_SEED_INVALID")
+    if previous != predecessor:
         raise _CliFailure("DISPATCHER_DRIFT")
 
     temporary, created_temporary_identity = _write_dispatcher_temp(
