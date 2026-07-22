@@ -140,6 +140,7 @@ citizen question
 | `docker ps ...` | command PASS, running container 0 |
 | `git commit` / `git push -u origin codex/MVP-001-four-day-core-loop` | PASS; implementation commit `4b3f93a`, private branch published |
 | `gh pr create --draft ...` | PASS; Draft owner-review PR #6, base `main`, auto-merge 0 |
+| `gh pr checks 6 --watch` | PASS; collaboration policy와 Frontend CI hosted summary 모두 green |
 
 첫 E2E 실패는 두 spec×3 viewport가 단일 local Next server에 6 worker로 붙으며 hydration 전에
 controlled input fill이 실행된 test-harness concurrency 문제였다. 기존 수준인 3 worker로 고정한 뒤
