@@ -138,6 +138,8 @@ citizen question
 | direct root full unittest 재실행 | 401/401 PASS, 2 platform/local skip; 의도된 negative fixture의 `[FAIL]` 출력 포함 |
 | `gh pr view 4 ...` | OPEN, non-draft, CLEAN/MERGEABLE, checks green |
 | `docker ps ...` | command PASS, running container 0 |
+| `git commit` / `git push -u origin codex/MVP-001-four-day-core-loop` | PASS; implementation commit `4b3f93a`, private branch published |
+| `gh pr create --draft ...` | PASS; Draft owner-review PR #6, base `main`, auto-merge 0 |
 
 첫 E2E 실패는 두 spec×3 viewport가 단일 local Next server에 6 worker로 붙으며 hydration 전에
 controlled input fill이 실행된 test-harness concurrency 문제였다. 기존 수준인 3 worker로 고정한 뒤
@@ -193,7 +195,8 @@ durable retry idempotency, 실제 admin DB read는 각각 Q-MVP-002/Q-API-002/Q-
 4. DATA actual 네 번째 실행은 별도 결정이 필요하다. 현재 ACTIVE 19·READY 200을 주장할 수 없다.
 5. local 실행 전 값 노출 없이 32-byte 이상 `CONTEXT_TOKEN_SECRET`을 설정해야 한다.
 6. PR #4는 merge 가능하지만 아직 OPEN이다. 사용자/팀원이 검토·병합해야 한다.
-7. 이번 owner 결과는 검토용 Draft PR이며 자동 merge하지 않는다.
+7. 이번 owner 결과는 [Draft PR #6](https://github.com/tskwak111/Sejong_AI/pull/6)이며 자동
+   merge하지 않는다. PR #4를 먼저 병합한 뒤 최신 `main`을 반영·재검증해야 한다.
 
 ## 13. AI 내부 구현 세부 — 인간이 굳이 이해하지 않아도 되는 내용
 
