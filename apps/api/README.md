@@ -1,17 +1,17 @@
 # apps/api
 
-세종 민원 AI 길잡이의 FastAPI 서비스다. 현재 public 수직 흐름은 health/readiness이며,
-내부에는 DB-001 lazy typed repository boundary가 구현됐다.
+세종 민원 AI 길잡이의 FastAPI 서비스다. health/readiness와 local/private `/api/v1/chat`
+수직 흐름, DB-001 lazy typed repository boundary를 제공한다.
 
 ## 현재 동작
 
 - `GET /health`: 외부 의존성을 확인하지 않고 `200 {"status":"ok"}` 반환
-- `GET /ready`: DB migration은 준비됐지만 승인 seed가 0이므로 기본적으로
-  `503 SERVICE_UNAVAILABLE` 반환
-- readiness는 typed probe로 주입할 수 있지만 DB repository는 아직 public route에 연결되지
-  않았고 provider도 비활성이다.
-- API 2.0.1-draft는 `/health`와 향후 ready 상태의 `/ready` 200 body를 required·closed schema로 고정한다. pre-DB 기본값은 계속 503이다.
-- 승인된 chat request/response와 공통 503은 strict Pydantic v2 경계 모델로 같은 17개 합성 JSON fixture를 소비한다. 숫자·문자열·boolean 간 암묵적 coercion과 FALLBACK 추가 필드를 거부한다.
+- `GET /ready`: local app factory가 승인된 초기 ACTIVE KB 19개와 기관 projection 10개를
+  확인한 경우만 200을 반환하며, 설정·DB·데이터가 하나라도 부족하면 503으로 닫힌다.
+- `POST /api/v1/chat`: local app factory에서 마스킹→정책 분류→ACTIVE KB 검색→근거 gate→
+  구조화 응답/폴백을 수행한다. import-safe 기본 앱은 의도적으로 503을 반환한다.
+- API 3.0.0-draft는 `PRIVACY_UNRESOLVED`, SUCCESS/FOLLOWUP/FALLBACK 판별 union, SUCCESS 기관 카드와 local/private 관리자 성공·오류 envelope를 엄격한 공개 계약으로 고정한다. pre-DB `/ready` 기본값은 계속 503이다.
+- 승인된 chat/admin response와 공통 503은 strict Pydantic v2 경계 모델과 공유 합성 JSON fixture를 함께 소비한다. 숫자·문자열·boolean 간 암묵적 coercion과 스냅샷/디버그 추가 필드를 거부한다.
 - 정상 완료와 일반 `Exception` 경로의 HTTP 요청 로그는 서버가 만든 UUID, method, 라우트
   템플릿, status만 JSON 한 줄로 남긴다.
 - Uvicorn request-line access log, raw ASGI trace logger, INFO 미만 protocol record와 고정
@@ -19,15 +19,19 @@
   INFO startup과 일반 error record는 유지하며, 현재 범위 밖인 WebSocket은 실행 명령에서도
   비활성화한다.
 
-채팅 route·관리자 API, 공식 seed, 외부 LLM 호출은 후속 수직 흐름이며 현재 구현에
-포함되지 않는다. 요청 body·query·header·cookie·client IP·응답 본문은 일반 로그에 기록하지
-않는다.
+관리자 wire/Pydantic 계약과 route/service는 구현됐지만 기본/public 앱에는 router를 등록하지 않아
+404를 반환한다. local/private composition이 fixed actor allowlist와 service를 명시적으로 제공할
+때만 route가 등록된다.
+실제 local DB용 관리자 read capability와 adapter는 별도 migration 승인 전까지 연결하지 않는다.
+실제 외부 LLM 호출도 후속 수직 흐름이다. 요청 body·query·header·cookie·client IP·응답 본문은
+일반 로그에 기록하지 않는다.
 
 ## 로컬 환경변수
 
 `apps/api/.env.example`을 `apps/api/.env`로 복사한다. 비밀 칸은 의도적으로 비어 있으며,
-현재 health/readiness 앱은 시작 시 환경변수·DB·provider를 읽거나 연결하지 않는다. DeepSeek는
-기본 비활성이고 승인된 local/private 합성 평가 단계 전에는 호출하지 않는다.
+local app factory는 `DATABASE_URL`과 최소 32-byte `CONTEXT_TOKEN_SECRET`만 allowlist로
+읽는다. 둘 중 하나라도 없거나 유효하지 않으면 `/ready`와 `/api/v1/chat`을 503으로 닫는다.
+DeepSeek는 기본 비활성이고 현재 결정론적 MVP 경로에서 호출하지 않는다.
 
 DB-001 `0.3.0-local` 후보의 Docker-backed 검증 gate는 실제 single loopback binding을
 reset 전에 먼저 확인하고, 안전할 때만 로컬 DB reset 뒤
@@ -54,7 +58,8 @@ remote/public 배포는 `00700` 전체 검증 전 금지한다.
 .\.tools\uv\uv.exe run --directory apps/api --frozen ruff format --check .
 .\.tools\uv\uv.exe run --directory apps/api --frozen ruff check .
 .\.tools\uv\uv.exe run --directory apps/api --frozen mypy src tests
-.\.tools\uv\uv.exe run --directory apps/api --frozen uvicorn sejong_ai_api.main:app `
+.\.tools\uv\uv.exe run --directory apps/api --frozen uvicorn sejong_ai_api.local:create_local_app `
+  --factory `
   --app-dir src --host 127.0.0.1 --port 8000 --no-access-log --ws none
 ```
 

@@ -441,7 +441,8 @@ def test_uvicorn_error_filter_drops_websocket_info_templates_without_formatting(
 
 def test_official_uvicorn_command_disables_access_log_and_websockets() -> None:
     readme = (API_ROOT / "README.md").read_text(encoding="utf-8")
-    command = readme.split("uvicorn sejong_ai_api.main:app", 1)[1].split("```", 1)[0]
+    command = readme.split("uvicorn sejong_ai_api.local:create_local_app", 1)[1].split("```", 1)[0]
+    assert "--factory" in command
     assert "--no-access-log" in command
     assert "--ws none" in command
 

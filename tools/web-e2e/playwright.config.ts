@@ -5,6 +5,7 @@ const corepack = process.platform === "win32" ? "corepack.cmd" : "corepack";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
+  workers: 3,
   forbidOnly: true,
   retries: 0,
   reporter: "list",
@@ -21,6 +22,10 @@ export default defineConfig({
     url: "http://127.0.0.1:3001",
     reuseExistingServer: false,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      ADMIN_UI_ENABLED: "true",
+    },
   },
   projects: [
     { name: "mobile-390", use: { viewport: { width: 390, height: 844 } } },

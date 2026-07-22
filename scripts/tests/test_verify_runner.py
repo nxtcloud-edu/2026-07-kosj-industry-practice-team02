@@ -524,6 +524,13 @@ exit 0
                 "exit /b 37\r\n",
                 encoding="utf-8",
             )
+            (bin_dir / "uv.cmd").write_text(
+                "@echo off\r\n"
+                "if not \"%1\"==\"--version\" exit /b 0\r\n"
+                "echo uv 0.11.28 ^(0000000 2026-07-22 x86_64-pc-windows-msvc^)\r\n"
+                "exit /b 0\r\n",
+                encoding="utf-8",
+            )
             environment = os.environ.copy()
             environment["PATH"] = str(bin_dir) + os.pathsep + environment.get("PATH", "")
             result = run_verify(environment=environment, cwd=temp)

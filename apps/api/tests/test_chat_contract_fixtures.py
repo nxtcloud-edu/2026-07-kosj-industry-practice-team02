@@ -21,7 +21,7 @@ FIXTURE_ROOT = Path(__file__).parents[3] / "contracts" / "fixtures"
 
 def read_fixture_text(relative_path: str) -> str:
     payload = (FIXTURE_ROOT / relative_path).read_text(encoding="utf-8")
-    assert "시연용 샘플" in payload
+    assert "시연용 샘플" in payload or "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" in payload
     return payload
 
 
@@ -56,6 +56,17 @@ def test_chat_request_consumes_shared_fixtures(fixture: str, valid: bool) -> Non
         ("valid-followup.json", True),
         ("valid-fallback-no-office.json", True),
         ("valid-fallback-office.json", True),
+        ("valid-privacy-unresolved.json", True),
+        ("invalid-privacy-copy.json", False),
+        ("invalid-privacy-confidence.json", False),
+        ("invalid-privacy-answer-payload.json", False),
+        ("invalid-privacy-candidate.json", False),
+        ("invalid-privacy-office.json", False),
+        ("invalid-success-fallback.json", False),
+        ("invalid-followup-source.json", False),
+        ("invalid-fallback-missing-fallback.json", False),
+        ("invalid-insufficient-candidate.json", False),
+        ("invalid-out-of-scope-intent.json", False),
         ("invalid-fallback-context.json", False),
         ("invalid-missing-context.json", False),
         ("invalid-session-id.json", False),
@@ -128,3 +139,30 @@ def test_office_allows_future_fields_but_rejects_explicit_null_source_url() -> N
     office_payload["source_url"] = None
     with pytest.raises(ValidationError):
         Office.model_validate_json(json.dumps(office_payload, ensure_ascii=False))
+
+
+def test_office_omits_an_absent_source_url_in_json_serialization() -> None:
+    payload = read_fixture("chat-response/valid-success.json")
+    office_payload = deepcopy(payload["office"])
+    office_payload.pop("source_url", None)
+
+    serialized = Office.model_validate_json(
+        json.dumps(office_payload, ensure_ascii=False)
+    ).model_dump(mode="json")
+
+    assert "source_url" not in serialized
+
+
+@pytest.mark.parametrize(
+    "url", ["javascript:alert(1)", "data:text/html,test", "http://example.invalid"]
+)
+def test_chat_contract_rejects_non_https_links(url: str) -> None:
+    response = read_fixture("chat-response/valid-success.json")
+    response["sources"][0]["url"] = url
+    with pytest.raises(ValidationError):
+        CHAT_RESPONSE_ADAPTER.validate_python(response, strict=True)
+
+    office_payload = deepcopy(response["office"])
+    office_payload["source_url"] = url
+    with pytest.raises(ValidationError):
+        Office.model_validate(office_payload, strict=True)

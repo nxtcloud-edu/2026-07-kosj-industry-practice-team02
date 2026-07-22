@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "세종 민원 AI 길잡이",
   description:
-    "승인된 공식 행정 지식에 근거하는 세종 시민 민원 안내 서비스를 준비하는 화면",
+    "승인된 공식 행정 지식을 근거로 출처와 다음 행동까지 안내하는 세종 시민 민원 서비스",
 };
 
 type RootLayoutProps = Readonly<{

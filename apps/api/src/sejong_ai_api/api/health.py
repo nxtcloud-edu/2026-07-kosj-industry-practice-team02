@@ -19,7 +19,7 @@ RETRY_AFTER_SECONDS = 30
 class ReadinessProbe(Protocol):
     """Boundary for checking required dependencies without coupling this router to them."""
 
-    def is_ready(self) -> bool:
+    async def check_ready(self) -> bool:
         """Return whether all required dependencies and approved seed data are ready."""
         ...
 
@@ -27,7 +27,7 @@ class ReadinessProbe(Protocol):
 class PreDatabaseReadinessProbe:
     """Safe default until the database and required approved seed are implemented."""
 
-    def is_ready(self) -> bool:
+    async def check_ready(self) -> bool:
         return False
 
 
@@ -68,11 +68,11 @@ def get_health() -> HealthResponse:
         }
     },
 )
-def get_readiness(
+async def get_readiness(
     probe: Annotated[ReadinessProbe, Depends(get_readiness_probe)],
 ) -> ReadyResponse | JSONResponse:
     """Report whether required dependencies and approved seed data are usable."""
-    if probe.is_ready():
+    if await probe.check_ready():
         return ReadyResponse(status="ready")
 
     unavailable = ServiceUnavailableEnvelope(

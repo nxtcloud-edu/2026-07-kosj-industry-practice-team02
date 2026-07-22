@@ -1,0 +1,20 @@
+{
+  "request_id": "adadadad-adad-4dad-8dad-adadadadadad",
+  "answer_status": "SUCCESS",
+  "intent": "BULKY_WASTE",
+  "sources": [
+    {
+      "source_id": "synthetic-source-002",
+      "title": "시연용 샘플 출처 — 공식 데이터 아님",
+      "url": "https://example.invalid/sources/002",
+      "last_verified_at": "2026-07-15"
+    }
+  ],
+  "fallback": {
+    "reason": "INSUFFICIENT_GROUNDING",
+    "title": "시연용 샘플 금지된 폴백",
+    "message": "시연용 샘플 안내입니다.",
+    "candidate_eligible": true
+  },
+  "context_token": "synthetic-context-token"
+}

@@ -243,7 +243,7 @@ audit_logs
 | PERSONAL_LOOKUP | 불가 | 필요 시 마스킹 후 30일 |
 | LEGAL_JUDGMENT | 불가 | 필요 시 마스킹 후 30일 |
 | OUT_OF_SCOPE | 불가 | 질문 텍스트 저장 금지, 이벤트만 |
-| PRIVACY_UNRESOLVED | 불가 | 질문 텍스트·실패 질문 행 없이 metadata event만 |
+| PRIVACY_UNRESOLVED | 불가 | 7/25 local은 질문 텍스트·실패 질문 행·DB event 모두 미생성 |
 | FOLLOWUP | 해당 없음 | 실패 질문 목록 미저장 |
 
 ### 외부 AI
@@ -261,7 +261,7 @@ audit_logs
 
 - 이름·상세주소는 재현율 우선으로 보수적으로 가린다. 답변 성공률 80% 미달의 원인이 과잉 마스킹으로 입증돼도 정밀도 우선으로 자동 전환하지 않고 인간 재승인을 받는다.
 - 초기 마스킹 코어는 표준 라이브러리 기반 결정론적 typed rule engine과 원문 값 없는 고정 토큰을 사용한다. 정규화·탐지 후에도 안전한 마스킹 문자열을 만들 수 없으면 텍스트를 반환하지 않고 실패 질문 row·provider 호출을 금지하며 질문 없는 interaction event만 허용한다.
-- 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. source/context/office, provider 호출, 질문 text, 실패 질문 행과 후보는 만들지 않는다. 후속 consumer 명세에서 공개 계약과 forward DB migration을 함께 승인하기 전에는 route를 활성화하지 않는다.
+- 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. source/context/office, provider 호출, 질문 text, 실패 질문 행·DB event·후보는 만들지 않는다. Q-MVP-001로 local/private route와 API 3.0.0-draft consumer는 활성화했지만, public route와 persistent metadata migration은 reserved `00700` 단계의 별도 승인 전까지 비활성이다.
 - 시민 질문에 들어온 phone-shaped value는 사용자가 “공식 대표번호”라고 적어도 모두 마스킹한다. 공식 연락처는 입력에서 보존하지 않고 승인된 KB·기관 메타데이터를 서버가 결합한 기관 카드에서만 제공한다.
 - 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니다. 실제 시민 질문은 마스킹 여부와 무관하게 DeepSeek에 전송하지 않는다.
 - 화면상 대화 기록과 15분 서명형 `context_token`은 현재 브라우저 탭 메모리에만 둔다. 서버 세션·raw 대화문·token을 DB/로그에 저장하지 않고 새로고침·탭 종료 시 화면 기록을 없앤다.

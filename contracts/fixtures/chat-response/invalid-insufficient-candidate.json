@@ -1,0 +1,13 @@
+{
+  "request_id": "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd",
+  "answer_status": "FALLBACK",
+  "intent": "BULKY_WASTE",
+  "sources": [],
+  "fallback": {
+    "reason": "INSUFFICIENT_GROUNDING",
+    "title": "시연용 샘플 근거 부족",
+    "message": "시연용 샘플 안내입니다.",
+    "candidate_eligible": false
+  },
+  "context_token": null
+}

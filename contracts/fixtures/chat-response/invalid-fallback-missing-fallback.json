@@ -1,0 +1,8 @@
+{
+  "request_id": "afafafaf-afaf-4faf-8faf-afafafafafaf",
+  "answer_status": "FALLBACK",
+  "intent": "OUT_OF_SCOPE",
+  "summary": "시연용 샘플 금지된 답변 payload",
+  "sources": [],
+  "context_token": null
+}

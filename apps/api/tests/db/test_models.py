@@ -157,6 +157,20 @@ def test_models_are_frozen_slotted_and_keep_immutable_tuples() -> None:
     assert type(record.question_examples) is tuple
 
 
+@pytest.mark.parametrize(
+    "url", ["javascript:alert(1)", "data:text/html,test", "http://example.invalid"]
+)
+def test_db_boundary_rejects_non_https_official_urls(url: str) -> None:
+    with pytest.raises(ValueError, match="SOURCE_URL_INVALID"):
+        candidate(source_url=url)
+    with pytest.raises(ValueError, match="SOURCE_URL_INVALID"):
+        knowledge(source_url=url)
+    with pytest.raises(ValueError, match="SOURCE_URL_INVALID"):
+        office(source_url=url)
+    with pytest.raises(ValueError, match="MAP_URL_INVALID"):
+        office(map_url=url)
+
+
 @pytest.mark.parametrize("actor_id", ["", " ", " operator", "operator ", 1, None])
 def test_actor_requires_an_exact_trimmed_nonempty_string(actor_id: object) -> None:
     with pytest.raises(ValueError, match="^ACTOR_ID_INVALID$"):

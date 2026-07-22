@@ -44,6 +44,9 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Tasks 1~4 완료, Task 5 partial, Task 6 partial, Task 7 pending. App scope·PR #1 merge/post-merge CI·secret-free Cloud environment 저장은 확인됐고 teammate MFA/recovery·첫 PR-only rehearsal, Cloud docs-only task/Draft PR/manual merge와 나머지 Task 7 rehearsal이 남았다 | D-052~D-057 / collaboration design and plan |
 | A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
 | A-040 | A / Blocker | 7/25 MVP scope·schedule | Resolved / execution In Progress | Q-MVP-001=A: 최종 범위를 삭제하지 않고 local/private 19→20 ACTIVE 핵심 루프를 7/25 중간 마일스톤으로 고정; DATA-SEED-002와 MVP-001 plan 즉시 실행 | D-058/ADR-0020. DeepSeek tuning·100명·자동 backup·고급 UI·public deploy는 7/25 뒤 P1, 안전 gate는 유지 |
+| A-041 | B / High | 범위 밖 개인조회·법적판단 표현 | Open / Q-MVP-002 | 승인 표본 T-16~T-18은 `PERSONAL_LOOKUP`/`LEGAL_JUDGMENT`를 요구하지만 현재 failed-question DB intent는 4개 지원 intent만 허용한다 | A 권고: 공개 응답은 `intent=UNKNOWN`+정책 reason, 저장이 필요하면 별도 forward migration; 답 전 3개 표본 Pending |
+| A-042 | A / Blocker | 관리자 DB read capability | Open / Q-DB-004 | `/admin` 서비스는 실패 질문·후보 목록/상세 read 4개를 요구하지만 현재 backend role용 `app_api` 조회 함수와 repository method가 없다 | A 권고: local/private 전용 `00650` forward migration+rollback+pgTAP+adapter; 답 전 fixture-only, 실제 20번째 ACTIVE Pending |
+| A-043 | B / High | chat 재시도 idempotency | Open / Q-API-002 | Web 재시도는 같은 payload를 보내지만 HTTP마다 새 request UUID라, DB 기록 뒤 응답만 유실되면 interaction/failed row가 중복될 수 있다 | A 권고: optional UUID `Idempotency-Key` 공개 header와 durable DB key를 함께 설계; 답 전 자동 재시도는 실제 개선 루프 완료 근거로 세지 않음 |
 
 ## 우선도 정의
 
@@ -52,7 +55,9 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 열린 인간 결정형 A/Blocker는 0개다. A-040/Q-MVP-001은 2026-07-22 D-058로 해결됐고,
+현재 열린 결정은 A-041/Q-MVP-002, A-042/Q-DB-004, A-043/Q-API-002다. 답을 받기 전에는 T-16~T-18,
+실제 admin DB E2E·20번째 ACTIVE 승격과 durable chat 재시도만 Pending으로 두고, 계약·pure core·fixture UI·보안·문서
+검증은 계속한다. A-040/Q-MVP-001은 2026-07-22 D-058로 해결됐고,
 A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
 사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
 보존한다. COLLAB-001은 Task 4 완료와 Task 5 partial external evidence를 기록했고, private
@@ -93,9 +98,50 @@ A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat 
 
 ## 현재 열린 인터뷰 질문
 
-없음. D-053으로 A-039/Q-GIT-004가 해결됐고 D-054로 COLLAB-001 실행계획이 승인됐다. Task 4와
-Task 5는 partial이며, MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push, Cloud docs-only
-task/Draft PR/manual merge 및 나머지 onboarding rehearsal은 설계 질문이 아닌 인간 실행 증거로 남는다.
+Q-MVP-002. 지원 분야 밖 개인 조회·법적 판단을 공개 응답과 DB에서 어떻게 표현할 것인가
+- 왜 지금 필요한가: 승인 표본 T-16~T-18은 `PERSONAL_LOOKUP`/`LEGAL_JUDGMENT`를 요구하지만,
+  현재 failed-question DB는 4개 지원 intent만 허용한다. 임의 저장하면 DB 계약을 깨고,
+  `OUT_OF_SCOPE`로 바꾸면 승인 표본과 정책 reason을 잃는다.
+- 선택지 A / 장점 / 단점: 공개 응답은 `intent=UNKNOWN`과 정확한 policy reason을 사용하고,
+  운영 보존이 필요하면 별도 forward migration에서 generic policy intent를 허용한다 / 시민 안내와
+  사유 지표를 보존한다 / 계약·DB migration·회귀 갱신이 필요하다.
+- 선택지 B / 장점 / 단점: 세 질문을 `OUT_OF_SCOPE`로 통합하고 text/failed row를 만들지 않는다 /
+  현 DB 변경이 없다 / 개인조회·법적판단의 구분과 승인 표본 기대를 바꿔야 한다.
+- 당신의 추천안: A. 공개 계약의 `UNKNOWN`은 이미 안전한 generic intent로 존재하므로 정책 reason과
+  조합하고, DB 저장은 migration 승인 뒤에만 활성화한다.
+- 답을 받지 못할 때 사용할 기본값: migration·저장을 만들지 않고 T-16~T-18을 Pending으로 둔다.
+- 영향을 받는 파일·계약·데이터·배포: sample 20, classifier/service, OpenAPI/Pydantic/TS,
+  failed-question DB constraint와 migration/rollback, 운영 지표.
+
+Q-DB-004. local/private `/admin`용 실패 질문·후보 read capability를 새 migration으로 추가할 것인가
+- 왜 지금 필요한가: 기존 DB에는 write/approve/purge capability만 있고 관리자 목록·상세 read가 없어,
+  구현된 `/admin` route/service를 실제 local DB에 연결할 수 없다.
+- 선택지 A / 장점 / 단점: `00600` 뒤·예약 `00700` 앞의 별도 `00650` migration과 rollback에서
+  정확한 `app_api` read 함수 4개, backend execute grant, repository adapter와 pgTAP을 추가한다 /
+  실제 개선 루프가 가능하다 / DB schema 변경과 전체 replay·rollback 검증이 필요하다.
+- 선택지 B / 장점 / 단점: 토요일에는 명시적 fixture `/admin`만 유지한다 / DB 변경 위험이 없다 /
+  실제 20번째 ACTIVE와 admin DB E2E는 완료할 수 없다.
+- 당신의 추천안: A. local/private 범위와 exact allowlist를 유지하고 public 활성화는 계속 차단한다.
+- 답을 받지 못할 때 사용할 기본값: B. fixture-only를 유지하고 실제 DB 개선 루프는 Pending 처리한다.
+- 영향을 받는 파일·계약·데이터·배포: `supabase/migrations/`, `database/rollbacks/`, pgTAP,
+  repository/local composition, DB schema version과 local data; public 배포는 불변이다.
+
+Q-API-002. 채팅 재시도의 중복 방지 identity를 공개 API와 DB에 추가할 것인가
+- 왜 지금 필요한가: 현재 서버는 HTTP 요청마다 새 UUID를 만들고 Web의 `다시 시도`는 같은 질문을
+  새 요청으로 전송한다. DB 기록은 성공했지만 응답만 유실된 경우 동일 시민 행동이 별도 interaction과
+  failed row로 저장될 수 있어 운영 집계와 후보 흐름이 중복된다.
+- 선택지 A / 장점 / 단점: optional UUID `Idempotency-Key` header를 공개 계약에 추가하고, 서버가
+  correlation request ID와 분리한 durable idempotency identity를 DB에 저장하며 Web은 한 질문의
+  재시도 동안 같은 key를 유지한다 / 재시도를 안전하게 만들고 프로세스 재시작 뒤에도 중복을 막는다 /
+  OpenAPI·Web client·DB forward migration/rollback·retention·동시성 테스트가 필요하다.
+- 선택지 B / 장점 / 단점: 자동 재시도 버튼을 제거하고 결과가 불명확하면 새 질문으로 다시 보내도록
+  안내한다 / 공개 계약과 DB를 바꾸지 않는다 / 사용성이 떨어지고 사용자의 수동 재전송 중복은 막지 못한다.
+- 당신의 추천안: A. request correlation과 durable idempotency를 분리하고 UUID 형식·보관 기간·동시
+  요청 원자성을 함께 검증한다.
+- 답을 받지 못할 때 사용할 기본값: 현재 DB나 공개 계약을 임의 변경하지 않고, 자동 재시도는
+  실제 개선 루프 완료 증거로 세지 않으며 Draft PR의 merge blocker로 표시한다.
+- 영향을 받는 파일·계약·데이터·배포: OpenAPI/Pydantic/generated TS, Web transport와 retry state,
+  interaction/failed-question DB migration·rollback·repository, 보안 로그와 동시성 회귀.
 
 ## 2026-07-20 해결된 인터뷰 질문
 

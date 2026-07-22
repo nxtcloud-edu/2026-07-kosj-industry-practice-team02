@@ -64,12 +64,12 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 **Files:** exactly those listed in
 `docs/superpowers/plans/2026-07-20-data-seed-002-successor-release-correction.md` Tasks 1~5.
 
-- [ ] Freeze `.1`/v1 byte fingerprints and add dual closed release profiles.
-- [ ] Add successor three-`EXISTS` SQL/verifier semantics and align one pgTAP predicate.
-- [ ] Add strict v2 schemas and `.2`-only create/activate state machine.
-- [ ] Bind root/DB runners to `.2` while preserving cleanup/output allowlists.
-- [ ] Generate twice, independent reviewer Critical/Important 0, publish create-once `.2`, activate dispatcher.
-- [ ] Focused Python tests and protected-path fingerprint checks pass.
+- [x] Freeze `.1`/v1 byte fingerprints and add dual closed release profiles.
+- [x] Add successor three-`EXISTS` SQL/verifier semantics and align one pgTAP predicate.
+- [x] Add strict v2 schemas and `.2`-only create/activate state machine.
+- [x] Bind root/DB runners to `.2` while preserving cleanup/output allowlists.
+- [x] Generate twice, independent reviewer Critical/Important 0, publish create-once `.2`, activate dispatcher.
+- [x] Focused Python tests and protected-path fingerprint checks pass.
 
 ### Task 2: Run the disposable actual DB cycle and promote 19 ACTIVE
 
@@ -89,12 +89,12 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - Modify: `apps/api/src/sejong_ai_api/contracts/**`, matching fixtures/tests
 - Modify: `versions/manifest.json`, ADR/design/note
 
-- [ ] Write RED contract fixtures for `PRIVACY_UNRESOLVED`, admin list/detail/create/submit/review envelopes,
+- [x] Write RED contract fixtures for `PRIVACY_UNRESOLVED`, admin list/detail/create/submit/review envelopes,
   exhaustive generated TS and strict Pydantic parity.
-- [ ] Add the response enum and exact no-source/no-context/no-office/candidate-false invariants.
-- [ ] Complete admin response schemas without changing path names.
-- [ ] Bump API to `3.0.0-draft` and shared contracts to `0.3.0` in the same change.
-- [ ] No DB migration in this milestone for privacy metadata; reserved public `00700` remains untouched.
+- [x] Add the response enum and exact no-source/no-context/no-office/candidate-false invariants.
+- [x] Complete admin response schemas without changing path names.
+- [x] Bump API to `3.0.0-draft` and shared contracts to `0.3.0` in the same change.
+- [x] No DB migration in this milestone for privacy metadata; reserved public `00700` remains untouched.
 
 ### Task 4: Implement the pure deterministic chat domain
 
@@ -103,12 +103,12 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - Create: matching `apps/api/tests/chat/**` fixtures/tests
 - Modify only for ports: DB repository protocol/fakes
 
-- [ ] RED tests for all 6 intents, ambiguous FOLLOWUP, 5 fallback reasons, lexical ranking and stable ties.
-- [ ] RED privacy spies: raw sentinel reaches no classifier/retriever/repository/provider/log/error.
-- [ ] Implement ACTIVE/OFFICIAL-only retrieval and server-bound source/office conversion.
-- [ ] Implement template SUCCESS and high-risk field omission; no provider SDK.
-- [ ] Implement 900-second signed context with value-free claims and silent invalid reset.
-- [ ] Validate sample 20 expectations at pure-service level.
+- [x] RED tests for all 6 intents, ambiguous FOLLOWUP, 5 fallback reasons, lexical ranking and stable ties.
+- [x] RED privacy spies: raw sentinel reaches no classifier/retriever/repository/provider/log/error.
+- [x] Implement ACTIVE/OFFICIAL-only retrieval and server-bound source/office conversion.
+- [x] Implement template SUCCESS and high-risk field omission; no provider SDK.
+- [x] Implement 900-second signed context with value-free claims and silent invalid reset.
+- [ ] Validate sample 20 expectations at pure-service level. 현재 17/20이며 T-16~T-18은 Q-MVP-002 대기.
 
 ### Task 5: Implement `/api/v1/chat` and readiness
 
@@ -117,39 +117,41 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - Modify: `apps/api/src/sejong_ai_api/main.py` and dependency composition/config
 - Create/modify: route, contract, privacy, logging and DB integration tests
 
-- [ ] RED route tests for SUCCESS/FOLLOWUP/FALLBACK/PRIVACY/503/idempotency.
-- [ ] Connect redactor → service → repository and metadata event matrix.
-- [ ] Map DB unavailable to 503 only when no safe template/snapshot exists.
-- [ ] Enable `/ready=200` only when DB responds and required 19 ACTIVE+office projection exists.
-- [ ] Ensure request body/raw question and context token are absent from access/error logs.
+- [ ] RED route tests for SUCCESS/FOLLOWUP/FALLBACK/PRIVACY/503/idempotency. 정책/503는 완료, idempotency는 미완료.
+- [x] Connect redactor → service → repository and metadata event matrix.
+- [x] Map DB unavailable to 503 only when no safe template/snapshot exists.
+- [ ] Enable `/ready=200` only when DB responds and required 19 ACTIVE+office projection exists. 코드 probe는 완료,
+  actual DB 19 증거가 없어 현재 503 유지.
+- [x] Ensure request body/raw question and context token are absent from access/error logs.
+- [x] Re-check repository readiness on each `/ready` and guarded chat request; startup state is not treated as permanent.
 
 ### Task 6: Frontend fixture-first `/chat` in parallel
 
 **Owner:** Frontend collaborator. **Allowed paths:** current collaboration allowlist only.
 
-- [ ] Build controlled fixture states for SUCCESS/FOLLOWUP/all fallback including privacy, empty office, 503.
-- [ ] Implement input, region, transcript, source/office cards, retry/duplicate-submit prevention.
-- [ ] Keep all transcript/token state in memory; browser storage/cookie/analytics 0.
-- [ ] Unit/E2E at 390/430/desktop, keyboard/focus/contrast/no-horizontal-overflow.
-- [ ] PR stays frontend-only and uses next reserved implementation-note ID.
+- [x] Build controlled fixture states for SUCCESS/FOLLOWUP/all fallback including privacy, empty office, 503.
+- [x] Implement input, region, transcript, source/office cards, retry/duplicate-submit prevention.
+- [x] Keep all transcript/token state in memory; browser storage/cookie/analytics 0.
+- [x] Unit/E2E at 390/430/desktop, keyboard/focus/contrast/no-horizontal-overflow.
+- [x] Owner integration branch owns this implementation; teammate PR #4 remains a separate docs-only human merge gate.
 
 ### Task 7: Connect actual typed frontend client
 
 **Files:** owner prepares shared-contract package boundary; collaborator changes web/E2E only.
 
-- [ ] Owner exposes generated shared types with frozen workspace/lockfile change and review.
-- [ ] Collaborator replaces fixture transport with typed fetch while preserving test transport injection.
-- [ ] Treat 200 policy outcomes separately from 503; do not display stale transcript as sent.
-- [ ] Render source metadata byte-for-value; never synthesize URLs/dates.
+- [x] Owner exposes generated shared types with frozen workspace/lockfile change and review.
+- [x] Frontend uses typed same-origin fetch while preserving test transport injection.
+- [x] Treat 200 policy outcomes separately from 503; do not display stale transcript as sent.
+- [x] Render source metadata byte-for-value; never synthesize URLs/dates.
 
 ### Task 8: Implement event/admin minimum
 
 **Files:** API admin contracts/routes/services/repository reads and `apps/web/src/app/admin/**`.
 
-- [ ] RED tests for failed list/detail/expired text/filters and role gate.
-- [ ] RED tests for reason confirm, candidate PII recheck, submit, self-approval rejection, approve/reject.
+- [x] RED tests for failed list/detail/expired text/filters and role gate.
+- [x] RED tests for reason confirm, candidate PII recheck, submit, self-approval rejection, approve/reject.
 - [ ] Add typed repository read methods and minimal admin routes; public mode router disabled.
-- [ ] Add local role switch UI with explicit demo-only label and audit metadata view.
+- [x] Add local role switch UI with explicit demo-only label and audit metadata view. 현재 명시적 fixture transport.
 - [ ] Confirm OUT_OF_SCOPE/FOLLOWUP/PRIVACY failed row 0 and 30-day text purge behavior.
 
 ### Task 9: Promote the 20th ACTIVE KB through the product loop
@@ -172,6 +174,21 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - [ ] Rehearse provider-off local demo from clean start through admin improvement.
 - [ ] Record 100-user, automatic backup, DeepSeek tuning, advanced UI, public deploy as deferred—not passed.
 - [ ] Independent spec and code/data/security review must report Critical 0, Important 0.
+
+## 2026-07-22 owner checkpoint
+
+- 계약/PII/chat pure core/`/api/v1/chat`/same-origin `/chat`/disabled-by-default admin API와 fixture
+  `/admin`까지 구현했다. API 전체 `1516 passed, 11 skipped`, contracts `87/87`, Web
+  `29/29`, Playwright `12/12`, Ruff/Mypy/ESLint/TypeScript/Next build가 통과했다.
+- 독립 리뷰의 Critical 0/Important 7 중 임의 demo actor·optional header, public `/admin`, stale
+  readiness, optional office URL 직렬화와 무동작 쉬운말 UI를 교정했다. 정책 표본은 Q-MVP-002,
+  durable 재시도는 Q-API-002, 실제 admin read는 Q-DB-004 결정 전 Pending이다.
+- 실제 DB는 실행 중 container 0, local env key는 `DATABASE_URL`만 확인됐다. 네 번째 DATA actual
+  cycle은 별도 실행 결정 전 금지되어 ACTIVE 19, `/ready=200`, actual admin/20번째 ACTIVE는 주장하지 않는다.
+- Q-MVP-002, Q-DB-004, Q-API-002를 사람 결정으로 열었다. 답 전에는 T-16~T-18, admin read migration,
+  durable retry, 19→20 actual regression만 Pending이고 나머지 안전한 closeout은 계속한다.
+- `/admin` fixture의 `MOCK` 후보는 ACTIVE 승인 불가, 반려만 가능하도록 UI와 transport 양쪽에서
+  차단했다. 실제 OFFICIAL 승인 흐름은 local DB 연결 뒤에만 증명한다.
 
 ## Daily stop conditions
 

@@ -1,6 +1,6 @@
 /**
  * source: contracts/openapi-v1.yaml
- * OpenAPI: 2.0.1-draft; generator: openapi-typescript 7.13.0
+ * OpenAPI: 3.0.0-draft; generator: openapi-typescript 7.13.0
  * Generated deterministically; do not edit by hand.
  */
 export interface paths {
@@ -184,8 +184,65 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @enum {string} */
-        CandidateStatus: "NEW" | "REASON_CONFIRMED" | "DRAFTED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+        AdminError: components["schemas"]["AdminRouteDisabledError"] | components["schemas"]["AdminForbiddenError"] | components["schemas"]["AdminNotFoundError"] | components["schemas"]["AdminInvalidStateError"] | components["schemas"]["AdminValidationFailedError"];
+        AdminErrorEnvelope: {
+            error: components["schemas"]["AdminError"];
+        };
+        AdminForbiddenError: {
+            /** @constant */
+            code: "ADMIN_FORBIDDEN";
+            /** @constant */
+            message: "이 작업을 수행할 권한이 없습니다.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        AdminInvalidStateError: {
+            /** @constant */
+            code: "ADMIN_INVALID_STATE";
+            /** @constant */
+            message: "현재 상태에서는 이 작업을 수행할 수 없습니다.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        AdminNotFoundError: {
+            /** @constant */
+            code: "ADMIN_NOT_FOUND";
+            /** @constant */
+            message: "대상을 찾을 수 없습니다.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        AdminRouteDisabledError: {
+            /** @constant */
+            code: "ADMIN_ROUTE_DISABLED";
+            /** @constant */
+            message: "관리자 기능을 사용할 수 없습니다.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        AdminValidationFailedError: {
+            /** @constant */
+            code: "ADMIN_VALIDATION_FAILED";
+            /** @constant */
+            message: "입력값을 확인해 주세요.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        CandidateReviewRequest: {
+            /** @enum {string} */
+            decision: "APPROVED" | "REJECTED";
+            review_comment: string;
+        };
         /**
          * @description SYSTEM_ERROR is represented by the HTTP 503 envelope, not a 200 ChatResponse.
          * @enum {string}
@@ -200,7 +257,8 @@ export interface components {
             /** @default false */
             simple_language?: boolean;
         };
-        ChatResponse: {
+        ChatResponse: components["schemas"]["SuccessResponse"] | components["schemas"]["FollowupResponse"] | components["schemas"]["FallbackResponse"];
+        ChatResponseBase: {
             answer_status: components["schemas"]["ChatAnswerStatus"];
             confidence?: number | null;
             /** @description Fresh signed 15-minute context for current-tab memory. SUCCESS and FOLLOWUP may return a token; FALLBACK always returns null. Never log, persist, display, or use it as authentication. */
@@ -217,7 +275,7 @@ export interface components {
             required_documents?: string[];
             sources: components["schemas"]["Source"][];
             summary?: string | null;
-        } & (unknown & unknown);
+        };
         FailedQuestion: {
             candidate_eligible: boolean;
             /** Format: date-time */
@@ -225,10 +283,11 @@ export interface components {
             fallback_reason: components["schemas"]["StoredFailureReason"];
             /** Format: uuid */
             id: string;
-            intent: components["schemas"]["Intent"];
+            intent: components["schemas"]["SupportedIntent"];
             /** @description Null only after the 30-day text retention job has purged the field. */
             masked_question: string | null;
-            status: components["schemas"]["CandidateStatus"];
+            /** @enum {string} */
+            status: "NEW" | "REASON_CONFIRMED";
             /**
              * Format: date-time
              * @description Expiry of masked_question only; exactly 30 days after creation.
@@ -239,8 +298,18 @@ export interface components {
              * @description Actual purge time; null while masked_question is retained.
              */
             text_purged_at: string | null;
+        } & (unknown & unknown);
+        FailedQuestionDetailResponse: {
+            item: components["schemas"]["FailedQuestion"];
         };
-        Fallback: {
+        FailedQuestionListResponse: {
+            items: components["schemas"]["FailedQuestion"][];
+            total: number;
+        };
+        /** @enum {string} */
+        FailedQuestionStatus: "NEW" | "REASON_CONFIRMED";
+        Fallback: components["schemas"]["InsufficientGroundingFallback"] | components["schemas"]["PersonalLookupFallback"] | components["schemas"]["LegalJudgmentFallback"] | components["schemas"]["OutOfScopeFallback"] | components["schemas"]["PrivacyUnresolvedFallback"];
+        FallbackPayloadBase: {
             candidate_eligible: boolean;
             message: string;
             next_actions?: string[];
@@ -249,16 +318,70 @@ export interface components {
             title: string;
         };
         /** @enum {string} */
-        FallbackReason: "INSUFFICIENT_GROUNDING" | "PERSONAL_LOOKUP" | "LEGAL_JUDGMENT" | "OUT_OF_SCOPE";
+        FallbackReason: "INSUFFICIENT_GROUNDING" | "PERSONAL_LOOKUP" | "LEGAL_JUDGMENT" | "OUT_OF_SCOPE" | "PRIVACY_UNRESOLVED";
+        FallbackResponse: components["schemas"]["InsufficientGroundingResponse"] | components["schemas"]["PersonalLookupResponse"] | components["schemas"]["LegalJudgmentResponse"] | components["schemas"]["OutOfScopeResponse"] | components["schemas"]["PrivacyUnresolvedResponse"];
+        FallbackResponseBase: components["schemas"]["ChatResponseBase"] & {
+            /** @constant */
+            answer_status: "FALLBACK";
+            confidence?: null;
+            context_token: null;
+            department?: null;
+            fallback: components["schemas"]["Fallback"];
+            fee?: null;
+            followup_options?: [
+            ];
+            intent: components["schemas"]["Intent"];
+            procedure_steps?: [
+            ];
+            processing_time?: null;
+            required_documents?: [
+            ];
+            sources: [
+            ];
+            summary?: null;
+        };
+        FollowupResponse: components["schemas"]["ChatResponseBase"] & {
+            /** @constant */
+            answer_status: "FOLLOWUP";
+            department?: null;
+            fallback?: null;
+            fee?: null;
+            followup_options: [
+                string,
+                ...string[]
+            ];
+            /** @enum {unknown} */
+            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL" | "UNKNOWN";
+            office: null;
+            procedure_steps?: [
+            ];
+            processing_time?: null;
+            required_documents?: [
+            ];
+            sources: [
+            ];
+            summary?: null;
+        };
         HealthResponse: {
             /** @constant */
             status: "ok";
+        };
+        InsufficientGroundingFallback: components["schemas"]["FallbackPayloadBase"] & {
+            /** @constant */
+            candidate_eligible: true;
+            /** @constant */
+            reason: "INSUFFICIENT_GROUNDING";
+        };
+        InsufficientGroundingResponse: components["schemas"]["FallbackResponseBase"] & {
+            fallback: components["schemas"]["InsufficientGroundingFallback"];
+            /** @enum {unknown} */
+            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
         };
         /** @enum {string} */
         Intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL" | "OUT_OF_SCOPE" | "UNKNOWN";
         KBCandidateCreate: {
             answer_summary: string;
-            category: components["schemas"]["Intent"];
+            category: components["schemas"]["SupportedIntent"];
             caution?: string | null;
             department: string;
             /** Format: uuid */
@@ -276,6 +399,77 @@ export interface components {
             source_url: string;
             title: string;
         };
+        KBCandidateCreateResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "DRAFTED";
+        };
+        KBCandidateListResponse: {
+            items: components["schemas"]["KBCandidateSummary"][];
+            total: number;
+        };
+        KBCandidateReviewResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "APPROVED" | "REJECTED";
+        };
+        /** @enum {string} */
+        KBCandidateStatus: "DRAFTED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+        KBCandidateSubmitResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "PENDING_APPROVAL";
+        };
+        KBCandidateSummary: {
+            /** Format: uuid */
+            activated_kb_id: string | null;
+            answer_summary: string;
+            /** Format: date-time */
+            approved_at: string | null;
+            /** @enum {string} */
+            category: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+            caution: string | null;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            /** @enum {string} */
+            data_origin: "OFFICIAL" | "MOCK";
+            department: string;
+            /** Format: uuid */
+            failed_question_id: string;
+            fee: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            last_verified_at: string;
+            procedure_steps: string[];
+            processing_time: string | null;
+            representative_question: string;
+            required_documents: string[];
+            review_comment: string | null;
+            reviewed_by: string | null;
+            source_title: string;
+            /** Format: uri */
+            source_url: string;
+            status: components["schemas"]["KBCandidateStatus"];
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        } & (unknown & unknown & unknown);
+        LegalJudgmentFallback: components["schemas"]["FallbackPayloadBase"] & {
+            /** @constant */
+            candidate_eligible: false;
+            /** @constant */
+            reason: "LEGAL_JUDGMENT";
+        };
+        LegalJudgmentResponse: components["schemas"]["FallbackResponseBase"] & {
+            fallback: components["schemas"]["LegalJudgmentFallback"];
+            /** @enum {unknown} */
+            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+        };
         Office: {
             address: string;
             id: string;
@@ -291,9 +485,60 @@ export interface components {
             /** Format: uri */
             source_url?: string;
         };
+        OutOfScopeFallback: components["schemas"]["FallbackPayloadBase"] & {
+            /** @constant */
+            candidate_eligible: false;
+            /** @constant */
+            reason: "OUT_OF_SCOPE";
+        };
+        OutOfScopeResponse: components["schemas"]["FallbackResponseBase"] & {
+            fallback: components["schemas"]["OutOfScopeFallback"];
+            /** @constant */
+            intent: "OUT_OF_SCOPE";
+        };
+        PersonalLookupFallback: components["schemas"]["FallbackPayloadBase"] & {
+            /** @constant */
+            candidate_eligible: false;
+            /** @constant */
+            reason: "PERSONAL_LOOKUP";
+        };
+        PersonalLookupResponse: components["schemas"]["FallbackResponseBase"] & {
+            fallback: components["schemas"]["PersonalLookupFallback"];
+            /** @enum {unknown} */
+            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+        };
+        PrivacyUnresolvedFallback: components["schemas"]["FallbackPayloadBase"] & {
+            /** @constant */
+            candidate_eligible: false;
+            /** @constant */
+            message: "개인정보를 빼거나 표현을 바꿔서 다시 질문해 주세요.";
+            next_actions: [
+                "이름, 주소, 전화번호, 접수번호 등을 적지 마세요."
+            ];
+            office: null;
+            /** @constant */
+            reason: "PRIVACY_UNRESOLVED";
+            /** @constant */
+            title: "개인정보를 안전하게 처리하지 못했어요";
+        };
+        PrivacyUnresolvedResponse: components["schemas"]["FallbackResponseBase"] & {
+            confidence: null;
+            fallback: components["schemas"]["PrivacyUnresolvedFallback"];
+            /** @constant */
+            intent: "UNKNOWN";
+        };
         ReadyResponse: {
             /** @constant */
             status: "ready";
+        };
+        ReasonConfirmationRequest: {
+            reason: components["schemas"]["StoredFailureReason"];
+        };
+        ReasonConfirmationResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "REASON_CONFIRMED";
         };
         ServiceUnavailableEnvelope: {
             error: {
@@ -320,8 +565,46 @@ export interface components {
          * @enum {string}
          */
         StoredFailureReason: "INSUFFICIENT_GROUNDING" | "PERSONAL_LOOKUP" | "LEGAL_JUDGMENT";
+        SuccessResponse: components["schemas"]["ChatResponseBase"] & {
+            /** @constant */
+            answer_status: "SUCCESS";
+            fallback?: null;
+            followup_options?: [
+            ];
+            /** @enum {unknown} */
+            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+            office: components["schemas"]["Office"] | null;
+            sources: [
+                components["schemas"]["Source"],
+                ...components["schemas"]["Source"][]
+            ];
+        };
+        /** @enum {string} */
+        SupportedIntent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+        ValidationErrorDetail: {
+            /** @constant */
+            code: "VALIDATION_ERROR";
+            /** @constant */
+            message: "입력값을 확인해 주세요.";
+            /** Format: uuid */
+            request_id: string;
+            /** @constant */
+            retryable: false;
+        };
+        ValidationErrorEnvelope: {
+            error: components["schemas"]["ValidationErrorDetail"];
+        };
     };
     responses: {
+        /** @description Stable local/private admin error without request input echo. */
+        AdminError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminErrorEnvelope"];
+            };
+        };
         /** @description No safe response can be produced from approved ACTIVE KB and currently available dependencies. */
         ServiceUnavailable: {
             headers: {
@@ -343,12 +626,14 @@ export interface components {
                 "application/json": components["schemas"]["ServiceUnavailableEnvelope"];
             };
         };
-        /** @description Request validation error */
+        /** @description Value-free request validation error without request input echo. */
         ValidationError: {
             headers: {
                 [name: string]: unknown;
             };
-            content?: never;
+            content: {
+                "application/json": components["schemas"]["ValidationErrorEnvelope"];
+            };
         };
     };
     parameters: {
@@ -368,7 +653,7 @@ export interface operations {
         parameters: {
             query?: {
                 reason?: components["schemas"]["StoredFailureReason"];
-                status?: components["schemas"]["CandidateStatus"];
+                status?: components["schemas"]["FailedQuestionStatus"];
             };
             header: {
                 /** @description Local/private demo actor only; not an authentication credential. */
@@ -387,18 +672,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items?: components["schemas"]["FailedQuestion"][];
-                    };
+                    "application/json": components["schemas"]["FailedQuestionListResponse"];
                 };
             };
-            /** @description Admin route disabled or demo actor not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
         };
     };
     getFailedQuestion: {
@@ -423,16 +700,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FailedQuestion"];
+                    "application/json": components["schemas"]["FailedQuestionDetailResponse"];
                 };
             };
-            /** @description Admin route disabled or demo actor not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
+            404: components["responses"]["AdminError"];
         };
     };
     confirmFallbackReason: {
@@ -451,9 +723,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    reason: components["schemas"]["StoredFailureReason"];
-                };
+                "application/json": components["schemas"]["ReasonConfirmationRequest"];
             };
         };
         responses: {
@@ -462,22 +732,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Admin route disabled or role not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["ReasonConfirmationResponse"];
                 };
-                content?: never;
             };
-            /** @description Invalid state transition */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
+            404: components["responses"]["AdminError"];
+            409: components["responses"]["AdminError"];
+            422: components["responses"]["AdminError"];
         };
     };
     listKBCandidates: {
@@ -499,15 +761,11 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Admin route disabled or demo actor not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["KBCandidateListResponse"];
                 };
-                content?: never;
             };
+            403: components["responses"]["AdminError"];
         };
     };
     createKBCandidate: {
@@ -533,22 +791,13 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Role not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["KBCandidateCreateResponse"];
                 };
-                content?: never;
             };
-            /** @description PII or official-source validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
+            409: components["responses"]["AdminError"];
+            422: components["responses"]["AdminError"];
         };
     };
     reviewKBCandidate: {
@@ -567,11 +816,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @enum {string} */
-                    decision: "APPROVED" | "REJECTED";
-                    review_comment: string;
-                };
+                "application/json": components["schemas"]["CandidateReviewRequest"];
             };
         };
         responses: {
@@ -580,22 +825,14 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Approver role required or self-approval blocked */
-            403: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["KBCandidateReviewResponse"];
                 };
-                content?: never;
             };
-            /** @description Invalid state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
+            404: components["responses"]["AdminError"];
+            409: components["responses"]["AdminError"];
+            422: components["responses"]["AdminError"];
         };
     };
     submitKBCandidate: {
@@ -619,15 +856,13 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Incomplete or wrong state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["KBCandidateSubmitResponse"];
                 };
-                content?: never;
             };
+            403: components["responses"]["AdminError"];
+            404: components["responses"]["AdminError"];
+            409: components["responses"]["AdminError"];
         };
     };
     getQualitySummary: {
@@ -651,13 +886,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Admin route disabled or demo actor not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            403: components["responses"]["AdminError"];
         };
     };
     createChatAnswer: {
@@ -689,7 +918,7 @@ export interface operations {
     listOffices: {
         parameters: {
             query: {
-                intent: components["schemas"]["Intent"];
+                intent: components["schemas"]["SupportedIntent"];
                 region: "아름동" | "도담동" | "조치원읍";
             };
             header?: never;

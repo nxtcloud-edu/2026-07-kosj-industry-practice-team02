@@ -1,0 +1,13 @@
+{
+  "request_id": "dededede-dede-4ede-8ede-dededededede",
+  "answer_status": "FALLBACK",
+  "intent": "LOCAL_TAX_GENERAL",
+  "sources": [],
+  "fallback": {
+    "reason": "OUT_OF_SCOPE",
+    "title": "시연용 샘플 범위 밖",
+    "message": "시연용 샘플 안내입니다.",
+    "candidate_eligible": false
+  },
+  "context_token": null
+}
