@@ -26,8 +26,19 @@ const successResponse = {
 };
 
 async function submit(page: Page, question: string) {
-  await page.getByRole("textbox", { name: "민원 질문" }).fill(question);
-  await page.getByRole("button", { name: "질문 보내기" }).click();
+  const textbox = page.getByRole("textbox", { name: "민원 질문" });
+  const submitButton = page.getByRole("button", { name: "질문 보내기" });
+
+  await expect(async () => {
+    await textbox.fill(question);
+    await expect(textbox).toHaveValue(question, { timeout: 250 });
+    await expect(submitButton).toBeEnabled({ timeout: 250 });
+  }).toPass({
+    timeout: 5_000,
+    intervals: [50, 100, 250, 500],
+  });
+
+  await submitButton.click();
 }
 
 test("home CTA reaches chat by keyboard and renders a grounded source", async ({ page }) => {

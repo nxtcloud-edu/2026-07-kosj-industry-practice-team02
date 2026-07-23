@@ -397,3 +397,9 @@ contract를 유지하는 AI 내부 세부다. local/private AI scope는 Review �
   `origin/codex/MVP-001-four-day-core-loop`에 push했다.
 - 기존 [Draft PR #6](https://github.com/tskwak111/Sejong_AI/pull/6)은 `main` 기준 0 behind인 owner
   branch를 가리키며, 자동 merge하지 않았다. 최종 merge와 수동 demo·접근성 검수는 인간 책임으로 남긴다.
+- 첫 hosted Frontend/browser gate는 느린 mobile-390 worker에서 `/chat` hydration 전 E2E `fill()`이
+  React state에 반영되지 않아 15개 중 1개가 disabled button timeout으로 실패했다. 같은 HEAD의 이전
+  hosted run과 local run은 15/15였고 Web unit/build/contract/bundle 단계는 모두 PASS여서 제품 동작
+  실패가 아니라 test navigation readiness race로 판정했다. submit helper는 입력값과 버튼 활성화만
+  5초 안에서 재확인하고 비가역 click은 콜백 밖에서 정확히 한 번 실행하도록 교정했다. mobile-390
+  집중 반복 5/5와 전체 15/15가 다시 PASS했고 독립 review도 Critical/Important/Minor `0/0/0`이다.
