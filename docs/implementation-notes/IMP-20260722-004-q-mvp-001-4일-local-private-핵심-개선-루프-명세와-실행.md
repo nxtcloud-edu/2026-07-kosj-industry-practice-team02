@@ -389,3 +389,11 @@ contract를 유지하는 AI 내부 세부다. local/private AI scope는 Review �
   조회는 의도한 least-privilege 권한 경계에서 거부됐다. DB mutation은 없었다. repository API venv,
   `app_api.list_active_kb` capability와 Windows selector event-loop policy로 교정한 최종 probe는
   `/ready=200`, ACTIVE 20, `KB-WASTE-03` 정확히 1건을 PASS했다.
+
+### Git/PR 게시 증거
+
+- 구현·계약·DB·테스트·문서 105개 파일은 commit `0893fdd`
+  (`feat(mvp): complete local private core loop`)로 묶어
+  `origin/codex/MVP-001-four-day-core-loop`에 push했다.
+- 기존 [Draft PR #6](https://github.com/tskwak111/Sejong_AI/pull/6)은 `main` 기준 0 behind인 owner
+  branch를 가리키며, 자동 merge하지 않았다. 최종 merge와 수동 demo·접근성 검수는 인간 책임으로 남긴다.
