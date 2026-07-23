@@ -158,6 +158,38 @@ class KBCandidateCreateRequest(StrictPublicModel):
     last_verified_at: date
     caution: str | None = None
 
+    @field_validator("failed_question_id", mode="before")
+    @classmethod
+    def parse_canonical_failed_question_id(cls, value: object) -> UUID:
+        if isinstance(value, UUID):
+            return value
+        if not isinstance(value, str):
+            raise ValueError("failed question ID must be a canonical UUID string")
+        try:
+            parsed = UUID(value)
+        except ValueError as error:
+            raise ValueError("failed question ID must be a canonical UUID string") from error
+        if str(parsed) != value:
+            raise ValueError("failed question ID must be a canonical UUID string")
+        return parsed
+
+    @field_validator("last_verified_at", mode="before")
+    @classmethod
+    def parse_canonical_last_verified_at(cls, value: object) -> date:
+        if isinstance(value, datetime):
+            raise ValueError("last verified date must use YYYY-MM-DD")
+        if isinstance(value, date):
+            return value
+        if not isinstance(value, str):
+            raise ValueError("last verified date must use YYYY-MM-DD")
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as error:
+            raise ValueError("last verified date must use YYYY-MM-DD") from error
+        if parsed.isoformat() != value:
+            raise ValueError("last verified date must use YYYY-MM-DD")
+        return parsed
+
 
 class CandidateReviewRequest(StrictPublicModel):
     decision: Literal["APPROVED", "REJECTED"]

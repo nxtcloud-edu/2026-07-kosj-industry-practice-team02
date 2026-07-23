@@ -128,8 +128,8 @@ def test_followup_is_value_free_and_requires_server_options() -> None:
     ("reason", "intent", "candidate_eligible"),
     [
         ("INSUFFICIENT_GROUNDING", Intent.BULKY_WASTE, True),
-        ("PERSONAL_LOOKUP", Intent.LOCAL_TAX_GENERAL, False),
-        ("LEGAL_JUDGMENT", Intent.MOVE_IN_RESIDENT_REGISTRATION, False),
+        ("PERSONAL_LOOKUP", Intent.UNKNOWN, False),
+        ("LEGAL_JUDGMENT", Intent.UNKNOWN, False),
         ("OUT_OF_SCOPE", Intent.OUT_OF_SCOPE, False),
         ("PRIVACY_UNRESOLVED", Intent.UNKNOWN, False),
     ],

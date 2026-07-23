@@ -680,10 +680,12 @@ SELECT is(
     WHERE namespaces.nspname = 'app_private'
       AND NOT triggers.tgisinternal
       AND functions.proname = 'set_updated_at'
-      AND tables.relname NOT IN ('kb_documents', 'failed_questions', 'kb_candidates')
+      AND tables.relname NOT IN (
+        'kb_documents', 'failed_questions', 'kb_candidates', 'chat_idempotency'
+      )
   ),
   0,
-  'set_updated_at is absent from all other domain tables'
+  'set_updated_at is absent outside the four approved mutable tables'
 );
 
 SELECT is(

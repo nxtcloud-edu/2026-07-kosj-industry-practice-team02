@@ -16,7 +16,6 @@ from .test_official_examples import load_records
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 SAMPLE_PATH = REPOSITORY_ROOT / "data" / "evaluation" / "sample_questions_20.csv"
-PENDING_POLICY_IDS = frozenset({"T-16", "T-17", "T-18"})
 
 
 def load_samples() -> tuple[dict[str, str], ...]:
@@ -54,18 +53,7 @@ SAMPLES = load_samples()
 
 @pytest.mark.parametrize(
     "sample",
-    [
-        pytest.param(
-            sample,
-            id=sample["test_id"],
-            marks=(
-                pytest.mark.skip(reason="Q-MVP-002 generic policy/DB decision pending")
-                if sample["test_id"] in PENDING_POLICY_IDS
-                else ()
-            ),
-        )
-        for sample in SAMPLES
-    ],
+    [pytest.param(sample, id=sample["test_id"]) for sample in SAMPLES],
 )
 def test_approved_sample_question_matches_frozen_expectation(sample: dict[str, str]) -> None:
     records_by_intent: defaultdict[Intent, list[KnowledgeRecord]] = defaultdict(list)
@@ -78,7 +66,6 @@ def test_approved_sample_question_matches_frozen_expectation(sample: dict[str, s
     assert actual_reason == (sample["기대 폴백 사유"] or None)
 
 
-def test_sample_matrix_remains_exactly_twenty_with_three_explicit_policy_gates() -> None:
+def test_sample_matrix_remains_exactly_twenty_with_no_policy_skips() -> None:
     assert len(SAMPLES) == 20
     assert {sample["test_id"] for sample in SAMPLES} == {f"T-{index:02d}" for index in range(1, 21)}
-    assert {"T-16", "T-17", "T-18"} == PENDING_POLICY_IDS

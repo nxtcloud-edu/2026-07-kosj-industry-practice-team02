@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from sejong_ai_api.admin.service import AdminServiceError
 from sejong_ai_api.api.admin import (
@@ -50,6 +52,7 @@ def failure() -> FailedQuestion:
 class RouteService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, Actor]] = []
+        self.created_payloads: list[KBCandidateCreateRequest] = []
         self.error: AdminServiceError | None = None
 
     def _record(self, name: str, actor: Actor) -> None:
@@ -88,8 +91,8 @@ class RouteService:
     async def create_candidate(
         self, actor: Actor, payload: KBCandidateCreateRequest
     ) -> KBCandidateCreateResponse:
-        del payload
         self._record("create_candidate", actor)
+        self.created_payloads.append(payload)
         return KBCandidateCreateResponse(id=CANDIDATE_ID, status="DRAFTED")
 
     async def submit_candidate(self, actor: Actor, candidate_id: UUID) -> KBCandidateSubmitResponse:
@@ -125,6 +128,25 @@ def application(*, enabled: bool, service: RouteService | None = None) -> FastAP
 
 def headers(*, actor_id: str = "OPERATOR-LOCAL-001", role: str = "OPERATOR") -> dict[str, str]:
     return {"X-Demo-Actor-Id": actor_id, "X-Demo-Role": role}
+
+
+def candidate_create_payload() -> dict[str, object]:
+    return {
+        "failed_question_id": str(FAILED_ID),
+        "title": "침대 프레임 배출 수수료",
+        "representative_question": "침대 2인용 프레임 수수료가 얼마예요?",
+        "category": "BULKY_WASTE",
+        "answer_summary": "공식 품목표에서 수수료를 확인합니다.",
+        "procedure_steps": ["품목을 확인합니다."],
+        "required_documents": [],
+        "processing_time": None,
+        "fee": "10,000원",
+        "department": "자원순환과",
+        "source_title": "세종특별자치시 대형폐기물 배출 안내",
+        "source_url": "https://www.sejong.go.kr/example",
+        "last_verified_at": "2026-07-19",
+        "caution": None,
+    }
 
 
 def test_admin_routes_are_disabled_by_default_with_exact_value_free_error() -> None:
@@ -190,6 +212,74 @@ def test_operator_reason_confirmation_is_wired_to_the_service() -> None:
     assert response.status_code == 200
     assert response.json() == {"id": str(FAILED_ID), "status": "REASON_CONFIRMED"}
     assert service.calls[0][0] == "confirm_reason"
+
+
+def test_candidate_create_converts_canonical_wire_uuid_and_date_before_service() -> None:
+    service = RouteService()
+
+    with TestClient(application(enabled=True, service=service)) as client:
+        response = client.post(
+            "/api/v1/admin/kb-candidates",
+            headers=headers(),
+            json=candidate_create_payload(),
+        )
+
+    assert response.status_code == 201
+    assert response.json() == {"id": str(CANDIDATE_ID), "status": "DRAFTED"}
+    assert service.calls == [("create_candidate", Actor("OPERATOR-LOCAL-001", AdminRole.OPERATOR))]
+    assert len(service.created_payloads) == 1
+    received = service.created_payloads[0]
+    assert type(received.failed_question_id) is UUID
+    assert received.failed_question_id == FAILED_ID
+    assert type(received.last_verified_at) is date
+    assert received.last_verified_at == date(2026, 7, 19)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("failed_question_id", "10000000000040008000000000000001"),
+        ("failed_question_id", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"),
+        ("failed_question_id", 1),
+        ("failed_question_id", True),
+        ("last_verified_at", "20260719"),
+        ("last_verified_at", "2026-02-30"),
+        ("last_verified_at", 1),
+        ("last_verified_at", True),
+    ],
+)
+def test_candidate_create_rejects_noncanonical_or_non_string_wire_values_before_service(
+    field: str, invalid_value: object
+) -> None:
+    service = RouteService()
+    payload = candidate_create_payload()
+    payload[field] = invalid_value
+
+    with TestClient(application(enabled=True, service=service)) as client:
+        response = client.post(
+            "/api/v1/admin/kb-candidates",
+            headers=headers(),
+            json=payload,
+        )
+
+    assert response.status_code == 422
+    assert service.calls == []
+    assert service.created_payloads == []
+
+
+def test_candidate_create_request_accepts_only_exact_internal_uuid_and_date_types() -> None:
+    payload = candidate_create_payload()
+    payload["failed_question_id"] = FAILED_ID
+    payload["last_verified_at"] = date(2026, 7, 19)
+
+    request = KBCandidateCreateRequest.model_validate(payload)
+
+    assert type(request.failed_question_id) is UUID
+    assert type(request.last_verified_at) is date
+
+    payload["last_verified_at"] = datetime(2026, 7, 19, tzinfo=UTC)
+    with pytest.raises(ValidationError):
+        KBCandidateCreateRequest.model_validate(payload)
 
 
 def test_service_errors_map_to_exact_admin_envelopes_without_exception_text() -> None:

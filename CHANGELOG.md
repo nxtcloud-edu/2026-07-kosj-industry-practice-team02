@@ -2,14 +2,37 @@
 
 ## [Unreleased]
 
+### Changed — MVP-001 local/private closeout
+
+- Promoted application to `0.6.0-local-core-loop`, tests to `1.2.1-core-loop-closeout` and docs to
+  `2.12.2` after final API 1,640, Web 48/lint/type/build, E2E 15, contracts 89, sample T-01~T-20
+  20/20, clean DB pgTAP 9/356·API integration 8/8 and root offline PASS.
+- Restored final local ACTIVE 20 after clean reset/seed/19→20 requery. Atomic idempotency and admin
+  race fixes passed independent `0/0/0` reviews. MVP-001 is Review/local-private AI scope complete,
+  not public-ready; human Draft PR/manual demo·accessibility and all provider/public/deferred gates remain.
+
 ### Added
 
+- 2026-07-22 local/private core-loop integration: API `3.1.0-draft`, shared contracts `0.4.0`,
+  application `0.6.0-local-core-loop-partial`, Web `0.4.0-chat-admin-local-integration` and DB
+  `0.4.0-local`. The optional UUID `Idempotency-Key` is durable and separate from correlation IDs;
+  HMAC digest, independent claim token, 5-minute lease, exact 24-hour TTL and startup/60-second
+  purge remain local/private only. No provider, remote DB or public deployment was activated.
+- DATA-SEED-002 supported actual continuation after the concurrency observer fix: baseline/identity,
+  forced rollback `tables=8 partial=0`, concurrency A/B, seed 19/3/10, replay 1, second-seed and
+  compensation guards, final citizen 19/exclusions 0/operational 0 and cleanup all PASSed. `.2` stays
+  immutable and `official_data=0.1.0-initial.2`. That seed evidence alone does not claim application
+  readiness; the later closeout above separately proves local `/ready=200` and final ACTIVE 20.
+- Local admin actual transport is explicitly gated; default Web stays fixture and default/public admin
+  remains disabled. Approved candidate source URLs use a six-host official allowlist with encoded-PII
+  protection. Personal/legal policy fallbacks create no text, event, failed row or candidate in this MVP.
 - DATA-SEED-002 immutable `0.1.0-initial.2` release, strict v2 schemas, independently reviewed
   create-once publication, byte-identical local dispatcher and exact predecessor/successor lineage.
   Three supported actual local runs reached concurrency A; the bounded diagnostic isolated
   concurrency B as `CAPABILITY_WRITE_DID_NOT_BLOCK`, cleanup passed, and no DB/READY/official-data
   promotion was claimed. Commit `eb74ac8` passed independent 0/0/0 review for the relation
-  OID-equality observer correction; no further actual run is authorized yet.
+  OID-equality observer correction. This historical failure record is superseded by the supported
+  actual PASS continuation above; it remains for audit lineage.
 - Q-MVP-001 four-day local/private milestone: D-058/ADR-0020, 2026-07-25 19→20 ACTIVE core-loop
   scope, date/role plan, DATA-SEED-002 execution approval and explicit post-Saturday deferrals
 - Cloud exact runtime evidence: Node `v24.12.0`, Python `3.12.13`, pnpm `11.13.0`, uv `0.11.28`,

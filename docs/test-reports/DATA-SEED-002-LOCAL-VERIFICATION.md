@@ -1,6 +1,6 @@
 # DATA-SEED-002 disposable local verification
 
-- Status: **Blocked**
+- Status: **Historical failed attempts preserved; supported actual PASS continuation recorded 2026-07-22**
 - Release: `0.1.0-initial.2`
 - Attempt 1 HEAD: `4a9ae513d568c8ae50c74bdf6954f87a46439c76`
 - Authorized retry HEAD: `e314592c4a8a3c38539d9ffb243f1233fe7f3543`
@@ -28,9 +28,9 @@ container/listener-absent boundary. It again passed baseline, exact identity, fo
 concurrency A, then identified the concurrency B failure as `CAPABILITY_WRITE_DID_NOT_BLOCK`.
 Cleanup passed and restored exact-owned containers/listeners to 0. No automatic fourth run occurred.
 
-`versions/manifest.json.versions.official_data` remains `0.0.0-not-populated`. The release's 19 KB,
-3 offices and 10 mappings are filesystem projection counts only; PostgreSQL ACTIVE KB 19,
-citizen-read and READY/AI status were not proven.
+Historical status before section 7A: `versions/manifest.json.versions.official_data` remained
+`0.0.0-not-populated`; the release's 19 KB, 3 offices and 10 mappings were filesystem projection
+counts only, and PostgreSQL ACTIVE KB 19, citizen-read and READY/AI status were not proven.
 
 ## 2. Immutable release and runtime identity
 
@@ -157,9 +157,31 @@ The next operator must:
 2. reconfirm container/listener 0, preserved volumes/network, patched runtime hash and no ambient DB
    environment variables without printing values;
 3. verify `.1`, `.2` and active dispatcher bytes, then use only the supported command;
-4. on failure, stop promotion, prove exact cleanup and retain `official_data=0.0.0-not-populated`;
+4. on failure, stop promotion, prove exact cleanup and retain the then-current official-data version;
 5. promote versions only after concurrency B, seed-cycle, compensation/replay, final projection and
-   cleanup all emit fresh PASS evidence.
+   cleanup all emit fresh PASS evidence. This condition is now met by section 7A.
+
+## 7A. 2026-07-22 supported actual PASS continuation
+
+This dated continuation supersedes the report's historical Blocked conclusion without erasing the
+prior three failed attempts. From an absent owned runtime and with immutable `.2` unchanged, the
+supported runner passed baseline, exact identity, forced rollback (`tables=8 partial=0`), concurrency
+A and B, 19/3/10 seed, replay (1), second-seed block, compensation guard block, final citizen 19 /
+exclusions 0 / operational 0 and cleanup. Final exact-owned runtime process/container count was 0.
+
+No DSN, key, token, provider payload, raw question or actual official-data body is recorded here.
+This promotes `official_data=0.1.0-initial.2` for local/private use only. It does not prove
+application `/ready=200`, the 20th ACTIVE regression, public admin, remote DB, deployment or
+DeepSeek actual use.
+
+### 7B. Evidence separation after the seed cycle
+
+After this report's seed-cycle boundary, MVP-001 ran a **separate** Windows local application probe
+and governed candidate regression. Those later tests observed final-DB `/ready=200` and a 19→20
+`KB-WASTE-03` workflow PASS. They do not retroactively alter immutable `.2`, its 19/3/10 contents,
+this seed runner's result, official source data, or this report's public/remote/DeepSeek boundary.
+Their runtime-only lineage is recorded in
+[`MVP-001 KB-WASTE-03 local workflow`](../data-lineage/MVP-001-KB-WASTE-03-LOCAL-WORKFLOW.md).
 
 ## 8. Security, privacy and rollback boundary
 
@@ -170,7 +192,8 @@ The next operator must:
   `.1`; a release defect requires a separately approved `.3`.
 - Preserve volumes/network. Do not use raw Docker removal, prune or ad-hoc role/grant/migration
   recovery.
-- `/ready=503`, READY-001 and AI-001 remain blocked until the full local gate succeeds.
+- This seed report alone does not prove application readiness. A later separate final local probe
+  passed `/ready=200` and READY-001; AI-001/provider/public gates remain outside this report.
 
 Release lineage and all seven canonical hashes are in
 [`DATA-SEED-002-0.1.0-initial.2.md`](../data-lineage/DATA-SEED-002-0.1.0-initial.2.md).

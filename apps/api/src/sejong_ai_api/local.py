@@ -6,6 +6,7 @@ continues to avoid environment and database access.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
@@ -13,11 +14,16 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
+from psycopg import Error as PsycopgError
+from psycopg.conninfo import conninfo_to_dict
 
+from sejong_ai_api.admin.service import AdminRepository, AdminService
 from sejong_ai_api.chat.context import ContextTokenCodec
+from sejong_ai_api.chat.idempotency import ChatIdempotencyRepository
 from sejong_ai_api.chat.readiness import ReadinessRepository, RepositoryReadinessProbe
 from sejong_ai_api.chat.service import (
     ChatRepository,
@@ -26,13 +32,17 @@ from sejong_ai_api.chat.service import (
     ChatUnavailableError,
 )
 from sejong_ai_api.contracts.chat import ChatRequest
-from sejong_ai_api.db.pool import create_pool
+from sejong_ai_api.db.models import PurgeResult
+from sejong_ai_api.db.pool import _ambient_libpq_environment_is_clear, create_pool
 from sejong_ai_api.db.repository import PsycopgSejongRepository
 from sejong_ai_api.main import create_app
 
 _LOCAL_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 _ALLOWED_ENV_KEYS = frozenset({"DATABASE_URL", "CONTEXT_TOKEN_SECRET"})
+_ALLOWED_DATABASE_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})
+_EXPECTED_DATABASE_IDENTITY = ("sejong_local_login", "127.0.0.1", 54322, "postgres")
 _MIN_CONTEXT_SECRET_BYTES = 32
+_DEFAULT_PURGE_INTERVAL_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,8 +57,14 @@ class LocalPool(Protocol):
     async def close(self) -> None: ...
 
 
-class LocalRepository(ChatRepository, ReadinessRepository, Protocol):
-    pass
+class LocalRepository(
+    ChatRepository,
+    ReadinessRepository,
+    AdminRepository,
+    ChatIdempotencyRepository,
+    Protocol,
+):
+    async def purge_expired_chat_idempotency(self) -> PurgeResult: ...
 
 
 class GuardedChatResponder:
@@ -65,11 +81,16 @@ class GuardedChatResponder:
         request: ChatRequest,
         *,
         request_id: UUID | None = None,
+        idempotency_key: UUID | None = None,
     ) -> ChatResult:
         if not await self._probe.check_ready():
             raise ChatUnavailableError()
         try:
-            return await self._service.answer(request, request_id=request_id)
+            return await self._service.answer(
+                request,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+            )
         except ChatUnavailableError:
             self._probe.mark_unavailable()
             raise ChatUnavailableError() from None
@@ -83,6 +104,10 @@ def load_local_settings(
     """Load only the two local runtime values, preferring the process environment."""
 
     source = os.environ if environ is None else environ
+    if not _ambient_libpq_environment_is_clear(source) or not _ambient_libpq_environment_is_clear(
+        os.environ
+    ):
+        return None
     selected: dict[str, str] = {}
     for key in _ALLOWED_ENV_KEYS:
         if key in source:
@@ -117,11 +142,12 @@ def create_local_app(
     env_path: Path | None = None,
     pool_factory: Callable[[str], LocalPool] | None = None,
     repository_factory: Callable[[object], LocalRepository] | None = None,
+    purge_interval_seconds: float = _DEFAULT_PURGE_INTERVAL_SECONDS,
 ) -> FastAPI:
     """Build one fail-closed local application without eager network access."""
 
     settings = load_local_settings(environ=environ, env_path=env_path)
-    if settings is None:
+    if settings is None or type(purge_interval_seconds) is not float or purge_interval_seconds <= 0:
         return create_app()
 
     selected_pool_factory = pool_factory if pool_factory is not None else _default_pool_factory
@@ -141,29 +167,74 @@ def create_local_app(
             request_id_factory=uuid4,
             monotonic_ns=time.monotonic_ns,
             is_test=False,
+            idempotency_repository=repository,
+            idempotency_secret=settings.context_token_secret,
+            idempotency_claim_factory=uuid4,
         )
         responder = GuardedChatResponder(probe, service)
     except Exception:
         return create_app()
 
-    application = create_app(readiness_probe=probe, chat_responder=responder)
+    application = create_app(
+        readiness_probe=probe,
+        chat_responder=responder,
+        admin_enabled=True,
+        admin_service=AdminService(repository),
+    )
 
     @asynccontextmanager
     async def local_lifespan(_application: FastAPI) -> AsyncIterator[None]:
+        stop_purge = asyncio.Event()
+        purge_task: asyncio.Task[None] | None = None
         try:
             await pool.open(wait=True)
+            await _purge_expired_private_records(repository)
             await probe.refresh()
+            purge_task = asyncio.create_task(
+                _run_periodic_purge(
+                    repository,
+                    probe,
+                    stop_purge,
+                    purge_interval_seconds,
+                )
+            )
         except Exception:
             probe.disable()
         try:
             yield
         finally:
+            stop_purge.set()
+            if purge_task is not None:
+                with suppress(Exception):
+                    await purge_task
             with suppress(Exception):
                 await pool.close()
             probe.disable()
 
     application.router.lifespan_context = local_lifespan
     return application
+
+
+async def _purge_expired_private_records(repository: LocalRepository) -> None:
+    await repository.purge_expired_failed_question_text()
+    await repository.purge_expired_chat_idempotency()
+
+
+async def _run_periodic_purge(
+    repository: LocalRepository,
+    probe: RepositoryReadinessProbe,
+    stop: asyncio.Event,
+    interval_seconds: float,
+) -> None:
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            try:
+                await _purge_expired_private_records(repository)
+            except Exception:
+                probe.disable()
+                return
 
 
 def _read_allowlisted_env(path: Path) -> dict[str, str] | None:
@@ -203,7 +274,40 @@ def _valid_env_value(value: object) -> bool:
 
 
 def _valid_database_url(value: object) -> bool:
-    return _valid_env_value(value) and cast(str, value).startswith(("postgresql://", "postgres://"))
+    if not _valid_env_value(value):
+        return False
+    candidate_dsn = cast(str, value)
+    if not candidate_dsn.startswith("postgresql://"):
+        return False
+    try:
+        values = conninfo_to_dict(candidate_dsn)
+        password = values.get("password")
+        port_text = values.get("port")
+        if (
+            set(values) != _ALLOWED_DATABASE_CONNINFO_KEYS
+            or not isinstance(password, str)
+            or not password
+            or any(character in password for character in "\x00\r\n")
+            or not isinstance(port_text, str)
+            or not port_text.isascii()
+            or not port_text.isdecimal()
+        ):
+            return False
+        identity = (
+            values.get("user", ""),
+            values.get("host", ""),
+            int(port_text),
+            values.get("dbname", ""),
+        )
+        if identity != _EXPECTED_DATABASE_IDENTITY:
+            return False
+        canonical_url = (
+            f"postgresql://{quote(identity[0], safe='')}:{quote(password, safe='')}"
+            f"@{identity[1]}:{identity[2]}/{quote(identity[3], safe='')}"
+        )
+    except (TypeError, UnicodeError, ValueError, PsycopgError):
+        return False
+    return candidate_dsn == canonical_url
 
 
 def _default_pool_factory(database_url: str) -> LocalPool:

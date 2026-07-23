@@ -1,6 +1,6 @@
 /**
  * source: contracts/openapi-v1.yaml
- * OpenAPI: 3.0.0-draft; generator: openapi-typescript 7.13.0
+ * OpenAPI: 3.1.0-draft; generator: openapi-typescript 7.13.0
  * Generated deterministically; do not edit by hand.
  */
 export interface paths {
@@ -467,8 +467,8 @@ export interface components {
         };
         LegalJudgmentResponse: components["schemas"]["FallbackResponseBase"] & {
             fallback: components["schemas"]["LegalJudgmentFallback"];
-            /** @enum {unknown} */
-            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+            /** @constant */
+            intent: "UNKNOWN";
         };
         Office: {
             address: string;
@@ -504,8 +504,8 @@ export interface components {
         };
         PersonalLookupResponse: components["schemas"]["FallbackResponseBase"] & {
             fallback: components["schemas"]["PersonalLookupFallback"];
-            /** @enum {unknown} */
-            intent: "MOVE_IN_RESIDENT_REGISTRATION" | "CERTIFICATE_ISSUANCE" | "BULKY_WASTE" | "LOCAL_TAX_GENERAL";
+            /** @constant */
+            intent: "UNKNOWN";
         };
         PrivacyUnresolvedFallback: components["schemas"]["FallbackPayloadBase"] & {
             /** @constant */
@@ -641,6 +641,13 @@ export interface components {
         DemoActorId: string;
         /** @description Local/private role switch only; reject when admin routes are not privately gated. */
         DemoRole: "OPERATOR" | "APPROVER";
+        /**
+         * @description Optional UUID identifying one logical chat submission across retries. It is
+         *     distinct from the per-HTTP-request correlation request_id. Reusing a completed
+         *     key with the same request replays the stored safe response; reusing it with a
+         *     different request is rejected without echoing input.
+         */
+        IdempotencyKey: string;
         IdPath: string;
     };
     requestBodies: never;
@@ -892,7 +899,15 @@ export interface operations {
     createChatAnswer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optional UUID identifying one logical chat submission across retries. It is
+                 *     distinct from the per-HTTP-request correlation request_id. Reusing a completed
+                 *     key with the same request replays the stored safe response; reusing it with a
+                 *     different request is rejected without echoing input.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };

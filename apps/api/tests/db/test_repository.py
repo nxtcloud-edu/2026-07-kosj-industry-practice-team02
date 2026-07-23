@@ -43,8 +43,15 @@ CREATE_CANDIDATE_SQL = (
 )
 SUBMIT_CANDIDATE_SQL = "SELECT app_api.submit_kb_candidate(%s, %s, %s)"
 APPROVE_CANDIDATE_SQL = "SELECT app_api.approve_kb_candidate(%s, %s, %s, %s)"
+APPROVE_CANDIDATE_WITH_PUBLIC_ID_SQL = (
+    "SELECT app_api.approve_kb_candidate_with_public_id(%s, %s, %s, %s, %s)"
+)
 REJECT_CANDIDATE_SQL = "SELECT app_api.reject_kb_candidate(%s, %s, %s, %s)"
 PURGE_SQL = "SELECT * FROM app_api.purge_expired_failed_question_text()"
+
+
+def _database_dsn(scheme: str, authority: str) -> str:
+    return f"{scheme}://{authority}"
 
 
 class FakePsycopgError(psycopg.Error):
@@ -282,7 +289,7 @@ def test_create_pool_is_explicit_lazy_and_preserves_nonblank_dsn(
             "min_size": 1,
             "max_size": 4,
             "open": False,
-            "kwargs": {"autocommit": False},
+            "kwargs": {"autocommit": False, "hostaddr": "127.0.0.1"},
         }
     ]
 
@@ -304,6 +311,33 @@ def test_create_pool_rejects_blank_dsn_before_pool_construction(
 
     with pytest.raises(ValueError, match="^DATABASE_URL_REQUIRED$"):
         create_pool(database_url)
+    assert calls == 0
+
+
+@pytest.mark.parametrize(
+    "variable",
+    ["PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS", "pgpassword"],
+)
+def test_create_pool_rejects_ambient_libpq_environment_before_construction(
+    variable: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sejong_ai_api.db import pool as pool_module
+
+    calls = 0
+
+    def fake_pool(**kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return object()
+
+    monkeypatch.setattr(pool_module, "AsyncConnectionPool", fake_pool)
+    monkeypatch.setenv(variable, "synthetic-ambient-value")
+
+    with pytest.raises(ValueError, match="^AMBIENT_LIBPQ_ENVIRONMENT_INVALID$"):
+        create_pool(
+            _database_dsn("postgresql", "sejong_local_login:secret@127.0.0.1:54322/postgres")
+        )
     assert calls == 0
 
 
@@ -421,6 +455,52 @@ async def test_confirmation_submission_and_reviews_use_exact_sql_parameters() ->
 
     for pool in (confirm_pool, submit_pool, approve_pool, reject_pool):
         assert_one_transaction(pool, None)
+
+
+@pytest.mark.asyncio
+async def test_reserved_approval_uses_fixed_explicit_public_id_sql_and_transaction() -> None:
+    candidate_id = UUID("44444444-4444-4444-8444-444444444444")
+    pool = FakePool(rows=[{"approve_kb_candidate_with_public_id": "KB-WASTE-03"}])
+
+    result = await repository(pool).approve_kb_candidate_with_public_id(
+        candidate_id,
+        approver(),
+        "공식 품목표와 canonical 값을 확인했습니다.",
+        "KB-WASTE-03",
+    )
+
+    assert result == "KB-WASTE-03"
+    assert pool.cursor.executions == [
+        (
+            APPROVE_CANDIDATE_WITH_PUBLIC_ID_SQL,
+            (
+                candidate_id,
+                "approver-1",
+                "APPROVER",
+                "공식 품목표와 canonical 값을 확인했습니다.",
+                "KB-WASTE-03",
+            ),
+        )
+    ]
+    assert_one_transaction(pool, None)
+
+
+@pytest.mark.asyncio
+async def test_reserved_approval_rejects_non_exact_server_public_id_before_pool_access() -> None:
+    class CallerDefinedPublicId(str):
+        pass
+
+    pool = FakePool()
+
+    with pytest.raises(ValueError, match="^PUBLIC_ID_INVALID$"):
+        await repository(pool).approve_kb_candidate_with_public_id(
+            uuid4(),
+            approver(),
+            "공식 품목표를 확인했습니다.",
+            CallerDefinedPublicId("KB-WASTE-03"),
+        )
+
+    assert pool.connection_calls == 0
 
 
 @pytest.mark.asyncio

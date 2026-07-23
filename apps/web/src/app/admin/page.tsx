@@ -10,6 +10,7 @@ export default function AdminPage() {
   if (process.env.ADMIN_UI_ENABLED !== "true") {
     notFound();
   }
+  const transportMode = process.env.ADMIN_UI_MODE === "actual" ? "actual" : "fixture";
 
   return (
     <>
@@ -21,7 +22,7 @@ export default function AdminPage() {
         </div>
       </header>
       <main id="admin-main" tabIndex={-1}>
-        <AdminExperience />
+        <AdminExperience transportMode={transportMode} />
       </main>
     </>
   );

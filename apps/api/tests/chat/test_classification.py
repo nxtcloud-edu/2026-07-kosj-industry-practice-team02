@@ -67,7 +67,7 @@ def test_ambiguous_supported_question_requests_followup(question: str) -> None:
 def test_personal_lookup_is_decided_before_retrieval() -> None:
     outcome = classify_question(safe_question("내 자동차세 체납액을 조회해줘."))
 
-    assert outcome.intent is Intent.LOCAL_TAX_GENERAL
+    assert outcome.intent is Intent.UNKNOWN
     assert outcome.followup_required is False
     assert outcome.fallback_reason is FallbackReason.PERSONAL_LOOKUP
 
@@ -77,7 +77,7 @@ def test_legal_judgment_is_decided_before_retrieval() -> None:
         safe_question("대형폐기물 신고를 안 하면 법적으로 처벌받는지 판단해줘.")
     )
 
-    assert outcome.intent is Intent.BULKY_WASTE
+    assert outcome.intent is Intent.UNKNOWN
     assert outcome.followup_required is False
     assert outcome.fallback_reason is FallbackReason.LEGAL_JUDGMENT
 
@@ -122,5 +122,24 @@ def test_canonical_bed_frame_question_is_supported_bulky_waste() -> None:
 def test_legal_wording_is_not_grounded_as_general_move_in_guidance() -> None:
     outcome = classify_question(safe_question("전입신고 벌금이 합법인가요?"))
 
-    assert outcome.intent is Intent.MOVE_IN_RESIDENT_REGISTRATION
+    assert outcome.intent is Intent.UNKNOWN
     assert outcome.fallback_reason is FallbackReason.LEGAL_JUDGMENT
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_reason"),
+    [
+        ("접수번호 SJ-2026-123456 처리됐어?", FallbackReason.PERSONAL_LOOKUP),
+        ("내가 기초생활수급 대상인지 판단해줘.", FallbackReason.LEGAL_JUDGMENT),
+        ("이 행정처분이 법적으로 부당한가요?", FallbackReason.LEGAL_JUDGMENT),
+    ],
+)
+def test_generic_policy_fallbacks_use_unknown_intent(
+    question: str,
+    expected_reason: FallbackReason,
+) -> None:
+    outcome = classify_question(safe_question(question))
+
+    assert outcome.intent is Intent.UNKNOWN
+    assert outcome.followup_required is False
+    assert outcome.fallback_reason is expected_reason

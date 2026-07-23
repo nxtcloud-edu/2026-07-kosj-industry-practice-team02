@@ -43,9 +43,12 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
 ## 현재 상태
 
 - 최종 제품과 정책 문서는 확정됨.
-- 활성 API의 첫 수직 흐름은 스캐폴딩됨: `/health=200`, 승인 seed 전 `/ready=503`. Web은 정적 소개
-  `/`와 입력·저장·fetch 없는 `/chat` 준비 화면까지 구현됐고, 실제 chat 입력/API 연결과 `/admin`은
-  아직 없음.
+- local/private MVP는 final DB의 dedicated Windows application probe에서 `/ready=200`을 확인했고,
+  clean governed rehearsal로 19→20 ACTIVE와 `KB-WASTE-03` 재질의 SUCCESS를 확인했다. import-safe
+  기본 앱과 public/remote readiness는 별도다. final API 1,640, Web unit 48/lint/type/build/E2E 15,
+  contracts 89, clean DB pgTAP 9/356·integration 8/8와 root `verify.ps1 -Offline`이 PASS했다.
+  현재 상태는 local/private AI scope complete의 **Review**이며 인간 Draft PR review/merge와 manual
+  demo/accessibility가 남았다.
 - 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
 - 개인 GitHub private source remote, Frontend 팀원 전체 수직 흐름 소유, 허용 frontend-only PR
   자가 병합, Codex Cloud Draft-PR-only 운영 명세와
@@ -57,26 +60,30 @@ legacy/                         오래된 스타터·문서, 비권위 참고자
   merge와 Frontend onboarding rehearsal도 Pending이다. Q-GIT-004=A로 본인 author
   email의 private collaborator 공개와 기존 history·SHA 보존은 확정됐다.
 - root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
-- 공유 계약 package는 17개 합성 fixture를 OpenAPI·standalone JSON Schema·strict Pydantic에서 검증하고, 닫힌 health/readiness 200·FALLBACK 구조와 OpenAPI 기반 TypeScript 생성물의 byte drift까지 차단함.
+- 역사적 pre-import 기준선에서는 공식/mock DB row 0과 `/ready=503`이 의도한 상태였다. 이는 당시
+  검증 기록이며 현재 상태가 아니다. 이후 supported actual seed와 application rehearsal이 local DB
+  19→20 ACTIVE 및 `/ready=200`을 별도 증명했다.
+- 공유 계약 package는 OpenAPI 3.1.0-draft, standalone JSON Schema·strict Pydantic과 생성 TypeScript의
+  drift를 검증한다. optional UUID `Idempotency-Key`는 correlation request ID와 분리한다.
 - DB-001 disposable local/private 기준선은 patched Supabase CLI 2.109.1, PostgreSQL 17.6,
-  6개 forward/compensation, 7 enum·8 table, forced RLS/capability, pgTAP 282와 backend
-  integration 8/8을 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
+  현재 9개 forward/rollback, forced RLS/capability, pgTAP 9 files/356 assertions와 backend
+  integration·rollback·absence·reset/replay 증거를 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
   `database/schema-v1.draft.sql`이다.
 - Windows PowerShell 5.1+ root gate와 별도 Docker DB gate가 exact runtime, frozen install,
-  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. local DB에 반영된 공식
-  seed row가 0이므로 `/ready=503`은 의도한 정상 상태다.
-- DATA-SEED-002의 immutable `0.1.0-initial.2` filesystem release와 byte-identical local
-  dispatcher는 게시·검증됐다. 지원된 actual local DB 실행 3회는 모두 concurrency A까지
-  통과했지만 concurrency B에서 멈췄고, 진단 실행의 exact stable reason은
-  `CAPABILITY_WRITE_DID_NOT_BLOCK`였다. 마지막 두 실행의 cleanup은 PASS했으며 현재
-  PostgreSQL ACTIVE 19/READY를 주장하지 않고 `official_data=0.0.0-not-populated`를 유지한다.
-  relation OID-equality observer 교정은 `eb74ac8`로 독립 검토 0/0/0과 commit까지 끝났지만
-  추가 actual 실행은 아직 승인되지 않았다. 이 DB blocker와 독립적인 PII/chat 계약·pure-core
-  MVP 작업은 계속 진행한다.
+  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. initial seed actual DB 반영과
+  application `/ready` probe는 서로 다른 증거로 관리한다.
+- DATA-SEED-002 immutable `0.1.0-initial.2` filesystem release와 byte-identical local dispatcher는
+  불변으로 유지된다. observer 수정 뒤 지원 actual cycle이 baseline·identity·forced rollback,
+  concurrency A/B, 19/3/10 seed, compensation/replay, final projection과 cleanup을 모두 PASS했다.
+  따라서 `official_data=0.1.0-initial.2`이며 final runtime process/container는 0이다. 이 immutable
+  19/3/10 seed 증거 자체는 `/ready=200`·20번째 ACTIVE를 뜻하지 않는다. 이 둘은 별도 final local
+  application rehearsal에서 PASS했으며, public/remote readiness는 계속 뜻하지 않는다.
+- canonical T-01~T-20 deterministic pure-service 평가는 20/20(SUCCESS 10/10, FOLLOWUP 2/2,
+  FALLBACK 8/8)이다. provider/remote/public 또는 HTTP source-card QA로 일반화하지 않는다.
 - 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
-- `contracts/`의 API spec revision은 3.0.0-draft다. SUCCESS/FOLLOWUP/5개 정책 폴백,
+- `contracts/`의 API spec revision은 3.1.0-draft다. SUCCESS/FOLLOWUP/5개 정책 폴백,
   HTTPS 전용 공식 링크와 local/private admin envelope를 판별 union으로 동결했다. DB executable authority는 timestamp
-  migrations이며 `database/`의 `0.3.0-local` projection은 실제 검증된 local 기준선의 읽기용
+  migrations이며 `database/`의 `0.4.0-local` projection은 실제 검증된 local 기준선의 읽기용
   투영이다. 공개·원격 DB 기준선이나 production readiness를 뜻하지 않는다.
 - LLM은 local/private 합성 fixture에서만 `deepseek-v4-flash`를 제한 사용하고, 실제 시민·공개 경로는 disabled/template provider를 사용함.
 - 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
@@ -137,10 +144,12 @@ Docker volume에는 실행하지 않는다.
 
 Q-SEC-004/005의 Docker 전역 보정만으로는 IPv6 wildcard가 남았으므로, D-031/D-032의 tracked
 source/runtime manifest와 project-local patched binary를 DB 실행 권위로 사용한다. 2026-07-18
-fresh gate에서 actual binding이 정확히 하나의 `127.0.0.1:54322`였고 pgTAP 282, backend integration
-8/8, 역순 보상·absence·reset/replay, final container 0/0이 모두 PASS했다. runner는 여전히 actual
-binding을 reset 전에 검사하며 stock/PATH fallback과 `db diff`를 허용하지 않는다. 공식 seed가
-0이므로 `/ready=503`은 유지되고 D-046의 deferred `00700` 구현·검증 전까지 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
+역사적 gate에서 actual binding이 정확히 하나의 `127.0.0.1:54322`였고 당시 pgTAP 8 files/320, backend integration,
+역순 보상·absence·reset/replay, final container/process 0이 모두 PASS했다. runner는 여전히 actual
+binding을 reset 전에 검사하며 stock/PATH fallback과 `db diff`를 허용하지 않는다. current source gate는
+9 forward/rollback·pgTAP 9 files/356 assertions이며, 이후 official `.2` seed 19/3/10과 별도 application
+rehearsal의 `/ready=200`·20번째 ACTIVE까지 local actual로 PASS했다.
+D-046의 deferred `00700` 구현·검증 전까지 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
 
 `73f300b`는 DB child를 bounded process tree로 실행·종료·dispose하도록 보정했다. focused 1/1,
 runner 50/50, patched 24/24와 독립 review 0/0/0 뒤 final-code DB gate도 102.746s에 PASS했고 exact

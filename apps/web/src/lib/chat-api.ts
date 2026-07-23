@@ -7,8 +7,12 @@ export type Office = components["schemas"]["Office"];
 
 type Fetcher = typeof fetch;
 
+export type ChatSendOptions = Readonly<{
+  idempotencyKey?: string;
+}>;
+
 export interface ChatTransport {
-  send(request: ChatRequest): Promise<ChatResponse>;
+  send(request: ChatRequest, options?: ChatSendOptions): Promise<ChatResponse>;
 }
 
 export class ChatTransportError extends Error {
@@ -53,10 +57,14 @@ export function createChatTransport(
   fetcher: Fetcher = fetch,
 ): ChatTransport {
   return {
-    send(request) {
+    send(request, options) {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (options?.idempotencyKey) {
+        headers["Idempotency-Key"] = options.idempotencyKey;
+      }
       return fetchJson<ChatResponse>(fetcher, apiUrl(baseUrl, "/api/v1/chat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(request),
       });
     },

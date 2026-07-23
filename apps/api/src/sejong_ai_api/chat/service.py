@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from collections.abc import Callable, Sequence
+from contextlib import suppress
+from dataclasses import dataclass
 from typing import Literal, Protocol, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sejong_ai_api.chat.classification import SafeQuestion, classify_question
 from sejong_ai_api.chat.context import ChatContext, ContextTokenCodec
 from sejong_ai_api.chat.grounding import evaluate_grounding
+from sejong_ai_api.chat.idempotency import (
+    ChatIdempotencyRepository,
+    IdempotencyClaimStatus,
+    IdempotencyConflictError,
+    IdempotencyInProgressError,
+    fingerprint_chat_request,
+)
 from sejong_ai_api.chat.response import (
     build_fallback_response,
     build_followup_response,
@@ -18,12 +28,13 @@ from sejong_ai_api.chat.response import (
 )
 from sejong_ai_api.chat.retrieval import RankedKnowledge, rank_active_knowledge
 from sejong_ai_api.contracts.chat import (
+    CHAT_RESPONSE_ADAPTER,
     ChatRequest,
     FallbackResponse,
     FollowupResponse,
     SuccessResponse,
 )
-from sejong_ai_api.db.errors import DatabaseUnavailableError
+from sejong_ai_api.db.errors import DatabaseRuleError, DatabaseUnavailableError
 from sejong_ai_api.db.models import (
     AnswerStatus,
     FallbackReason,
@@ -111,6 +122,12 @@ class ChatUnavailableError(Exception):
         super().__init__("CHAT_UNAVAILABLE")
 
 
+@dataclass(frozen=True, slots=True)
+class _ChatExecution:
+    response: ChatResult
+    interaction: InteractionWrite | None
+
+
 class ChatService:
     """Compose redaction, policy, retrieval, grounding, response and event gates."""
 
@@ -122,24 +139,65 @@ class ChatService:
         request_id_factory: Callable[[], UUID],
         monotonic_ns: Callable[[], int],
         is_test: bool,
+        idempotency_repository: ChatIdempotencyRepository | None = None,
+        idempotency_secret: bytes | None = None,
+        idempotency_claim_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         if not callable(request_id_factory) or not callable(monotonic_ns):
             raise TypeError("CHAT_SERVICE_DEPENDENCY_INVALID")
         if type(is_test) is not bool:
+            raise TypeError("CHAT_SERVICE_DEPENDENCY_INVALID")
+        if (idempotency_repository is None) is not (idempotency_secret is None):
+            raise ValueError("IDEMPOTENCY_CONFIGURATION_INVALID")
+        if idempotency_secret is not None and (
+            type(idempotency_secret) is not bytes or len(idempotency_secret) < 32
+        ):
+            raise ValueError("IDEMPOTENCY_CONFIGURATION_INVALID")
+        if not callable(idempotency_claim_factory):
             raise TypeError("CHAT_SERVICE_DEPENDENCY_INVALID")
         self._repository = repository
         self._context_codec = context_codec
         self._request_id_factory = request_id_factory
         self._monotonic_ns = monotonic_ns
         self._is_test = is_test
+        self._idempotency_repository = idempotency_repository
+        self._idempotency_secret = idempotency_secret
+        self._idempotency_claim_factory = idempotency_claim_factory
 
     async def answer(
         self,
         request: ChatRequest,
         *,
         request_id: UUID | None = None,
+        idempotency_key: UUID | None = None,
     ) -> ChatResult:
-        """Return one safe contract response or a value-free unavailable signal."""
+        """Return one result, using the durable identity only when supplied."""
+
+        if type(request) is not ChatRequest:
+            raise TypeError("CHAT_REQUEST_REQUIRED")
+        selected_request_id = request_id if request_id is not None else self._request_id_factory()
+        if type(selected_request_id) is not UUID:
+            raise TypeError("REQUEST_ID_FACTORY_INVALID")
+        if idempotency_key is None:
+            execution = await self._execute_once(request, request_id=selected_request_id)
+            if execution.interaction is not None:
+                await self._record_best_effort(execution.interaction)
+            return execution.response
+        if type(idempotency_key) is not UUID:
+            raise TypeError("IDEMPOTENCY_KEY_INVALID")
+        return await self._answer_idempotent(
+            request,
+            request_id=selected_request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    async def _execute_once(
+        self,
+        request: ChatRequest,
+        *,
+        request_id: UUID | None = None,
+    ) -> _ChatExecution:
+        """Build one safe response and its optional persistence command."""
 
         if type(request) is not ChatRequest:
             raise TypeError("CHAT_REQUEST_REQUIRED")
@@ -150,11 +208,14 @@ class ChatService:
 
         redaction = redact_question(request.question)
         if redaction.masked_text is None:
-            return build_fallback_response(
-                request_id=selected_request_id,
-                intent=Intent.UNKNOWN,
-                reason="PRIVACY_UNRESOLVED",
-                office=None,
+            return _ChatExecution(
+                response=build_fallback_response(
+                    request_id=selected_request_id,
+                    intent=Intent.UNKNOWN,
+                    reason="PRIVACY_UNRESOLVED",
+                    office=None,
+                ),
+                interaction=None,
             )
 
         safe_question = SafeQuestion(redaction)
@@ -180,7 +241,7 @@ class ChatService:
                 reason="OUT_OF_SCOPE",
                 office=None,
             )
-            await self._record_best_effort(
+            interaction = self._build_interaction(
                 request_id=selected_request_id,
                 intent=Intent.OUT_OF_SCOPE,
                 answer_status=AnswerStatus.FALLBACK,
@@ -191,35 +252,23 @@ class ChatService:
                 masked_question=None,
                 started_ns=started_ns,
             )
-            return fallback_response
+            return _ChatExecution(response=fallback_response, interaction=interaction)
 
         if outcome.fallback_reason in {
             FallbackReason.PERSONAL_LOOKUP,
             FallbackReason.LEGAL_JUDGMENT,
         }:
-            office = await self._load_optional_office(selected_region, intent)
             reason = cast(FallbackReason, outcome.fallback_reason)
             fallback_response = build_fallback_response(
                 request_id=selected_request_id,
-                intent=intent,
+                intent=Intent.UNKNOWN,
                 reason=cast(
                     Literal["PERSONAL_LOOKUP", "LEGAL_JUDGMENT"],
                     reason.value,
                 ),
-                office=office,
+                office=None,
             )
-            await self._record_best_effort(
-                request_id=selected_request_id,
-                intent=intent,
-                answer_status=AnswerStatus.FALLBACK,
-                fallback_reason=reason,
-                used_source_ids=(),
-                selected_region=selected_region,
-                office=office,
-                masked_question=safe_question.text,
-                started_ns=started_ns,
-            )
-            return fallback_response
+            return _ChatExecution(response=fallback_response, interaction=None)
 
         if intent is Intent.UNKNOWN:
             token = self._issue_context(
@@ -234,7 +283,7 @@ class ChatService:
                 option_ids=_FOLLOWUP_OPTIONS,
                 context_token=token,
             )
-            await self._record_best_effort(
+            interaction = self._build_interaction(
                 request_id=selected_request_id,
                 intent=Intent.UNKNOWN,
                 answer_status=AnswerStatus.FOLLOWUP,
@@ -245,7 +294,7 @@ class ChatService:
                 masked_question=None,
                 started_ns=started_ns,
             )
-            return followup_response
+            return _ChatExecution(response=followup_response, interaction=interaction)
 
         ranked = await self._ranked_knowledge(safe_question, intent)
         top = ranked[0] if ranked else None
@@ -263,7 +312,7 @@ class ChatService:
                 reason="INSUFFICIENT_GROUNDING",
                 office=office,
             )
-            await self._record_best_effort(
+            interaction = self._build_interaction(
                 request_id=selected_request_id,
                 intent=intent,
                 answer_status=AnswerStatus.FALLBACK,
@@ -274,7 +323,7 @@ class ChatService:
                 masked_question=safe_question.text,
                 started_ns=started_ns,
             )
-            return fallback_response
+            return _ChatExecution(response=fallback_response, interaction=interaction)
 
         office = await self._load_optional_office(selected_region, intent)
         token = self._issue_context(
@@ -289,7 +338,7 @@ class ChatService:
             confidence=_confidence(top),
             context_token=token,
         )
-        await self._record_best_effort(
+        interaction = self._build_interaction(
             request_id=selected_request_id,
             intent=intent,
             answer_status=AnswerStatus.SUCCESS,
@@ -300,7 +349,103 @@ class ChatService:
             masked_question=None,
             started_ns=started_ns,
         )
-        return success_response
+        return _ChatExecution(response=success_response, interaction=interaction)
+
+    async def _answer_idempotent(
+        self,
+        request: ChatRequest,
+        *,
+        request_id: UUID,
+        idempotency_key: UUID,
+    ) -> ChatResult:
+        repository = self._idempotency_repository
+        secret = self._idempotency_secret
+        if repository is None or secret is None:
+            raise ChatUnavailableError()
+        claim_token = self._idempotency_claim_factory()
+        if type(claim_token) is not UUID or claim_token == request_id:
+            raise ChatUnavailableError()
+        request_fingerprint = fingerprint_chat_request(request, secret=secret)
+        try:
+            claim = await repository.claim_chat_idempotency(
+                idempotency_key=idempotency_key,
+                request_fingerprint=request_fingerprint,
+                claim_token=claim_token,
+            )
+        except (DatabaseRuleError, DatabaseUnavailableError):
+            raise ChatUnavailableError() from None
+
+        if claim.status is IdempotencyClaimStatus.CONFLICT:
+            raise IdempotencyConflictError()
+        if claim.status is IdempotencyClaimStatus.IN_PROGRESS:
+            raise IdempotencyInProgressError()
+        if claim.status is IdempotencyClaimStatus.COMPLETED:
+            payload = dict(cast(dict[str, object], claim.response_payload))
+            payload["request_id"] = str(request_id)
+            payload["context_token"] = None
+            try:
+                replay = CHAT_RESPONSE_ADAPTER.validate_json(
+                    json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    )
+                )
+            except (TypeError, ValueError):
+                raise ChatUnavailableError() from None
+            if replay.answer_status in {"SUCCESS", "FOLLOWUP"}:
+                prior_context = self._context_codec.read(request.context_token)
+                selected_region = _selected_region(request.selected_region, prior_context)
+                payload["context_token"] = self._issue_context(
+                    intent=Intent(replay.intent),
+                    selected_region=selected_region,
+                    answer_status=replay.answer_status,
+                )
+                try:
+                    return CHAT_RESPONSE_ADAPTER.validate_json(
+                        json.dumps(
+                            payload,
+                            ensure_ascii=False,
+                            allow_nan=False,
+                            separators=(",", ":"),
+                        )
+                    )
+                except (TypeError, ValueError):
+                    raise ChatUnavailableError() from None
+            return replay
+        if claim.status is not IdempotencyClaimStatus.ACQUIRED:
+            raise ChatUnavailableError()
+
+        try:
+            execution = await self._execute_once(request, request_id=request_id)
+        except Exception:
+            with suppress(Exception):
+                await repository.abandon_chat_idempotency(
+                    idempotency_key=idempotency_key,
+                    request_fingerprint=request_fingerprint,
+                    claim_token=claim_token,
+                )
+            raise
+
+        safe_payload = cast(
+            dict[str, object],
+            execution.response.model_dump(
+                mode="json",
+                exclude={"request_id", "context_token"},
+            ),
+        )
+        try:
+            await repository.commit_chat_idempotency(
+                idempotency_key=idempotency_key,
+                request_fingerprint=request_fingerprint,
+                claim_token=claim_token,
+                response_payload=safe_payload,
+                interaction=execution.interaction,
+            )
+        except (DatabaseRuleError, DatabaseUnavailableError):
+            raise ChatUnavailableError() from None
+        return execution.response
 
     async def _ranked_knowledge(
         self,
@@ -339,7 +484,7 @@ class ChatService:
             answer_status=answer_status,
         )
 
-    async def _record_best_effort(
+    def _build_interaction(
         self,
         *,
         request_id: UUID,
@@ -351,8 +496,8 @@ class ChatService:
         office: OfficeRecord | None,
         masked_question: str | None,
         started_ns: int,
-    ) -> None:
-        event = InteractionWrite(
+    ) -> InteractionWrite:
+        return InteractionWrite(
             request_id=request_id,
             intent=intent,
             answer_status=answer_status,
@@ -364,6 +509,8 @@ class ChatService:
             is_test=self._is_test,
             masked_question=masked_question,
         )
+
+    async def _record_best_effort(self, event: InteractionWrite) -> None:
         try:
             await self._repository.record_interaction(event)
         except DatabaseUnavailableError:

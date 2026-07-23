@@ -1,8 +1,8 @@
 # shared-contracts
 
-OpenAPI/JSON Schema로부터 동기화한 프론트·백엔드 공용 계약 검증 package다. runtime business logic은 포함하지 않으며, OpenAPI 3.0.0-draft에서 결정적으로 생성한 TypeScript 타입을 추적한다.
+OpenAPI/JSON Schema로부터 동기화한 프론트·백엔드 공용 계약 검증 package다. runtime business logic은 포함하지 않으며, OpenAPI 3.1.0-draft에서 결정적으로 생성한 TypeScript 타입을 추적한다.
 
-package 버전은 `0.3.0`이며 `PRIVACY_UNRESOLVED`의 닫힌 응답과 local/private 관리자 목록·상세·상태변경 envelope를 포함한다.
+package 버전은 `0.4.0`이며 `PRIVACY_UNRESOLVED`의 닫힌 응답, optional UUID `Idempotency-Key`와 local/private 관리자 목록·상세·상태변경 envelope를 포함한다.
 
 ## 검증 범위
 

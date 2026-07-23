@@ -58,7 +58,7 @@ Q-SEED-002 선택지 A를 채택한다.
 
 - Immutable `0.1.0-initial.2`, strict v2 schemas and the byte-identical local dispatcher were
   published and verified after independent technical review. Historical `.1`/v1 bytes remain exact.
-- Three supported actual local DB runs passed baseline, identity, forced rollback and concurrency A,
+- Four supported actual local DB runs passed baseline, identity, forced rollback and concurrency A,
   then stopped at concurrency B. The bounded diagnostic run returned exact stable reason
   `CAPABILITY_WRITE_DID_NOT_BLOCK`; cleanup passed and restored exact-owned container/listener 0.
 - Seed-cycle, PostgreSQL 19/3/10 counts, citizen-visible ACTIVE 19, final semantic hash and READY were
@@ -92,7 +92,7 @@ immutable SQL 자체가 같은 catalog에서 실패하므로 문제를 해결하
   successor다.
 - 데이터 내용과 `seed_semantic_sha256`은 같아야 하지만 release JSON/SQL/manifest byte hash는
   version과 guard가 달라 새 값이어야 한다.
-- actual cycle이 모두 통과하면 `official_data=0.1.0-initial.2`로 승격할 수 있다. 현재 세 실행은
+- actual cycle이 모두 통과하면 `official_data=0.1.0-initial.2`로 승격할 수 있다. 현재 네 실행은
   concurrency B에서 Blocked이므로 승격하지 않는다. `/ready=200` 전환은 별도 READY-001이
   소유하므로 계속 503이다.
 - local/private actual DB cycle만 허용한다. Q-SEC-003의 `00700` 구현과 public deployment는

@@ -55,8 +55,11 @@ FROM app_api.record_interaction(
 )
 """.strip()
 _SEED_PREFLIGHT_MARKER = b"\n\nDO $data_seed_empty_guard$"
-# record_interaction first touches interaction_events with SELECT ... FOR SHARE.
-CAPABILITY_FIRST_ACCESS_LOCK_MODE = "RowShareLock"
+# A fresh backend can first resolve the function's interaction_events%ROWTYPE
+# (AccessShareLock) before the SELECT ... FOR SHARE plan acquires RowShareLock.
+# Both are direct relation reads and both must be blocked by the seed's exact
+# ACCESS EXCLUSIVE lock; no other relation or lock mode is accepted.
+CAPABILITY_FIRST_ACCESS_LOCK_MODES = frozenset({"AccessShareLock", "RowShareLock"})
 LOCK_WAIT_QUERY = """
 SELECT
   pg_catalog.pg_blocking_pids(%s),
@@ -153,7 +156,7 @@ def _wait_until_lock_blocked(
                 and seed_backend_pid in blockers
                 and locktype == "relation"
                 and relation_matches is True
-                and mode == CAPABILITY_FIRST_ACCESS_LOCK_MODE
+                and mode in CAPABILITY_FIRST_ACCESS_LOCK_MODES
                 and granted is False
             ):
                 return

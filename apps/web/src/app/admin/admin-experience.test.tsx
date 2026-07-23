@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { components } from "../../../../../packages/shared-contracts/src/generated/api";
@@ -27,6 +27,38 @@ const FAILURE = {
   text_expires_at: "2026-08-23T01:00:00Z",
   text_purged_at: null,
 } satisfies FailedQuestion;
+
+const GENERIC_FAILURE = {
+  ...FAILURE,
+  id: "33333333-3333-4333-8333-333333333333",
+  masked_question: "책상 의자는 어떻게 버려요?",
+} satisfies FailedQuestion;
+
+const SECOND_BED_FAILURE = {
+  ...FAILURE,
+  id: "44444444-4444-4444-8444-444444444444",
+  masked_question: "침대 1인용 프레임 수수료를 알려주세요.",
+} satisfies FailedQuestion;
+
+const WASTE_03_PAYLOAD = {
+  failed_question_id: FAILURE.id,
+  category: "BULKY_WASTE",
+  title: "침대 프레임 배출 수수료",
+  representative_question: "침대 2인용 프레임 수수료가 얼마예요?",
+  answer_summary: "공식 품목표의 침대 프레임 수수료는 1인용침대 8,000원, 2인용침대 10,000원으로 표시됩니다.",
+  procedure_steps: [
+    "공식 품목표에서 침대 프레임의 1인용침대 또는 2인용침대 항목을 확인합니다.",
+    "해당 수수료로 공식 배출 절차를 진행합니다.",
+  ],
+  required_documents: [],
+  processing_time: null,
+  fee: "1인용침대 8,000원; 2인용침대 10,000원",
+  department: "세종특별자치시시설관리공단",
+  source_title: "배출항목선택",
+  source_url: "https://www.sjwaste.kr/wasteApp/appCategoryPopup.do?menuId=MENU00305",
+  last_verified_at: "2026-07-18",
+  caution: "공식 품목표의 1인용침대·2인용침대 항목을 그대로 따릅니다. 매트리스 포함 가격이나 실제 규격을 단정하지 않습니다.",
+} satisfies KBCandidateCreate;
 
 const DRAFT_CANDIDATE = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -93,11 +125,45 @@ function actor(role: AdminActor["role"]): AdminActor {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   window.localStorage.clear();
   window.sessionStorage.clear();
 });
 
 describe("local/private admin experience", () => {
+  it("uses only the actual same-origin admin API in explicit actual mode", async () => {
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/admin/failed-questions")) {
+        return new Response(JSON.stringify({ items: [FAILURE], total: 1 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/api/v1/admin/kb-candidates")) {
+        return new Response(JSON.stringify({ items: [], total: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      void init;
+      return new Response(null, { status: 404 });
+    });
+
+    render(<AdminExperience transportMode="actual" fetcher={fetcher as typeof fetch} />);
+
+    expect(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ })).toBeInTheDocument();
+    expect(screen.getByText("실제 local DB API 연결")).toBeInTheDocument();
+    expect(screen.queryByText("시연용 샘플 데이터")).not.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const [, init] of fetcher.mock.calls) {
+      expect(init?.headers).toMatchObject({
+        "X-Demo-Actor-Id": "OPERATOR-LOCAL-001",
+        "X-Demo-Role": "OPERATOR",
+      });
+    }
+  });
+
   it("shows an accessible loading state, then masked failure data and the demo-only boundary", async () => {
     const pending = deferred<FailedQuestionListResponse>();
     const setItem = vi.spyOn(Storage.prototype, "setItem");
@@ -105,6 +171,8 @@ describe("local/private admin experience", () => {
 
     expect(screen.getByText("운영 데이터를 불러오고 있어요.")).toBeInTheDocument();
     expect(screen.getByText("시연용 역할 선택 · 인증 아님")).toBeInTheDocument();
+    expect(screen.getByText("시연용 샘플 데이터")).toBeInTheDocument();
+    expect(screen.queryByText("실제 local DB API 연결")).not.toBeInTheDocument();
 
     pending.resolve({ items: [FAILURE], total: 1 });
     expect(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ })).toBeInTheDocument();
@@ -112,6 +180,324 @@ describe("local/private admin experience", () => {
     expect(setItem).not.toHaveBeenCalled();
     expect(window.sessionStorage.length).toBe(0);
     expect(document.cookie).toBe("");
+  });
+
+  it("keeps the newest failure selected when detail requests resolve out of order", async () => {
+    const olderDetail = deferred<{ item: FailedQuestion }>();
+    const newerDetail = deferred<{ item: FailedQuestion }>();
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [GENERIC_FAILURE, FAILURE], total: 2 }),
+      getFailedQuestion: vi.fn((_actor, id) => (
+        id === FAILURE.id ? newerDetail.promise : olderDetail.promise
+      )),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    const genericButton = await screen.findByRole("button", { name: /책상 의자는 어떻게 버려요/ });
+    fireEvent.click(genericButton);
+    fireEvent.click(screen.getByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+
+    await act(async () => {
+      newerDetail.resolve({ item: FAILURE });
+      await newerDetail.promise;
+    });
+    const detailPanel = screen.getByRole("heading", { name: "실패 질문 상세" }).closest("section");
+    expect(detailPanel).not.toBeNull();
+    expect(within(detailPanel!).getByText(FAILURE.masked_question!)).toBeInTheDocument();
+
+    await act(async () => {
+      olderDetail.resolve({ item: GENERIC_FAILURE });
+      await olderDetail.promise;
+    });
+    expect(within(detailPanel!).getByText(FAILURE.masked_question!)).toBeInTheDocument();
+    expect(within(detailPanel!).queryByText(GENERIC_FAILURE.masked_question!)).not.toBeInTheDocument();
+  });
+
+  it("clears selected failure, draft, and error when the demo role changes", async () => {
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [GENERIC_FAILURE, FAILURE], total: 2 }),
+      getFailedQuestion: vi.fn(async (_actor, id) => {
+        if (id === GENERIC_FAILURE.id) throw new Error("detail unavailable");
+        return { item: FAILURE };
+      }),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+    expect(screen.getByRole("textbox", { name: "후보 제목" })).toHaveValue(WASTE_03_PAYLOAD.title);
+
+    fireEvent.click(screen.getByRole("button", { name: /책상 의자는 어떻게 버려요/ }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "시연 역할" }), {
+      target: { value: "APPROVER" },
+    });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("왼쪽 목록에서 질문을 선택하세요.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "시연 역할" }), {
+      target: { value: "OPERATOR" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    expect(await screen.findByRole("textbox", { name: "후보 제목" })).toHaveValue("");
+  });
+
+  it("ignores a reason confirmation that completes after the demo role changes", async () => {
+    const confirmation = deferred<{ id: string; status: "REASON_CONFIRMED" }>();
+    const transport = createTransport({
+      confirmReason: vi.fn(() => confirmation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "시연 역할" }), {
+      target: { value: "APPROVER" },
+    });
+    expect(screen.getByText("왼쪽 목록에서 질문을 선택하세요.")).toBeInTheDocument();
+
+    await act(async () => {
+      confirmation.resolve({ id: FAILURE.id, status: "REASON_CONFIRMED" });
+      await confirmation.promise;
+    });
+
+    expect(screen.getByText("왼쪽 목록에서 질문을 선택하세요.")).toBeInTheDocument();
+    expect(screen.queryByText("사유 확인 완료")).not.toBeInTheDocument();
+  });
+
+  it("sends one reason confirmation when the operator clicks twice in one render batch", async () => {
+    const confirmation = deferred<{ id: string; status: "REASON_CONFIRMED" }>();
+    const transport = createTransport({
+      confirmReason: vi.fn(() => confirmation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    const confirmButton = await screen.findByRole("button", { name: "사유 확정" });
+    act(() => {
+      confirmButton.click();
+      confirmButton.click();
+    });
+
+    expect(transport.confirmReason).toHaveBeenCalledTimes(1);
+    expect(confirmButton).toBeDisabled();
+
+    await act(async () => {
+      confirmation.resolve({ id: FAILURE.id, status: "REASON_CONFIRMED" });
+      await confirmation.promise;
+    });
+
+    expect(await screen.findAllByText("사유 확인 완료")).not.toHaveLength(0);
+  });
+
+  it("ignores candidate completion and refresh after the demo role changes", async () => {
+    const confirmedFailure = {
+      ...FAILURE,
+      status: "REASON_CONFIRMED",
+    } satisfies FailedQuestion;
+    const creation = deferred<{ id: string; status: "DRAFTED" }>();
+    const listCandidates = vi.fn().mockResolvedValue({ items: [], total: 0 });
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [confirmedFailure], total: 1 }),
+      getFailedQuestion: vi.fn().mockResolvedValue({ item: confirmedFailure }),
+      listCandidates,
+      createCandidate: vi.fn(() => creation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+    fireEvent.click(screen.getByRole("button", { name: "KB 후보 작성" }));
+    await waitFor(() => expect(transport.createCandidate).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByRole("combobox", { name: "시연 역할" }), {
+      target: { value: "APPROVER" },
+    });
+    expect(screen.getByText("왼쪽 목록에서 질문을 선택하세요.")).toBeInTheDocument();
+    await waitFor(() => expect(listCandidates).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      creation.resolve({ id: DRAFT_CANDIDATE.id, status: "DRAFTED" });
+      await creation.promise;
+      await Promise.resolve();
+    });
+
+    expect(listCandidates).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("왼쪽 목록에서 질문을 선택하세요.")).toBeInTheDocument();
+    expect(screen.queryByText("KB 후보를 작성했습니다.")).not.toBeInTheDocument();
+  });
+
+  it("keeps failure B selected when confirmation for failure A completes later", async () => {
+    const confirmation = deferred<{ id: string; status: "REASON_CONFIRMED" }>();
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [FAILURE, GENERIC_FAILURE], total: 2 }),
+      getFailedQuestion: vi.fn(async (_actor, id) => ({
+        item: id === FAILURE.id ? FAILURE : GENERIC_FAILURE,
+      })),
+      confirmReason: vi.fn(() => confirmation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    fireEvent.click(screen.getByRole("button", { name: /책상 의자는 어떻게 버려요/ }));
+
+    const detailPanel = screen.getByRole("heading", { name: "실패 질문 상세" }).closest("section");
+    expect(detailPanel).not.toBeNull();
+    expect(await within(detailPanel!).findByText(GENERIC_FAILURE.masked_question!)).toBeInTheDocument();
+
+    await act(async () => {
+      confirmation.resolve({ id: FAILURE.id, status: "REASON_CONFIRMED" });
+      await confirmation.promise;
+    });
+
+    expect(within(detailPanel!).getByText(GENERIC_FAILURE.masked_question!)).toBeInTheDocument();
+    expect(within(detailPanel!).queryByText(FAILURE.masked_question!)).not.toBeInTheDocument();
+    expect(screen.queryByText("사유 확인 완료")).not.toBeInTheDocument();
+  });
+
+  it("preserves failure B draft when candidate creation for failure A completes later", async () => {
+    const confirmedA = { ...FAILURE, status: "REASON_CONFIRMED" } satisfies FailedQuestion;
+    const confirmedB = { ...SECOND_BED_FAILURE, status: "REASON_CONFIRMED" } satisfies FailedQuestion;
+    const creation = deferred<{ id: string; status: "DRAFTED" }>();
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [confirmedA, confirmedB], total: 2 }),
+      getFailedQuestion: vi.fn(async (_actor, id) => ({
+        item: id === confirmedA.id ? confirmedA : confirmedB,
+      })),
+      createCandidate: vi.fn(() => creation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+    fireEvent.click(screen.getByRole("button", { name: "KB 후보 작성" }));
+    await waitFor(() => expect(transport.createCandidate).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: /침대 1인용 프레임 수수료/ }));
+    const detailPanel = screen.getByRole("heading", { name: "실패 질문 상세" }).closest("section");
+    expect(detailPanel).not.toBeNull();
+    expect(await within(detailPanel!).findByText(confirmedB.masked_question!)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+    expect(screen.getByRole("textbox", { name: "후보 제목" })).toHaveValue(WASTE_03_PAYLOAD.title);
+
+    await act(async () => {
+      creation.resolve({ id: DRAFT_CANDIDATE.id, status: "DRAFTED" });
+      await creation.promise;
+      await Promise.resolve();
+    });
+
+    expect(within(detailPanel!).getByText(confirmedB.masked_question!)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "후보 제목" })).toHaveValue(WASTE_03_PAYLOAD.title);
+    expect(screen.queryByText("KB 후보를 작성했습니다.")).not.toBeInTheDocument();
+  });
+
+  it("loads the reviewed KB-WASTE-03 template only for the eligible bed-frame failure and submits its full canonical payload", async () => {
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [GENERIC_FAILURE, FAILURE], total: 2 }),
+      getFailedQuestion: vi.fn(async (_actor, id) => ({
+        item: id === FAILURE.id ? FAILURE : GENERIC_FAILURE,
+      })),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /책상 의자는 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    expect(await screen.findByRole("heading", { name: "KB 후보 작성" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+    const templateButton = await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" });
+    fireEvent.click(templateButton);
+
+    expect(screen.getByRole("textbox", { name: "후보 제목" })).toHaveValue(WASTE_03_PAYLOAD.title);
+    expect(screen.getByRole("textbox", { name: "대표 질문" })).toHaveValue(WASTE_03_PAYLOAD.representative_question);
+    expect(screen.getByRole("textbox", { name: "답변 요약" })).toHaveValue(WASTE_03_PAYLOAD.answer_summary);
+    expect(screen.getByRole("textbox", { name: "담당 부서" })).toHaveValue(WASTE_03_PAYLOAD.department);
+    expect(screen.getByRole("textbox", { name: "공식 출처명" })).toHaveValue(WASTE_03_PAYLOAD.source_title);
+    expect(screen.getByRole("textbox", { name: "공식 출처 URL" })).toHaveValue(WASTE_03_PAYLOAD.source_url);
+    expect(screen.getByLabelText("공식 확인일")).toHaveValue(WASTE_03_PAYLOAD.last_verified_at);
+    const preview = screen.getByRole("region", { name: "검수 전 확인" });
+    expect(within(preview).getByText(WASTE_03_PAYLOAD.procedure_steps[0])).toBeInTheDocument();
+    expect(within(preview).getByText(WASTE_03_PAYLOAD.procedure_steps[1])).toBeInTheDocument();
+    expect(within(preview).getByText(WASTE_03_PAYLOAD.fee!)).toBeInTheDocument();
+    expect(within(preview).getByText(WASTE_03_PAYLOAD.caution!)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "KB 후보 작성" }));
+
+    await waitFor(() => expect(transport.createCandidate).toHaveBeenCalledWith(actor("OPERATOR"), WASTE_03_PAYLOAD));
+    const submitted = vi.mocked(transport.createCandidate).mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(submitted).not.toHaveProperty("public_id");
+  });
+
+  it("keeps later KB-WASTE-03 submissions canonical when a transport mutates submitted arrays", async () => {
+    const received: KBCandidateCreate[] = [];
+    const createCandidate = vi.fn(async (_actor: AdminActor, request: KBCandidateCreate) => {
+      received.push({
+        ...request,
+        procedure_steps: [...(request.procedure_steps ?? [])],
+        required_documents: [...(request.required_documents ?? [])],
+      });
+      request.procedure_steps![0] = "transport-mutated procedure";
+      request.required_documents!.push("transport-mutated document");
+      return { id: DRAFT_CANDIDATE.id, status: "DRAFTED" as const };
+    });
+    const transport = createTransport({ createCandidate });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "사유 확정" }));
+
+    for (let submission = 1; submission <= 2; submission += 1) {
+      fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+      fireEvent.click(screen.getByRole("button", { name: "KB 후보 작성" }));
+      await waitFor(() => expect(received).toHaveLength(submission));
+    }
+
+    expect(received[1]).toEqual(WASTE_03_PAYLOAD);
+  });
+
+  it("creates one candidate when the operator submits the form twice in one render batch", async () => {
+    const confirmedFailure = {
+      ...FAILURE,
+      status: "REASON_CONFIRMED",
+    } satisfies FailedQuestion;
+    const creation = deferred<{ id: string; status: "DRAFTED" }>();
+    const listCandidates = vi.fn()
+      .mockResolvedValueOnce({ items: [], total: 0 })
+      .mockResolvedValueOnce({ items: [DRAFT_CANDIDATE], total: 1 });
+    const transport = createTransport({
+      listFailedQuestions: vi.fn().mockResolvedValue({ items: [confirmedFailure], total: 1 }),
+      getFailedQuestion: vi.fn().mockResolvedValue({ item: confirmedFailure }),
+      listCandidates,
+      createCandidate: vi.fn(() => creation.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /침대 프레임은 어떻게 버려요/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "검수된 KB-WASTE-03 자료 불러오기" }));
+    const createButton = screen.getByRole("button", { name: "KB 후보 작성" });
+    const form = createButton.closest("form");
+    expect(form).not.toBeNull();
+    act(() => {
+      form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(transport.createCandidate).toHaveBeenCalledTimes(1);
+    expect(createButton).toBeDisabled();
+
+    await act(async () => {
+      creation.resolve({ id: DRAFT_CANDIDATE.id, status: "DRAFTED" });
+      await creation.promise;
+    });
+
+    expect(await screen.findByRole("heading", { name: DRAFT_CANDIDATE.title })).toBeInTheDocument();
+    expect(screen.getByText("KB 후보를 작성했습니다.")).toBeInTheDocument();
   });
 
   it("moves an eligible failure through reason confirmation, draft, submit, separate approval, and ACTIVE", async () => {
@@ -181,6 +567,87 @@ describe("local/private admin experience", () => {
       decision: "APPROVED",
       review_comment: "공식 출처 확인",
     });
+  });
+
+  it("sends only one submit request when an operator rapidly clicks twice", async () => {
+    const submission = deferred<{ id: string; status: "PENDING_APPROVAL" }>();
+    const transport = createTransport({
+      listCandidates: vi.fn().mockResolvedValue({ items: [DRAFT_CANDIDATE], total: 1 }),
+      submitCandidate: vi.fn(() => submission.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    const card = await screen.findByRole("article", { name: DRAFT_CANDIDATE.title });
+    const submitButton = within(card).getByRole("button", { name: "승인 요청" });
+    fireEvent.click(submitButton);
+    fireEvent.click(submitButton);
+
+    expect(transport.submitCandidate).toHaveBeenCalledTimes(1);
+    expect(submitButton).toBeDisabled();
+
+    await act(async () => {
+      submission.resolve({ id: DRAFT_CANDIDATE.id, status: "PENDING_APPROVAL" });
+      await submission.promise;
+    });
+  });
+
+  it("sends only one review request when an approver rapidly clicks twice", async () => {
+    const review = deferred<{ id: string; status: "APPROVED" }>();
+    const pending = candidate("PENDING_APPROVAL");
+    const transport = createTransport({
+      listCandidates: vi.fn().mockResolvedValue({ items: [pending], total: 1 }),
+      reviewCandidate: vi.fn(() => review.promise),
+    });
+    render(<AdminExperience transport={transport} initialRole="APPROVER" />);
+
+    const card = await screen.findByRole("article", { name: DRAFT_CANDIDATE.title });
+    fireEvent.change(within(card).getByRole("textbox", { name: "검수 의견" }), {
+      target: { value: "공식 출처 확인" },
+    });
+    const approveButton = within(card).getByRole("button", { name: "승인하고 ACTIVE 반영" });
+    fireEvent.click(approveButton);
+    fireEvent.click(approveButton);
+
+    expect(transport.reviewCandidate).toHaveBeenCalledTimes(1);
+    expect(approveButton).toBeDisabled();
+
+    await act(async () => {
+      review.resolve({ id: DRAFT_CANDIDATE.id, status: "APPROVED" });
+      await review.promise;
+    });
+  });
+
+  it("does not let a previous actor action refresh overwrite the current actor candidate state", async () => {
+    const submission = deferred<{ id: string; status: "PENDING_APPROVAL" }>();
+    const pending = candidate("PENDING_APPROVAL");
+    const listCandidates = vi.fn()
+      .mockResolvedValueOnce({ items: [DRAFT_CANDIDATE], total: 1 })
+      .mockResolvedValueOnce({ items: [pending], total: 1 })
+      .mockResolvedValue({ items: [DRAFT_CANDIDATE], total: 1 });
+    const transport = createTransport({
+      listCandidates,
+      submitCandidate: vi.fn(() => submission.promise),
+    });
+    render(<AdminExperience transport={transport} />);
+
+    const operatorCard = await screen.findByRole("article", { name: DRAFT_CANDIDATE.title });
+    fireEvent.click(within(operatorCard).getByRole("button", { name: "승인 요청" }));
+    await waitFor(() => expect(transport.submitCandidate).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByRole("combobox", { name: "시연 역할" }), {
+      target: { value: "APPROVER" },
+    });
+    expect(await screen.findByText("승인 대기")).toBeInTheDocument();
+
+    await act(async () => {
+      submission.resolve({ id: DRAFT_CANDIDATE.id, status: "PENDING_APPROVAL" });
+      await submission.promise;
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("승인 대기")).toBeInTheDocument();
+    expect(screen.queryByText("초안")).not.toBeInTheDocument();
+    expect(listCandidates).toHaveBeenCalledTimes(2);
   });
 
   it("prevents an author from reviewing their own candidate", async () => {

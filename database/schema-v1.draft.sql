@@ -1,4 +1,4 @@
--- Logical projection of executable migration baseline 0.3.0-local.
+-- Logical projection of executable migration baseline 0.4.0-local.
 --
 -- This file is for human review only. It is not executable authority and must not
 -- be run to create, migrate, or recover a database. The ordered authority is
@@ -269,6 +269,31 @@ CREATE TABLE app_private.audit_logs (
   CHECK (review_comment IS NULL OR char_length(review_comment) <= 1000)
 );
 
+-- Local/private durable retry metadata only. `20260722000660_chat_idempotency.sql`
+-- is the executable authority for CHECKs, RLS, grants and capability functions.
+-- No question text, masked question, correlation request ID, token, IP, device ID
+-- or provider payload is projected or stored here.
+CREATE TABLE app_private.chat_idempotency (
+  idempotency_key uuid PRIMARY KEY,
+  request_digest text NOT NULL,
+  claim_token uuid,
+  lease_expires_at timestamptz,
+  state text NOT NULL,
+  response_json jsonb,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  completed_at timestamptz,
+  abandoned_at timestamptz,
+  expires_at timestamptz NOT NULL
+);
+
+-- `00650` adds four backend-only local admin read capabilities:
+-- app_api.list_failed_questions, app_api.get_failed_question,
+-- app_api.list_kb_candidates and app_api.get_kb_candidate.
+-- `00660` adds backend-only claim/complete/abandon/purge idempotency capabilities.
+-- Their SECURITY DEFINER, fixed search_path, revoke/grant posture and exact state
+-- machine are intentionally not duplicated in this non-executable projection.
+
 -- Final executable CHECK families (42) projected from migrations 00200+00400.
 -- The migration helper implementations are intentionally not duplicated here.
 --
@@ -348,3 +373,5 @@ CREATE INDEX idx_candidates_status
 -- - ACTIVE KB has at least one question example;
 -- - exact audit action/actor/target/status/changed-field shapes;
 -- - row locking, atomic candidate approval, append-only audit, RLS and ACLs.
+-- - 00660 idempotency safe-response key denylist, independent claim-token ownership,
+--   five-minute lease, exact 24-hour expiry and purge capability.

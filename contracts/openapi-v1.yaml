@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Sejong Civil AI API
-  version: 3.0.0-draft
+  version: 3.1.0-draft
   description: |
     Final-scope draft. Validate through discovery/interview before implementation.
     Admin routes are local/private demo surfaces, not public authentication boundaries.
@@ -37,6 +37,8 @@ paths:
   /api/v1/chat:
     post:
       operationId: createChatAnswer
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
       requestBody:
         required: true
         content:
@@ -202,6 +204,16 @@ paths:
         '403': { $ref: '#/components/responses/AdminError' }
 components:
   parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: |
+        Optional UUID identifying one logical chat submission across retries. It is
+        distinct from the per-HTTP-request correlation request_id. Reusing a completed
+        key with the same request replays the stored safe response; reusing it with a
+        different request is rejected without echoing input.
+      schema: { type: string, format: uuid }
     IdPath:
       in: path
       name: id
@@ -579,8 +591,7 @@ components:
         - type: object
           required: [intent, fallback]
           properties:
-            intent:
-              enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+            intent: { const: UNKNOWN }
             fallback: { $ref: '#/components/schemas/PersonalLookupFallback' }
       unevaluatedProperties: false
     LegalJudgmentResponse:
@@ -590,8 +601,7 @@ components:
         - type: object
           required: [intent, fallback]
           properties:
-            intent:
-              enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+            intent: { const: UNKNOWN }
             fallback: { $ref: '#/components/schemas/LegalJudgmentFallback' }
       unevaluatedProperties: false
     OutOfScopeResponse:

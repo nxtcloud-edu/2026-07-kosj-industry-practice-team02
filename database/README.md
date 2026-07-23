@@ -1,9 +1,9 @@
 # Database
 
-DB-001의 manifest 의미 버전은 disposable local/private `0.3.0-local`이다. pinned patched
-Supabase CLI의 exact single `127.0.0.1:54322`, pgTAP 282, backend integration 8/8,
-6단계 compensation/reset/replay와 final review를 통과했다. 이는 production/public readiness를
-뜻하지 않는다.
+DB-001의 manifest 의미 버전은 disposable local/private `0.4.0-local`이다. pinned patched
+Supabase CLI의 exact single `127.0.0.1:54322`, current 9 forward/9 matching rollback,
+pgTAP 9 files/356 assertions와 rollback absence/reapply 36/36을 검증했다. 이는
+production/public readiness를 뜻하지 않는다.
 Q-SEC-003=A/D-046으로 exact privileged function 22 signatures의 property-only `00700`
 보정 방향은 확정됐지만 public 준비까지 구현을 보류한다. `00700`·matching compensation·전체
 regression 전에는 remote/public 배포, public admin/API, public backend DB credential을 금지한다.
@@ -12,17 +12,20 @@ regression 전에는 remote/public 배포, public admin/API, public backend DB c
 
 - 실행 권위: `supabase/migrations/`를 timestamp 오름차순으로 적용한다.
 - 보상: `database/rollbacks/`를 timestamp 역순으로 실행하며 disposable local DB에만 쓴다.
-- 논리 투영: `database/schema-v1.draft.sql`은 7 enum·8 table·5 index를 읽기 쉽게 보여주는
+- 논리 투영: `database/schema-v1.draft.sql`은 7 enum·9 table·5 index를 읽기 쉽게 보여주는
   참고본일 뿐 직접 실행하지 않는다.
 - 공식 filesystem release 권위: historical `.1`과 corrected immutable
   `data/official/releases/0.1.0-initial.2/`가 함께 보존되며 `.2`의 19/3/10 projection과
   create-once artifact가 게시·검증됐다. `supabase/seed.sql`은 `.2` seed와 byte-identical이고
-  `[db.seed].enabled=false`다. Actual DB cycle은 concurrency B에서 Blocked이며 공식/mock
-  persistent row와 `official_data` 승격은 없다.
+  `[db.seed].enabled=false`다. 2026-07-22 지원 actual DB cycle은 concurrency A/B, seed,
+  compensation/replay와 cleanup까지 PASS하여 local DB에 ACTIVE/OFFICIAL KB 19·official office 3·
+  approved mapping 10을 반영했고 `official_data=0.1.0-initial.2`로 승격됐다. 이 initial seed는
+  20번째 ACTIVE admin regression이나 `/ready=200` 증거를 대신하지 않는다. 이들은 별도 final local
+  application rehearsal에서 PASS했으며 public/remote readiness는 계속 뜻하지 않는다.
 
-Forward migration과 matching compensation은 각각 6개다. 적용·commit된 migration은
+Forward migration과 matching compensation은 현재 각각 9개다. 적용·commit된 migration은
 수정하지 않고 보정이 필요하면 새 reviewed forward migration을 추가한다. 현재 local 전체
-보상 순서는 `00600 → 00500 → 00400 → 00300 → 00200 → 00100`이며, 이어
+보상 순서는 `00670 → 00660 → 00650 → 00600 → 00500 → 00400 → 00300 → 00200 → 00100`이며, 이어
 `database/verify_db001_absent.sql`로 DB-001 객체 부재를 증명한다.
 
 ## 로컬 실행과 검증 — patched repository gate만 허용
@@ -40,7 +43,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.
 ```
 
 첫 DB gate는 pinned Supabase CLI `2.109.1`을 runner가 고정 loopback network로 시작하고 actual
-single `127.0.0.1:54322`를 검증한다. 이후에만 reset, login rotation, pgTAP, 6단계 보상,
+single `127.0.0.1:54322`를 검증한다. 이후에만 reset, login rotation, pgTAP, 9단계 보상,
 부재 확인, reset/replay,
 pgTAP, 실제 backend integration을 순서대로 수행한다. `-SkipStart`는 이미 실행 중인 local
 DB를 재사용할 때만 쓴다. `-SkipRollbackReplay`는 진단 옵션이며 완료 증거가 아니다.
@@ -73,13 +76,13 @@ provider 설정은 보존한다. DSN, password, status 원문을 문서·로그�
 ADMIN/INHERIT/SET effective-option union 권위와 동일한 guard로 게시됐고 `.1`/v1 byte는
 보존됐다.
 
-지원된 actual runner 3회는 baseline·identity·forced rollback·concurrency A까지 통과하고
-concurrency B에서 중단됐다. 세 번째 bounded diagnostic의 exact reason은
-`CAPABILITY_WRITE_DID_NOT_BLOCK`이고 cleanup은 PASS했다. 따라서 seed cycle·19/3/10 DB count·
-final semantic hash는 미도달이며 citizen-visible ACTIVE 19/READY를 주장하지 않는다.
-`official_data=0.0.0-not-populated`, `/ready=503`이 정상이고 `/ready=200`은 별도 READY-001이
-소유한다. relation observer의 OID-equality 교정 `eb74ac8`은 독립 검토 0/0/0과 commit을
-마쳤으며 별도 실행 결정 전 추가 actual run은 금지한다. 상세 evidence는
+이전 3회는 concurrency B에서 중단됐지만, relation observer의 accepted lock mode를 수정한 뒤
+2026-07-22 지원 actual cycle은 baseline, exact identity, forced rollback(`tables=8 partial=0`),
+concurrency A/B, 19/3/10 seed, replay·compensation guard, final citizen 19/exclusions 0/
+operational 0와 cleanup을 모두 PASS했다. final exact-owned runtime process/container는 0이다.
+`.1`·`.2` immutable artifacts는 변경하지 않았다. `/ready=200`과 20번째 ACTIVE regression은 별도
+final local application rehearsal에서 PASS했으며, 이 seed report를 public/remote readiness로 확장하지
+않는다. 상세 evidence는
 [`DATA-SEED-002 lineage`](../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)와
 [`DATA-SEED-002 local verification`](../docs/test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md)을
 따른다.

@@ -1,46 +1,22 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { components } from "../../../../../packages/shared-contracts/src/generated/api";
+import {
+  type AdminActor,
+  type AdminTransport,
+  createAdminTransport,
+} from "../../lib/admin-api";
 
 import styles from "./admin.module.css";
 
+export type { AdminActor, AdminTransport } from "../../lib/admin-api";
+
 type CandidateReviewRequest = components["schemas"]["CandidateReviewRequest"];
 type FailedQuestion = components["schemas"]["FailedQuestion"];
-type FailedQuestionDetailResponse = components["schemas"]["FailedQuestionDetailResponse"];
-type FailedQuestionListResponse = components["schemas"]["FailedQuestionListResponse"];
 type KBCandidateCreate = components["schemas"]["KBCandidateCreate"];
-type KBCandidateCreateResponse = components["schemas"]["KBCandidateCreateResponse"];
-type KBCandidateListResponse = components["schemas"]["KBCandidateListResponse"];
-type KBCandidateReviewResponse = components["schemas"]["KBCandidateReviewResponse"];
-type KBCandidateSubmitResponse = components["schemas"]["KBCandidateSubmitResponse"];
 type KBCandidateSummary = components["schemas"]["KBCandidateSummary"];
-type ReasonConfirmationRequest = components["schemas"]["ReasonConfirmationRequest"];
-type ReasonConfirmationResponse = components["schemas"]["ReasonConfirmationResponse"];
-
-export type AdminActor = Readonly<{
-  role: "OPERATOR" | "APPROVER";
-  actorId: string;
-}>;
-
-export interface AdminTransport {
-  listFailedQuestions(actor: AdminActor): Promise<FailedQuestionListResponse>;
-  getFailedQuestion(actor: AdminActor, id: string): Promise<FailedQuestionDetailResponse>;
-  confirmReason(
-    actor: AdminActor,
-    id: string,
-    request: ReasonConfirmationRequest,
-  ): Promise<ReasonConfirmationResponse>;
-  listCandidates(actor: AdminActor): Promise<KBCandidateListResponse>;
-  createCandidate(actor: AdminActor, request: KBCandidateCreate): Promise<KBCandidateCreateResponse>;
-  submitCandidate(actor: AdminActor, id: string): Promise<KBCandidateSubmitResponse>;
-  reviewCandidate(
-    actor: AdminActor,
-    id: string,
-    request: CandidateReviewRequest,
-  ): Promise<KBCandidateReviewResponse>;
-}
 
 const ACTORS: Record<AdminActor["role"], AdminActor> = {
   OPERATOR: { role: "OPERATOR", actorId: "OPERATOR-LOCAL-001" },
@@ -61,26 +37,81 @@ const INTENT_LABELS: Record<FailedQuestion["intent"], string> = {
   LOCAL_TAX_GENERAL: "지방세 일반 안내",
 };
 
-type CandidateDraft = Pick<
+type CandidateDraft = Omit<
   KBCandidateCreate,
-  | "title"
-  | "representative_question"
-  | "answer_summary"
-  | "department"
-  | "source_title"
-  | "source_url"
-  | "last_verified_at"
+  | "failed_question_id"
+  | "category"
+  | "procedure_steps"
+  | "required_documents"
+  | "processing_time"
+  | "fee"
+  | "caution"
+> & {
+  procedure_steps: string[];
+  required_documents: string[];
+  processing_time: string | null;
+  fee: string | null;
+  caution: string | null;
+};
+
+type CandidateTextField = Extract<
+  keyof CandidateDraft,
+  "title" | "representative_question" | "answer_summary" | "department" | "source_title" | "source_url" | "last_verified_at"
 >;
+
+type CanonicalCandidateDraft = Omit<CandidateDraft, "procedure_steps" | "required_documents"> & {
+  readonly procedure_steps: readonly string[];
+  readonly required_documents: readonly string[];
+};
 
 const EMPTY_DRAFT: CandidateDraft = {
   title: "",
   representative_question: "",
   answer_summary: "",
+  procedure_steps: [],
+  required_documents: [],
+  processing_time: null,
+  fee: null,
   department: "",
+  caution: null,
   source_title: "",
   source_url: "",
   last_verified_at: "",
 };
+
+const KB_WASTE_03_DRAFT: Readonly<CanonicalCandidateDraft> = Object.freeze({
+  title: "침대 프레임 배출 수수료",
+  representative_question: "침대 2인용 프레임 수수료가 얼마예요?",
+  answer_summary: "공식 품목표의 침대 프레임 수수료는 1인용침대 8,000원, 2인용침대 10,000원으로 표시됩니다.",
+  procedure_steps: Object.freeze([
+    "공식 품목표에서 침대 프레임의 1인용침대 또는 2인용침대 항목을 확인합니다.",
+    "해당 수수료로 공식 배출 절차를 진행합니다.",
+  ]),
+  required_documents: Object.freeze([]),
+  processing_time: null,
+  fee: "1인용침대 8,000원; 2인용침대 10,000원",
+  department: "세종특별자치시시설관리공단",
+  caution: "공식 품목표의 1인용침대·2인용침대 항목을 그대로 따릅니다. 매트리스 포함 가격이나 실제 규격을 단정하지 않습니다.",
+  source_title: "배출항목선택",
+  source_url: "https://www.sjwaste.kr/wasteApp/appCategoryPopup.do?menuId=MENU00305",
+  last_verified_at: "2026-07-18",
+});
+
+function cloneWaste03Draft(): CandidateDraft {
+  return {
+    ...KB_WASTE_03_DRAFT,
+    procedure_steps: [...KB_WASTE_03_DRAFT.procedure_steps],
+    required_documents: [...KB_WASTE_03_DRAFT.required_documents],
+  };
+}
+
+function isWaste03Eligible(failure: FailedQuestion) {
+  return failure.intent === "BULKY_WASTE"
+    && failure.candidate_eligible
+    && failure.masked_question !== null
+    && failure.masked_question.includes("침대")
+    && failure.masked_question.includes("프레임");
+}
 
 function safeMessage(error: unknown) {
   void error;
@@ -183,6 +214,28 @@ function FailureText({ failure }: { failure: FailedQuestion }) {
   return <span className={styles.purgedText}>보관 기간이 지나 질문 텍스트가 파기되었습니다.</span>;
 }
 
+function CandidateReviewPreview({ draft }: { draft: CandidateDraft }) {
+  if (!draft.procedure_steps.length && !draft.fee && !draft.caution) return null;
+
+  return (
+    <section className={styles.reviewPreview} aria-labelledby="candidate-review-preview-title">
+      <h4 id="candidate-review-preview-title">검수 전 확인</h4>
+      <dl className={styles.auditList}>
+        <div>
+          <dt>배출 절차</dt>
+          <dd>
+            <ol className={styles.procedureList}>
+              {draft.procedure_steps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+          </dd>
+        </div>
+        <div><dt>수수료</dt><dd>{draft.fee ?? "별도 표기 없음"}</dd></div>
+        <div><dt>주의 사항</dt><dd>{draft.caution ?? "별도 표기 없음"}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
 function CandidateCard({
   actor,
   candidate,
@@ -198,21 +251,32 @@ function CandidateCard({
 }) {
   const [reviewComment, setReviewComment] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = useRef(false);
   const isOwnCandidate = candidate.created_by === actor.actorId;
   const canReview = actor.role === "APPROVER" && candidate.status === "PENDING_APPROVAL" && !isOwnCandidate;
   const canApprove = canReview && candidate.data_origin === "OFFICIAL";
 
   async function submit() {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionBusy(true);
     setActionError(null);
     try {
       await transport.submitCandidate(actor, candidate.id);
       await onRefresh();
     } catch {
       setActionError("승인 요청을 처리하지 못했어요.");
+    } finally {
+      actionInFlight.current = false;
+      setActionBusy(false);
     }
   }
 
   async function review(decision: CandidateReviewRequest["decision"]) {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionBusy(true);
     setActionError(null);
     try {
       await transport.reviewCandidate(actor, candidate.id, {
@@ -222,11 +286,14 @@ function CandidateCard({
       await onRefresh();
     } catch {
       setActionError("검수 결과를 반영하지 못했어요.");
+    } finally {
+      actionInFlight.current = false;
+      setActionBusy(false);
     }
   }
 
   return (
-    <article className={styles.candidateCard} aria-label={candidate.title}>
+    <article className={styles.candidateCard} aria-label={candidate.title} aria-busy={actionBusy}>
       <div className={styles.cardHeading}>
         <div>
           <p className={styles.kicker}>KB 후보</p>
@@ -245,7 +312,7 @@ function CandidateCard({
       </dl>
 
       {actor.role === "OPERATOR" && candidate.status === "DRAFTED" ? (
-        <button className={styles.primaryButton} type="button" disabled={busy} onClick={() => void submit()}>
+        <button className={styles.primaryButton} type="button" disabled={busy || actionBusy} onClick={() => void submit()}>
           승인 요청
         </button>
       ) : null}
@@ -265,7 +332,7 @@ function CandidateCard({
             <button
               className={styles.primaryButton}
               type="button"
-              disabled={!canApprove || busy || !reviewComment.trim()}
+              disabled={!canApprove || busy || actionBusy || !reviewComment.trim()}
               onClick={() => void review("APPROVED")}
             >
               승인하고 ACTIVE 반영
@@ -273,7 +340,7 @@ function CandidateCard({
             <button
               className={styles.secondaryButton}
               type="button"
-              disabled={!canReview || busy || !reviewComment.trim()}
+              disabled={!canReview || busy || actionBusy || !reviewComment.trim()}
               onClick={() => void review("REJECTED")}
             >
               반려
@@ -290,12 +357,19 @@ function CandidateCard({
 export function AdminExperience({
   transport: providedTransport,
   initialRole = "OPERATOR",
+  transportMode = "fixture",
+  fetcher = fetch,
 }: {
   transport?: AdminTransport;
   initialRole?: AdminActor["role"];
+  transportMode?: "fixture" | "actual";
+  fetcher?: typeof fetch;
 }) {
-  const usesFixture = !providedTransport;
-  const [transport] = useState(() => providedTransport ?? createFixtureAdminTransport());
+  const usesFixture = transportMode === "fixture";
+  const [transport] = useState(
+    () => providedTransport
+      ?? (transportMode === "actual" ? createAdminTransport(fetcher) : createFixtureAdminTransport()),
+  );
   const [role, setRole] = useState<AdminActor["role"]>(initialRole);
   const actor = ACTORS[role];
   const [failures, setFailures] = useState<FailedQuestion[]>([]);
@@ -306,13 +380,26 @@ export function AdminExperience({
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [currentActorEpoch, setCurrentActorEpoch] = useState(0);
+  const detailRequestSequence = useRef(0);
+  const mutationEpoch = useRef(0);
+  const mutationInFlight = useRef<symbol | null>(null);
+  const actorEpoch = useRef(0);
+  const candidateRefreshSequence = useRef(0);
+  const dashboardRequestSequence = useRef(0);
 
   const refreshCandidates = useCallback(async () => {
+    const requestEpoch = currentActorEpoch;
+    if (requestEpoch !== actorEpoch.current) return;
+    const requestSequence = ++candidateRefreshSequence.current;
     const response = await transport.listCandidates(actor);
+    if (requestEpoch !== actorEpoch.current || requestSequence !== candidateRefreshSequence.current) return;
     setCandidates(response.items);
-  }, [actor, transport]);
+  }, [actor, currentActorEpoch, transport]);
 
   const loadDashboard = useCallback(async () => {
+    const requestEpoch = currentActorEpoch;
+    const requestSequence = ++dashboardRequestSequence.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -320,14 +407,18 @@ export function AdminExperience({
         transport.listFailedQuestions(actor),
         transport.listCandidates(actor),
       ]);
+      if (requestEpoch !== actorEpoch.current || requestSequence !== dashboardRequestSequence.current) return;
       setFailures(failureResponse.items);
       setCandidates(candidateResponse.items);
     } catch (caught) {
+      if (requestEpoch !== actorEpoch.current || requestSequence !== dashboardRequestSequence.current) return;
       setError(safeMessage(caught));
     } finally {
-      setIsLoading(false);
+      if (requestEpoch === actorEpoch.current && requestSequence === dashboardRequestSequence.current) {
+        setIsLoading(false);
+      }
     }
-  }, [actor, transport]);
+  }, [actor, currentActorEpoch, transport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -355,40 +446,56 @@ export function AdminExperience({
   );
 
   async function openFailure(id: string) {
+    mutationInFlight.current = null;
+    mutationEpoch.current += 1;
+    const requestSequence = ++detailRequestSequence.current;
     setIsBusy(true);
     setError(null);
     try {
       const response = await transport.getFailedQuestion(actor, id);
+      if (requestSequence !== detailRequestSequence.current) return;
       setSelectedFailure(response.item);
       setDraft(EMPTY_DRAFT);
     } catch (caught) {
+      if (requestSequence !== detailRequestSequence.current) return;
       setError(safeMessage(caught));
     } finally {
-      setIsBusy(false);
+      if (requestSequence === detailRequestSequence.current) setIsBusy(false);
     }
   }
 
   async function confirmReason() {
-    if (!selectedFailure) return;
+    if (!selectedFailure || mutationInFlight.current !== null) return;
+    const actionToken = Symbol("confirm-reason");
+    mutationInFlight.current = actionToken;
+    const actionEpoch = ++mutationEpoch.current;
     setIsBusy(true);
     try {
       await transport.confirmReason(actor, selectedFailure.id, {
         reason: selectedFailure.fallback_reason,
       });
+      if (actionEpoch !== mutationEpoch.current) return;
       const confirmed: FailedQuestion = { ...selectedFailure, status: "REASON_CONFIRMED" };
       setSelectedFailure(confirmed);
       setFailures((current) => current.map((item) => item.id === confirmed.id ? confirmed : item));
       setAnnouncement("사유 확인 완료");
     } catch {
+      if (actionEpoch !== mutationEpoch.current) return;
       setError("사유를 확정하지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
-      setIsBusy(false);
+      if (mutationInFlight.current === actionToken) {
+        mutationInFlight.current = null;
+        if (actionEpoch === mutationEpoch.current) setIsBusy(false);
+      }
     }
   }
 
   async function createCandidate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedFailure) return;
+    if (!selectedFailure || mutationInFlight.current !== null) return;
+    const actionToken = Symbol("create-candidate");
+    mutationInFlight.current = actionToken;
+    const actionEpoch = ++mutationEpoch.current;
     setIsBusy(true);
     setError(null);
     try {
@@ -396,24 +503,49 @@ export function AdminExperience({
         failed_question_id: selectedFailure.id,
         category: selectedFailure.intent,
         ...draft,
-        procedure_steps: [],
-        required_documents: [],
-        processing_time: null,
-        fee: null,
-        caution: null,
+        procedure_steps: [...draft.procedure_steps],
+        required_documents: [...draft.required_documents],
       });
-      await refreshCandidates();
+      if (actionEpoch !== mutationEpoch.current) return;
+      const candidateResponse = await transport.listCandidates(actor);
+      if (actionEpoch !== mutationEpoch.current) return;
+      setCandidates(candidateResponse.items);
       setAnnouncement("KB 후보를 작성했습니다.");
       setDraft(EMPTY_DRAFT);
     } catch {
+      if (actionEpoch !== mutationEpoch.current) return;
       setError("KB 후보를 작성하지 못했어요. 입력값을 확인해 주세요.");
     } finally {
-      setIsBusy(false);
+      if (mutationInFlight.current === actionToken) {
+        mutationInFlight.current = null;
+        if (actionEpoch === mutationEpoch.current) setIsBusy(false);
+      }
     }
   }
 
-  function updateDraft(field: keyof CandidateDraft, value: string) {
+  function updateDraft(field: CandidateTextField, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function loadWaste03Draft() {
+    setDraft(cloneWaste03Draft());
+    setAnnouncement("검수된 KB-WASTE-03 자료를 불러왔습니다.");
+  }
+
+  function changeRole(nextRole: AdminActor["role"]) {
+    mutationInFlight.current = null;
+    actorEpoch.current += 1;
+    setCurrentActorEpoch(actorEpoch.current);
+    candidateRefreshSequence.current += 1;
+    dashboardRequestSequence.current += 1;
+    detailRequestSequence.current += 1;
+    mutationEpoch.current += 1;
+    setSelectedFailure(null);
+    setDraft(EMPTY_DRAFT);
+    setError(null);
+    setAnnouncement("");
+    setIsBusy(false);
+    setRole(nextRole);
   }
 
   return (
@@ -423,12 +555,13 @@ export function AdminExperience({
         <h1 id="admin-title">AI 민원 운영센터</h1>
         <p>근거가 부족했던 질문을 확인하고, 작성자와 다른 검수자를 거쳐 공식 KB로 반영합니다.</p>
         {usesFixture ? <p className={styles.mockBadge}>시연용 샘플 데이터</p> : null}
+        {!usesFixture ? <p className={styles.confirmed}>실제 local DB API 연결</p> : null}
         <p className={styles.demoBoundary}>시연용 역할 선택 · 인증 아님</p>
         <label htmlFor="demo-role">시연 역할</label>
         <select
           id="demo-role"
           value={role}
-          onChange={(event) => setRole(event.target.value as AdminActor["role"])}
+          onChange={(event) => changeRole(event.target.value as AdminActor["role"])}
         >
           <option value="OPERATOR">작성 운영자 · OPERATOR-LOCAL-001</option>
           <option value="APPROVER">별도 승인자 · PM-LOCAL-001</option>
@@ -488,7 +621,7 @@ export function AdminExperience({
                   <div><dt>텍스트 만료</dt><dd><time dateTime={selectedFailure.text_expires_at}>{selectedFailure.text_expires_at}</time></dd></div>
                 </dl>
                 {role === "OPERATOR" && selectedFailure.status === "NEW" ? (
-                  <button className={styles.primaryButton} type="button" disabled={isBusy} onClick={() => void confirmReason()}>
+                  <button className={styles.primaryButton} type="button" disabled={isBusy} aria-busy={isBusy} onClick={() => void confirmReason()}>
                     사유 확정
                   </button>
                 ) : null}
@@ -503,6 +636,11 @@ export function AdminExperience({
                   && !selectedHasCandidate ? (
                   <form className={styles.candidateForm} onSubmit={createCandidate}>
                     <h3>KB 후보 작성</h3>
+                    {isWaste03Eligible(selectedFailure) ? (
+                      <button className={styles.secondaryButton} type="button" onClick={loadWaste03Draft}>
+                        검수된 KB-WASTE-03 자료 불러오기
+                      </button>
+                    ) : null}
                     <label htmlFor="candidate-title">후보 제목</label>
                     <input id="candidate-title" required value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} />
                     <label htmlFor="candidate-question">대표 질문</label>
@@ -517,7 +655,8 @@ export function AdminExperience({
                     <input id="candidate-source-url" type="url" required value={draft.source_url} onChange={(event) => updateDraft("source_url", event.target.value)} />
                     <label htmlFor="candidate-verified-date">공식 확인일</label>
                     <input id="candidate-verified-date" type="date" required value={draft.last_verified_at} onChange={(event) => updateDraft("last_verified_at", event.target.value)} />
-                    <button className={styles.primaryButton} type="submit" disabled={isBusy}>KB 후보 작성</button>
+                    <CandidateReviewPreview draft={draft} />
+                    <button className={styles.primaryButton} type="submit" disabled={isBusy} aria-busy={isBusy}>KB 후보 작성</button>
                   </form>
                 ) : null}
               </div>
@@ -541,7 +680,7 @@ export function AdminExperience({
             <div className={styles.candidateGrid}>
               {candidates.map((item) => (
                 <CandidateCard
-                  key={item.id}
+                  key={`${currentActorEpoch}:${actor.role}:${actor.actorId}:${item.id}`}
                   actor={actor}
                   candidate={item}
                   busy={isBusy}

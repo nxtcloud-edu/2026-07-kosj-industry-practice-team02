@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Sequence
 from datetime import date
 from typing import Any, Protocol
@@ -12,7 +14,11 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
+from pydantic import ValidationError
 
+from sejong_ai_api.admin.candidate_binding import RESERVED_KB_PUBLIC_ID
+from sejong_ai_api.chat.idempotency import IdempotencyClaim, IdempotencyClaimStatus
+from sejong_ai_api.contracts.admin import FailedQuestion, KBCandidateSummary
 from sejong_ai_api.db.errors import DatabaseUnavailableError, map_database_error
 from sejong_ai_api.db.models import (
     Actor,
@@ -41,10 +47,21 @@ CREATE_KB_CANDIDATE_SQL = (
 )
 SUBMIT_KB_CANDIDATE_SQL = "SELECT app_api.submit_kb_candidate(%s, %s, %s)"
 APPROVE_KB_CANDIDATE_SQL = "SELECT app_api.approve_kb_candidate(%s, %s, %s, %s)"
+APPROVE_KB_CANDIDATE_WITH_PUBLIC_ID_SQL = (
+    "SELECT app_api.approve_kb_candidate_with_public_id(%s, %s, %s, %s, %s)"
+)
 REJECT_KB_CANDIDATE_SQL = "SELECT app_api.reject_kb_candidate(%s, %s, %s, %s)"
 PURGE_EXPIRED_FAILED_QUESTION_TEXT_SQL = (
     "SELECT * FROM app_api.purge_expired_failed_question_text()"
 )
+LIST_FAILED_QUESTIONS_SQL = "SELECT * FROM app_api.list_failed_questions(%s, %s)"
+GET_FAILED_QUESTION_SQL = "SELECT * FROM app_api.get_failed_question(%s)"
+LIST_KB_CANDIDATES_SQL = "SELECT * FROM app_api.list_kb_candidates()"
+GET_KB_CANDIDATE_SQL = "SELECT * FROM app_api.get_kb_candidate(%s)"
+CLAIM_CHAT_IDEMPOTENCY_SQL = "SELECT * FROM app_api.claim_chat_idempotency(%s, %s, %s)"
+COMPLETE_CHAT_IDEMPOTENCY_SQL = "SELECT app_api.complete_chat_idempotency(%s, %s, %s, %s)"
+ABANDON_CHAT_IDEMPOTENCY_SQL = "SELECT app_api.abandon_chat_idempotency(%s, %s, %s)"
+PURGE_EXPIRED_CHAT_IDEMPOTENCY_SQL = "SELECT * FROM app_api.purge_expired_chat_idempotency()"
 
 _SUPPORTED_INTENTS = frozenset(
     {
@@ -61,6 +78,23 @@ _CONFIRMABLE_REASONS = frozenset(
         FallbackReason.LEGAL_JUDGMENT,
     }
 )
+_ADMIN_FAILURE_REASONS = frozenset(reason.value for reason in _CONFIRMABLE_REASONS)
+_ADMIN_FAILURE_STATUSES = frozenset({"NEW", "REASON_CONFIRMED"})
+_IDEMPOTENCY_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$", re.ASCII)
+_FORBIDDEN_IDEMPOTENCY_RESPONSE_KEYS = frozenset(
+    {
+        "context_token",
+        "masked_question",
+        "prompt",
+        "provider_body",
+        "question",
+        "raw_question",
+        "request_body",
+        "request_id",
+        "transcript",
+    }
+)
+_MAX_IDEMPOTENCY_RESPONSE_BYTES = 65_536
 
 
 class SejongRepository(Protocol):
@@ -85,11 +119,66 @@ class SejongRepository(Protocol):
         self, candidate_id: UUID, actor: Actor, review_comment: str
     ) -> str: ...
 
+    async def approve_kb_candidate_with_public_id(
+        self,
+        candidate_id: UUID,
+        actor: Actor,
+        review_comment: str,
+        public_id: str,
+    ) -> str: ...
+
     async def reject_kb_candidate(
         self, candidate_id: UUID, actor: Actor, review_comment: str
     ) -> None: ...
 
     async def purge_expired_failed_question_text(self) -> PurgeResult: ...
+
+    async def list_failed_questions(
+        self, *, reason: str | None, status: str | None
+    ) -> Sequence[FailedQuestion]: ...
+
+    async def get_failed_question(self, failed_question_id: UUID) -> FailedQuestion | None: ...
+
+    async def list_kb_candidates(self) -> Sequence[KBCandidateSummary]: ...
+
+    async def get_kb_candidate(self, candidate_id: UUID) -> KBCandidateSummary | None: ...
+
+    async def claim_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> IdempotencyClaim: ...
+
+    async def complete_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+    ) -> None: ...
+
+    async def commit_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+        interaction: InteractionWrite | None,
+    ) -> None: ...
+
+    async def abandon_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> None: ...
+
+    async def purge_expired_chat_idempotency(self) -> PurgeResult: ...
 
 
 def _require_supported_intent(intent: object) -> Intent:
@@ -120,6 +209,52 @@ def _require_review_comment(value: object) -> str:
     if type(value) is not str or not value or value.strip() != value or len(value) > 1000:
         raise ValueError("REVIEW_COMMENT_INVALID")
     return value
+
+
+def _require_admin_read_filter(value: object, allowed: frozenset[str]) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str or value not in allowed:
+        raise ValueError("ADMIN_READ_FILTER_INVALID")
+    return value
+
+
+def _require_idempotency_digest(value: object) -> str:
+    if type(value) is not str or _IDEMPOTENCY_DIGEST_PATTERN.fullmatch(value) is None:
+        raise ValueError("IDEMPOTENCY_DIGEST_INVALID")
+    return value
+
+
+def _response_has_forbidden_key(value: object) -> bool:
+    if type(value) is dict:
+        for key, nested in value.items():
+            if type(key) is not str:
+                return True
+            if key.casefold() in _FORBIDDEN_IDEMPOTENCY_RESPONSE_KEYS:
+                return True
+            if _response_has_forbidden_key(nested):
+                return True
+        return False
+    if type(value) is list:
+        return any(_response_has_forbidden_key(item) for item in value)
+    return type(value) not in {str, int, float, bool, type(None)}
+
+
+def _require_safe_response_json(value: object) -> dict[str, Any]:
+    if type(value) is not dict or not value or _response_has_forbidden_key(value):
+        raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE")
+    try:
+        encoded = json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (TypeError, ValueError):
+        raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE") from None
+    if len(encoded) > _MAX_IDEMPOTENCY_RESPONSE_BYTES:
+        raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE")
+    return value.copy()
 
 
 def _required_text(value: object) -> str:
@@ -213,6 +348,20 @@ def _safe_office_records(rows: list[dict[str, Any]]) -> tuple[OfficeRecord, ...]
         raise DatabaseUnavailableError() from None
 
 
+def _safe_failed_questions(rows: list[dict[str, Any]]) -> tuple[FailedQuestion, ...]:
+    try:
+        return tuple(FailedQuestion.model_validate(row) for row in rows)
+    except (TypeError, ValueError, ValidationError):
+        raise DatabaseUnavailableError() from None
+
+
+def _safe_candidates(rows: list[dict[str, Any]]) -> tuple[KBCandidateSummary, ...]:
+    try:
+        return tuple(KBCandidateSummary.model_validate(row) for row in rows)
+    except (TypeError, ValueError, ValidationError):
+        raise DatabaseUnavailableError() from None
+
+
 class PsycopgSejongRepository:
     def __init__(
         self,
@@ -250,18 +399,7 @@ class PsycopgSejongRepository:
     async def record_interaction(self, event: InteractionWrite) -> InteractionWriteResult:
         if type(event) is not InteractionWrite:
             raise ValueError("INTERACTION_INVALID")
-        parameters = (
-            event.request_id,
-            event.intent.value,
-            event.answer_status.value,
-            event.fallback_reason.value if event.fallback_reason is not None else None,
-            list(event.used_source_ids),
-            event.response_time_ms,
-            event.selected_region.value if event.selected_region is not None else None,
-            event.routed_office_public_id,
-            event.is_test,
-            event.masked_question,
-        )
+        parameters = self._interaction_parameters(event)
         try:
             async with (
                 self._pool.connection() as connection,
@@ -367,6 +505,38 @@ class PsycopgSejongRepository:
             raise map_database_error(exc) from exc
         return result
 
+    async def approve_kb_candidate_with_public_id(
+        self,
+        candidate_id: UUID,
+        actor: Actor,
+        review_comment: str,
+        public_id: str,
+    ) -> str:
+        valid_id = _require_uuid(candidate_id, "CANDIDATE_ID_INVALID")
+        valid_actor = _require_actor(actor, AdminRole.APPROVER)
+        valid_comment = _require_review_comment(review_comment)
+        if type(public_id) is not str or public_id != RESERVED_KB_PUBLIC_ID:
+            raise ValueError("PUBLIC_ID_INVALID")
+        parameters = (
+            valid_id,
+            valid_actor.actor_id,
+            valid_actor.role.value,
+            valid_comment,
+            RESERVED_KB_PUBLIC_ID,
+        )
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(APPROVE_KB_CANDIDATE_WITH_PUBLIC_ID_SQL, parameters)
+                rows = await cursor.fetchall()
+                result = self._scalar_text(rows, "approve_kb_candidate_with_public_id")
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return result
+
     async def reject_kb_candidate(
         self, candidate_id: UUID, actor: Actor, review_comment: str
     ) -> None:
@@ -397,6 +567,174 @@ class PsycopgSejongRepository:
             raise map_database_error(exc) from exc
         return result
 
+    async def list_failed_questions(
+        self, *, reason: str | None, status: str | None
+    ) -> tuple[FailedQuestion, ...]:
+        valid_reason = _require_admin_read_filter(reason, _ADMIN_FAILURE_REASONS)
+        valid_status = _require_admin_read_filter(status, _ADMIN_FAILURE_STATUSES)
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(LIST_FAILED_QUESTIONS_SQL, (valid_reason, valid_status))
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return _safe_failed_questions(rows)
+
+    async def get_failed_question(self, failed_question_id: UUID) -> FailedQuestion | None:
+        valid_id = _require_uuid(failed_question_id, "FAILED_QUESTION_ID_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(GET_FAILED_QUESTION_SQL, (valid_id,))
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise DatabaseUnavailableError()
+        return _safe_failed_questions(rows)[0]
+
+    async def list_kb_candidates(self) -> tuple[KBCandidateSummary, ...]:
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(LIST_KB_CANDIDATES_SQL, ())
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return _safe_candidates(rows)
+
+    async def get_kb_candidate(self, candidate_id: UUID) -> KBCandidateSummary | None:
+        valid_id = _require_uuid(candidate_id, "CANDIDATE_ID_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(GET_KB_CANDIDATE_SQL, (valid_id,))
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise DatabaseUnavailableError()
+        return _safe_candidates(rows)[0]
+
+    async def claim_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> IdempotencyClaim:
+        valid_key = _require_uuid(idempotency_key, "IDEMPOTENCY_KEY_INVALID")
+        valid_digest = _require_idempotency_digest(request_fingerprint)
+        valid_claim_token = _require_uuid(claim_token, "CLAIM_TOKEN_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(
+                    CLAIM_CHAT_IDEMPOTENCY_SQL,
+                    (valid_key, valid_digest, valid_claim_token),
+                )
+                rows = await cursor.fetchall()
+                result = self._idempotency_claim(rows)
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return result
+
+    async def complete_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+    ) -> None:
+        valid_key = _require_uuid(idempotency_key, "IDEMPOTENCY_KEY_INVALID")
+        valid_digest = _require_idempotency_digest(request_fingerprint)
+        valid_claim_token = _require_uuid(claim_token, "CLAIM_TOKEN_INVALID")
+        valid_response = _require_safe_response_json(response_payload)
+        await self._execute_void_write(
+            COMPLETE_CHAT_IDEMPOTENCY_SQL,
+            (valid_key, valid_digest, valid_claim_token, Jsonb(valid_response)),
+        )
+
+    async def commit_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+        interaction: InteractionWrite | None,
+    ) -> None:
+        valid_key = _require_uuid(idempotency_key, "IDEMPOTENCY_KEY_INVALID")
+        valid_digest = _require_idempotency_digest(request_fingerprint)
+        valid_claim_token = _require_uuid(claim_token, "CLAIM_TOKEN_INVALID")
+        valid_response = _require_safe_response_json(response_payload)
+        if interaction is not None and type(interaction) is not InteractionWrite:
+            raise ValueError("INTERACTION_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                if interaction is not None:
+                    await cursor.execute(
+                        RECORD_INTERACTION_SQL,
+                        self._interaction_parameters(interaction),
+                    )
+                    self._interaction_result(await cursor.fetchall())
+                await cursor.execute(
+                    COMPLETE_CHAT_IDEMPOTENCY_SQL,
+                    (valid_key, valid_digest, valid_claim_token, Jsonb(valid_response)),
+                )
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+
+    async def abandon_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> None:
+        valid_key = _require_uuid(idempotency_key, "IDEMPOTENCY_KEY_INVALID")
+        valid_digest = _require_idempotency_digest(request_fingerprint)
+        valid_claim_token = _require_uuid(claim_token, "CLAIM_TOKEN_INVALID")
+        await self._execute_void_write(
+            ABANDON_CHAT_IDEMPOTENCY_SQL,
+            (valid_key, valid_digest, valid_claim_token),
+        )
+
+    async def purge_expired_chat_idempotency(self) -> PurgeResult:
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(PURGE_EXPIRED_CHAT_IDEMPOTENCY_SQL, ())
+                rows = await cursor.fetchall()
+                result = self._purge_result(rows)
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return result
+
     async def _execute_void_write(self, sql: str, parameters: tuple[object, ...]) -> None:
         try:
             async with (
@@ -407,6 +745,21 @@ class PsycopgSejongRepository:
                 await cursor.execute(sql, parameters)
         except psycopg.Error as exc:
             raise map_database_error(exc) from exc
+
+    @staticmethod
+    def _interaction_parameters(event: InteractionWrite) -> tuple[object, ...]:
+        return (
+            event.request_id,
+            event.intent.value,
+            event.answer_status.value,
+            event.fallback_reason.value if event.fallback_reason is not None else None,
+            list(event.used_source_ids),
+            event.response_time_ms,
+            event.selected_region.value if event.selected_region is not None else None,
+            event.routed_office_public_id,
+            event.is_test,
+            event.masked_question,
+        )
 
     @staticmethod
     def _single_row(
@@ -451,6 +804,21 @@ class PsycopgSejongRepository:
             return PurgeResult(
                 purged_count=purged_count,
                 purged_ids=_uuid_array(row["purged_ids"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            raise DatabaseUnavailableError() from None
+
+    @classmethod
+    def _idempotency_claim(cls, rows: list[dict[str, Any]]) -> IdempotencyClaim:
+        try:
+            row = cls._single_row(rows)
+            raw_response = row["response_json"]
+            response = None
+            if raw_response is not None:
+                response = _require_safe_response_json(raw_response)
+            return IdempotencyClaim(
+                status=IdempotencyClaimStatus(_required_text(row["disposition"])),
+                response_payload=response,
             )
         except (KeyError, TypeError, ValueError):
             raise DatabaseUnavailableError() from None

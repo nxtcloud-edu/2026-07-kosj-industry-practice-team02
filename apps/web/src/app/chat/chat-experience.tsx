@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useRef, useState } from "react";
 import {
   type ChatRequest,
   type ChatResponse,
+  type ChatSendOptions,
   type ChatTransport,
   ChatTransportError,
   type Office,
@@ -20,6 +21,7 @@ type Exchange = Readonly<{
 }>;
 
 type FailedDraft = Readonly<{
+  idempotencyKey: string;
   request: ChatRequest;
   retryable: boolean;
 }>;
@@ -157,7 +159,13 @@ function FallbackAnswer({ exchange }: { exchange: Exchange }) {
   );
 }
 
-export function ChatExperience({ transport = createChatTransport() }: { transport?: ChatTransport }) {
+export function ChatExperience({
+  transport = createChatTransport(),
+  createIdempotencyKey = () => crypto.randomUUID(),
+}: {
+  transport?: ChatTransport;
+  createIdempotencyKey?: () => string;
+}) {
   const [question, setQuestion] = useState("");
   const [selectedRegion, setSelectedRegion] = useState<ChatRequest["selected_region"]>(null);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -166,14 +174,14 @@ export function ChatExperience({ transport = createChatTransport() }: { transpor
   const contextTokenRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
 
-  const sendRequest = useCallback(async (request: ChatRequest) => {
+  const sendRequest = useCallback(async (request: ChatRequest, options: Required<ChatSendOptions>) => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setIsLoading(true);
     setFailedDraft(null);
 
     try {
-      const response = await transport.send(request);
+      const response = await transport.send(request, options);
       const shouldShowOfficeState = response.answer_status === "SUCCESS" && Boolean(request.selected_region);
       const office = response.answer_status === "SUCCESS" ? response.office : null;
 
@@ -191,6 +199,7 @@ export function ChatExperience({ transport = createChatTransport() }: { transpor
       setQuestion((current) => (current.trim() === request.question ? "" : current));
     } catch (error) {
       setFailedDraft({
+        idempotencyKey: options.idempotencyKey,
         request,
         retryable: !(error instanceof ChatTransportError) || error.retryable,
       });
@@ -204,13 +213,16 @@ export function ChatExperience({ transport = createChatTransport() }: { transpor
     const trimmed = nextQuestion.trim();
     if (!trimmed || inFlightRef.current) return;
 
-    void sendRequest({
-      question: trimmed,
-      selected_region: selectedRegion ?? null,
-      simple_language: true,
-      context_token: contextToken,
-    });
-  }, [selectedRegion, sendRequest]);
+    void sendRequest(
+      {
+        question: trimmed,
+        selected_region: selectedRegion ?? null,
+        simple_language: true,
+        context_token: contextToken,
+      },
+      { idempotencyKey: createIdempotencyKey() },
+    );
+  }, [createIdempotencyKey, selectedRegion, sendRequest]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -260,7 +272,15 @@ export function ChatExperience({ transport = createChatTransport() }: { transpor
                 : "입력 내용을 확인한 뒤 새 질문을 보내 주세요."}
             </p>
             {failedDraft.retryable ? (
-              <button type="button" onClick={() => void sendRequest(failedDraft.request)}>다시 시도</button>
+              <button
+                type="button"
+                onClick={() => void sendRequest(
+                  failedDraft.request,
+                  { idempotencyKey: failedDraft.idempotencyKey },
+                )}
+              >
+                다시 시도
+              </button>
             ) : null}
           </div>
         ) : null}

@@ -67,7 +67,12 @@ afterEach(() => {
 describe("citizen chat experience", () => {
   it("renders a successful answer with source and selected-region office metadata unchanged", async () => {
     const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
-    render(<ChatExperience transport={transportWith(send)} />);
+    render(
+      <ChatExperience
+        transport={transportWith(send)}
+        createIdempotencyKey={() => "99999999-9999-4999-8999-999999999999"}
+      />,
+    );
 
     fireEvent.change(screen.getByRole("combobox", { name: "지역 선택" }), {
       target: { value: "아름동" },
@@ -90,12 +95,15 @@ describe("citizen chat experience", () => {
       "href",
       OFFICE.map_url,
     );
-    expect(send).toHaveBeenCalledWith({
-      question: "이사했는데 전입신고 어떻게 해요?",
-      selected_region: "아름동",
-      simple_language: true,
-      context_token: null,
-    });
+    expect(send).toHaveBeenCalledWith(
+      {
+        question: "이사했는데 전입신고 어떻게 해요?",
+        selected_region: "아름동",
+        simple_language: true,
+        context_token: null,
+      },
+      { idempotencyKey: "99999999-9999-4999-8999-999999999999" },
+    );
   });
 
   it("keeps follow-up context only in React memory and sends it with the selected option", async () => {
@@ -247,6 +255,41 @@ describe("citizen chat experience", () => {
     fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
     expect(await screen.findByText(SUCCESS_RESPONSE.summary)).toBeInTheDocument();
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("reuses one idempotency key for a failed logical question and rotates it for a new question", async () => {
+    const firstKey = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const secondKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const createIdempotencyKey = vi.fn()
+      .mockReturnValueOnce(firstKey)
+      .mockReturnValueOnce(secondKey);
+    const secondResponse = {
+      ...SUCCESS_RESPONSE,
+      request_id: "77777777-7777-4777-8777-777777777777",
+    } satisfies ChatResponse;
+    const send = vi.fn()
+      .mockRejectedValueOnce(new ChatTransportError(503, true))
+      .mockResolvedValueOnce(SUCCESS_RESPONSE)
+      .mockResolvedValueOnce(secondResponse);
+    render(
+      <ChatExperience
+        transport={transportWith(send)}
+        createIdempotencyKey={createIdempotencyKey}
+      />,
+    );
+
+    ask("첫 질문");
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await screen.findByText(SUCCESS_RESPONSE.summary);
+
+    ask("새 질문");
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(3));
+
+    expect(createIdempotencyKey).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0][1]).toEqual({ idempotencyKey: firstKey });
+    expect(send.mock.calls[1][1]).toEqual({ idempotencyKey: firstKey });
+    expect(send.mock.calls[2][1]).toEqual({ idempotencyKey: secondKey });
   });
 
   it("does not offer retry for a non-retryable validation error", async () => {

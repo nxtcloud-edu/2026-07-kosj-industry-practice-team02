@@ -14,10 +14,12 @@
 
 ## 현재 lineage
 
-- [`DATA-SEED-002 / 0.1.0-initial.2`](DATA-SEED-002-0.1.0-initial.2.md) — canonical successor
-  19/3/10 filesystem release and active dispatcher are published/byte-verified; reviewed diagnostic
-  isolated concurrency B as `CAPABILITY_WRITE_DID_NOT_BLOCK`; cleanup PASS,
-  `official_data=0.0.0-not-populated`, PostgreSQL ACTIVE 19 not claimed
+- [`DATA-SEED-002 / 0.1.0-initial.2`](DATA-SEED-002-0.1.0-initial.2.md) — canonical immutable
+  19/3/10 filesystem release and active dispatcher. The supported actual local cycle passed and
+  promotes `official_data=0.1.0-initial.2`; it remains distinct from application readiness and the
+  later candidate workflow.
+- [`MVP-001 KB-WASTE-03 local workflow`](MVP-001-KB-WASTE-03-LOCAL-WORKFLOW.md) — local/private
+  19→20 governed runtime evidence only; no official `.2` artifact or source data changed.
 - [`DATA-SEED-001 / 0.1.0-initial.1`](DATA-SEED-001-0.1.0-initial.1.md) — filesystem release
   19/3/10 published/verified; actual PostgreSQL import Blocked before seed, `official_data` not
   promoted; retained as the immutable predecessor of DATA-SEED-002

@@ -175,10 +175,14 @@ class EnvironmentBoundaryTest(unittest.TestCase):
         path = ROOT / "apps" / "web" / ".env.example"
         self.assertTrue(path.is_file())
         parsed = assignments(path)
-        self.assertEqual(set(parsed), {"API_INTERNAL_BASE_URL", "ADMIN_UI_ENABLED"})
+        self.assertEqual(
+            set(parsed),
+            {"API_INTERNAL_BASE_URL", "ADMIN_UI_ENABLED", "ADMIN_UI_MODE"},
+        )
         if parsed.get("API_INTERNAL_BASE_URL") != "http://127.0.0.1:8000":
             raise AssertionError("web API base URL does not match the approved local default")
         self.assertEqual(parsed.get("ADMIN_UI_ENABLED"), "false")
+        self.assertEqual(parsed.get("ADMIN_UI_MODE"), "fixture")
         text = path.read_text(encoding="utf-8")
         self.assertNotIn("NEXT_PUBLIC_", text)
         for name in (
@@ -217,8 +221,8 @@ class EnvironmentBoundaryTest(unittest.TestCase):
             "CONTEXT_TOKEN_SECRET": "",
             "CONTEXT_TOKEN_TTL_SECONDS": "900",
             "PII_RETENTION_DAYS": "30",
-            "DEMO_OPERATOR_ID": "operator-demo",
-            "DEMO_APPROVER_ID": "approver-demo",
+            "DEMO_OPERATOR_ID": "OPERATOR-LOCAL-001",
+            "DEMO_APPROVER_ID": "PM-LOCAL-001",
             "ENABLE_EMBEDDINGS": "false",
             "ENABLE_DEMO_ROLE_SWITCH": "true",
             "ENABLE_LOAD_TEST_ENDPOINT": "false",

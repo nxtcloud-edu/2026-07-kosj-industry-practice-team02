@@ -52,6 +52,33 @@ describe("chat API transport", () => {
     );
   });
 
+  it("adds an optional idempotency identity without inventing a correlation request id", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(SUCCESS_RESPONSE), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const transport = createChatTransport(undefined, fetcher);
+
+    await transport.send(
+      { question: "전입신고 알려줘" },
+      { idempotencyKey: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/v1/chat",
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        },
+      }),
+    );
+    const init = fetcher.mock.calls[0][1] as RequestInit;
+    expect(init.headers).not.toHaveProperty("X-Request-Id");
+  });
+
   it("uses same-origin by default and maps non-200 responses to a value-free retryable error", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       new Response(

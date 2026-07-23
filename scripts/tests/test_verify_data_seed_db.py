@@ -326,8 +326,8 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
         self.assertIn("locks.mode", concurrency.LOCK_WAIT_QUERY)
         self.assertNotIn("pg_stat_activity", concurrency.LOCK_WAIT_QUERY)
         self.assertEqual(
-            "RowShareLock",
-            getattr(concurrency, "CAPABILITY_FIRST_ACCESS_LOCK_MODE", None),
+            frozenset({"AccessShareLock", "RowShareLock"}),
+            getattr(concurrency, "CAPABILITY_FIRST_ACCESS_LOCK_MODES", None),
         )
 
     def test_concurrency_wait_rejects_wrong_blocker_relation_or_mode(self) -> None:
@@ -391,29 +391,31 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                 concurrency._wait_until_lock_blocked(connection, 702)
 
     def test_concurrency_wait_accepts_only_direct_seed_relation_lock(self) -> None:
-        connection = _LockProbeConnection(
-            [
-                (
-                    [701],
-                    "relation",
-                    True,
-                    "RowShareLock",
-                    False,
+        for mode in ("AccessShareLock", "RowShareLock"):
+            with self.subTest(mode=mode):
+                connection = _LockProbeConnection(
+                    [
+                        (
+                            [701],
+                            "relation",
+                            True,
+                            mode,
+                            False,
+                        )
+                    ]
                 )
-            ]
-        )
-        with mock.patch.object(
-            concurrency.time,
-            "monotonic",
-            side_effect=[0.0, 1.0, 6.0],
-        ):
-            try:
-                concurrency._wait_until_lock_blocked(connection, 702)
-            except ValueError as error:
-                self.fail(f"exact first-access relation lock was rejected: {error}")
+                with mock.patch.object(
+                    concurrency.time,
+                    "monotonic",
+                    side_effect=[0.0, 1.0, 6.0],
+                ):
+                    try:
+                        concurrency._wait_until_lock_blocked(connection, 702)
+                    except ValueError as error:
+                        self.fail(f"exact first-access relation lock was rejected: {error}")
 
-        self.assertEqual(1, len(connection.calls))
-        self.assertEqual((702, 702), connection.calls[0][1])
+                self.assertEqual(1, len(connection.calls))
+                self.assertEqual((702, 702), connection.calls[0][1])
 
     def test_projection_queries_select_only_seed_owned_fields(self) -> None:
         self.assertEqual(

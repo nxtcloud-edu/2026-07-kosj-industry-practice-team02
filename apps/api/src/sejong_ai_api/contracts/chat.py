@@ -160,17 +160,16 @@ class FallbackResponse(ChatResponseBase):
 
         if reason == "OUT_OF_SCOPE" and self.intent != "OUT_OF_SCOPE":
             raise ValueError("OUT_OF_SCOPE fallback requires OUT_OF_SCOPE intent")
-        if reason in {
-            "INSUFFICIENT_GROUNDING",
-            "PERSONAL_LOOKUP",
-            "LEGAL_JUDGMENT",
-        } and self.intent not in {
+        if reason == "INSUFFICIENT_GROUNDING" and self.intent not in {
             "MOVE_IN_RESIDENT_REGISTRATION",
             "CERTIFICATE_ISSUANCE",
             "BULKY_WASTE",
             "LOCAL_TAX_GENERAL",
         }:
-            raise ValueError("administrative fallback requires a supported intent")
+            raise ValueError("INSUFFICIENT_GROUNDING requires a supported intent")
+
+        if reason in {"PERSONAL_LOOKUP", "LEGAL_JUDGMENT"} and self.intent != "UNKNOWN":
+            raise ValueError("policy fallback requires UNKNOWN intent")
 
         if reason == "PRIVACY_UNRESOLVED":
             if self.intent != "UNKNOWN":

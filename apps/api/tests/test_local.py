@@ -1,25 +1,45 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
+from sejong_ai_api.chat.idempotency import IdempotencyClaim, IdempotencyClaimStatus
 from sejong_ai_api.chat.readiness import INITIAL_ACTIVE_KB_IDS, REQUIRED_OFFICE_PROJECTIONS
+from sejong_ai_api.contracts.admin import FailedQuestion, KBCandidateSummary
 from sejong_ai_api.db.models import (
+    Actor,
+    CandidateDraft,
+    FallbackReason,
     Intent,
     InteractionWrite,
     InteractionWriteResult,
     KnowledgeRecord,
     OfficeRecord,
+    PurgeResult,
     Region,
 )
 from sejong_ai_api.local import create_local_app, load_local_settings
+
+
+def _database_dsn(scheme: str, authority: str) -> str:
+    return f"{scheme}://{authority}"
+
+
+_PROVISIONED_DATABASE_URL = _database_dsn(
+    "postgresql",
+    "sejong_local_login:synthetic%3A%2F%40%25%20password@127.0.0.1:54322/postgres",
+)
+_FILE_DATABASE_URL = _database_dsn(
+    "postgresql", "sejong_local_login:file-secret@127.0.0.1:54322/postgres"
+)
 
 
 def _knowledge(public_id: str, intent: Intent) -> KnowledgeRecord:
@@ -101,6 +121,9 @@ class FakeRepository:
             for region, intent, office_id in REQUIRED_OFFICE_PROJECTIONS
         }
         self.events: list[InteractionWrite] = []
+        self.idempotency: dict[UUID, tuple[str, UUID, dict[str, object] | None]] = {}
+        self.failed_text_purge_count = 0
+        self.idempotency_purge_count = 0
 
     async def list_active_kb(self, intent: Intent) -> Sequence[KnowledgeRecord]:
         if not self.ready:
@@ -116,10 +139,140 @@ class FakeRepository:
         self.events.append(event)
         return InteractionWriteResult(interaction_id=uuid4(), failed_question_id=None)
 
+    async def list_failed_questions(self, *, reason: str | None, status: str | None) -> tuple[()]:
+        del reason, status
+        return ()
+
+    async def get_failed_question(self, failed_question_id: UUID) -> FailedQuestion | None:
+        del failed_question_id
+        return None
+
+    async def list_kb_candidates(self) -> tuple[KBCandidateSummary, ...]:
+        return ()
+
+    async def get_kb_candidate(self, candidate_id: UUID) -> KBCandidateSummary | None:
+        del candidate_id
+        return None
+
+    async def confirm_failed_question_reason(
+        self,
+        failed_question_id: UUID,
+        actor: Actor,
+        fallback_reason: FallbackReason,
+    ) -> None:
+        del failed_question_id, actor, fallback_reason
+
+    async def create_kb_candidate(self, draft: CandidateDraft) -> UUID:
+        del draft
+        return uuid4()
+
+    async def submit_kb_candidate(self, candidate_id: UUID, actor: Actor) -> None:
+        del candidate_id, actor
+
+    async def approve_kb_candidate(
+        self, candidate_id: UUID, actor: Actor, review_comment: str
+    ) -> str:
+        del candidate_id, actor, review_comment
+        return "KB-FAKE"
+
+    async def approve_kb_candidate_with_public_id(
+        self,
+        candidate_id: UUID,
+        actor: Actor,
+        review_comment: str,
+        public_id: str,
+    ) -> str:
+        del candidate_id, actor, review_comment
+        return public_id
+
+    async def reject_kb_candidate(
+        self, candidate_id: UUID, actor: Actor, review_comment: str
+    ) -> None:
+        del candidate_id, actor, review_comment
+
+    async def purge_expired_failed_question_text(self) -> PurgeResult:
+        self.failed_text_purge_count += 1
+        return PurgeResult(purged_count=0, purged_ids=())
+
+    async def claim_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> IdempotencyClaim:
+        existing = self.idempotency.get(idempotency_key)
+        if existing is None:
+            self.idempotency[idempotency_key] = (
+                request_fingerprint,
+                claim_token,
+                None,
+            )
+            return IdempotencyClaim(status=IdempotencyClaimStatus.ACQUIRED)
+        fingerprint, _claim_id, response = existing
+        if fingerprint != request_fingerprint:
+            return IdempotencyClaim(status=IdempotencyClaimStatus.CONFLICT)
+        if response is None:
+            return IdempotencyClaim(status=IdempotencyClaimStatus.IN_PROGRESS)
+        return IdempotencyClaim(
+            status=IdempotencyClaimStatus.COMPLETED,
+            response_payload=response,
+        )
+
+    async def complete_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+    ) -> None:
+        self.idempotency[idempotency_key] = (
+            request_fingerprint,
+            claim_token,
+            response_payload,
+        )
+
+    async def commit_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+        response_payload: dict[str, object],
+        interaction: InteractionWrite | None,
+    ) -> None:
+        await self.complete_chat_idempotency(
+            idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+            claim_token=claim_token,
+            response_payload=response_payload,
+        )
+        if interaction is not None:
+            self.events.append(interaction)
+
+    async def abandon_chat_idempotency(
+        self,
+        *,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        claim_token: UUID,
+    ) -> None:
+        if self.idempotency.get(idempotency_key) == (
+            request_fingerprint,
+            claim_token,
+            None,
+        ):
+            self.idempotency.pop(idempotency_key)
+
+    async def purge_expired_chat_idempotency(self) -> PurgeResult:
+        self.idempotency_purge_count += 1
+        return PurgeResult(purged_count=0, purged_ids=())
+
 
 def _config() -> dict[str, str]:
     return {
-        "DATABASE_URL": "postgresql://local.invalid/sejong",
+        "DATABASE_URL": _PROVISIONED_DATABASE_URL,
         "CONTEXT_TOKEN_SECRET": "x" * 32,
     }
 
@@ -127,7 +280,7 @@ def _config() -> dict[str, str]:
 def test_process_environment_wins_over_the_known_env_file(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        "DATABASE_URL=postgresql://file.invalid/sejong\n"
+        f"DATABASE_URL={_FILE_DATABASE_URL}\n"
         f"CONTEXT_TOKEN_SECRET={'f' * 32}\n"
         "LLM_API_KEY=DEEPSEEK-SENTINEL-MUST-NOT-BE-READ\n",
         encoding="utf-8",
@@ -136,7 +289,7 @@ def test_process_environment_wins_over_the_known_env_file(tmp_path: Path) -> Non
     settings = load_local_settings(environ=_config(), env_path=env_path)
 
     assert settings is not None
-    assert settings.database_url == "postgresql://local.invalid/sejong"
+    assert settings.database_url == _PROVISIONED_DATABASE_URL
     assert settings.context_token_secret == b"x" * 32
     assert not hasattr(settings, "llm_api_key")
 
@@ -144,27 +297,117 @@ def test_process_environment_wins_over_the_known_env_file(tmp_path: Path) -> Non
 def test_known_env_file_is_a_fallback_for_each_missing_allowlisted_value(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"CONTEXT_TOKEN_SECRET={'s' * 32}\nDATABASE_URL=postgresql://file.invalid/sejong\n",
+        f"CONTEXT_TOKEN_SECRET={'s' * 32}\nDATABASE_URL={_FILE_DATABASE_URL}\n",
         encoding="utf-8",
     )
 
     settings = load_local_settings(
-        environ={"DATABASE_URL": "postgresql://process.invalid/sejong"},
+        environ={"DATABASE_URL": _PROVISIONED_DATABASE_URL},
         env_path=env_path,
     )
 
     assert settings is not None
-    assert settings.database_url == "postgresql://process.invalid/sejong"
+    assert settings.database_url == _PROVISIONED_DATABASE_URL
     assert settings.context_token_secret == b"s" * 32
+
+
+def test_percent_encoded_provisioned_database_uri_is_accepted_without_secret_repr(
+    tmp_path: Path,
+) -> None:
+    settings = load_local_settings(environ=_config(), env_path=tmp_path / "missing")
+
+    assert settings is not None
+    assert settings.database_url == _PROVISIONED_DATABASE_URL
+    assert _PROVISIONED_DATABASE_URL not in repr(settings)
+    assert "synthetic:/@% password" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "user=sejong_local_login password=secret host=127.0.0.1 port=54322 dbname=postgres",
+        _database_dsn("postgres", "sejong_local_login:secret@127.0.0.1:54322/postgres"),
+        _database_dsn("postgresql", "sejong_local_login:secret@db.example.invalid:54322/postgres"),
+        _database_dsn("postgresql", "sejong_local_login:secret@localhost:54322/postgres"),
+        _database_dsn("postgresql", "postgres:secret@127.0.0.1:54322/postgres"),
+        _database_dsn("postgresql", "sejong_local_login:secret@127.0.0.1:54321/postgres"),
+        _database_dsn("postgresql", "sejong_local_login:secret@127.0.0.1:54322/template1"),
+        _database_dsn("postgresql", "sejong_local_login:@127.0.0.1:54322/postgres"),
+        _database_dsn(
+            "postgresql", "sejong_local_login:secret@127.0.0.1:54322/postgres?sslmode=disable"
+        ),
+        _database_dsn(
+            "postgresql", "sejong_local_login:secret@127.0.0.1:54322/postgres?hostaddr=127.0.0.2"
+        ),
+        _database_dsn(
+            "postgresql",
+            "sejong_local_login:secret@remote.example.invalid@127.0.0.1:54322/postgres",
+        ),
+        _database_dsn("postgresql", "sejong_local_login:secret%ZZ@127.0.0.1:54322/postgres"),
+    ],
+)
+def test_database_uri_rejects_malformed_remote_or_untrusted_configuration(
+    tmp_path: Path,
+    database_url: str,
+) -> None:
+    pool_factory_calls: list[str] = []
+
+    def pool_factory(value: str) -> FakePool:
+        pool_factory_calls.append(value)
+        return FakePool()
+
+    assert (
+        load_local_settings(
+            environ={
+                "DATABASE_URL": database_url,
+                "CONTEXT_TOKEN_SECRET": "x" * 32,
+            },
+            env_path=tmp_path / "missing",
+        )
+        is None
+    )
+    create_local_app(
+        environ={
+            "DATABASE_URL": database_url,
+            "CONTEXT_TOKEN_SECRET": "x" * 32,
+        },
+        env_path=tmp_path / "missing",
+        pool_factory=pool_factory,
+    )
+    assert pool_factory_calls == []
+
+
+@pytest.mark.parametrize(
+    "variable",
+    ["PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS", "pgpassword"],
+)
+def test_ambient_libpq_environment_keeps_local_pool_unconstructed(
+    tmp_path: Path,
+    variable: str,
+) -> None:
+    environ = {**_config(), variable: "synthetic-ambient-value"}
+    pool_factory_calls: list[str] = []
+
+    def pool_factory(value: str) -> FakePool:
+        pool_factory_calls.append(value)
+        return FakePool()
+
+    assert load_local_settings(environ=environ, env_path=tmp_path / "missing") is None
+    create_local_app(
+        environ=environ,
+        env_path=tmp_path / "missing",
+        pool_factory=pool_factory,
+    )
+    assert pool_factory_calls == []
 
 
 @pytest.mark.parametrize(
     "environ",
     [
         {},
-        {"DATABASE_URL": "postgresql://local.invalid/sejong"},
+        {"DATABASE_URL": _PROVISIONED_DATABASE_URL},
         {"CONTEXT_TOKEN_SECRET": "x" * 32},
-        {"DATABASE_URL": "postgresql://local.invalid/sejong", "CONTEXT_TOKEN_SECRET": "short"},
+        {"DATABASE_URL": _PROVISIONED_DATABASE_URL, "CONTEXT_TOKEN_SECRET": "short"},
     ],
 )
 def test_missing_or_short_configuration_is_closed_without_an_exception(
@@ -191,6 +434,16 @@ def test_missing_configuration_keeps_health_alive_and_chat_readiness_closed(tmp_
         assert client.get("/health").json() == {"status": "ok"}
         assert client.get("/ready").status_code == 503
         assert client.post("/api/v1/chat", json={"question": "전입신고"}).status_code == 503
+        assert (
+            client.get(
+                "/api/v1/admin/failed-questions",
+                headers={
+                    "X-Demo-Actor-Id": "OPERATOR-LOCAL-001",
+                    "X-Demo-Role": "OPERATOR",
+                },
+            ).status_code
+            == 404
+        )
     assert pool_factory_calls == []
 
 
@@ -217,7 +470,7 @@ def test_valid_configuration_creates_one_lazy_pool_and_opens_and_closes_it_once(
         repository_factory=repository_factory,
     )
 
-    assert pool_factory_calls == ["postgresql://local.invalid/sejong"]
+    assert pool_factory_calls == [_PROVISIONED_DATABASE_URL]
     assert pool.open_calls == []
     with TestClient(app) as client:
         assert pool.open_calls == [True]
@@ -229,9 +482,84 @@ def test_valid_configuration_creates_one_lazy_pool_and_opens_and_closes_it_once(
         )
         assert chat.status_code == 200
         assert chat.json()["answer_status"] == "SUCCESS"
+        admin = client.get(
+            "/api/v1/admin/failed-questions",
+            headers={
+                "X-Demo-Actor-Id": "OPERATOR-LOCAL-001",
+                "X-Demo-Role": "OPERATOR",
+            },
+        )
+        assert admin.status_code == 200
+        assert admin.json() == {"items": [], "total": 0}
     assert pool.close_count == 1
     assert len(repositories) == 1
     assert len(repositories[0].events) == 1
+    assert repositories[0].failed_text_purge_count == 2
+    assert repositories[0].idempotency_purge_count == 1
+
+
+def test_local_chat_replays_same_logical_request_without_duplicate_event(
+    tmp_path: Path,
+) -> None:
+    pool = FakePool()
+    repositories: list[FakeRepository] = []
+
+    def repository_factory(value: object) -> FakeRepository:
+        repository = FakeRepository(value)
+        repositories.append(repository)
+        return repository
+
+    app = create_local_app(
+        environ=_config(),
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: pool,
+        repository_factory=repository_factory,
+    )
+    idempotency_key = str(uuid4())
+    payload = {"question": "이사했는데 전입신고는 어떻게 하나요?"}
+
+    with TestClient(app) as client:
+        first = client.post(
+            "/api/v1/chat",
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        replay = client.post(
+            "/api/v1/chat",
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert first.json()["request_id"] != replay.json()["request_id"]
+    assert len(repositories[0].events) == 1
+
+
+def test_local_runtime_periodically_purges_expired_private_records(tmp_path: Path) -> None:
+    pool = FakePool()
+    repositories: list[FakeRepository] = []
+
+    def repository_factory(value: object) -> FakeRepository:
+        repository = FakeRepository(value)
+        repositories.append(repository)
+        return repository
+
+    app = create_local_app(
+        environ=_config(),
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: pool,
+        repository_factory=repository_factory,
+        purge_interval_seconds=0.01,
+    )
+
+    with TestClient(app):
+        deadline = time.monotonic() + 0.5
+        while repositories[0].idempotency_purge_count < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+    assert repositories[0].failed_text_purge_count >= 2
+    assert repositories[0].idempotency_purge_count >= 2
 
 
 def test_runtime_repository_failure_closes_readiness_and_chat_without_restart(

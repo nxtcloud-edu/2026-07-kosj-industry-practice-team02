@@ -15,7 +15,7 @@ ACTIVE 공식 KB 검색, 근거 판정, 구조화 답변 또는 정책 폴백을
 
 완료는 local/private 환경에서 아래 증거가 모두 있을 때만 주장한다.
 
-- 초기 19 ACTIVE/OFFICIAL KB + 공식 기관 3 + 매핑 10 actual DB projection
+- 초기 19 ACTIVE/OFFICIAL KB + 공식 기관 3 + 매핑 10 actual DB projection (2026-07-22 DATA-SEED PASS)
 - `/api/v1/chat` SUCCESS/FOLLOWUP/FALLBACK/503와 `PRIVACY_UNRESOLVED`
 - `/chat` current-tab transcript, source/office card, loading/error/empty/retry, 390/430 keyboard flow
 - 실패 질문 → reason confirm → candidate → 다른 approver → 20번째 ACTIVE → same-query SUCCESS
@@ -29,6 +29,21 @@ ACTIVE 공식 KB 검색, 근거 판정, 구조화 답변 또는 정책 폴백을
 - public admin, SSO/RBAC, `00700`, production CORS/secret/log 설정
 - 고급 motion/visual polish, 새 페이지, P2 기능
 - 새 production dependency
+
+## 2.1 2026-07-22 fast-MVP 추가 확정
+
+- Q-MVP-002=A: 개인 조회·법적 판단은 `intent=UNKNOWN`과 정확한 정책 reason, 후보 false이며
+  local MVP에서는 질문 text·event·failed row를 저장하지 않는다.
+- Q-DB-004=A: local/private 관리자 read capability를 immutable `00650` migration, rollback,
+  pgTAP, repository adapter로 추가한다. public admin은 계속 금지한다.
+- Q-API-002=A: optional UUID `Idempotency-Key`, 같은 logical retry key 유지, per-request
+  correlation ID 분리와 immutable `00660` durable dedupe를 사용한다.
+- durable record에는 domain-separated HMAC request digest, correlation과 무관한 claim token·5분
+  lease와 안전 응답만 논리 TTL 24시간 저장한다. same-key conflict는 value-free 422, 살아 있는
+  in-progress lease는 retryable 503, stale lease는 재획득하고 complete는 안전 응답을 replay한다.
+  startup과 60초 주기 purge 실패 시 readiness를 닫는다.
+- DATA-SEED-002 actual 4차는 승인·실행됐으나 concurrency B의 bounded
+  `CAPABILITY_WRITE_DID_NOT_BLOCK`에서 중단됐다. 19/3/10 projection과 official-data 승격은 미완료다.
 
 ## 3. 수직 흐름
 
@@ -136,8 +151,9 @@ INSUFFICIENT_GROUNDING event
 ## 11. 버전 전략
 
 - 이 명세 문서화 시 product spec `2.2.5→2.3.0`, docs `2.10.9→2.11.0`.
-- `PRIVACY_UNRESOLVED`와 admin response freeze 시 API draft major `3.0.0-draft`, shared contract
-  `0.3.0`, application/API를 함께 올리고 generated TypeScript/fixtures를 같은 commit에서 갱신한다.
+- `PRIVACY_UNRESOLVED`와 initial admin response freeze는 API `3.0.0-draft`, shared `0.3.0`이었다.
+  Approved idempotency continuation은 API `3.1.0-draft`, shared `0.4.0`으로 갱신하고 generated
+  TypeScript/fixtures를 같은 change에서 동기화한다.
 - DATA actual PASS 때만 official data를 `0.1.0-initial.2`로 올린다.
 - 20번째 ACTIVE candidate는 DB runtime data lineage로 기록하고 immutable initial `.2` artifact에는
   섞지 않는다.

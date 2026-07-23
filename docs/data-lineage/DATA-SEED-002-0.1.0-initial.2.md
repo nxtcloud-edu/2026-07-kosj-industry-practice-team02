@@ -1,6 +1,6 @@
 # DATA-SEED-002 — `0.1.0-initial.2` lineage
 
-- Status: **immutable filesystem release published and byte-verified / actual database cycle Blocked**
+- Status: **immutable filesystem release published and byte-verified / supported actual database cycle PASS (2026-07-22 continuation)**
 - Release ID: `sejong-official-0.1.0-initial.2`
 - Governance release time: `2026-07-20T11:41:24Z`
 - Approval reviewer/time: `PM-LOCAL-001` / `2026-07-19T02:06:19+09:00`
@@ -8,9 +8,10 @@
   mock 0
 - Runtime boundary: `supabase/seed.sql` is byte-identical to the `.2` release seed, but
   `[db.seed].enabled=false`; automatic reset import is disabled.
-- Product boundary: the actual database cycle did not reach seed import. PostgreSQL 19/3/10,
-  citizen-visible ACTIVE KB 19 and READY/AI promotion are **not** claimed, and
-  `official_data=0.0.0-not-populated` remains authoritative.
+- Product boundary: the 2026-07-22 supported continuation reached seed import and final verification.
+  PostgreSQL local projection is ACTIVE/OFFICIAL KB 19, OFFICIAL office 3 and approved mapping 10;
+  `official_data=0.1.0-initial.2` is authoritative. `/ready=200`, 20th ACTIVE and any public/remote
+  readiness remain separate, unclaimed gates.
 
 ## 1. Source approval and correction lineage
 
@@ -114,14 +115,39 @@ exact relation-OID equality; 25/25 DB verifier tests and independent Critical/Im
 review passed. The review authorizes the code commit only, not another actual run. No further actual
 run is authorized by this lineage record.
 
+## 4A. 2026-07-22 supported actual PASS continuation
+
+This continuation supersedes only the historical **Blocked** status in sections 3–4; the earlier
+attempt chronology remains evidence and is not rewritten. After the concurrency observer accepted
+`AccessShareLock`/`RowShareLock` for the exact protected relation, the approved supported runner was
+run from the owner worktree (`HEAD f15b189` plus the in-progress local MVP integration) without
+printing a DSN, secret or citizen question.
+
+| Required stage | Result |
+|---|---|
+| baseline, exact `.2` identity | PASS |
+| forced rollback | PASS (`tables=8`, `partial=0`) |
+| concurrency A and B | PASS |
+| seed cycle | PASS: KB 19 / office 3 / mapping 10 |
+| replay and second seed | PASS; replay 1, second seed blocked |
+| compensation guard | PASS; blocked as required |
+| final projection | PASS: citizen 19 / exclusions 0 / operational 0 |
+| cleanup | PASS; exact-owned runtime process/container 0 |
+
+The immutable `.2` artifacts and dispatcher did not change. This is a local/private evidence
+promotion only: it does not activate a remote database, provider, deployment, public admin, or
+application `/ready=200`. The authoritative command and detailed stage record are in
+[`DATA-SEED-002-LOCAL-VERIFICATION.md`](../test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md).
+
 ## 5. Security, privacy, rollback and handoff
 
 - This lineage contains no DSN, key, token, provider payload, citizen question, raw official-data
   body or PII. Neither actual attempt used DeepSeek, remote DB or deployment services.
 - Never edit, delete, overwrite or rename away `.1` or `.2`. A defect discovered after publication
   requires a separately approved immutable `.3` successor.
-- Keep `[db.seed].enabled=false` and `official_data=0.0.0-not-populated` until one supported cycle
-  reaches every required stage and cleanup PASS.
+- Historical pre-continuation instruction (superseded by section 4A): keep `[db.seed].enabled=false`
+  and `official_data=0.0.0-not-populated` until one supported cycle reaches every required stage and
+  cleanup PASS. The supported cycle now passed; auto-seed remains disabled and `.2` stays immutable.
 - Before a future attempt, require a separate operational execution decision for reviewed commit
   `eb74ac8`, an absent exact-owned runtime and listener, the pinned runtime and both
   releases/dispatcher, and use only the supported command above.

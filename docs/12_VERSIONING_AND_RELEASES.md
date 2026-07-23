@@ -49,20 +49,32 @@ Git commit가 아직 없으면 `uncommitted`라고 기록하고, 현재 HEAD를 
 
 ## 현재 local DB 기준선과 manifest
 
-DB-001 Task 10은 2026-07-18 disposable actual gate를 통과해 local/private 기준선으로 승격됐다.
+DB-001의 historical 2026-07-18 baseline 뒤, 2026-07-22 local/private core-loop migration과
+supported DATA-SEED-002 actual cycle이 현재 기준선을 갱신했다.
 
 ```text
-repo_guidance: 1.5.0
-database_schema: 0.3.0-local
-test_suite: 0.5.0-db-baseline
-documentation: 2.4.0
+product_spec: 2.3.1
+application: 0.6.0-local-core-loop
+web: 0.4.0-chat-admin-local-integration
+api: 3.1.0-draft
+shared_contracts: 0.4.0
+database_schema: 0.4.0-local
+official_data: 0.1.0-initial.2
+test_suite: 1.2.1-core-loop-closeout
+documentation: 2.12.2
 ```
 
-승격 근거는 6개 timestamp forward/compensation, pinned patched runtime, actual exact one
-`127.0.0.1:54322`, fresh pgTAP 282, integration 8/8, compensation/absence/replay와 static/root gate다.
-제품·API·shared contracts·official/mock data·prompt 축은 바뀌지 않았다. 공식 데이터·mock 데이터는
-모두 `0.0.0-not-populated`이고 `/ready=503`이 정상이다. `local` suffix는 공개·원격·production
-release가 아님을 명시한다. D-046에서 방향이 확정된 `00700` 구현·검증은 계속 별도 public blocker다.
+승격 근거는 current local source gate pgTAP 9 files/356, rollback absence/reapply 36/36, pinned
+patched runtime, actual exact one `127.0.0.1:54322`, backend integration,
+compensation/absence/reset/replay와
+DATA-SEED `.2` baseline·identity·A/B concurrency·19/3/10·replay·cleanup PASS다. root full integration
+first attempt는 stale Web env expectation 1건(집중 수정/통과)과 Windows PowerShell subprocess timeout
+9건 때문에 최종 green으로 주장하지 않는다. 별도 final local application rehearsal의 `/ready=200`과
+20번째 ACTIVE, sample 20/20, final API/Web/contracts/E2E/scanner, clean disposable DB와 root offline은
+PASS했다. application `0.6.0-local-core-loop`은 local/private AI scope 완료를 뜻하며 human Draft PR/
+manual demo·accessibility와 public/remote/provider/`00700` readiness를 뜻하지 않는다.
+`local` suffix는 공개·원격·production release가 아님을 명시한다. D-046에서 방향이 확정된 `00700`
+구현·검증은 계속 별도 public blocker다.
 
 ## 릴리스 체크
 

@@ -9,7 +9,7 @@ import {
 const { openApi } = loadContracts();
 
 test("health and readiness 200 responses use strict required body components", () => {
-  assert.equal(openApi.info.version, "3.0.0-draft");
+  assert.equal(openApi.info.version, "3.1.0-draft");
 
   for (const [path, componentName, status] of [
     ["/health", "HealthResponse", "ok"],
@@ -35,6 +35,26 @@ test("readiness and chat share the approved 503 response reference", () => {
     openApi.paths["/api/v1/chat"].post.responses["503"].$ref,
     expected,
   );
+});
+
+test("chat idempotency key is an optional UUID distinct from request_id", () => {
+  const parameter = openApi.components.parameters.IdempotencyKey;
+  assert.equal(parameter.in, "header");
+  assert.equal(parameter.name, "Idempotency-Key");
+  assert.equal(parameter.required, false);
+  assert.deepEqual(parameter.schema, { type: "string", format: "uuid" });
+  assert.deepEqual(openApi.paths["/api/v1/chat"].post.parameters, [
+    { $ref: "#/components/parameters/IdempotencyKey" },
+  ]);
+});
+
+test("personal lookup and legal judgment expose UNKNOWN without becoming stored failures", () => {
+  for (const schemaName of ["PersonalLookupResponse", "LegalJudgmentResponse"]) {
+    assert.deepEqual(
+      openApi.components.schemas[schemaName].allOf[1].properties.intent,
+      { const: "UNKNOWN" },
+    );
+  }
 });
 
 test("503 Retry-After is an integer of at least one second", () => {

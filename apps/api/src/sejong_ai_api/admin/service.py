@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Literal, Protocol, TypeVar
+from urllib.parse import SplitResult, parse_qsl, unquote, urlsplit
 from uuid import UUID
 
+from sejong_ai_api.admin.candidate_binding import (
+    RESERVED_KB_PUBLIC_ID,
+    claims_reserved_binding,
+    is_exact_reserved_candidate,
+)
 from sejong_ai_api.contracts.admin import (
     CandidateReviewRequest,
     FailedQuestion,
@@ -46,6 +53,55 @@ type AdminErrorCode = Literal[
 
 _FAILURE_REASONS = frozenset({"INSUFFICIENT_GROUNDING", "PERSONAL_LOOKUP", "LEGAL_JUDGMENT"})
 _FAILURE_STATUSES = frozenset({"NEW", "REASON_CONFIRMED"})
+_SENSITIVE_SOURCE_QUERY_KEYS = frozenset(
+    {
+        "account",
+        "api_key",
+        "apikey",
+        "auth",
+        "card",
+        "email",
+        "jumin",
+        "mobile",
+        "name",
+        "password",
+        "passwd",
+        "phone",
+        "pin",
+        "pwd",
+        "resident",
+        "rrn",
+        "secret",
+        "token",
+        "user",
+        "username",
+    }
+)
+_APPROVED_SOURCE_HOSTS = frozenset(
+    {
+        "www.sejong.go.kr",
+        "plus.gov.kr",
+        "www.gov.kr",
+        "www.law.go.kr",
+        "www.wetax.go.kr",
+        "www.sjwaste.kr",
+    }
+)
+_TECHNICAL_SOURCE_QUERY_PATTERNS = {
+    "srvcid": re.compile(r"13\d{9}"),
+    "cappbizcd": re.compile(r"13\d{9}"),
+    "typesn": re.compile(r"\d{2}"),
+    "tp_seq": re.compile(r"\d{2}"),
+    "highctgcd": re.compile(r"[A-Z]\d{5}"),
+    "lsid": re.compile(r"\d{6}"),
+    "urlmode": re.compile(r"lsInfoP"),
+    "menuid": re.compile(r"MENU\d{5}"),
+    "siteid": re.compile(r"null"),
+}
+_MAX_SOURCE_URL_LENGTH = 1000
+_MAX_SOURCE_URL_PERCENT_DECODING_PASSES = 4
+_PERCENT_ENCODED_OCTET = re.compile(r"%[0-9A-Fa-f]{2}")
+_TECHNICAL_SOURCE_PATH_SUFFIX = ".do"
 
 
 class AdminServiceError(Exception):
@@ -84,6 +140,14 @@ class AdminRepository(Protocol):
 
     async def approve_kb_candidate(
         self, candidate_id: UUID, actor: Actor, review_comment: str
+    ) -> str: ...
+
+    async def approve_kb_candidate_with_public_id(
+        self,
+        candidate_id: UUID,
+        actor: Actor,
+        review_comment: str,
+        public_id: str,
     ) -> str: ...
 
     async def reject_kb_candidate(
@@ -219,16 +283,33 @@ class AdminService:
         candidate = await self._get_candidate_for_change(candidate_id)
         if candidate.status != "PENDING_APPROVAL":
             raise AdminServiceError("ADMIN_INVALID_STATE")
+        reserved_binding = claims_reserved_binding(candidate)
+        if (
+            payload.decision == "APPROVED"
+            and reserved_binding
+            and not is_exact_reserved_candidate(candidate)
+        ):
+            raise AdminServiceError("ADMIN_VALIDATION_FAILED")
         if candidate.created_by == actor.actor_id:
             raise AdminServiceError("ADMIN_FORBIDDEN")
         if payload.decision == "APPROVED":
-            await self._safe_call(
-                lambda: self._repository.approve_kb_candidate(
-                    candidate_id,
-                    actor,
-                    payload.review_comment,
+            if reserved_binding:
+                await self._safe_call(
+                    lambda: self._repository.approve_kb_candidate_with_public_id(
+                        candidate_id,
+                        actor,
+                        payload.review_comment,
+                        RESERVED_KB_PUBLIC_ID,
+                    )
                 )
-            )
+            else:
+                await self._safe_call(
+                    lambda: self._repository.approve_kb_candidate(
+                        candidate_id,
+                        actor,
+                        payload.review_comment,
+                    )
+                )
         else:
             await self._safe_call(
                 lambda: self._repository.reject_kb_candidate(
@@ -286,6 +367,66 @@ class AdminService:
             result = redact_question(value)
             if result.masked_text is None or result.masked_text != value or result.findings:
                 raise AdminServiceError("ADMIN_VALIDATION_FAILED")
+        AdminService._require_privacy_safe_source_url(str(payload.source_url))
+
+    @staticmethod
+    def _require_privacy_safe_source_url(value: str) -> None:
+        try:
+            if len(value) > _MAX_SOURCE_URL_LENGTH:
+                raise ValueError
+            AdminService._parse_approved_source_url(value)
+            decoded = value
+            for _ in range(_MAX_SOURCE_URL_PERCENT_DECODING_PASSES):
+                next_decoded = unquote(decoded)
+                if next_decoded == decoded:
+                    if _PERCENT_ENCODED_OCTET.search(decoded):
+                        raise ValueError
+                    break
+                decoded = next_decoded
+            else:
+                raise ValueError
+            if len(decoded) > _MAX_SOURCE_URL_LENGTH:
+                raise ValueError
+            parsed = AdminService._parse_approved_source_url(decoded)
+            path_to_scan = parsed.path
+            if path_to_scan.endswith(_TECHNICAL_SOURCE_PATH_SUFFIX):
+                path_to_scan = path_to_scan[: -len(_TECHNICAL_SOURCE_PATH_SUFFIX)]
+            if path_to_scan:
+                AdminService._require_privacy_safe_source_url_component(path_to_scan)
+            for key, query_value in parse_qsl(parsed.query, keep_blank_values=True):
+                AdminService._require_privacy_safe_source_url_component(key)
+                normalized_key = key.casefold()
+                if normalized_key in _SENSITIVE_SOURCE_QUERY_KEYS:
+                    raise ValueError
+                technical_pattern = _TECHNICAL_SOURCE_QUERY_PATTERNS.get(normalized_key)
+                if technical_pattern is not None:
+                    if technical_pattern.fullmatch(query_value) is None:
+                        raise ValueError
+                    continue
+                AdminService._require_privacy_safe_source_url_component(query_value)
+        except (TypeError, ValueError):
+            raise AdminServiceError("ADMIN_VALIDATION_FAILED") from None
+
+    @staticmethod
+    def _parse_approved_source_url(value: str) -> SplitResult:
+        parsed = urlsplit(value)
+        hostname = (parsed.hostname or "").rstrip(".").casefold()
+        if (
+            parsed.scheme.casefold() != "https"
+            or hostname not in _APPROVED_SOURCE_HOSTS
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in {None, 443}
+            or bool(parsed.fragment)
+        ):
+            raise ValueError
+        return parsed
+
+    @staticmethod
+    def _require_privacy_safe_source_url_component(value: str) -> None:
+        result = redact_question(value)
+        if result.masked_text is None or result.masked_text != value or result.findings:
+            raise ValueError
 
     @staticmethod
     async def _safe_call(operation: Callable[[], Awaitable[T]]) -> T:

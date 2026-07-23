@@ -94,6 +94,7 @@ _FIRST_PERSON_TERMS = frozenset({"내", "내가", "나의", "저의", "제", "�
 _PERSONAL_LOOKUP_TERMS = (
     "체납액",
     "납부내역",
+    "접수번호",
     "신청상태",
     "처리상태",
     "발급상태",
@@ -114,6 +115,14 @@ _LEGAL_TERMS = (
     "벌금",
     "과태료",
 )
+_QUALIFICATION_TERMS = (
+    "대상인지",
+    "대상여부",
+    "수급대상",
+    "자격이되는지",
+    "자격여부",
+)
+_JUDGMENT_ACTIONS = ("판단", "결정", "해당하는지")
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -158,6 +167,11 @@ class ClassificationOutcome:
             if self.fallback_reason is not FallbackReason.OUT_OF_SCOPE:
                 raise ValueError("CLASSIFICATION_OUTCOME_INVALID")
             return
+        if self.intent is Intent.UNKNOWN and self.fallback_reason in {
+            FallbackReason.PERSONAL_LOOKUP,
+            FallbackReason.LEGAL_JUDGMENT,
+        }:
+            return
         if self.intent not in _SUPPORTED_INTENTS:
             raise ValueError("CLASSIFICATION_OUTCOME_INVALID")
         if self.fallback_reason not in {
@@ -174,6 +188,11 @@ def classify_question(question: SafeQuestion) -> ClassificationOutcome:
     if type(question) is not SafeQuestion:
         raise TypeError("SAFE_QUESTION_REQUIRED")
     compact = _compact(question.text)
+
+    if _is_personal_lookup(question.text, compact):
+        return ClassificationOutcome(Intent.UNKNOWN, False, FallbackReason.PERSONAL_LOOKUP)
+    if _is_legal_judgment(compact):
+        return ClassificationOutcome(Intent.UNKNOWN, False, FallbackReason.LEGAL_JUDGMENT)
 
     scores = {
         intent: max((weight for term, weight in terms if term in compact), default=0)
@@ -193,10 +212,6 @@ def classify_question(question: SafeQuestion) -> ClassificationOutcome:
         return ClassificationOutcome(Intent.UNKNOWN, followup_required=True, fallback_reason=None)
 
     intent = best_intents[0]
-    if _is_personal_lookup(question.text, compact):
-        return ClassificationOutcome(intent, False, FallbackReason.PERSONAL_LOOKUP)
-    if any(term in compact for term in _LEGAL_TERMS):
-        return ClassificationOutcome(intent, False, FallbackReason.LEGAL_JUDGMENT)
     return ClassificationOutcome(intent, False, None)
 
 
@@ -219,6 +234,14 @@ def _is_personal_lookup(value: str, compact: str) -> bool:
         term in compact for term in _PERSONAL_LOOKUP_TERMS if term not in {"체납액", "납부내역"}
     )
     return (has_subject and has_personal_target) or (intrinsically_personal and has_lookup_action)
+
+
+def _is_legal_judgment(compact: str) -> bool:
+    if any(term in compact for term in _LEGAL_TERMS):
+        return True
+    return any(term in compact for term in _QUALIFICATION_TERMS) and any(
+        action in compact for action in _JUDGMENT_ACTIONS
+    )
 
 
 __all__ = ["ClassificationOutcome", "SafeQuestion", "classify_question"]

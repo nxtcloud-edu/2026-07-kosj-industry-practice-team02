@@ -33,7 +33,7 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-027 | A | PM 승인 증거 | Resolved / materialized and verified | Q-DATA-003=A: `PM-LOCAL-001`, current 35 recommendations, `2026-07-19T02:06:19+09:00` final confirmation | D-035; DATA-001 approval evidence complete, official release/seed not authorized |
 | A-028 | A | official release·seed | Resolved decision / filesystem release delivered; actual DB Blocked by A-030 | Q-SEED-001=A: immutable filesystem release+existing-schema transactional seed; empty disposable local compensation only | D-036/D-038/D-039/ADR-0016; `.1` 19/3/10 published/verified, dispatcher active+auto-seed disabled, actual DB stopped before seed |
 | A-029 | B | 홈→채팅 진입 | Resolved / implemented and verified | Q-WEB-001=A: no-input/no-storage/no-fetch accessible static `/chat` preparation route and home CTA | D-037/WEB-HOME plan/IMP-20260719-005; final review 0/0/0 |
-| A-030 | A / Blocker | official seed correction | Resolved decision / `.2` published; actual DB Blocked | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지한 immutable `.2` successor는 게시·검증 완료. actual 3회는 concurrency A 뒤 B에서 실패했고 diagnostic reason은 `CAPABILITY_WRITE_DID_NOT_BLOCK` | D-044/D-058 / ADR-0017/0020. OID-equality observer `eb74ac8` 독립 검토 0/0/0·commit 완료; 별도 실행 결정 전 추가 actual run 0, actual 전체 PASS 전 official-data 승격 0 |
+| A-030 | A / Blocker | official seed correction | Resolved / supported local actual PASS | Q-SEED-002=A: migration의 three-`EXISTS` effective-option union 권위를 유지한 immutable `.2` successor는 게시·검증 완료. 역사적 4회 concurrency B failure 뒤 observer 교정 continuation이 전체 cycle을 PASS | D-044/D-058/D-062/D-064 / ADR-0017/0020. `.2` 불변, 19/3/10/replay/compensation/final projection/cleanup PASS, `official_data=0.1.0-initial.2`; READY/20th ACTIVE 별도 |
 | A-031 | B / High | unresolved PII consumer response | Resolved / MVP consumer plan approved | Q-PII-002=A: contract에 `PRIVACY_UNRESOLVED` 전용 reason과 HTTP 200 안전 재질문 응답 | D-045/D-058 / ADR-0004/0020. local milestone은 failed row·DB event 0; persistent metadata migration은 reserved `00700` 이후 |
 | A-032 | A / Blocker | public phone-shaped value masking | Resolved / AI-001A plan approved | Q-PII-003=A: 시민 질문의 “공식 대표번호” label을 신뢰하지 않고 모든 phone-shaped value를 마스킹 | D-043 / ADR-0004; 공식 연락처는 승인된 KB·기관 metadata/card에서만 서버 결합 |
 | A-033 | A | Git source remote·access | Resolved / App scope confirmed | private `tskwak111/Sejong_AI`, merge commit `ce8a6085fb57670ca74e009ed45e3d02d784c24b`, post-merge hosted CI, `koregy` write/variable과 사용자의 GitHub UI `Only select repositories / Sejong_AI` 확인을 기록했다 | D-047/D-053~D-057 / ADR-0019 |
@@ -43,10 +43,10 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 | A-037 | A | Codex Cloud merge·secret | Resolved policy | Q-CLOUD-001=A: Cloud는 branch+Draft PR만, 사람이 merge; secret·DeepSeek·Docker actual 없음 | D-051 / ADR-0019 |
 | A-038 | A | Collaboration operating model | Resolved spec / In Progress execution | Tasks 1~4 완료, Task 5 partial, Task 6 partial, Task 7 pending. App scope·PR #1 merge/post-merge CI·secret-free Cloud environment 저장은 확인됐고 teammate MFA/recovery·첫 PR-only rehearsal, Cloud docs-only task/Draft PR/manual merge와 나머지 Task 7 rehearsal이 남았다 | D-052~D-057 / collaboration design and plan |
 | A-039 | A / Blocker | Git author identity privacy | Resolved | Q-GIT-004=A: 해당 email이 사용자 본인 것이며 private Frontend collaborator에게 보여도 괜찮음을 확인. 현재 history와 모든 SHA를 보존하고 noreply rewrite를 하지 않음 | D-053/D-054 / ADR-0019; 승인된 pre-push gate를 통과한 뒤에만 private push |
-| A-040 | A / Blocker | 7/25 MVP scope·schedule | Resolved / execution In Progress | Q-MVP-001=A: 최종 범위를 삭제하지 않고 local/private 19→20 ACTIVE 핵심 루프를 7/25 중간 마일스톤으로 고정; DATA-SEED-002와 MVP-001 plan 즉시 실행 | D-058/ADR-0020. DeepSeek tuning·100명·자동 backup·고급 UI·public deploy는 7/25 뒤 P1, 안전 gate는 유지 |
-| A-041 | B / High | 범위 밖 개인조회·법적판단 표현 | Open / Q-MVP-002 | 승인 표본 T-16~T-18은 `PERSONAL_LOOKUP`/`LEGAL_JUDGMENT`를 요구하지만 현재 failed-question DB intent는 4개 지원 intent만 허용한다 | A 권고: 공개 응답은 `intent=UNKNOWN`+정책 reason, 저장이 필요하면 별도 forward migration; 답 전 3개 표본 Pending |
-| A-042 | A / Blocker | 관리자 DB read capability | Open / Q-DB-004 | `/admin` 서비스는 실패 질문·후보 목록/상세 read 4개를 요구하지만 현재 backend role용 `app_api` 조회 함수와 repository method가 없다 | A 권고: local/private 전용 `00650` forward migration+rollback+pgTAP+adapter; 답 전 fixture-only, 실제 20번째 ACTIVE Pending |
-| A-043 | B / High | chat 재시도 idempotency | Open / Q-API-002 | Web 재시도는 같은 payload를 보내지만 HTTP마다 새 request UUID라, DB 기록 뒤 응답만 유실되면 interaction/failed row가 중복될 수 있다 | A 권고: optional UUID `Idempotency-Key` 공개 header와 durable DB key를 함께 설계; 답 전 자동 재시도는 실제 개선 루프 완료 근거로 세지 않음 |
+| A-040 | A / Blocker | 7/25 MVP scope·schedule | Resolved / Review — local-private AI scope complete | Q-MVP-001=A: final local 19→20, sample 20/20, full root/DB/API/Web gate PASS | D-058/ADR-0020. human Draft PR/manual demo·a11y Pending; DeepSeek·100명·backup·advanced UI·public deploy deferred |
+| A-041 | B / High | 범위 밖 개인조회·법적판단 표현 | Resolved / Q-MVP-002=A | 공개 응답은 `intent=UNKNOWN`+정확한 정책 reason, 후보 false; local MVP에서 text/event/failed row 0 | D-059/ADR-0021; sample T-16~T-18 실행 승인 |
+| A-042 | A / Blocker | 관리자 DB read capability | Resolved / Q-DB-004=A | local/private 전용 `00650` migration+rollback+pgTAP+repository adapter 승인 | D-060/ADR-0021; public admin/remote/00700 불변 |
+| A-043 | B / High | chat 재시도 idempotency | Resolved / Q-API-002=A | optional UUID header, Web retry key 유지, correlation 분리, `00660` durable dedupe 승인 | D-061/ADR-0021; raw question 저장 0, local 24h TTL |
 
 ## 우선도 정의
 
@@ -55,9 +55,10 @@ Codex는 초기 감사에서 이 목록을 검증하고 추가/해결한다. 이
 - C: AI 기본값 가능, 기록 필요
 - D: 내부 구현 판단
 
-현재 열린 결정은 A-041/Q-MVP-002, A-042/Q-DB-004, A-043/Q-API-002다. 답을 받기 전에는 T-16~T-18,
-실제 admin DB E2E·20번째 ACTIVE 승격과 durable chat 재시도만 Pending으로 두고, 계약·pure core·fixture UI·보안·문서
-검증은 계속한다. A-040/Q-MVP-001은 2026-07-22 D-058로 해결됐고,
+현재 MVP 구현을 막는 인터뷰 결정은 없다. A-041~A-043은 2026-07-22 D-059~D-061로 해결됐다.
+T-16~T-18, local admin DB read와 durable chat 재시도는 승인 범위에서 구현·검증한다. DATA actual과
+end-to-end 증거가 통과해 final local 19→20 ACTIVE를 확인했다. A-040/Q-MVP-001은
+2026-07-22 D-058로 해결됐고,
 A-039/Q-GIT-004는 2026-07-20 D-053으로 해결됐고
 사용자는 본인 author/committer email의 private collaborator 공개를 허용해 현재 history·SHA를
 보존한다. COLLAB-001은 Task 4 완료와 Task 5 partial external evidence를 기록했고, private
@@ -72,16 +73,17 @@ persistent metadata migration은 reserved public `00700` 이후 별도 승인한
 A-028의 written specification은 2026-07-19T09:20:31+09:00, 실행계획은
 2026-07-19T09:52:08+09:00 승인됐다. Task 5는 immutable `.1` filesystem release 19/3/10과
 byte-active dispatcher를 완료했고 `[db.seed].enabled=false`다. Q-SEED-002=A/D-044와
-Q-MVP-001=A/D-058에 따라 corrected immutable `.2` successor도 게시·검증됐다. actual 실행 3회는
+Q-MVP-001=A/D-058에 따라 corrected immutable `.2` successor도 게시·검증됐다. actual 실행 4회는
 모두 concurrency A 뒤 B에서 멈췄고 bounded diagnostic reason은
-`CAPABILITY_WRITE_DID_NOT_BLOCK`, cleanup은 PASS였다. PostgreSQL ACTIVE 19를 주장하지 않고
-`official_data=0.0.0-not-populated`, `/ready=503`을 유지한다. OID-equality observer correction
-`eb74ac8`은 독립 검토 0/0/0·commit 완료이며 별도 실행 결정 전 추가 actual run은 없다.
-non-DB MVP lane은 계속 진행한다.
+`CAPABILITY_WRITE_DID_NOT_BLOCK`이었다. 이후 observer 교정과 지원 actual continuation이
+baseline·identity·rollback·A/B concurrency·19/3/10·replay/compensation·final projection·cleanup을
+PASS하여 `official_data=0.1.0-initial.2`로 승격했다. 별도 final local application rehearsal도
+`/ready=200`과 20번째 ACTIVE를 PASS했다. fresh whole-repository와 sample 20 closeout도 PASS해
+MVP-001은 local/private AI scope complete의 Review로 이동했다.
   Q-SEC-002와 Q-WF-001은 2026-07-16에
 해결됐고, Q-DB-003은 D-028/ADR-0012, Q-SEC-004는 D-029, Q-SEC-005는 D-030으로 2026-07-17에 해결됐다. Task 9의 역사적 RED는
-real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 full pgTAP 282, integration 8/8,
-6단계 replay와 독립 review가 완료됐다. 그러나 Task 10 quality review에서 실제 host wildcard
+real DB 6 pass/2 approval fail이었고 `00600` 구현 뒤 historical full pgTAP 282, integration 8/8,
+6단계 replay와 독립 review가 완료됐다. 이후 local `0.4.0`은 8 files/320과 8단계 replay로 확장됐다. 그러나 Task 10 quality review에서 실제 host wildcard
 publish가 발견됐고 승인된 두 Docker Desktop 보정도 IPv6 wildcard를 남겼으므로 DB-001은
 `0.3.0-local` 승격을 차단했었다. 이후 사용자는 수정 계획을 `수정 계획 승인, 구현 시작`으로
 승인했고 A-024/A-025는 short-root TDD, reproducible runtime pin, patched-only runner와 2026-07-18
@@ -96,9 +98,9 @@ disposable local DB cycle을 승인했다. 실제 실행 결과 filesystem relea
 A-030으로 전환됐다. Q-WEB-001=A로 A-029는 해결됐고 static home/chat shell은 구현·검증
 완료됐다.
 
-## 현재 열린 인터뷰 질문
+## 해결된 인터뷰 질문 기록
 
-Q-MVP-002. 지원 분야 밖 개인 조회·법적 판단을 공개 응답과 DB에서 어떻게 표현할 것인가
+Q-MVP-002. 지원 분야 밖 개인 조회·법적 판단을 공개 응답과 DB에서 어떻게 표현할 것인가 — D-059로 A 확정
 - 왜 지금 필요한가: 승인 표본 T-16~T-18은 `PERSONAL_LOOKUP`/`LEGAL_JUDGMENT`를 요구하지만,
   현재 failed-question DB는 4개 지원 intent만 허용한다. 임의 저장하면 DB 계약을 깨고,
   `OUT_OF_SCOPE`로 바꾸면 승인 표본과 정책 reason을 잃는다.
@@ -113,7 +115,7 @@ Q-MVP-002. 지원 분야 밖 개인 조회·법적 판단을 공개 응답과 DB
 - 영향을 받는 파일·계약·데이터·배포: sample 20, classifier/service, OpenAPI/Pydantic/TS,
   failed-question DB constraint와 migration/rollback, 운영 지표.
 
-Q-DB-004. local/private `/admin`용 실패 질문·후보 read capability를 새 migration으로 추가할 것인가
+Q-DB-004. local/private `/admin`용 실패 질문·후보 read capability를 새 migration으로 추가할 것인가 — D-060으로 A 확정
 - 왜 지금 필요한가: 기존 DB에는 write/approve/purge capability만 있고 관리자 목록·상세 read가 없어,
   구현된 `/admin` route/service를 실제 local DB에 연결할 수 없다.
 - 선택지 A / 장점 / 단점: `00600` 뒤·예약 `00700` 앞의 별도 `00650` migration과 rollback에서
@@ -126,7 +128,7 @@ Q-DB-004. local/private `/admin`용 실패 질문·후보 read capability를 새
 - 영향을 받는 파일·계약·데이터·배포: `supabase/migrations/`, `database/rollbacks/`, pgTAP,
   repository/local composition, DB schema version과 local data; public 배포는 불변이다.
 
-Q-API-002. 채팅 재시도의 중복 방지 identity를 공개 API와 DB에 추가할 것인가
+Q-API-002. 채팅 재시도의 중복 방지 identity를 공개 API와 DB에 추가할 것인가 — D-061로 A 확정
 - 왜 지금 필요한가: 현재 서버는 HTTP 요청마다 새 UUID를 만들고 Web의 `다시 시도`는 같은 질문을
   새 요청으로 전송한다. DB 기록은 성공했지만 응답만 유실된 경우 동일 시민 행동이 별도 interaction과
   failed row로 저장될 수 있어 운영 집계와 후보 흐름이 중복된다.
@@ -205,9 +207,10 @@ Q-SEED-002. DATA-SEED actual DB blocker의 membership 권위 충돌을 어떻게
   필요하다.
 - 당신의 추천안: A. 권위 계약을 하나로 유지하고 immutable correction 정책을 지킨다.
 - 실행 경계: Q-MVP-001=A/D-058로 written specification/plan이 Approved/In Progress가 됐다.
-  이 승인으로 `.2`와 dispatcher 게시 및 disposable DB actual 3회가 실행됐지만 concurrency B에서
-  Blocked됐다. 현재 `eb74ac8`까지 검토·commit됐고, 별도 실행 결정 전 네 번째 actual run은 없다.
-  전체 PASS 전 official-data version을 변경하지 않는다.
+  역사적 4회는 concurrency B에서 Blocked됐지만, observer accepted-lock-mode 교정 뒤 지원 actual
+  continuation은 baseline·identity·forced rollback·A/B concurrency·seed/replay/compensation·final
+  projection·cleanup을 모두 PASS했다. `.2`와 dispatcher는 불변이며
+  `official_data=0.1.0-initial.2`로 승격했다. `/ready=200`과 20번째 ACTIVE는 여전히 별도 gate다.
 - 영향 범위: A는 successor official release/schema/manifest/generator/dispatcher·actual test·lineage/version 승인에,
   B는 그에 더해 DB migration/compensation/pgTAP/role security/deployment에 영향을 준다. 두 선택 모두
   `.1` byte, public API, citizen 답변, READY 활성을 자동 변경하지 않는다.

@@ -259,6 +259,26 @@
   padding-top: 1rem;
 }
 
+.reviewPreview {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid #97b4db;
+  border-radius: 0.75rem;
+  background: var(--soft);
+  padding: 1rem;
+}
+
+.reviewPreview h4 {
+  margin: 0;
+}
+
+.procedureList {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
 .candidateGrid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr));
   margin-top: 1rem;

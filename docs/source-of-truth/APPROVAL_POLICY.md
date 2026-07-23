@@ -17,7 +17,7 @@
 - 개인정보·중복·담당 기관·기준일 확인
 - 승인 또는 반려
 
-MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할 전환**으로 두 역할을 시연한다. 데모 헤더는 인증이 아니다. 백엔드는 `actor_id`, `actor_role`, `created_by`를 검사해 작성자 본인 승인을 거부한다. public 환경에서는 별도 승인된 서버측 gate가 없으면 관리자 UI와 API를 비활성화한다. 실제 운영 단계에서는 기관 SSO와 RBAC로 확장한다.
+MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할 전환**으로 두 역할을 시연한다. 고정 demo actor는 작성자 `OPERATOR-LOCAL-001`, 승인자 `PM-LOCAL-001`이며, 데모 헤더는 인증이 아니다. 백엔드는 `actor_id`, `actor_role`, `created_by`를 검사해 작성자 본인 승인을 거부한다. public 환경에서는 별도 승인된 서버측 gate가 없으면 관리자 UI와 API를 비활성화한다. 실제 운영 단계에서는 기관 SSO와 RBAC로 확장한다.
 
 ## 2. 후보 전환 규칙
 

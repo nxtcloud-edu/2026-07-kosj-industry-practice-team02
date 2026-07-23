@@ -4,7 +4,7 @@
 > independent code tasks and `superpowers:test-driven-development` for every behavior change.
 
 - Plan ID: MVP-001-PLAN
-- Status: **Approved / In Progress — Q-MVP-001=A and immediate execution**
+- Status: **Review — local/private AI scope complete; human Draft PR/manual demo·accessibility pending**
 - Window: 2026-07-22 02:10 KST ~ 2026-07-25
 - Goal: local/private 19→20 ACTIVE 개선 루프와 시민/admin 최소 UI 완주
 - Design: `docs/superpowers/specs/2026-07-22-four-day-local-private-core-loop-mvp-design.md`
@@ -75,11 +75,11 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 
 **Files:** DATA-SEED-002 Task 6 report/lineage/docs/version files only.
 
-- [ ] Bootstrap and verify the pinned patched Supabase runtime without revealing network credentials.
-- [ ] Run exactly `scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2` from absent owned runtime.
-- [ ] Require pgTAP/integration/replay/compensation/19-3-10/cleanup PASS.
-- [ ] On complete PASS set only `official_data=0.1.0-initial.2`; keep `/ready=503` until application probe Task 5.
-- [ ] On failure retain `.2`, do not promote version, record reached stages, and continue only non-DB work.
+- [x] Bootstrap and verify the pinned patched Supabase runtime without revealing network credentials.
+- [x] Run exactly `scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2` from absent owned runtime.
+- [x] Require pgTAP/integration/replay/compensation/19-3-10/cleanup PASS.
+- [x] On complete PASS set only `official_data=0.1.0-initial.2`; keep `/ready=503` until application probe Task 5.
+- [x] Historical failure was retained in lineage; the supported continuation passed without promotion on failure.
 
 ### Task 3: Freeze PII consumer, chat, and minimal admin contracts
 
@@ -93,7 +93,8 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
   exhaustive generated TS and strict Pydantic parity.
 - [x] Add the response enum and exact no-source/no-context/no-office/candidate-false invariants.
 - [x] Complete admin response schemas without changing path names.
-- [x] Bump API to `3.0.0-draft` and shared contracts to `0.3.0` in the same change.
+- [x] Initial consumer freeze bumped API to `3.0.0-draft`/shared `0.3.0`; the approved idempotency
+  continuation updates them to API `3.1.0-draft`/shared `0.4.0` in the same contract change.
 - [x] No DB migration in this milestone for privacy metadata; reserved public `00700` remains untouched.
 
 ### Task 4: Implement the pure deterministic chat domain
@@ -108,7 +109,7 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - [x] Implement ACTIVE/OFFICIAL-only retrieval and server-bound source/office conversion.
 - [x] Implement template SUCCESS and high-risk field omission; no provider SDK.
 - [x] Implement 900-second signed context with value-free claims and silent invalid reset.
-- [ ] Validate sample 20 expectations at pure-service level. 현재 17/20이며 T-16~T-18은 Q-MVP-002 대기.
+- [x] Validate sample 20 expectations at pure-service level with skip 0. Q-MVP-002=A로 T-16~T-18 구현 승인.
 
 ### Task 5: Implement `/api/v1/chat` and readiness
 
@@ -117,11 +118,12 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - Modify: `apps/api/src/sejong_ai_api/main.py` and dependency composition/config
 - Create/modify: route, contract, privacy, logging and DB integration tests
 
-- [ ] RED route tests for SUCCESS/FOLLOWUP/FALLBACK/PRIVACY/503/idempotency. 정책/503는 완료, idempotency는 미완료.
+- [x] RED route tests for SUCCESS/FOLLOWUP/FALLBACK/PRIVACY/503/idempotency. Q-API-002=A에 따라 optional UUID header와 durable replay를 구현한다.
 - [x] Connect redactor → service → repository and metadata event matrix.
 - [x] Map DB unavailable to 503 only when no safe template/snapshot exists.
-- [ ] Enable `/ready=200` only when DB responds and required 19 ACTIVE+office projection exists. 코드 probe는 완료,
-  actual DB 19 증거가 없어 현재 503 유지.
+- [x] Enable `/ready=200` only when DB responds and required 19 ACTIVE+office projection exists. dedicated
+  Windows `run_local_api` actual run에서 final local DB의 `/ready=200`을 확인했다. import-safe/default
+  앱은 의도대로 계속 503이며 public readiness 주장이 아니다.
 - [x] Ensure request body/raw question and context token are absent from access/error logs.
 - [x] Re-check repository readiness on each `/ready` and guarded chat request; startup state is not treated as permanent.
 
@@ -150,30 +152,37 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 
 - [x] RED tests for failed list/detail/expired text/filters and role gate.
 - [x] RED tests for reason confirm, candidate PII recheck, submit, self-approval rejection, approve/reject.
-- [ ] Add typed repository read methods and minimal admin routes; public mode router disabled.
+- [x] Add typed repository read methods and minimal admin routes; public mode router disabled.
 - [x] Add local role switch UI with explicit demo-only label and audit metadata view. 현재 명시적 fixture transport.
-- [ ] Confirm OUT_OF_SCOPE/FOLLOWUP/PRIVACY failed row 0 and 30-day text purge behavior.
+- [x] Confirm OUT_OF_SCOPE/FOLLOWUP/PRIVACY failed row 0 and 30-day failed-question text purge behavior.
+  Service/DB gates cover row-zero and clean disposable API DB integration 8/8 proves actual purge/FK behavior.
 
 ### Task 9: Promote the 20th ACTIVE KB through the product loop
 
 **Data:** `KB-WASTE-03`, existing PM-approved official source only.
 
-- [ ] Start from the canonical bed-frame question and record `INSUFFICIENT_GROUNDING` masked failure.
-- [ ] OPERATOR confirms reason and authors candidate; `PM-LOCAL-001` or other different APPROVER reviews.
-- [ ] Transactionally create exactly one ACTIVE/OFFICIAL 20th KB; audit snapshot text 0.
-- [ ] Re-run same question and require SUCCESS, expected fee/source, source count >=1.
-- [ ] Record runtime lineage separately from immutable initial `.2` artifact.
+- [x] Start from the canonical bed-frame question and record one `INSUFFICIENT_GROUNDING` masked failure.
+- [x] OPERATOR confirms reason and authors candidate; same writer approval은 차단되고 다른 `PM-LOCAL-001`
+  APPROVER가 승인했다.
+- [x] Transactionally create exactly one ACTIVE/OFFICIAL 20th KB; audit snapshot text 0.
+- [x] Re-run same question and require SUCCESS, expected fee/source, source count >=1 (`KB-WASTE-03`).
+- [x] Record runtime lineage separately from immutable initial `.2` artifact.
 
 ### Task 10: Saturday acceptance and closeout
 
 **Files:** evaluation report, security report, demo runbook, version/task/source-of-truth/note updates.
 
-- [ ] Run all 20 sample questions and publish numerator/denominator for success/source/fallback/followup/privacy.
-- [ ] Run regression 1, ACTIVE-only/DRAFT-hidden, raw sentinel, secret/history/browser-bundle gates.
-- [ ] Run API lint/type/full tests, web lint/type/unit/build/E2E, DB pgTAP/integration and root offline verify.
-- [ ] Rehearse provider-off local demo from clean start through admin improvement.
-- [ ] Record 100-user, automatic backup, DeepSeek tuning, advanced UI, public deploy as deferred—not passed.
-- [ ] Independent spec and code/data/security review must report Critical 0, Important 0.
+- [x] Run all 20 sample questions and publish numerator/denominator for success/fallback/followup/privacy.
+  Deterministic pure-service report: total 20/20, SUCCESS 10/10, FOLLOWUP 2/2, FALLBACK 8/8.
+- [x] Run regression 1, ACTIVE-only/DRAFT-hidden and raw-question/no-snapshot boundaries in the clean actual
+  local regression. secret/history/browser-bundle gates also passed in the final root offline closeout.
+- [x] Run API lint/type/full tests, web lint/type/unit/build/E2E, DB pgTAP/integration and root offline verify.
+  API 1,640+5 subtests(8 DB-only skip), Ruff/Mypy 64, Web 48/lint/type/build/E2E 15, contracts 89,
+  clean DB pgTAP 9/356·API integration 8/8와 `verify.ps1 -Offline` PASS.
+- [x] Rehearse provider-off local demo from clean start through admin improvement.
+- [x] Record 100-user, automatic backup, DeepSeek tuning, advanced UI, public deploy as deferred—not passed.
+- [x] Independent spec and code/data/security review reports Critical 0, Important 0. Atomic idempotency,
+  admin race, scanner and adapter final reviews are `0/0/0`.
 
 ## 2026-07-22 owner checkpoint
 
@@ -183,12 +192,21 @@ Task 7 + Task 9 -> Task 10 sample/security/demo closeout
 - 독립 리뷰의 Critical 0/Important 7 중 임의 demo actor·optional header, public `/admin`, stale
   readiness, optional office URL 직렬화와 무동작 쉬운말 UI를 교정했다. 정책 표본은 Q-MVP-002,
   durable 재시도는 Q-API-002, 실제 admin read는 Q-DB-004 결정 전 Pending이다.
-- 실제 DB는 실행 중 container 0, local env key는 `DATABASE_URL`만 확인됐다. 네 번째 DATA actual
-  cycle은 별도 실행 결정 전 금지되어 ACTIVE 19, `/ready=200`, actual admin/20번째 ACTIVE는 주장하지 않는다.
+- DATA-SEED actual continuation은 19/3/10 initial projection과 cleanup까지 PASS했다. `/ready=200`,
+  actual admin 20번째 ACTIVE와 application-level requery는 여전히 별도 gate다.
 - Q-MVP-002, Q-DB-004, Q-API-002를 사람 결정으로 열었다. 답 전에는 T-16~T-18, admin read migration,
   durable retry, 19→20 actual regression만 Pending이고 나머지 안전한 closeout은 계속한다.
 - `/admin` fixture의 `MOCK` 후보는 ACTIVE 승인 불가, 반려만 가능하도록 UI와 transport 양쪽에서
   차단했다. 실제 OFFICIAL 승인 흐름은 local DB 연결 뒤에만 증명한다.
+
+## 2026-07-22 fast-MVP approval checkpoint
+
+- Q-MVP-002=A, Q-DB-004=A, Q-API-002=A를 D-059~D-061로 확정했다. 인터뷰 blocker는 없다.
+- migration 번호는 `00650=local admin read`, `00660=chat idempotency`로 main owner가 고정했다.
+- API 3.1.0-draft는 optional `Idempotency-Key`를 추가하고 policy fallback intent를 UNKNOWN으로 동결한다.
+- DATA-SEED-002 historical fourth run은 concurrency B에서 중단됐으나 observer 수정 뒤 지원 actual
+  continuation은 concurrency A/B·seed·replay·compensation·final 19/3/10·cleanup까지 PASS했다.
+- actual data blocker와 독립적인 API/DB migration/Web/admin transport 구현은 세 lane으로 계속한다.
 
 ## Daily stop conditions
 

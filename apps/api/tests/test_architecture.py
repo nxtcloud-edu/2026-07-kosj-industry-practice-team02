@@ -94,8 +94,8 @@ class ApiArchitectureTest(unittest.TestCase):
         self.assertTrue(pyproject_path.is_file(), "apps/api/pyproject.toml must exist")
 
         pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-        self.assertEqual(pyproject["project"]["version"], "0.3.0")
-        self.assertEqual(__version__, "0.3.0")
+        self.assertEqual(pyproject["project"]["version"], "0.4.0")
+        self.assertEqual(__version__, "0.4.0")
         self.assertEqual(set(pyproject["project"]["dependencies"]), APPROVED_RUNTIME_DEPENDENCIES)
         self.assertEqual(
             set(pyproject["dependency-groups"]["dev"]), APPROVED_DEVELOPMENT_DEPENDENCIES
