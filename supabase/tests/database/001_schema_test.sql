@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(32);
+SELECT plan(33);
 
 SELECT has_schema('app_private', 'app_private schema exists');
 SELECT has_schema('app_api', 'app_api schema exists');
@@ -36,10 +36,14 @@ SELECT has_table('app_private', 'interaction_events', 'interaction events are pr
 SELECT has_table('app_private', 'failed_questions', 'failed questions are private');
 SELECT has_table('app_private', 'kb_candidates', 'KB candidates are private');
 SELECT has_table('app_private', 'audit_logs', 'audit logs are private');
+SELECT has_table(
+  'app_private', 'chat_idempotency', 'chat idempotency state is private'
+);
 SELECT tables_are(
   'app_private',
   ARRAY[
     'audit_logs',
+    'chat_idempotency',
     'failed_questions',
     'interaction_events',
     'kb_candidates',
@@ -48,7 +52,7 @@ SELECT tables_are(
     'office_service_mappings',
     'offices'
   ],
-  'app_private contains exactly the eight domain tables'
+  'app_private contains exactly the nine approved local/private tables'
 );
 
 SELECT is(
@@ -99,7 +103,8 @@ SELECT is(
           'interaction_events',
           'failed_questions',
           'kb_candidates',
-          'audit_logs'
+          'audit_logs',
+          'chat_idempotency'
         ]
       )
       AND lower(columns.column_name) ~ '^(raw_question|question_text|answer_text|transcript|context_token|ip_address|device_id|secret|provider_payload)$'
@@ -129,11 +134,12 @@ SELECT ok(
           'interaction_events',
           'failed_questions',
           'kb_candidates',
-          'audit_logs'
+          'audit_logs',
+          'chat_idempotency'
         ]
       )
   ),
-  'public contains none of the eight domain tables'
+  'public contains none of the nine approved local/private tables'
 );
 
 SELECT * FROM finish();

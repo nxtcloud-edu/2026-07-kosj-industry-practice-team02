@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "id": "20000000-0000-4000-8000-000000000021",
+      "failed_question_id": "10000000-0000-4000-8000-000000000021",
+      "title": "시연용 샘플 후보",
+      "representative_question": "시연용 샘플 대표 질문",
+      "data_origin": "MOCK",
+      "category": "BULKY_WASTE",
+      "answer_summary": "시연용 샘플 답변",
+      "procedure_steps": [],
+      "required_documents": [],
+      "processing_time": null,
+      "fee": null,
+      "department": "시연용 샘플 부서",
+      "source_title": "시연용 샘플 출처",
+      "source_url": "https://example.invalid/admin/source",
+      "last_verified_at": "2026-07-15",
+      "caution": null,
+      "status": "APPROVED",
+      "created_by": "OPERATOR-LOCAL-001",
+      "reviewed_by": "PM-LOCAL-001",
+      "review_comment": "시연용 샘플 승인 의견",
+      "approved_at": "2026-07-22T04:00:00+09:00",
+      "activated_kb_id": "30000000-0000-4000-8000-000000000021",
+      "created_at": "2026-07-22T03:00:00+09:00",
+      "updated_at": "2026-07-22T04:00:00+09:00"
+    }
+  ],
+  "total": 1
+}

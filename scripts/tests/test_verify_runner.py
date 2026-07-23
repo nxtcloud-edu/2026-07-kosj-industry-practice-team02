@@ -24,7 +24,8 @@ STAGE_IDS = (
     "TEST-ROOT",
     "VALIDATE-DATA-001",
     "TEST-DATA-SEED",
-    "VERIFY-DATA-SEED-RELEASE",
+    "VERIFY-DATA-SEED-RELEASE-INITIAL",
+    "VERIFY-DATA-SEED-RELEASE-SUCCESSOR",
     "VERIFY-LOCAL-SEED",
     "LINT-WEB",
     "TYPECHECK-WEB",
@@ -129,7 +130,8 @@ class VerifyRunnerStructureTest(unittest.TestCase):
             '-StepId "TEST-ROOT" -Executable $apiPython',
             '-StepId "VALIDATE-DATA-001" -Executable $apiPython',
             '-StepId "TEST-DATA-SEED" -Executable $apiPython',
-            '-StepId "VERIFY-DATA-SEED-RELEASE" -Executable $apiPython',
+            '-StepId "VERIFY-DATA-SEED-RELEASE-INITIAL" -Executable $apiPython',
+            '-StepId "VERIFY-DATA-SEED-RELEASE-SUCCESSOR" -Executable $apiPython',
             '-StepId "VERIFY-LOCAL-SEED" -Executable $apiPython',
             '-StepId "LINT-WEB" -Executable "corepack.cmd"',
             '-StepId "TYPECHECK-WEB" -Executable "corepack.cmd"',
@@ -175,21 +177,34 @@ class VerifyRunnerStructureTest(unittest.TestCase):
         self.assertIn(focused_arguments, compact)
         self.assertIn(
             '"-B", "scripts/promote_data_seed.py", "verify-release", '
-            '"--release-dir", $dataSeedReleaseToken',
+            '"--release-dir", $dataSeedInitialReleaseToken',
+            compact,
+        )
+        self.assertIn(
+            '"-B", "scripts/promote_data_seed.py", "verify-release", '
+            '"--release-dir", $dataSeedSuccessorReleaseToken',
             compact,
         )
         self.assertIn(
             '"-B", "scripts/promote_data_seed.py", "verify-local-seed", '
-            '"--release-dir", $dataSeedReleaseToken',
+            '"--release-dir", $dataSeedSuccessorReleaseToken',
             compact,
         )
         self.assertIn(
-            '$dataSeedReleaseToken = "data/official/releases/0.1.0-initial.1"',
+            '$dataSeedInitialReleaseToken = "data/official/releases/0.1.0-initial.1"',
+            source,
+        )
+        self.assertIn(
+            '$dataSeedSuccessorReleaseToken = "data/official/releases/0.1.0-initial.2"',
             source,
         )
         self.assertIn('"release_manifest.json"', source)
         self.assertIn(
             '"data\\schemas\\data-seed\\v1\\release-manifest.schema.json"',
+            source,
+        )
+        self.assertIn(
+            '"data\\schemas\\data-seed\\v2\\release-manifest.schema.json"',
             source,
         )
         self.assertIn('"supabase\\seed.sql"', source)
@@ -206,6 +221,12 @@ class VerifyRunnerStructureTest(unittest.TestCase):
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
+
+        initial = source.find('-StepId "VERIFY-DATA-SEED-RELEASE-INITIAL"')
+        successor = source.find('-StepId "VERIFY-DATA-SEED-RELEASE-SUCCESSOR"')
+        local = source.find('-StepId "VERIFY-LOCAL-SEED"')
+        self.assertLess(initial, successor)
+        self.assertLess(successor, local)
 
     def test_has_all_stable_stage_ids_in_the_required_order(self) -> None:
         source = read_verify()
@@ -501,6 +522,13 @@ exit 0
                 f"echo {sentinel}\r\n"
                 f"echo {sentinel} 1>&2\r\n"
                 "exit /b 37\r\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "uv.cmd").write_text(
+                "@echo off\r\n"
+                "if not \"%1\"==\"--version\" exit /b 0\r\n"
+                "echo uv 0.11.28 ^(0000000 2026-07-22 x86_64-pc-windows-msvc^)\r\n"
+                "exit /b 0\r\n",
                 encoding="utf-8",
             )
             environment = os.environ.copy()

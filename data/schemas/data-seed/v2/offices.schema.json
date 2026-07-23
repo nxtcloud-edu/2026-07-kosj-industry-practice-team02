@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DATA-SEED successor release offices",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_version", "records"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 2},
+    "release_version": {"type": "string", "const": "0.1.0-initial.2"},
+    "records": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "public_id", "data_origin", "region", "office_name", "address", "phone",
+          "opening_hours", "map_url", "provider", "source_title", "source_url",
+          "last_verified_at", "created_by", "approved_by", "approved_at"
+        ],
+        "properties": {
+          "public_id": {"type": "string", "pattern": "^OFFICE-(?:AREUM|DODAM|JOCHIWON)$"},
+          "data_origin": {"type": "string", "const": "OFFICIAL"},
+          "region": {"enum": ["아름동", "도담동", "조치원읍"]},
+          "office_name": {"type": "string", "minLength": 1},
+          "address": {"type": "string", "minLength": 1},
+          "phone": {"type": "string", "minLength": 1},
+          "opening_hours": {"type": ["string", "null"]},
+          "map_url": {"type": ["string", "null"], "format": "https-url"},
+          "provider": {"type": "string", "minLength": 1},
+          "source_title": {"type": "string", "minLength": 1},
+          "source_url": {"type": "string", "format": "https-url"},
+          "last_verified_at": {"type": "string", "format": "date"},
+          "created_by": {"type": "string", "const": "AI-DATA-BACKEND"},
+          "approved_by": {"type": "string", "const": "PM-LOCAL-001"},
+          "approved_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

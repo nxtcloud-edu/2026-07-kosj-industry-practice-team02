@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import cast
+from urllib.parse import urlsplit
 from uuid import UUID
 
 
@@ -82,6 +84,18 @@ def _require_text(value: object, message: str) -> None:
 def _require_optional_text(value: object, message: str) -> None:
     if value is not None:
         _require_text(value, message)
+
+
+def _require_https_url(value: object, message: str) -> None:
+    _require_text(value, message)
+    parsed = urlsplit(cast(str, value))
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(message)
+
+
+def _require_optional_https_url(value: object, message: str) -> None:
+    if value is not None:
+        _require_https_url(value, message)
 
 
 def _require_text_tuple(value: object, message: str) -> None:
@@ -238,7 +252,7 @@ class CandidateDraft:
         _require_optional_text(self.fee, "FEE_INVALID")
         _require_text(self.department, "DEPARTMENT_INVALID")
         _require_text(self.source_title, "SOURCE_TITLE_INVALID")
-        _require_text(self.source_url, "SOURCE_URL_INVALID")
+        _require_https_url(self.source_url, "SOURCE_URL_INVALID")
         _require_date(self.last_verified_at, "LAST_VERIFIED_AT_INVALID")
         _require_optional_text(self.caution, "CAUTION_INVALID")
         _require_enum(self.data_origin, DataOrigin, "DATA_ORIGIN_INVALID")
@@ -274,7 +288,7 @@ class KnowledgeRecord:
         _require_optional_text(self.fee, "FEE_INVALID")
         _require_text(self.department, "DEPARTMENT_INVALID")
         _require_text(self.source_title, "SOURCE_TITLE_INVALID")
-        _require_text(self.source_url, "SOURCE_URL_INVALID")
+        _require_https_url(self.source_url, "SOURCE_URL_INVALID")
         _require_date(self.last_verified_at, "LAST_VERIFIED_AT_INVALID")
         _require_optional_text(self.caution, "CAUTION_INVALID")
         _require_text_tuple(self.question_examples, "QUESTION_EXAMPLES_INVALID")
@@ -303,10 +317,10 @@ class OfficeRecord:
         _require_text(self.address, "ADDRESS_INVALID")
         _require_text(self.phone, "PHONE_INVALID")
         _require_optional_text(self.opening_hours, "OPENING_HOURS_INVALID")
-        _require_optional_text(self.map_url, "MAP_URL_INVALID")
+        _require_optional_https_url(self.map_url, "MAP_URL_INVALID")
         _require_optional_text(self.department_label, "DEPARTMENT_LABEL_INVALID")
         _require_text(self.source_title, "SOURCE_TITLE_INVALID")
-        _require_text(self.source_url, "SOURCE_URL_INVALID")
+        _require_https_url(self.source_url, "SOURCE_URL_INVALID")
         _require_date(self.last_verified_at, "LAST_VERIFIED_AT_INVALID")
 
 

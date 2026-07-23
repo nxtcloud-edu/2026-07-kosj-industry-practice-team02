@@ -55,14 +55,44 @@ Invoke-Expression $source.Substring(0,$index)
 
 
 class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
-    def test_accepts_only_exact_initial_release_version(self) -> None:
+    def test_accepts_only_exact_successor_release_version(self) -> None:
         source = read_runner()
         preamble = source.split("Set-StrictMode", 1)[0]
 
         self.assertEqual(re.findall(r"\[string\]\$(\w+)", preamble), ["ReleaseVersion"])
-        self.assertIn('"0.1.0-initial.1"', source)
+        self.assertIn('"0.1.0-initial.2"', source)
+        self.assertNotIn('"0.1.0-initial.1"', source)
         self.assertIn("RELEASE-VERSION-INVALID", source)
         self.assertNotIn("[switch]", preamble)
+
+    def test_known_broken_initial_release_is_rejected_before_runtime_work(self) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        result = subprocess.run(
+            [
+                POWERSHELL,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(RUNNER),
+                "-ReleaseVersion",
+                "0.1.0-initial.1",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(
+            "[FAIL] step=VALIDATE-DATA-SEED-ARGUMENTS "
+            "reason=RELEASE-VERSION-INVALID code=2",
+            result.stdout.strip(),
+        )
+        self.assertFalse(result.stderr)
 
     def test_uses_only_pinned_patched_supabase_and_exact_runtime_allowlist(
         self,
@@ -139,6 +169,45 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
         self.assertNotIn("Write-Output $adminDsn", source)
         self.assertNotIn("Write-Host $adminDsn", source)
 
+    def test_owned_runtime_cleanup_is_wired_after_any_baseline_attempt(self) -> None:
+        source = read_runner()
+        main = source.split(MAIN_MARKER, 1)[1]
+
+        baseline_attempt = main.find("$baselineAttempted = $true")
+        baseline_call = main.find('-Step "VERIFY-DATABASE-BASELINE"')
+        finally_block = main.split("finally", 1)[1]
+
+        self.assertNotEqual(-1, baseline_attempt)
+        self.assertNotEqual(-1, baseline_call)
+        self.assertLess(baseline_attempt, baseline_call)
+        self.assertIn("Complete-DataSeedRuntimeAttempt", finally_block)
+        self.assertIn("Remove-DataSeedOwnedRuntime", source)
+        self.assertIn("Write-DataSeedFailureEvidence -Failure $failure", main)
+        self.assertLess(
+            finally_block.find("Complete-DataSeedRuntimeAttempt"),
+            finally_block.find("Restore-DataSeedEnvironment"),
+        )
+
+    def test_cleanup_preserves_volumes_network_and_uses_only_patched_stop(self) -> None:
+        source = read_runner()
+        cleanup = source.split("function Remove-DataSeedOwnedRuntime", 1)[1].split(
+            "function Complete-DataSeedRuntimeAttempt", 1
+        )[0]
+        lowered = cleanup.lower()
+
+        self.assertIn('@("stop", "--project-id", $ProjectId)', cleanup)
+        self.assertNotRegex(cleanup, r'-Arguments\s+@\("stop"\)\s*`')
+        for forbidden in (
+            "--no-backup",
+            "volume rm",
+            "network rm",
+            "docker stop",
+            "docker rm",
+            "system prune",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, lowered)
+
     def test_database_evidence_is_allowlisted_before_relay(self) -> None:
         source = read_runner()
         main = source.split(MAIN_MARKER, 1)[1]
@@ -203,6 +272,522 @@ class VerifyDataSeedRunnerStructureTests(unittest.TestCase):
 
 
 class VerifyDataSeedRunnerStubTests(unittest.TestCase):
+    def test_pre_run_requires_zero_owned_containers_and_zero_listener(self) -> None:
+        base_environment = os.environ.copy()
+        base_environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+$containerCount=[int][Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_CONTAINER_COUNT')
+$listenerCount=[int][Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_LISTENER_COUNT')
+$script:stopCalled=$false
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $ids=@()
+    for($i=0;$i -lt $containerCount;$i+=1){$ids+=('a'*11)+[string]$i}
+    return [pscustomobject]@{ExitCode=0;Output=($ids -join "`n")}
+  }
+  if($Arguments[0] -ceq 'stop'){$script:stopCalled=$true}
+  return [pscustomobject]@{ExitCode=0;Output=''}
+}
+function Get-DataSeedListenerCount { param($Port,$Step) return $listenerCount }
+try {
+  Assert-DataSeedRuntimeAbsent -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -WorkingDirectory (Get-Location).Path
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'invalid'){exit 81}
+  if($script:stopCalled){exit 82}
+  Write-Output '[PASS] step=STUB-PRE-RUN-REJECTED'
+  exit 0
+}
+if($containerCount -ne 0 -or $listenerCount -ne 0){exit 83}
+if($script:stopCalled){exit 84}
+Write-Output '[PASS] step=STUB-PRE-RUN-ABSENT'
+exit 0
+"""
+        for container_count, listener_count, marker in (
+            (0, 0, "STUB-PRE-RUN-ABSENT"),
+            (1, 0, "STUB-PRE-RUN-REJECTED"),
+            (0, 1, "STUB-PRE-RUN-REJECTED"),
+        ):
+            with self.subTest(
+                container_count=container_count, listener_count=listener_count
+            ):
+                environment = base_environment.copy()
+                environment["SEJONG_SYNTHETIC_CONTAINER_COUNT"] = str(container_count)
+                environment["SEJONG_SYNTHETIC_LISTENER_COUNT"] = str(listener_count)
+                result = run_library_command(command, environment)
+                combined = result.stdout + result.stderr
+                self.assertEqual(0, result.returncode, combined)
+                self.assertIn(f"[PASS] step={marker}", combined)
+
+    def test_exact_owned_runtime_is_stopped_and_output_is_content_free(self) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"] = (
+            "synthetic-container-secret-must-not-be-relayed"
+        )
+        command = r"""
+$script:listCalls=0
+$script:stopCalls=0
+$script:exactStop=$false
+$sentinel=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_INSPECT_SENTINEL')
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $script:listCalls+=1
+    if($script:listCalls -eq 1){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    $json='{"Name":"/supabase_db_sejong-ai-local","State":{"Running":true,"Status":"running"},"Config":{"Labels":{"com.supabase.cli.project":"sejong-ai-local","sentinel":"'+$sentinel+'"}},"HostConfig":{"NetworkMode":"sejong-ai-local-loopback","PortBindings":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}},"NetworkSettings":{"Networks":{"sejong-ai-local-loopback":{}},"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}}}'
+    return [pscustomobject]@{ExitCode=0;Output=$json}
+  }
+  if($Arguments[0] -ceq 'stop') {
+    $script:stopCalls+=1
+    $script:exactStop=(
+      $Arguments.Count -eq 3 -and
+      $Arguments[1] -ceq '--project-id' -and
+      $Arguments[2] -ceq 'sejong-ai-local'
+    )
+    return [pscustomobject]@{ExitCode=0;Output=$sentinel}
+  }
+  exit 85
+}
+Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+if($script:listCalls -ne 2 -or $script:stopCalls -ne 1 -or -not $script:exactStop){exit 86}
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[START] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertIn("[PASS] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertNotIn("aaaaaaaaaaaa", combined)
+        self.assertNotIn(environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"], combined)
+
+    def test_exact_reset_owned_runtime_is_stopped_and_output_is_content_free(
+        self,
+    ) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"] = (
+            "synthetic-reset-container-secret-must-not-be-relayed"
+        )
+        command = r"""
+$script:listCalls=0
+$script:stopCalls=0
+$script:exactStop=$false
+$sentinel=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_INSPECT_SENTINEL')
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $script:listCalls+=1
+    if($script:listCalls -eq 1){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    $json='{"Name":"/supabase_db_sejong-ai-local","State":{"Running":true,"Status":"running"},"Config":{"Labels":{"com.supabase.cli.project":"sejong-ai-local","sentinel":"'+$sentinel+'"}},"HostConfig":{"NetworkMode":"supabase_network_sejong-ai-local","PortBindings":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}},"NetworkSettings":{"Networks":{"supabase_network_sejong-ai-local":{}},"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}}}'
+    return [pscustomobject]@{ExitCode=0;Output=$json}
+  }
+  if($Arguments[0] -ceq 'stop') {
+    $script:stopCalls+=1
+    $script:exactStop=(
+      $Arguments.Count -eq 3 -and
+      $Arguments[1] -ceq '--project-id' -and
+      $Arguments[2] -ceq 'sejong-ai-local'
+    )
+    return [pscustomobject]@{ExitCode=0;Output=$sentinel}
+  }
+  exit 112
+}
+Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+if($script:listCalls -ne 2 -or $script:stopCalls -ne 1 -or -not $script:exactStop){exit 113}
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[START] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertIn("[PASS] step=CLEANUP-DATA-SEED-RUNTIME", combined)
+        self.assertNotIn("aaaaaaaaaaaa", combined)
+        self.assertNotIn(environment["SEJONG_SYNTHETIC_INSPECT_SENTINEL"], combined)
+
+    def test_exact_stopped_owned_runtime_is_cleaned_without_resolved_fields(self) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+$script:listCalls=0
+$script:stopCalls=0
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $script:listCalls+=1
+    if($script:listCalls -eq 1){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    return [pscustomobject]@{ExitCode=0;Output='{"Name":"/supabase_db_sejong-ai-local","State":{"Running":false,"Status":"exited"},"Config":{"Labels":{"com.supabase.cli.project":"sejong-ai-local"}},"HostConfig":{"NetworkMode":"sejong-ai-local-loopback","PortBindings":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}},"NetworkSettings":{}}'}
+  }
+  if($Arguments[0] -ceq 'stop') {
+    if($Arguments.Count -ne 3 -or $Arguments[1] -cne '--project-id' -or $Arguments[2] -cne 'sejong-ai-local'){exit 108}
+    $script:stopCalls+=1
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  exit 109
+}
+Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+if($script:listCalls -ne 2 -or $script:stopCalls -ne 1){exit 110}
+Write-Output '[PASS] step=STUB-STOPPED-OWNED-CLEANUP'
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=STUB-STOPPED-OWNED-CLEANUP", combined)
+
+    def test_cleanup_rejects_multiple_or_wrong_owner_without_stop(self) -> None:
+        base_environment = os.environ.copy()
+        base_environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+$case=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_CLEANUP_CASE')
+$requestedNetwork=if($case -ceq 'requested-initial-soft-hyphen'){
+  'sejong-ai-local'+[char]0x00ad+'-loopback'
+}else{
+  'sejong-ai-local-loopback'
+}
+$script:stopCalls=0
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    if($case -ceq 'multiple'){return [pscustomobject]@{ExitCode=0;Output="aaaaaaaaaaaa`nbbbbbbbbbbbb"}}
+    return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    if($case -ceq 'malformed'){return [pscustomobject]@{ExitCode=0;Output='{not-json'}}
+    $name=if($case -ceq 'wrong-name'){
+      'not-owned'
+    }elseif($case -ceq 'name-soft-hyphen'){
+      'supabase_db_'+[char]0x00ad+'sejong-ai-local'
+    }else{
+      'supabase_db_sejong-ai-local'
+    }
+    $label=if($case -ceq 'wrong-label'){
+      'not-owned'
+    }elseif($case -ceq 'label-zero-width-non-joiner'){
+      'sejong-ai'+[char]0x200c+'-local'
+    }else{
+      'sejong-ai-local'
+    }
+    $network=if($case -ceq 'wrong-network'){
+      'not-owned'
+    }elseif($case -ceq 'reset-prefix-confusable'){
+      'prefix-supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'reset-suffix-confusable'){
+      'supabase_network_sejong-ai-local-suffix'
+    }elseif($case -ceq 'configured-reset-soft-hyphen'){
+      'supabase_network_'+[char]0x00ad+'sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-zero-width-non-joiner'){
+      'supabase_network_'+[char]0x200c+'sejong-ai-local'
+    }elseif($case -cin @('resolved-reset-soft-hyphen','resolved-reset-zero-width-non-joiner')){
+      'supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-resolved-initial'){
+      'supabase_network_sejong-ai-local'
+    }else{
+      $requestedNetwork
+    }
+    $resolvedNetwork=if($case -ceq 'configured-initial-resolved-reset'){
+      'supabase_network_sejong-ai-local'
+    }elseif($case -ceq 'configured-reset-resolved-initial'){
+      'sejong-ai-local-loopback'
+    }elseif($case -ceq 'resolved-reset-soft-hyphen'){
+      'supabase_network_'+[char]0x00ad+'sejong-ai-local'
+    }elseif($case -ceq 'resolved-reset-zero-width-non-joiner'){
+      'supabase_network_'+[char]0x200c+'sejong-ai-local'
+    }else{
+      $network
+    }
+    $port=if($case -ceq 'wrong-port'){'54323'}else{'54322'}
+    $hostIp=if($case -ceq 'wrong-host-ip'){'0.0.0.0'}else{'127.0.0.1'}
+    $running=if($case -ceq 'invalid-status'){'false'}else{'true'}
+    $status=if($case -ceq 'invalid-status'){
+      'removing'
+    }elseif($case -ceq 'status-soft-hyphen'){
+      'run'+[char]0x00ad+'ning'
+    }else{
+      'running'
+    }
+    $networkEntries='"'+$resolvedNetwork+'":{}'
+    if($case -ceq 'extra-network'){$networkEntries+=',"unexpected-network":{}'}
+    $portName=if($case -ceq 'port-name-soft-hyphen'){'5432/'+[char]0x00ad+'tcp'}else{'5432/tcp'}
+    if($case -ceq 'host-ip-zero-width-non-joiner'){$hostIp='127.0.0.'+[char]0x200c+'1'}
+    if($case -ceq 'host-port-soft-hyphen'){$port='543'+[char]0x00ad+'22'}
+    $portEntries='"'+$portName+'":[{"HostIp":"'+$hostIp+'","HostPort":"'+$port+'"}]'
+    if($case -ceq 'extra-port'){$portEntries+=',"9999/tcp":[{"HostIp":"127.0.0.1","HostPort":"59999"}]'}
+    $json='{"Name":"/'+$name+'","State":{"Running":'+$running+',"Status":"'+$status+'"},"Config":{"Labels":{"com.supabase.cli.project":"'+$label+'"}},"HostConfig":{"NetworkMode":"'+$network+'","PortBindings":{'+$portEntries+'}},"NetworkSettings":{"Networks":{'+$networkEntries+'},"Ports":{'+$portEntries+'}}}'
+    return [pscustomobject]@{ExitCode=0;Output=$json}
+  }
+  if($Arguments[0] -ceq 'stop'){$script:stopCalls+=1}
+  return [pscustomobject]@{ExitCode=0;Output=''}
+}
+try {
+  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName $requestedNetwork -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'invalid'){exit 87}
+  if($script:stopCalls -ne 0){exit 88}
+  Write-Output '[PASS] step=STUB-UNOWNED-REJECTED'
+  exit 0
+}
+exit 89
+"""
+        for case in (
+            "multiple",
+            "malformed",
+            "wrong-name",
+            "name-soft-hyphen",
+            "wrong-label",
+            "label-zero-width-non-joiner",
+            "wrong-network",
+            "requested-initial-soft-hyphen",
+            "reset-prefix-confusable",
+            "reset-suffix-confusable",
+            "configured-reset-soft-hyphen",
+            "configured-reset-zero-width-non-joiner",
+            "resolved-reset-soft-hyphen",
+            "resolved-reset-zero-width-non-joiner",
+            "configured-initial-resolved-reset",
+            "configured-reset-resolved-initial",
+            "wrong-port",
+            "wrong-host-ip",
+            "port-name-soft-hyphen",
+            "host-ip-zero-width-non-joiner",
+            "host-port-soft-hyphen",
+            "extra-port",
+            "extra-network",
+            "invalid-status",
+            "status-soft-hyphen",
+        ):
+            with self.subTest(case=case):
+                environment = base_environment.copy()
+                environment["SEJONG_SYNTHETIC_CLEANUP_CASE"] = case
+                result = run_library_command(command, environment)
+                combined = result.stdout + result.stderr
+                self.assertEqual(0, result.returncode, combined)
+                self.assertIn("[PASS] step=STUB-UNOWNED-REJECTED", combined)
+
+    def test_cleanup_child_error_and_timeout_fail_closed_without_output(self) -> None:
+        base_environment = os.environ.copy()
+        base_environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        base_environment["SEJONG_SYNTHETIC_CHILD_SENTINEL"] = (
+            "synthetic-runtime-child-secret-must-not-be-relayed"
+        )
+        command = r"""
+$case=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_CHILD_CASE')
+$sentinel=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_CHILD_SENTINEL')
+$script:stopCalls=0
+function Get-DataSeedListenerCount { param($Port,$Step) return 0 }
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'stop'){$script:stopCalls+=1}
+  if($case -ceq 'timeout') {
+    Throw-DataSeedFailure -Step 'DATA-SEED-CHILD' -Reason 'timeout' -Code 2
+  }
+  return [pscustomobject]@{ExitCode=23;Output=$sentinel}
+}
+try {
+  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+}
+catch {
+  $expected=if($case -ceq 'timeout'){'timeout'}else{'child'}
+  if($_.Exception.Data['reason'] -cne $expected){exit 102}
+  if($script:stopCalls -ne 0){exit 103}
+  Write-Output '[PASS] step=STUB-CLEANUP-CHILD-REJECTED'
+  exit 0
+}
+exit 104
+"""
+        for case in ("child", "timeout"):
+            with self.subTest(case=case):
+                environment = base_environment.copy()
+                environment["SEJONG_SYNTHETIC_CHILD_CASE"] = case
+                result = run_library_command(command, environment)
+                combined = result.stdout + result.stderr
+                self.assertEqual(0, result.returncode, combined)
+                self.assertIn("[PASS] step=STUB-CLEANUP-CHILD-REJECTED", combined)
+                self.assertNotIn(
+                    environment["SEJONG_SYNTHETIC_CHILD_SENTINEL"], combined
+                )
+
+    def test_cleanup_fails_when_container_or_listener_remains_after_stop(self) -> None:
+        base_environment = os.environ.copy()
+        base_environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+$case=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_POST_STOP_CASE')
+$script:listCalls=0
+$script:stopCalls=0
+function Get-DataSeedListenerCount {
+  param($Port,$Step)
+  if($case -ceq 'listener-remains'){return 1}
+  return 0
+}
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  if($Arguments[0] -ceq 'ps') {
+    $script:listCalls+=1
+    if($script:listCalls -eq 1){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    if($case -ceq 'container-remains'){return [pscustomobject]@{ExitCode=0;Output='aaaaaaaaaaaa'}}
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  if($Arguments[0] -ceq 'inspect') {
+    return [pscustomobject]@{ExitCode=0;Output='{"Name":"/supabase_db_sejong-ai-local","State":{"Running":true,"Status":"running"},"Config":{"Labels":{"com.supabase.cli.project":"sejong-ai-local"}},"HostConfig":{"NetworkMode":"sejong-ai-local-loopback","PortBindings":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}},"NetworkSettings":{"Networks":{"sejong-ai-local-loopback":{}},"Ports":{"5432/tcp":[{"HostIp":"127.0.0.1","HostPort":"54322"}]}}}'}
+  }
+  if($Arguments[0] -ceq 'stop'){
+    if($Arguments.Count -ne 3 -or $Arguments[1] -cne '--project-id' -or $Arguments[2] -cne 'sejong-ai-local'){exit 111}
+    $script:stopCalls+=1
+    return [pscustomobject]@{ExitCode=0;Output=''}
+  }
+  exit 90
+}
+try {
+  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'invalid'){exit 91}
+  if($script:stopCalls -ne 1){exit 92}
+  Write-Output '[PASS] step=STUB-POST-STOP-REMAINS-REJECTED'
+  exit 0
+}
+exit 93
+"""
+        for case in ("container-remains", "listener-remains"):
+            with self.subTest(case=case):
+                environment = base_environment.copy()
+                environment["SEJONG_SYNTHETIC_POST_STOP_CASE"] = case
+                result = run_library_command(command, environment)
+                combined = result.stdout + result.stderr
+                self.assertEqual(0, result.returncode, combined)
+                self.assertIn("[PASS] step=STUB-POST-STOP-REMAINS-REJECTED", combined)
+
+    def test_cleanup_listener_probe_error_is_attributed_to_cleanup(self) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+function Invoke-DataSeedChild {
+  param($FilePath,$Arguments,$WorkingDirectory,$TimeoutMilliseconds)
+  return [pscustomobject]@{ExitCode=0;Output=''}
+}
+function Get-DataSeedListenerCount {
+  param($Port,$Step)
+  Throw-DataSeedFailure -Step $Step -Reason 'operational' -Code 2
+}
+try {
+  Remove-DataSeedOwnedRuntime -SupabasePath (Join-Path $PSHOME 'powershell.exe') -DockerPath (Join-Path $PSHOME 'powershell.exe') -ProjectId 'sejong-ai-local' -NetworkName 'sejong-ai-local-loopback' -ExpectedContainerName 'supabase_db_sejong-ai-local' -WorkingDirectory (Get-Location).Path
+}
+catch {
+  if($_.Exception.Data['step'] -cne 'CLEANUP-DATA-SEED-RUNTIME'){exit 105}
+  if($_.Exception.Data['reason'] -cne 'operational'){exit 106}
+  Write-Output '[PASS] step=STUB-CLEANUP-LISTENER-ERROR'
+  exit 0
+}
+exit 107
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=STUB-CLEANUP-LISTENER-ERROR", combined)
+
+    def test_cleanup_runs_for_success_and_failure_and_preserves_primary(self) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        command = r"""
+$script:cleanupCalls=0
+function Remove-DataSeedOwnedRuntime {
+  param($SupabasePath,$DockerPath,$ProjectId,$NetworkName,$ExpectedContainerName,$WorkingDirectory)
+  $script:cleanupCalls+=1
+}
+$common=@{
+  SupabasePath=(Join-Path $PSHOME 'powershell.exe');
+  DockerPath=(Join-Path $PSHOME 'powershell.exe');
+  ProjectId='sejong-ai-local';
+  NetworkName='sejong-ai-local-loopback';
+  ExpectedContainerName='supabase_db_sejong-ai-local';
+  WorkingDirectory=(Get-Location).Path
+}
+$success=Complete-DataSeedRuntimeAttempt @common -PrimaryFailure $null
+$primary=New-Object System.InvalidOperationException('synthetic primary')
+$failure=Complete-DataSeedRuntimeAttempt @common -PrimaryFailure $primary
+if($null -ne $success){exit 94}
+if(-not [object]::ReferenceEquals($primary,$failure)){exit 95}
+if($script:cleanupCalls -ne 2){exit 96}
+
+function Remove-DataSeedOwnedRuntime {
+  param($SupabasePath,$DockerPath,$ProjectId,$NetworkName,$ExpectedContainerName,$WorkingDirectory)
+  Throw-DataSeedFailure -Step 'CLEANUP-DATA-SEED-RUNTIME' -Reason 'timeout' -Code 2
+}
+$cleanupOnly=Complete-DataSeedRuntimeAttempt @common -PrimaryFailure $null
+$primaryWithCleanup=Complete-DataSeedRuntimeAttempt @common -PrimaryFailure $primary
+if($cleanupOnly.Data['step'] -cne 'CLEANUP-DATA-SEED-RUNTIME'){exit 97}
+if(-not [object]::ReferenceEquals($primary,$primaryWithCleanup)){exit 98}
+if($primaryWithCleanup.Data['cleanup_step'] -cne 'CLEANUP-DATA-SEED-RUNTIME'){exit 99}
+if($primaryWithCleanup.Data['cleanup_reason'] -cne 'timeout'){exit 100}
+if([int]$primaryWithCleanup.Data['cleanup_code'] -ne 2){exit 101}
+Write-Output '[PASS] step=STUB-CLEANUP-PRIMARY-PRESERVED'
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=STUB-CLEANUP-PRIMARY-PRESERVED", combined)
+
+    def test_primary_cleanup_and_restore_diagnostics_are_stable_and_content_free(
+        self,
+    ) -> None:
+        environment = os.environ.copy()
+        environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+        environment["SEJONG_SYNTHETIC_DIAGNOSTIC_SENTINEL"] = (
+            "synthetic-diagnostic-secret-must-not-be-relayed"
+        )
+        command = r"""
+$sentinel=[Environment]::GetEnvironmentVariable('SEJONG_SYNTHETIC_DIAGNOSTIC_SENTINEL')
+try {
+  Throw-DataSeedFailure -Step 'VERIFY-DATA-SEED-FINAL' -Reason 'child' -Code 37
+}
+catch {$primary=$_.Exception}
+$primary.Data['cleanup_step']='CLEANUP-DATA-SEED-RUNTIME'
+$primary.Data['cleanup_reason']='timeout'
+$primary.Data['cleanup_code']=2
+$primary.Data['restore_step']='RESTORE-DATA-SEED-ENVIRONMENT'
+$primary.Data['restore_reason']='operational'
+$primary.Data['restore_code']=2
+$primary.Data['sentinel']=$sentinel
+Write-DataSeedFailureEvidence -Failure $primary
+exit 0
+"""
+        result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertEqual(
+            [
+                "[FAIL] step=VERIFY-DATA-SEED-FINAL reason=child code=37",
+                "[FAIL] step=CLEANUP-DATA-SEED-RUNTIME reason=timeout code=2",
+                "[FAIL] step=RESTORE-DATA-SEED-ENVIRONMENT reason=operational code=2",
+            ],
+            result.stdout.splitlines(),
+        )
+        self.assertNotIn(
+            environment["SEJONG_SYNTHETIC_DIAGNOSTIC_SENTINEL"], combined
+        )
+
     def test_patched_runtime_accepts_exact_manifest_when_property_diff_is_empty(
         self,
     ) -> None:
@@ -266,6 +851,101 @@ exit 100
         self.assertNotIn(stdout_sentinel, combined)
         self.assertNotIn(stderr_sentinel, combined)
 
+    def test_nonzero_evidence_child_relays_only_exact_stable_failure_reason(
+        self,
+    ) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        with tempfile.TemporaryDirectory(prefix="sejong stable evidence child ") as directory:
+            child = Path(directory) / "stable-failure.cmd"
+            child.write_text(
+                "@echo off\r\n"
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "exit /b 2\r\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+            environment["SEJONG_DATA_SEED_EVIDENCE_CHILD"] = str(child)
+            command = r"""
+$child=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_CHILD')
+try {
+  Invoke-DataSeedEvidenceStep -Step 'VERIFY-DATA-SEED-CONCURRENCY-B' -FilePath $child -Arguments @() -WorkingDirectory (Get-Location).Path -TimeoutMilliseconds 5000
+}
+catch {
+  if($_.Exception.Data['step'] -cne 'VERIFY-DATA-SEED-CONCURRENCY-B'){exit 98}
+  if($_.Exception.Data['reason'] -cne 'CAPABILITY_WRITE_DID_NOT_BLOCK'){exit 99}
+  if([int]$_.Exception.Data['code'] -ne 2){exit 100}
+  Write-Output '[PASS] step=STUB-STABLE-FAILURE-RELAYED'
+  exit 0
+}
+exit 101
+"""
+            result = run_library_command(command, environment)
+
+        combined = result.stdout + result.stderr
+        self.assertEqual(0, result.returncode, combined)
+        self.assertIn("[PASS] step=STUB-STABLE-FAILURE-RELAYED", combined)
+        self.assertNotIn("CAPABILITY_WRITE_DID_NOT_BLOCK issues=1", combined)
+
+    def test_nonzero_evidence_child_rejects_payload_and_wrong_step(self) -> None:
+        if POWERSHELL is None:
+            self.fail("Windows PowerShell is required")
+        cases = {
+            "extra-line": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo synthetic-secret-payload\r\n"
+            ),
+            "extra-blank-line": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo.\r\n"
+            ),
+            "extra-stderr": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-B "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+                "echo synthetic-secret-stderr 1>&2\r\n"
+            ),
+            "wrong-step": (
+                "echo [FAIL] step=VERIFY-DATA-SEED-CONCURRENCY-A "
+                "reason=CAPABILITY_WRITE_DID_NOT_BLOCK issues=1\r\n"
+            ),
+        }
+        for case, body in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory(
+                prefix="sejong rejected evidence child "
+            ) as directory:
+                child = Path(directory) / "rejected-failure.cmd"
+                child.write_text(
+                    "@echo off\r\n" + body + "exit /b 2\r\n",
+                    encoding="utf-8",
+                )
+                environment = os.environ.copy()
+                environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
+                environment["SEJONG_DATA_SEED_EVIDENCE_CHILD"] = str(child)
+                command = r"""
+$child=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_CHILD')
+try {
+  Invoke-DataSeedEvidenceStep -Step 'VERIFY-DATA-SEED-CONCURRENCY-B' -FilePath $child -Arguments @() -WorkingDirectory (Get-Location).Path -TimeoutMilliseconds 5000
+}
+catch {
+  if($_.Exception.Data['reason'] -cne 'child'){exit 99}
+  Write-Output '[PASS] step=STUB-UNTRUSTED-FAILURE-REJECTED'
+  exit 0
+}
+exit 100
+"""
+                result = run_library_command(command, environment)
+
+            combined = result.stdout + result.stderr
+            self.assertEqual(0, result.returncode, combined)
+            self.assertIn("[PASS] step=STUB-UNTRUSTED-FAILURE-REJECTED", combined)
+            self.assertNotIn("synthetic-secret-payload", combined)
+            self.assertNotIn("synthetic-secret-stderr", combined)
+            self.assertNotIn("CAPABILITY_WRITE_DID_NOT_BLOCK issues=1", combined)
+
     def test_dynamic_pg_environment_is_saved_cleared_and_restored(self) -> None:
         environment = os.environ.copy()
         environment["SEJONG_DATA_SEED_RUNNER_PATH"] = str(RUNNER)
@@ -307,7 +987,7 @@ exit 0
         sentinel = "synthetic-evidence-secret-must-not-be-relayed"
         environment["SEJONG_DATA_SEED_EVIDENCE_SENTINEL"] = sentinel
         command = r"""
-$safe='[PASS] step=VERIFY-DATA-SEED-IDENTITY release=0.1.0-initial.1 identity=exact'
+$safe='[PASS] step=VERIFY-DATA-SEED-IDENTITY release=0.1.0-initial.2 identity=exact'
 Write-DataSeedEvidence -Step 'VERIFY-DATA-SEED-IDENTITY' -Output $safe
 $sentinel=[Environment]::GetEnvironmentVariable('SEJONG_DATA_SEED_EVIDENCE_SENTINEL')
 try {
@@ -326,7 +1006,7 @@ exit 95
         self.assertEqual(0, result.returncode, combined)
         self.assertIn(
             "[PASS] step=VERIFY-DATA-SEED-IDENTITY "
-            "release=0.1.0-initial.1 identity=exact",
+            "release=0.1.0-initial.2 identity=exact",
             combined,
         )
         self.assertIn("[PASS] step=STUB-EVIDENCE-REJECTED", combined)

@@ -163,6 +163,9 @@ class SafeRequestLoggingMiddleware:
 
         downstream_send = send_with_status if is_http else send
         request_id = self._request_id_factory() if is_http else None
+        if is_http and isinstance(request_id, UUID):
+            state = scope.setdefault("state", {})
+            state["request_id"] = request_id
         try:
             await self._application(scope, receive, downstream_send)
         except Exception:

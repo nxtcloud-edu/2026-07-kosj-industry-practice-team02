@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "id": "10000000-0000-4000-8000-000000000010",
+      "masked_question": "시연용 샘플 마스킹 질문",
+      "intent": "BULKY_WASTE",
+      "fallback_reason": "PERSONAL_LOOKUP",
+      "candidate_eligible": true,
+      "status": "NEW",
+      "created_at": "2026-07-22T01:00:00+09:00",
+      "text_expires_at": "2026-08-21T01:00:00+09:00",
+      "text_purged_at": null
+    }
+  ],
+  "total": 1
+}

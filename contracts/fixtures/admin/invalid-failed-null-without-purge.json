@@ -1,0 +1,13 @@
+{
+  "item": {
+    "id": "10000000-0000-4000-8000-000000000011",
+    "masked_question": null,
+    "intent": "BULKY_WASTE",
+    "fallback_reason": "INSUFFICIENT_GROUNDING",
+    "candidate_eligible": true,
+    "status": "REASON_CONFIRMED",
+    "created_at": "2026-07-22T01:00:00+09:00",
+    "text_expires_at": "2026-08-21T01:00:00+09:00",
+    "text_purged_at": null
+  }
+}

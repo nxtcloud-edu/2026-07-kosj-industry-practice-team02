@@ -439,11 +439,13 @@ def test_uvicorn_error_filter_drops_websocket_info_templates_without_formatting(
         assert record.args == arguments
 
 
-def test_official_uvicorn_command_disables_access_log_and_websockets() -> None:
+def test_official_local_runner_disables_access_log_and_websockets() -> None:
     readme = (API_ROOT / "README.md").read_text(encoding="utf-8")
-    command = readme.split("uvicorn sejong_ai_api.main:app", 1)[1].split("```", 1)[0]
-    assert "--no-access-log" in command
-    assert "--ws none" in command
+    runner = (API_ROOT.parents[1] / "scripts" / "run_local_api.py").read_text(encoding="utf-8")
+    assert "python scripts/run_local_api.py" in readme
+    assert "factory=True" in runner
+    assert "access_log=False" in runner
+    assert 'ws="none"' in runner
 
 
 def test_safe_logging_source_is_pure_asgi_and_never_reads_sensitive_request_channels() -> None:

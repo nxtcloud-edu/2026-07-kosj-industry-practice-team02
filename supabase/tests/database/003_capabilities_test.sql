@@ -43,6 +43,16 @@ SELECT ok(
     WHERE granted_role.rolname = 'sejong_schema_owner'
       AND member_role.rolname = CURRENT_USER
       AND memberships.inherit_option
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS memberships
+    JOIN pg_catalog.pg_roles AS granted_role
+      ON granted_role.oid = memberships.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = memberships.member
+    WHERE granted_role.rolname = 'sejong_schema_owner'
+      AND member_role.rolname = CURRENT_USER
       AND memberships.set_option
   ),
   'migration user keeps ADMIN, INHERIT, and SET for schema owner'
@@ -134,8 +144,8 @@ SELECT is(
       AND relations.relkind = 'r'
       AND owners.rolname = 'sejong_schema_owner'
   ),
-  8,
-  'schema owner owns all eight base tables'
+  9,
+  'schema owner owns all nine approved local/private base tables'
 );
 
 SELECT is(
@@ -160,8 +170,8 @@ SELECT is(
       AND relations.relkind = 'r'
       AND relations.relrowsecurity
   ),
-  8,
-  'all eight base tables have RLS enabled'
+  9,
+  'all nine approved local/private base tables have RLS enabled'
 );
 
 SELECT is(
@@ -173,8 +183,8 @@ SELECT is(
       AND relations.relkind = 'r'
       AND relations.relforcerowsecurity
   ),
-  8,
-  'all eight base tables force RLS'
+  9,
+  'all nine approved local/private base tables force RLS'
 );
 
 SELECT is(
@@ -185,8 +195,8 @@ SELECT is(
     JOIN pg_catalog.pg_namespace AS namespaces ON namespaces.oid = relations.relnamespace
     WHERE namespaces.nspname = 'app_private'
   ),
-  8,
-  'app_private has exactly eight policies total'
+  9,
+  'app_private has exactly nine owner-only policies total'
 );
 
 SELECT results_eq(
@@ -223,6 +233,8 @@ SELECT results_eq(
     FROM (
       VALUES
         ('audit_logs'::text, 'audit_logs_owner_all'::text,
+         '*'::text, true, true, 'true'::text, 'true'::text),
+        ('chat_idempotency'::text, 'chat_idempotency_owner_all'::text,
          '*'::text, true, true, 'true'::text, 'true'::text),
         ('failed_questions'::text, 'failed_questions_owner_all'::text,
          '*'::text, true, true, 'true'::text, 'true'::text),
@@ -367,10 +379,37 @@ SELECT results_eq(
             'app_api.approve_kb_candidate(uuid,text,text,text)'
           )::oid,
           pg_catalog.to_regprocedure(
+            'app_api.approve_kb_candidate_with_public_id(uuid,text,text,text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
             'app_api.reject_kb_candidate(uuid,text,text,text)'
           )::oid,
           pg_catalog.to_regprocedure(
             'app_api.purge_expired_failed_question_text()'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.list_failed_questions(text,text)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.get_failed_question(uuid)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.list_kb_candidates()'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.get_kb_candidate(uuid)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.claim_chat_idempotency(uuid,text,uuid)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.complete_chat_idempotency(uuid,text,uuid,jsonb)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.abandon_chat_idempotency(uuid,text,uuid)'
+          )::oid,
+          pg_catalog.to_regprocedure(
+            'app_api.purge_expired_chat_idempotency()'
           )::oid
         ]::oid[],
         NULL::oid
@@ -378,7 +417,7 @@ SELECT results_eq(
     ) AS approved(oid)
     ORDER BY approved.oid
   $expected$,
-  'app_api contains only approved DB-001 interface identities'
+  'app_api contains only approved DB-001 and local MVP interface identities'
 );
 
 SELECT is(
@@ -412,10 +451,37 @@ SELECT is(
               'app_api.approve_kb_candidate(uuid,text,text,text)'
             )::oid,
             pg_catalog.to_regprocedure(
+              'app_api.approve_kb_candidate_with_public_id(uuid,text,text,text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
               'app_api.reject_kb_candidate(uuid,text,text,text)'
             )::oid,
             pg_catalog.to_regprocedure(
               'app_api.purge_expired_failed_question_text()'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.list_failed_questions(text,text)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.get_failed_question(uuid)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.list_kb_candidates()'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.get_kb_candidate(uuid)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.claim_chat_idempotency(uuid,text,uuid)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.complete_chat_idempotency(uuid,text,uuid,jsonb)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.abandon_chat_idempotency(uuid,text,uuid)'
+            )::oid,
+            pg_catalog.to_regprocedure(
+              'app_api.purge_expired_chat_idempotency()'
             )::oid
           ]::oid[],
           NULL::oid
@@ -447,7 +513,16 @@ SELECT ok(
       AND (
         owners.rolname <> 'sejong_schema_owner'
         OR NOT functions.prosecdef
-        OR functions.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[]
+        OR functions.proconfig IS DISTINCT FROM CASE
+          WHEN functions.proname IN (
+            'list_failed_questions', 'get_failed_question',
+            'list_kb_candidates', 'get_kb_candidate',
+            'approve_kb_candidate_with_public_id',
+            'claim_chat_idempotency', 'complete_chat_idempotency',
+            'abandon_chat_idempotency', 'purge_expired_chat_idempotency'
+          ) THEN ARRAY['search_path=pg_catalog, pg_temp']::text[]
+          ELSE ARRAY['search_path=pg_catalog']::text[]
+        END
       )
   ),
   'every app_api function is schema-owner SECURITY DEFINER with fixed search_path'

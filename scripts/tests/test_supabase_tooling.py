@@ -27,12 +27,52 @@ PATCHED_RUNTIME_RELATIVE = Path(
 )
 CONFIG_PATH = ROOT / "supabase" / "config.toml"
 SEED_PATH = ROOT / "supabase" / "seed.sql"
-RELEASE_SEED_PATH = (
+INITIAL_RELEASE_SEED_PATH = (
     ROOT / "data" / "official" / "releases" / "0.1.0-initial.1" / "seed.sql"
+)
+RELEASE_SEED_PATH = (
+    ROOT / "data" / "official" / "releases" / "0.1.0-initial.2" / "seed.sql"
 )
 PROVISION_PATH = ROOT / "scripts" / "provision_local_database_login.py"
 SQL_RUNNER_PATH = ROOT / "scripts" / "run_database_sql.py"
 DATABASE_RUNNER_PATH = ROOT / "scripts" / "verify_database.ps1"
+CAPABILITY_MIGRATION_PATH = (
+    ROOT / "supabase" / "migrations" / "20260716000300_capabilities_and_functions.sql"
+)
+CAPABILITY_TEST_PATH = ROOT / "supabase" / "tests" / "database" / "003_capabilities_test.sql"
+ADMIN_READ_MIGRATION_PATH = (
+    ROOT
+    / "supabase"
+    / "migrations"
+    / "20260722000650_local_admin_read_capabilities.sql"
+)
+ADMIN_READ_ROLLBACK_PATH = (
+    ROOT
+    / "database"
+    / "rollbacks"
+    / "20260722000650_local_admin_read_capabilities.rollback.sql"
+)
+ADMIN_READ_TEST_PATH = (
+    ROOT / "supabase" / "tests" / "database" / "007_local_admin_read_capabilities_test.sql"
+)
+IDEMPOTENCY_MIGRATION_PATH = (
+    ROOT / "supabase" / "migrations" / "20260722000660_chat_idempotency.sql"
+)
+IDEMPOTENCY_ROLLBACK_PATH = (
+    ROOT / "database" / "rollbacks" / "20260722000660_chat_idempotency.rollback.sql"
+)
+IDEMPOTENCY_TEST_PATH = (
+    ROOT / "supabase" / "tests" / "database" / "008_chat_idempotency_test.sql"
+)
+CANDIDATE_BINDING_MIGRATION_PATH = (
+    ROOT / "supabase" / "migrations" / "20260722000670_candidate_public_id_binding.sql"
+)
+CANDIDATE_BINDING_ROLLBACK_PATH = (
+    ROOT / "database" / "rollbacks" / "20260722000670_candidate_public_id_binding.rollback.sql"
+)
+CANDIDATE_BINDING_TEST_PATH = (
+    ROOT / "supabase" / "tests" / "database" / "009_candidate_public_id_binding_test.sql"
+)
 EXPECTED_PIN = {
     "version": "2.109.1",
     "release": "v2.109.1",
@@ -46,6 +86,107 @@ EXPECTED_PIN = {
     "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16",
 }
 CHILD_OUTPUT_SENTINEL = "postgresql://synthetic.invalid/private-question-sentinel"
+
+
+def _database_dsn(scheme: str, authority: str) -> str:
+    return f"{scheme}://{authority}"
+
+
+class MembershipGuardStructureTests(unittest.TestCase):
+    def assert_independent_schema_owner_options(self, block: str) -> None:
+        for option in ("admin_option", "inherit_option", "set_option"):
+            self.assertEqual(1, block.count(f"memberships.{option}"), option)
+        self.assertNotIn(
+            "memberships.inherit_option\n      AND memberships.set_option",
+            block,
+        )
+
+    def test_migration_and_pgtap_use_three_independent_option_checks(self) -> None:
+        migration = CAPABILITY_MIGRATION_PATH.read_text(encoding="utf-8")
+        migration_block = migration.split("IF NOT EXISTS (", maxsplit=1)[1].split(
+            "OR NOT EXISTS (\n       SELECT 1 FROM pg_catalog.pg_auth_members AS memberships\n"
+            "       WHERE memberships.roleid = v_backend_oid",
+            maxsplit=1,
+        )[0]
+        self.assert_independent_schema_owner_options(migration_block)
+
+        pgtap = CAPABILITY_TEST_PATH.read_text(encoding="utf-8")
+        pgtap_block = pgtap.split("SELECT ok(", maxsplit=1)[1].split(
+            "'migration user keeps ADMIN, INHERIT, and SET for schema owner'",
+            maxsplit=1,
+        )[0]
+        self.assert_independent_schema_owner_options(pgtap_block)
+
+
+class MvpDatabaseAdditionStructureTests(unittest.TestCase):
+    def test_new_migrations_rollbacks_and_pgtap_files_are_transaction_bounded(self) -> None:
+        for path in (
+            ADMIN_READ_MIGRATION_PATH,
+            ADMIN_READ_ROLLBACK_PATH,
+            ADMIN_READ_TEST_PATH,
+            IDEMPOTENCY_MIGRATION_PATH,
+            IDEMPOTENCY_ROLLBACK_PATH,
+            IDEMPOTENCY_TEST_PATH,
+            CANDIDATE_BINDING_MIGRATION_PATH,
+            CANDIDATE_BINDING_ROLLBACK_PATH,
+            CANDIDATE_BINDING_TEST_PATH,
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertTrue(source.startswith("BEGIN;\n"), path.name)
+            self.assertRegex(source, r"(?m)^(?:COMMIT|ROLLBACK);\s*$", path.name)
+
+    def test_admin_read_files_expose_and_compensate_only_four_capabilities(self) -> None:
+        migration = ADMIN_READ_MIGRATION_PATH.read_text(encoding="utf-8")
+        rollback = ADMIN_READ_ROLLBACK_PATH.read_text(encoding="utf-8")
+        pgtap = ADMIN_READ_TEST_PATH.read_text(encoding="utf-8")
+        names = (
+            "list_failed_questions",
+            "get_failed_question",
+            "list_kb_candidates",
+            "get_kb_candidate",
+        )
+
+        for name in names:
+            self.assertIn(f"CREATE FUNCTION app_api.{name}", migration)
+            self.assertIn(f"DROP FUNCTION app_api.{name}", rollback)
+            self.assertIn(name, pgtap)
+        self.assertNotIn("GRANT SELECT ON app_private", migration)
+
+    def test_idempotency_files_keep_correlation_identity_out_and_bound_lease(self) -> None:
+        migration = IDEMPOTENCY_MIGRATION_PATH.read_text(encoding="utf-8")
+        rollback = IDEMPOTENCY_ROLLBACK_PATH.read_text(encoding="utf-8")
+        pgtap = IDEMPOTENCY_TEST_PATH.read_text(encoding="utf-8")
+
+        self.assertNotIn("claim_request_id", migration)
+        self.assertIn("claim_token uuid", migration)
+        self.assertIn("lease_expires_at timestamptz", migration)
+        self.assertIn("interval '5 minutes'", migration)
+        self.assertIn("interval '24 hours'", migration)
+        self.assertIn("DROP TABLE app_private.chat_idempotency", rollback)
+        self.assertIn("SELECT plan(23);", pgtap)
+        self.assertIn("the old claim token cannot complete reacquired work", pgtap)
+
+    def test_candidate_binding_is_one_backend_only_fixed_capability(self) -> None:
+        migration = CANDIDATE_BINDING_MIGRATION_PATH.read_text(encoding="utf-8")
+        rollback = CANDIDATE_BINDING_ROLLBACK_PATH.read_text(encoding="utf-8")
+        pgtap = CANDIDATE_BINDING_TEST_PATH.read_text(encoding="utf-8")
+
+        self.assertEqual(migration.count("CREATE FUNCTION app_api."), 1)
+        self.assertIn(
+            "CREATE FUNCTION app_api.approve_kb_candidate_with_public_id(", migration
+        )
+        self.assertIn(
+            "DROP FUNCTION app_api.approve_kb_candidate_with_public_id"
+            "(uuid, text, text, text, text)",
+            rollback,
+        )
+        self.assertIn("SET search_path = pg_catalog, pg_temp", migration)
+        self.assertIn("OWNER TO sejong_schema_owner", migration)
+        self.assertIn("FROM PUBLIC, anon, authenticated, sejong_backend", migration)
+        self.assertIn("TO sejong_backend", migration)
+        self.assertIn("app_api.approve_kb_candidate(", migration)
+        self.assertIn("KB-WASTE-03", pgtap)
+        self.assertIn("SELECT plan(36);", pgtap)
 
 
 def powershell_executable() -> str:
@@ -991,7 +1132,23 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
     def test_seed_dispatcher_matches_active_release_and_stays_db_disabled(self) -> None:
         config = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(RELEASE_SEED_PATH.read_bytes(), SEED_PATH.read_bytes())
+        self.assertEqual(
+            ROOT
+            / "data"
+            / "official"
+            / "releases"
+            / "0.1.0-initial.2"
+            / "seed.sql",
+            RELEASE_SEED_PATH,
+        )
+        if RELEASE_SEED_PATH.is_file():
+            self.assertEqual(RELEASE_SEED_PATH.read_bytes(), SEED_PATH.read_bytes())
+        else:
+            self.assertEqual(
+                INITIAL_RELEASE_SEED_PATH.read_bytes(),
+                SEED_PATH.read_bytes(),
+                "pre-publication dispatcher must remain byte-exact predecessor",
+            )
         self.assertFalse(config["db"]["seed"]["enabled"])
         self.assertEqual(["./seed.sql"], config["db"]["seed"]["sql_paths"])
 
@@ -1071,6 +1228,143 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
 
             self.assertEqual(env_path.read_bytes(), original)
             self.assertEqual(list(root.glob(".env.*")), [])
+
+    def test_provisioner_writes_canonical_percent_encoded_local_database_uri(
+        self,
+    ) -> None:
+        module = load_module(PROVISION_PATH, "provision_local_database_login_uri_test")
+        admin_password = "synthetic-admin-secret"
+        admin_dsn = _database_dsn(
+            "postgresql", "postgres:synthetic-admin-secret@127.0.0.1:54322/postgres"
+        )
+        generated_password = "synthetic:/@% password"
+        expected_url = _database_dsn(
+            "postgresql",
+            "sejong_local_login:synthetic%3A%2F%40%25%20password@127.0.0.1:54322/postgres",
+        )
+
+        with tempfile.TemporaryDirectory(prefix="sejong provision uri ") as directory:
+            env_path = Path(directory) / ".env"
+            env_path.write_text(
+                "CONTEXT_TOKEN_SECRET=synthetic-context\n", encoding="utf-8"
+            )
+            with (
+                patch.dict(module.os.environ, {}, clear=True),
+                patch.object(module.psycopg, "connect") as connect,
+                patch.object(
+                    module.secrets, "token_urlsafe", return_value=generated_password
+                ),
+                patch("builtins.print") as output,
+            ):
+                connection = connect.return_value.__enter__.return_value
+                cursor = connection.cursor.return_value.__enter__.return_value
+                cursor.fetchone.return_value = None
+
+                module.provision(admin_dsn, env_path)
+
+            self.assertEqual(
+                env_path.read_text(encoding="utf-8"),
+                f"CONTEXT_TOKEN_SECRET=synthetic-context\nDATABASE_URL={expected_url}\n",
+            )
+            self.assertNotIn(admin_password, env_path.read_text(encoding="utf-8"))
+            connect.assert_called_once_with(
+                admin_dsn,
+                hostaddr="127.0.0.1",
+                autocommit=False,
+            )
+            output.assert_not_called()
+
+    def test_provisioner_rejects_non_exact_admin_identity_before_connect_or_write(
+        self,
+    ) -> None:
+        module = load_module(
+            PROVISION_PATH, "provision_local_database_login_identity_test"
+        )
+        admin_secret = "synthetic-admin-secret"
+        valid = _database_dsn(
+            "postgresql", f"postgres:{admin_secret}@127.0.0.1:54322/postgres"
+        )
+        invalid = (
+            valid.replace("postgres:", "other:", 1),
+            valid.replace("127.0.0.1", "localhost", 1),
+            valid.replace("127.0.0.1", "db.example.invalid", 1),
+            valid.replace("54322", "54321", 1),
+            valid.removesuffix("/postgres") + "/template1",
+            valid + "?sslmode=disable",
+            valid.replace(
+                "@127.0.0.1",
+                "@remote.example.invalid@127.0.0.1",
+                1,
+            ),
+            valid.replace(admin_secret, "malformed%ZZsecret", 1),
+            "user=postgres password=synthetic-admin-secret "
+            "host=127.0.0.1 port=54322 dbname=postgres application_name=untrusted",
+        )
+
+        with tempfile.TemporaryDirectory(
+            prefix="sejong provision identity "
+        ) as directory:
+            env_path = Path(directory) / ".env"
+            for admin_dsn in invalid:
+                with self.subTest(
+                    admin_dsn_shape=admin_dsn.replace(admin_secret, "[SECRET]")
+                ):
+                    with (
+                        patch.dict(module.os.environ, {}, clear=True),
+                        patch.object(module.psycopg, "connect") as connect,
+                    ):
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            "^ADMIN_DSN_IDENTITY_INVALID$",
+                        ) as caught:
+                            module.provision(admin_dsn, env_path)
+
+                    connect.assert_not_called()
+                    self.assertFalse(env_path.exists())
+                    self.assertNotIn(admin_secret, repr(caught.exception))
+
+    def test_provisioner_rejects_ambient_libpq_environment_before_connect_or_write(
+        self,
+    ) -> None:
+        module = load_module(
+            PROVISION_PATH, "provision_local_database_login_ambient_test"
+        )
+        admin_secret = "synthetic-admin-secret"
+        admin_dsn = _database_dsn(
+            "postgresql", f"postgres:{admin_secret}@127.0.0.1:54322/postgres"
+        )
+
+        with tempfile.TemporaryDirectory(
+            prefix="sejong provision ambient "
+        ) as directory:
+            env_path = Path(directory) / ".env"
+            for variable in (
+                "PGHOSTADDR",
+                "PGSERVICE",
+                "PGSERVICEFILE",
+                "PGOPTIONS",
+                "pgpassword",
+            ):
+                with self.subTest(variable=variable):
+                    with (
+                        patch.dict(
+                            module.os.environ,
+                            {variable: "synthetic-ambient-value"},
+                            clear=True,
+                        ),
+                        patch.object(module.psycopg, "connect") as connect,
+                        patch("builtins.print") as output,
+                    ):
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            "^AMBIENT_LIBPQ_ENVIRONMENT_INVALID$",
+                        ) as caught:
+                            module.provision(admin_dsn, env_path)
+
+                    connect.assert_not_called()
+                    output.assert_not_called()
+                    self.assertFalse(env_path.exists())
+                    self.assertNotIn(admin_secret, repr(caught.exception))
 
     def test_provisioner_missing_admin_dsn_is_stable(self) -> None:
         environment = os.environ.copy()
@@ -1679,6 +1973,9 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
         self.assertEqual(
             rollback_paths,
             [
+                "20260722000670_candidate_public_id_binding.rollback.sql",
+                "20260722000660_chat_idempotency.rollback.sql",
+                "20260722000650_local_admin_read_capabilities.rollback.sql",
                 "20260717000600_deferred_active_question_trigger_security.rollback.sql",
                 "20260716000500_indexes_and_read_interfaces.rollback.sql",
                 "20260716000400_candidate_workflow.rollback.sql",
@@ -1709,6 +2006,9 @@ class LocalDatabaseToolingContractTests(unittest.TestCase):
                 ["test", "db"],
                 [
                     "sql",
+                    "20260722000670_candidate_public_id_binding.rollback.sql",
+                    "20260722000660_chat_idempotency.rollback.sql",
+                    "20260722000650_local_admin_read_capabilities.rollback.sql",
                     "20260717000600_deferred_active_question_trigger_security.rollback.sql",
                     "20260716000500_indexes_and_read_interfaces.rollback.sql",
                     "20260716000400_candidate_workflow.rollback.sql",

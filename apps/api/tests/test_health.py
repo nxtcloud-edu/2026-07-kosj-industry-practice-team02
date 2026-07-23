@@ -12,7 +12,7 @@ class FakeReadinessProbe:
         self.ready = ready
         self.call_count = 0
 
-    def is_ready(self) -> bool:
+    async def check_ready(self) -> bool:
         self.call_count += 1
         return self.ready
 
@@ -73,7 +73,7 @@ def test_injected_readiness_probe_can_report_ready_without_database_code() -> No
 def test_generated_openapi_uses_the_tracked_health_operation_ids() -> None:
     schema = create_app().openapi()
 
-    assert schema["info"]["version"] == "2.0.1-draft"
+    assert schema["info"]["version"] == "3.1.0-draft"
     assert schema["paths"]["/health"]["get"]["operationId"] == "health"
     assert schema["paths"]["/ready"]["get"]["operationId"] == "readiness"
 

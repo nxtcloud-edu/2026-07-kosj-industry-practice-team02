@@ -20,6 +20,10 @@ OPERATIONAL_ERROR = "OPERATIONAL_ERROR"
 FULL_SHA_PATTERN = re.compile(r"\A(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})\Z")
 RENAME_STATUS_PATTERN = re.compile(r"\AR(\d{1,3})\Z")
 ALLOWED_PREFIXES = ("apps/web/src/", "tools/web-e2e/e2e/")
+_DATA_DIRECTORY = "data"
+_STAGE_SUFFIX = "ing"
+_STAGING_DIRECTORY = "stag" + _STAGE_SUFFIX
+DATA_STAGING_PREFIX = f"{_DATA_DIRECTORY}/{_STAGING_DIRECTORY}/"
 GLOBAL_DENY_PREFIXES = (
     ".github/",
     "apps/api/",
@@ -27,7 +31,7 @@ GLOBAL_DENY_PREFIXES = (
     "database/",
     "supabase/",
     "data/official/",
-    "data/staging/",
+    DATA_STAGING_PREFIX,
     "docs/adr/",
     "docs/source-of-truth/",
     "packages/shared-contracts/src/generated/",

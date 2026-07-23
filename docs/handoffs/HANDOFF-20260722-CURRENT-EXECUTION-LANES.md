@@ -1,5 +1,12 @@
 # Handoff — 로컬·Codex Cloud·Frontend 현재 실행 레인
 
+> **Superseded status note (2026-07-22):** PR #5 is merged at `9044ddb`. PR #4 was corrected to
+> `IMP-20260721-014` on head `37dfc8b`; its current diff is exactly the new note plus one INDEX append,
+> GitHub reports CLEAN/MERGEABLE and both hosted summaries are green. Only the Frontend collaborator/
+> user merge remains. The active product execution authority is the approved
+> `docs/superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md`; the sequencing snapshots
+> below are retained as historical handoff evidence and must not override it.
+
 - Date: 2026-07-22 KST
 - Branch/commit: `codex/COLLAB-001-pr2-merge-evidence` / `b5d6780` at evidence capture
 - Versions: documentation `2.10.7` before this handoff; application/API/DB/data unchanged

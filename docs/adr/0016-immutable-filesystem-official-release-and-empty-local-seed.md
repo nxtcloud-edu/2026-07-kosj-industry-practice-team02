@@ -80,7 +80,7 @@ history.
 - Released `.1` bytes remain immutable and must not be edited or deleted. Q-SEED-002=A/D-044 later
   selected ADR-0017: keep migration union authority, align the narrower pgTAP predicate, and create immutable
   `0.1.0-initial.2` with the same PM-approved 19/3/10 data, corrected guard, new manifest and full
-  rerun. ADR-0017의 written specification/plan은 Review이며 후속 plan 승인 전 구현하지 않는다.
+  rerun. ADR-0017의 written specification/plan은 이후 D-058/Q-MVP-001로 Approved/In Progress가 됐다.
 
 ## Safety and rollback
 

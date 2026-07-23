@@ -22,7 +22,7 @@ from scripts import verify_data_seed_db as verifier
 from scripts import test_data_seed_concurrency as concurrency
 
 
-RELEASE_VERSION = "0.1.0-initial.1"
+RELEASE_VERSION = "0.1.0-initial.2"
 SECRET_DSN = "postgresql://postgres:" + "synthetic-secret@127.0.0.1:54322/postgres"
 
 
@@ -113,7 +113,7 @@ class AdminDsnIdentityTests(unittest.TestCase):
         connection = _RowsConnection(
             {
                 "FROM pg_catalog.pg_auth_members": [
-                    ("postgres", "postgres", "postgres", 1, True)
+                    ("postgres", "postgres", "postgres", True, True, True)
                 ]
             }
         )
@@ -123,6 +123,62 @@ class AdminDsnIdentityTests(unittest.TestCase):
         statement = connection.statements[0]
         self.assertIn("COALESCE(", statement)
         self.assertNotIn("pg_catalog.coalesce", statement.lower())
+        self.assertEqual(3, statement.count("pg_catalog.bool_or"))
+        self.assertNotIn("pg_catalog.bool_and", statement)
+        self.assertNotIn("pg_catalog.count", statement)
+
+    def test_session_identity_rejects_each_missing_effective_option(self) -> None:
+        cases = (
+            (True, True, True, True),
+            (True, True, False, False),
+            (True, False, True, False),
+            (False, True, True, False),
+            (False, False, False, False),
+        )
+
+        for admin, inherit, set_option, accepted in cases:
+            with self.subTest(
+                admin=admin,
+                inherit=inherit,
+                set_option=set_option,
+            ):
+                connection = _RowsConnection(
+                    {
+                        "FROM pg_catalog.pg_auth_members": [
+                            (
+                                "postgres",
+                                "postgres",
+                                "postgres",
+                                admin,
+                                inherit,
+                                set_option,
+                            )
+                        ]
+                    }
+                )
+
+                if accepted:
+                    verifier._assert_session_identity(connection)
+                else:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "^DATABASE_SESSION_IDENTITY_INVALID$",
+                    ):
+                        verifier._assert_session_identity(connection)
+
+    def test_session_identity_rejects_zero_rows_without_catalog_disclosure(self) -> None:
+        connection = _RowsConnection({"FROM pg_catalog.pg_auth_members": []})
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^DATABASE_SESSION_IDENTITY_INVALID$",
+        ) as caught:
+            verifier._assert_session_identity(connection)
+
+        self.assertEqual(
+            "DATABASE_SESSION_IDENTITY_INVALID",
+            str(caught.exception),
+        )
 
     def test_dsn_identity_requires_exact_local_admin(self) -> None:
         accepted = verifier.parse_and_validate_dsn(SECRET_DSN)
@@ -263,23 +319,43 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
         self.assertIn("NOT locks.granted", concurrency.LOCK_WAIT_QUERY)
         self.assertIn("locks.locktype", concurrency.LOCK_WAIT_QUERY)
         self.assertIn(
-            "locks.relation::pg_catalog.regclass::text", concurrency.LOCK_WAIT_QUERY
+            "locks.relation = 'app_private.interaction_events'::pg_catalog.regclass",
+            concurrency.LOCK_WAIT_QUERY,
         )
+        self.assertNotIn("regclass::text", concurrency.LOCK_WAIT_QUERY)
         self.assertIn("locks.mode", concurrency.LOCK_WAIT_QUERY)
         self.assertNotIn("pg_stat_activity", concurrency.LOCK_WAIT_QUERY)
+        self.assertEqual(
+            frozenset({"AccessShareLock", "RowShareLock"}),
+            getattr(concurrency, "CAPABILITY_FIRST_ACCESS_LOCK_MODES", None),
+        )
 
     def test_concurrency_wait_rejects_wrong_blocker_relation_or_mode(self) -> None:
         unrelated_rows = (
             (
                 [999],
                 "relation",
-                "app_private.interaction_events",
+                True,
+                "RowShareLock",
+                False,
+            ),
+            ([701], "relation", False, "RowShareLock", False),
+            (
+                [701],
+                "relation",
+                True,
                 "RowExclusiveLock",
                 False,
             ),
-            ([701], "relation", "app_private.audit_logs", "RowExclusiveLock", False),
-            ([701], "relation", "app_private.interaction_events", "ShareLock", False),
-            ([701], "advisory", None, "ExclusiveLock", False),
+            (
+                [701],
+                "relation",
+                True,
+                "RowShareLock",
+                True,
+            ),
+            ([701], "advisory", False, "ExclusiveLock", False),
+            ([701], "relation", True, "RowShareLock"),
         )
         for row in unrelated_rows:
             with self.subTest(row=row):
@@ -298,23 +374,48 @@ class ProjectionCanonicalizationTests(unittest.TestCase):
                     ):
                         concurrency._wait_until_lock_blocked(connection, 702)
 
-    def test_concurrency_wait_accepts_only_direct_seed_relation_lock(self) -> None:
-        connection = _LockProbeConnection(
-            [
-                (
-                    [701],
-                    "relation",
-                    "app_private.interaction_events",
-                    "RowExclusiveLock",
-                    False,
-                )
-            ]
-        )
-        with mock.patch.object(concurrency.time, "monotonic", side_effect=[0.0, 1.0]):
-            concurrency._wait_until_lock_blocked(connection, 702)
+    def test_concurrency_wait_rejects_missing_lock_rows(self) -> None:
+        connection = _LockProbeConnection([])
+        with (
+            mock.patch.object(
+                concurrency.time,
+                "monotonic",
+                side_effect=[0.0, 1.0, 6.0],
+            ),
+            mock.patch.object(concurrency.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "CAPABILITY_WRITE_DID_NOT_BLOCK",
+            ):
+                concurrency._wait_until_lock_blocked(connection, 702)
 
-        self.assertEqual(1, len(connection.calls))
-        self.assertEqual((702, 702), connection.calls[0][1])
+    def test_concurrency_wait_accepts_only_direct_seed_relation_lock(self) -> None:
+        for mode in ("AccessShareLock", "RowShareLock"):
+            with self.subTest(mode=mode):
+                connection = _LockProbeConnection(
+                    [
+                        (
+                            [701],
+                            "relation",
+                            True,
+                            mode,
+                            False,
+                        )
+                    ]
+                )
+                with mock.patch.object(
+                    concurrency.time,
+                    "monotonic",
+                    side_effect=[0.0, 1.0, 6.0],
+                ):
+                    try:
+                        concurrency._wait_until_lock_blocked(connection, 702)
+                    except ValueError as error:
+                        self.fail(f"exact first-access relation lock was rejected: {error}")
+
+                self.assertEqual(1, len(connection.calls))
+                self.assertEqual((702, 702), connection.calls[0][1])
 
     def test_projection_queries_select_only_seed_owned_fields(self) -> None:
         self.assertEqual(
@@ -417,7 +518,7 @@ class ReleaseAndOutputBoundaryTests(unittest.TestCase):
             release.mkdir(parents=True)
             summary = {
                 "release_version": RELEASE_VERSION,
-                "release_id": "sejong-official-0.1.0-initial.1",
+                "release_id": "sejong-official-0.1.0-initial.2",
                 "counts": {"kb": 19, "office": 3, "mapping": 10},
                 "seed_semantic_sha256": "a" * 64,
                 "seed_sql_bytes": b"BEGIN; SELECT 1; COMMIT;\n",
@@ -445,11 +546,26 @@ class ReleaseAndOutputBoundaryTests(unittest.TestCase):
         self.assertEqual("a" * 64, loaded.semantic_sha256)
         self.assertEqual(19, loaded.counts["kb"])
 
-    def test_wrong_release_version_fails_before_release_read(self) -> None:
+    def test_known_broken_initial_release_fails_before_release_read(self) -> None:
         with mock.patch.object(verifier, "verify_release_directory") as verify:
             with self.assertRaisesRegex(ValueError, "RELEASE_VERSION_INVALID"):
-                verifier.load_verified_release(Path.cwd(), "0.1.0")
+                verifier.load_verified_release(Path.cwd(), "0.1.0-initial.1")
         verify.assert_not_called()
+
+    def test_cli_parsers_reject_known_broken_initial_release(self) -> None:
+        with self.assertRaisesRegex(ValueError, "CLI_ARGUMENTS_INVALID"):
+            verifier._parse_cli(
+                ["identity", "--release-version", "0.1.0-initial.1"]
+            )
+        with self.assertRaisesRegex(ValueError, "CLI_ARGUMENTS_INVALID"):
+            concurrency._parse_cli(
+                [
+                    "--scenario",
+                    concurrency.CAPABILITY_BEFORE_SEED,
+                    "--release-version",
+                    "0.1.0-initial.1",
+                ]
+            )
 
     def test_cli_output_never_contains_dsn_release_sql_or_exception_content(
         self,

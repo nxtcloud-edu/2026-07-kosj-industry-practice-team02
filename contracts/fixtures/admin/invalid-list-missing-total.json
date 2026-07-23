@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "masked_question": "시연용 샘플 마스킹 질문",
+      "intent": "LOCAL_TAX_GENERAL",
+      "fallback_reason": "LEGAL_JUDGMENT",
+      "candidate_eligible": false,
+      "status": "NEW",
+      "created_at": "2026-07-22T02:00:00+09:00",
+      "text_expires_at": "2026-08-21T02:00:00+09:00",
+      "text_purged_at": null
+    }
+  ]
+}

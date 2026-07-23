@@ -15,7 +15,7 @@ import psycopg
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.data_seed_release import RELEASE_VERSION
+from scripts.data_seed_release import SUCCESSOR_RELEASE_PROFILE
 from scripts.verify_data_seed_db import (
     ADMIN_DSN_ENVIRONMENT,
     REPOSITORY_ROOT,
@@ -32,6 +32,7 @@ from scripts.verify_data_seed_db import (
 )
 
 
+RELEASE_VERSION = SUCCESSOR_RELEASE_PROFILE.version
 CAPABILITY_BEFORE_SEED = "capability-before-seed"
 SEED_BEFORE_CAPABILITY = "seed-before-capability"
 _SCENARIO_STEPS = {
@@ -54,11 +55,16 @@ FROM app_api.record_interaction(
 )
 """.strip()
 _SEED_PREFLIGHT_MARKER = b"\n\nDO $data_seed_empty_guard$"
+# A fresh backend can first resolve the function's interaction_events%ROWTYPE
+# (AccessShareLock) before the SELECT ... FOR SHARE plan acquires RowShareLock.
+# Both are direct relation reads and both must be blocked by the seed's exact
+# ACCESS EXCLUSIVE lock; no other relation or lock mode is accepted.
+CAPABILITY_FIRST_ACCESS_LOCK_MODES = frozenset({"AccessShareLock", "RowShareLock"})
 LOCK_WAIT_QUERY = """
 SELECT
   pg_catalog.pg_blocking_pids(%s),
   locks.locktype,
-  locks.relation::pg_catalog.regclass::text,
+  locks.relation = 'app_private.interaction_events'::pg_catalog.regclass,
   locks.mode,
   locks.granted
 FROM pg_catalog.pg_locks AS locks
@@ -144,13 +150,13 @@ def _wait_until_lock_blocked(
         for row in rows:
             if len(row) != 5:
                 continue
-            blockers, locktype, relation, mode, granted = row
+            blockers, locktype, relation_matches, mode, granted = row
             if (
                 isinstance(blockers, (list, tuple))
                 and seed_backend_pid in blockers
                 and locktype == "relation"
-                and relation == "app_private.interaction_events"
-                and mode == "RowExclusiveLock"
+                and relation_matches is True
+                and mode in CAPABILITY_FIRST_ACCESS_LOCK_MODES
                 and granted is False
             ):
                 return

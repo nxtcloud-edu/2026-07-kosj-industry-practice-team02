@@ -88,6 +88,7 @@ text_purged_at
 - `LEGAL_JUDGMENT`: 마스킹 질문 저장 가능하나 후보 적격은 false
 - `OUT_OF_SCOPE`: 텍스트 저장 금지, 이벤트만 저장
 - `PRIVACY_UNRESOLVED`: 텍스트 저장·실패 질문 행·후보·provider 호출 금지, 질문 없는 이벤트만 저장
+- 2026-07-25 local/private MVP에서는 D-059가 위 일반 정책보다 좁게 적용된다. `PERSONAL_LOOKUP`과 `LEGAL_JUDGMENT`도 질문 text·event·실패 질문 행·후보를 만들지 않는다.
 - `FOLLOWUP`: 실패가 아니므로 실패 질문 목록에 저장하지 않음
 - `text_expires_at`: `created_at + 30일`; 실패 행 전체가 아니라 `masked_question` 텍스트의 만료 시각
 - `text_purged_at`: 파기 전에는 NULL, 파기 후에는 실제 처리 시각
@@ -125,6 +126,7 @@ text_purged_at
 | 실패 질문 비텍스트 메타데이터·후보 연결 | 텍스트 파기 후에도 프로젝트 산출물 범위에서 유지 |
 | 지원 범위 밖 질문 텍스트 | 저장하지 않음 |
 | 대화 transcript·context token | 서버에 저장하지 않음; 현재 탭 메모리에서만 15분 이내 사용 |
+| local chat idempotency | UUID key, HMAC request digest, correlation과 분리된 임시 claim token·5분 lease, 안전 응답과 상태만 논리 TTL 24시간; 원문·마스킹 질문·correlation ID는 저장하지 않고 startup+60초 주기로 만료 행 purge |
 | KB 후보·승인 이력 | 프로젝트 산출물 범위에서 유지 |
 | 승인 KB | 출처·버전·승인자와 함께 유지 |
 | 감사 이력 | 질문·답변 전문 없이 상태 변경 정보만 유지 |

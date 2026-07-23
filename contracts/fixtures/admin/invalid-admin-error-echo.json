@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "ADMIN_VALIDATION_FAILED",
+    "message": "입력값을 확인해 주세요.",
+    "request_id": "30000000-0000-4000-8000-000000000002",
+    "retryable": false,
+    "input": "시연용 샘플 금지된 입력 echo"
+  }
+}

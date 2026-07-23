@@ -3,7 +3,7 @@
 > **최종 제품**: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터  
 > **프로젝트 기간**: 2026-07-06 ~ 2026-07-31  
 > **책임 역할**: PM·Frontend·Backend·AI/Data 4개; 현재 실제 개발 협업은 사용자 owner + Frontend 팀원 1명
-> **문서 버전**: v2.2.5
+> **문서 버전**: v2.3.1
 > **팀명·팀원·연락처·제출일**: 제출 전 직접 입력
 
 ## 1. 프로젝트 정의
@@ -153,22 +153,23 @@ activation은 별도 복구 가능 단계이고, seed/compensation은 역할 확
 정확한 semantic projection 검증 아래 disposable local DB에서만 허용한다. 서면 명세는
 `2026-07-19T09:20:31+09:00`, 실행계획은 `2026-07-19T09:52:08+09:00` 승인됐다.
 
-Task 5는 `.1` filesystem release 19/3/10을 게시·검증하고 byte-identical local
-dispatcher를 활성화했다. `[db.seed].enabled=false`는 유지된다. Task 6 actual disposable
-PostgreSQL 17 cycle은 seed write 전 identity guard에서 Blocked다. migration은 grantor별 row의
-ADMIN/INHERIT/SET effective union을 권위로 삼지만 불변 `.1` seed/compensation은 모든
-option을 가진 단일 row만 인정하기 때문이다. 따라서 PostgreSQL에 승인 row가 삽입된
-근거, citizen-visible ACTIVE data, READY/AI 승격은 없고 `official_data`는
-`0.0.0-not-populated`다. runtime은 container 0·port 54322 listener 0으로 정리됐다.
+Q-SEED-002=A/D-044와 Q-MVP-001=A/D-058에 따라 historical `.1`과 v1 schema byte를 보존하면서
+같은 PM 승인 19/3/10을 corrected effective-option union guard·strict v2 schema·new manifest에
+묶은 immutable `0.1.0-initial.2`를 게시했다. 독립 기술 검토와 create-once/byte 검증을 통과했고
+`supabase/seed.sql`은 `.2`와 byte-identical하며 `[db.seed].enabled=false`다.
 
-Q-SEED-002=A/D-044로 기존 effective-union 권위를 유지하고 같은 PM 승인 19/3/10을 corrected
-guard·new manifest·technical review에 묶은 successor immutable `0.1.0-initial.2`로 새로
-게시한 뒤 actual cycle 전체를 재실행하는 방향을 확정했다. `.1` release와 v1 schema byte는
-수정·삭제하지 않는다. ADR-0017과 DATA-SEED-002 written specification/plan은 Review이고,
-사용자의 후속 plan 승인 전 `.2` 생성·dispatcher 교체·DB reset/import·official-data 승격은
-금지한다. 현재 pgTAP의 `INHERIT+SET` same-row 검사는 successor 실행에서 migration의 세 독립
-`EXISTS` 의미로 정렬하되 assertion count와 runtime DB object는 바꾸지 않는다. 성공하더라도
-`/ready=200`은 별도 READY-001이 소유한다.
+초기 4회는 concurrency B에서 중단됐지만 relation observer의 accepted lock mode 교정 뒤 2026-07-22
+지원 actual disposable PostgreSQL 17 cycle은 baseline·exact identity·forced rollback
+(`tables=8 partial=0`)·concurrency A/B·seed cycle·second-seed/compensation guard·replay·final
+projection·cleanup까지 PASS했다. local DB projection은 ACTIVE/OFFICIAL KB 19, OFFICIAL office 3,
+approved mapping 10이며 final citizen 19/exclusions 0/operational 0 및 final runtime
+process/container 0을 확인했다. immutable `.2`는 변경하지 않았고 `official_data=0.1.0-initial.2`로
+승격한다. `/ready=200`과 20번째 ACTIVE는 이 seed 증거와 별개인 실제 application probe/rehearsal이
+소유한다. 그 separate final local rehearsal은 `/ready=200`, one NEW failure→different approver→
+`KB-WASTE-03` SUCCESS, final ACTIVE 20/four fields×5를 PASS했으며 `.2` artifact는 그대로다.
+final API/Web/contracts/E2E/scanner, clean disposable DB와 root `verify.ps1 -Offline`은 PASS했다.
+deterministic sample T-01~T-20도 20/20이며 별도 보고서가 수치를 소유한다. local/private AI scope는
+Review이고 Draft PR review/merge와 manual demo/accessibility는 인간 Pending이다.
 
 ## 7. 시스템 설계
 
@@ -243,10 +244,10 @@ audit_logs
 | 사유 | KB 후보 | 텍스트 저장 |
 | --- | --- | --- |
 | INSUFFICIENT_GROUNDING | 가능 | 마스킹 후 30일 |
-| PERSONAL_LOOKUP | 불가 | 필요 시 마스킹 후 30일 |
-| LEGAL_JUDGMENT | 불가 | 필요 시 마스킹 후 30일 |
+| PERSONAL_LOOKUP | 불가 | 7/25 local은 질문 text·event·실패 질문 행 미생성 |
+| LEGAL_JUDGMENT | 불가 | 7/25 local은 질문 text·event·실패 질문 행 미생성 |
 | OUT_OF_SCOPE | 불가 | 질문 텍스트 저장 금지, 이벤트만 |
-| PRIVACY_UNRESOLVED | 불가 | 질문 텍스트·실패 질문 행 없이 metadata event만 |
+| PRIVACY_UNRESOLVED | 불가 | 7/25 local은 질문 텍스트·실패 질문 행·DB event 모두 미생성 |
 | FOLLOWUP | 해당 없음 | 실패 질문 목록 미저장 |
 
 ### 외부 AI
@@ -264,7 +265,7 @@ audit_logs
 
 - 이름·상세주소는 재현율 우선으로 보수적으로 가린다. 답변 성공률 80% 미달의 원인이 과잉 마스킹으로 입증돼도 정밀도 우선으로 자동 전환하지 않고 인간 재승인을 받는다.
 - 초기 마스킹 코어는 표준 라이브러리 기반 결정론적 typed rule engine과 원문 값 없는 고정 토큰을 사용한다. 정규화·탐지 후에도 안전한 마스킹 문자열을 만들 수 없으면 텍스트를 반환하지 않고 실패 질문 row·provider 호출을 금지하며 질문 없는 interaction event만 허용한다.
-- 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. source/context/office, provider 호출, 질문 text, 실패 질문 행과 후보는 만들지 않는다. 후속 consumer 명세에서 공개 계약과 forward DB migration을 함께 승인하기 전에는 route를 활성화하지 않는다.
+- 안전한 마스킹 문자열을 만들 수 없는 시민 요청은 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. source/context/office, provider 호출, 질문 text, 실패 질문 행·DB event·후보는 만들지 않는다. Q-MVP-001로 local/private route와 API 3.1.0-draft consumer는 활성화했지만, public route와 persistent metadata migration은 reserved `00700` 단계의 별도 승인 전까지 비활성이다.
 - 시민 질문에 들어온 phone-shaped value는 사용자가 “공식 대표번호”라고 적어도 모두 마스킹한다. 공식 연락처는 입력에서 보존하지 않고 승인된 KB·기관 메타데이터를 서버가 결합한 기관 카드에서만 제공한다.
 - 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니다. 실제 시민 질문은 마스킹 여부와 무관하게 DeepSeek에 전송하지 않는다.
 - 화면상 대화 기록과 15분 서명형 `context_token`은 현재 브라우저 탭 메모리에만 둔다. 서버 세션·raw 대화문·token을 DB/로그에 저장하지 않고 새로고침·탭 종료 시 화면 기록을 없앤다.
@@ -304,6 +305,23 @@ audit_logs
 | 7/22 | 역할·권한 검수 | 역할 전환·승인 모달 | 권한 차단·감사 이력 | 후보 출처 검토 | 승인 동작 |
 | 7/23 | 테스트 기준 | 품질 현황 탭 | 품질·성능 API | 표본 테스트 1차 | KPI 표시 |
 | 7/24 | 중간 리허설 | 모바일 통합 | 회귀·로컬 백업 | 실패 분석 | P0/P1 통합 완료 |
+
+### Q-MVP-001 가속 마일스톤: 7/22~7/25
+
+기존 주차표의 최종 범위는 유지하되 현재 저장소의 실제 선후관계에 맞춰 local/private 핵심 루프를
+아래 순서로 재배치한다. 상세 task/명령/담당 경계는 승인된
+`docs/superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md`가 소유한다.
+
+| 날짜 | Owner/BE·Data·Security | Frontend 팀원 | PM·QA | 일일 완료 gate |
+|---|---|---|---|---|
+| 7/22 | 통합 회귀 복구, DATA-SEED-002 `.2` | PR #4 `012→014`, `/chat` fixture states | 명세·표시 문구 확인 | staging/release green, `.2` reviewable |
+| 7/23 | actual 19 ACTIVE, PII/chat 계약·pure core | `/chat` fixture 완료·typed client 준비 | 19 official/계약 확인 | DATA actual와 chat core green |
+| 7/24 | chat API, event/admin API, 20번째 후보 backend | 실제 `/chat`, 최소 `/admin` | author/reviewer rehearsal | PASS: candidate approval atomic local E2E |
+| 7/25 | 전체 회귀·보안·데모 | 390/430/desktop 접근성 수정 | 표본 20·회귀 1 판정 | AI closeout PASS: final ACTIVE 20·sample 20/20·root green; human manual review Pending |
+
+7월 25일 gate에는 DeepSeek 품질 튜닝, 100명 부하, 자동 백업, public deployment, 고급 UI를
+포함하지 않는다. 이 항목은 4주차 P1에 남으며, 개인정보·ACTIVE·승인·출처·접근성 최소선은
+마일스톤에서도 필수다.
 
 ### 4주차: 7/27~7/31
 

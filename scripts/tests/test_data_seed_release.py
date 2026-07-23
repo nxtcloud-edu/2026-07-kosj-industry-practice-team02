@@ -39,6 +39,54 @@ CANONICAL_DRAFT_TOKEN = "data/staging/data-001/0.1.0-draft.1"
 CANONICAL_DRAFT_RELATIVE = Path(CANONICAL_DRAFT_TOKEN)
 RELEASE_VERSION = "0.1.0-initial.1"
 RELEASED_AT = "2026-07-19T09:20:31+09:00"
+INITIAL_RELEASE_FILES = {
+    "approval_manifest.json": (
+        13074,
+        "466d7af44cc36a9ee1ea1eed3d90f0e6fa1627fc57c03de5377c6f9f9fef5b6a",
+    ),
+    "compensation.sql": (
+        41710,
+        "6fde4e35e185453ca1bba42af4440fc0f935257efbc1701f84cc349ecedc2368",
+    ),
+    "kb_records.json": (
+        37208,
+        "831a0c01c9cdb08130febb122ebcad7d7b4fd9e7d846764d0d49d3e3c02402ec",
+    ),
+    "office_service_mappings.json": (
+        4057,
+        "361ba3f4024abdfc7f1d0b4c8107d3aff708e377ac309bc18beda7613bfccebd",
+    ),
+    "offices.json": (
+        2263,
+        "d83d48ff56cb945ddbb262e26c7d876dbc4b34af9b038048884057ab54e10b4e",
+    ),
+    "release_manifest.json": (
+        1605,
+        "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2",
+    ),
+    "seed.sql": (
+        75891,
+        "42d67828bb23c0eb0fa17ae2daa7d457fd71806b7cc796a54643dd975597783d",
+    ),
+}
+INITIAL_SCHEMA_FILES = {
+    "kb-records.schema.json": (
+        2564,
+        "97bd21438bbfc1a60c13de13106b9378961ddef20839c3227d88bcf75eae9527",
+    ),
+    "office-service-mappings.schema.json": (
+        1460,
+        "82853a80f7147cd9948580bec97a9bf5c765cf1956520680f205ebfd5d4d2bfa",
+    ),
+    "offices.schema.json": (
+        1885,
+        "7a251ba5fff8e5990788db010faf946d221b845089c2192ae5c0a122e632f280",
+    ),
+    "release-manifest.schema.json": (
+        2765,
+        "0b6cc2deb20cf25ea9b02059cc6400826304c0452ee957e3757a41679e91423e",
+    ),
+}
 EXPECTED_RUNTIME_ALLOWLIST = frozenset(
     {
         "scripts/data_seed_release.py",
@@ -416,6 +464,85 @@ class DataSeedReleaseTrustBoundaryTests(unittest.TestCase):
         self.assertEqual(3, offices["properties"]["records"]["minItems"])
         self.assertEqual(10, mappings["properties"]["records"]["minItems"])
 
+    def test_successor_schemas_are_strict_and_only_extend_version_lineage(self) -> None:
+        schema_root = self.root / "data" / "schemas" / "data-seed"
+        v1 = {
+            path.name: json.loads(path.read_text(encoding="utf-8"))
+            for path in (schema_root / "v1").glob("*.schema.json")
+        }
+        v2 = {
+            path.name: json.loads(path.read_text(encoding="utf-8"))
+            for path in (schema_root / "v2").glob("*.schema.json")
+        }
+        self.assertEqual(set(v1), set(v2))
+
+        for name, schema in v2.items():
+            self.assertFalse(schema["additionalProperties"], name)
+            self.assertEqual(2, schema["properties"]["schema_version"]["const"], name)
+            self.assertEqual(
+                "0.1.0-initial.2",
+                schema["properties"]["release_version"]["const"],
+                name,
+            )
+
+        correction = v2["release-manifest.schema.json"]["properties"]["correction"]
+        self.assertFalse(correction["additionalProperties"])
+        self.assertEqual(
+            [
+                "predecessor_release_version",
+                "predecessor_manifest_sha256",
+                "decision_id",
+                "reason",
+            ],
+            correction["required"],
+        )
+        self.assertEqual(
+            {
+                "predecessor_release_version": "0.1.0-initial.1",
+                "predecessor_manifest_sha256": (
+                    "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2"
+                ),
+                "decision_id": "D-044",
+                "reason": "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            },
+            {
+                field: property_schema["const"]
+                for field, property_schema in correction["properties"].items()
+            },
+        )
+
+        for name in (
+            "kb-records.schema.json",
+            "offices.schema.json",
+            "office-service-mappings.schema.json",
+        ):
+            normalized = json.loads(json.dumps(v2[name]))
+            normalized["title"] = v1[name]["title"]
+            normalized["properties"]["schema_version"]["const"] = 1
+            normalized["properties"]["release_version"]["const"] = (
+                "0.1.0-initial.1"
+            )
+            self.assertEqual(v1[name], normalized, name)
+
+        normalized_manifest = json.loads(
+            json.dumps(v2["release-manifest.schema.json"])
+        )
+        initial_manifest = v1["release-manifest.schema.json"]
+        normalized_manifest["title"] = initial_manifest["title"]
+        normalized_manifest["required"].remove("correction")
+        normalized_manifest["properties"].pop("correction")
+        normalized_manifest["properties"]["schema_version"]["const"] = 1
+        normalized_manifest["properties"]["release_id"]["const"] = (
+            "sejong-official-0.1.0-initial.1"
+        )
+        normalized_manifest["properties"]["release_version"]["const"] = (
+            "0.1.0-initial.1"
+        )
+        normalized_manifest["properties"]["generator"]["const"] = (
+            "data-seed-release-v1"
+        )
+        self.assertEqual(initial_manifest, normalized_manifest)
+
     def test_release_tool_is_the_only_new_staging_scanner_exception(self) -> None:
         self.assertEqual(
             EXPECTED_RUNTIME_ALLOWLIST, staging_validation._RUNTIME_ALLOWLIST
@@ -458,6 +585,101 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         shutil.copytree(REPOSITORY_ROOT / "data", self.root / "data")
         self.draft = self.root / CANONICAL_DRAFT_RELATIVE
         self.projection = build_seed_projection(self.draft, RELEASE_VERSION)
+
+    def test_initial_release_and_v1_schema_bytes_are_frozen(self) -> None:
+        release_dir = self.root / "data/official/releases/0.1.0-initial.1"
+        for name, (length, digest) in INITIAL_RELEASE_FILES.items():
+            payload = (release_dir / name).read_bytes()
+            self.assertEqual(length, len(payload), name)
+            self.assertEqual(digest, hashlib.sha256(payload).hexdigest(), name)
+
+        schema_dir = self.root / "data/schemas/data-seed/v1"
+        for name, (length, digest) in INITIAL_SCHEMA_FILES.items():
+            payload = (schema_dir / name).read_bytes()
+            self.assertEqual(length, len(payload), name)
+            self.assertEqual(digest, hashlib.sha256(payload).hexdigest(), name)
+
+        profile = data_seed_release.release_profile(RELEASE_VERSION)
+        bundle = build_release_bundle(
+            self.root,
+            self.draft,
+            profile.version,
+            profile.released_at,
+        )
+        generated = data_seed_release.release_bundle_files(bundle)
+        self.assertEqual(set(INITIAL_RELEASE_FILES), set(generated))
+        for name, payload in generated.items():
+            self.assertEqual((release_dir / name).read_bytes(), payload, name)
+
+    def test_profiles_are_closed_and_successor_preserves_projection(self) -> None:
+        initial = data_seed_release.release_profile("0.1.0-initial.1")
+        successor = data_seed_release.release_profile("0.1.0-initial.2")
+
+        self.assertIsInstance(initial, data_seed_release.ReleaseProfile)
+        self.assertEqual("legacy-single-row", initial.membership_guard)
+        self.assertEqual("effective-option-union", successor.membership_guard)
+        self.assertEqual(
+            "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2",
+            successor.predecessor_manifest_sha256,
+        )
+        self.assertEqual("D-044", successor.decision_id)
+        self.assertEqual(
+            "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            successor.correction_reason,
+        )
+        self.assertEqual(
+            {"0.1.0-initial.1", "0.1.0-initial.2"},
+            set(data_seed_release.RELEASE_PROFILES),
+        )
+        self.assertEqual("0.1.0-initial.2", data_seed_release.RELEASE_VERSION)
+        self.assertEqual(
+            build_seed_projection(self.draft, initial.version),
+            build_seed_projection(self.draft, successor.version),
+        )
+        with self.assertRaisesRegex(ValueError, "RELEASE_VERSION_INVALID"):
+            data_seed_release.release_profile("0.1.0-initial.3")
+
+    def test_successor_bundle_uses_profile_metadata_and_correction(self) -> None:
+        profile = data_seed_release.SUCCESSOR_RELEASE_PROFILE
+        bundle = build_release_bundle(
+            self.root,
+            self.draft,
+            profile.version,
+            profile.released_at,
+        )
+
+        self.assertEqual(2, bundle.manifest["schema_version"])
+        self.assertEqual(profile.release_id, bundle.manifest["release_id"])
+        self.assertEqual(profile.version, bundle.manifest["release_version"])
+        self.assertEqual(profile.released_at_utc, bundle.manifest["released_at"])
+        self.assertEqual(profile.generator_id, bundle.manifest["generator"])
+        self.assertEqual(
+            {
+                "predecessor_release_version": "0.1.0-initial.1",
+                "predecessor_manifest_sha256": (
+                    "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2"
+                ),
+                "decision_id": "D-044",
+                "reason": "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION",
+            },
+            bundle.manifest["correction"],
+        )
+        for payload in (
+            bundle.kb_records_bytes,
+            bundle.offices_bytes,
+            bundle.office_service_mappings_bytes,
+        ):
+            document = json.loads(payload)
+            self.assertEqual(2, document["schema_version"])
+            self.assertEqual(profile.version, document["release_version"])
+        for payload in (bundle.seed_sql_bytes, bundle.compensation_sql_bytes):
+            principal = payload.decode("utf-8").split(
+                "DO $data_seed_assert_principal$", maxsplit=1
+            )[1].split("$data_seed_assert_principal$;", maxsplit=1)[0]
+            self.assertEqual(1, principal.count("IF NOT EXISTS ("))
+            self.assertEqual(2, principal.count("OR NOT EXISTS ("))
+            self.assertNotIn("pg_catalog.bool_and", principal)
+            self.assertNotIn("pg_catalog.count", principal)
 
     def test_projection_is_exact_19_3_10_and_excludes_rejected_records(self) -> None:
         self.assertEqual(19, len(self.projection["kb_documents"]))
@@ -598,7 +820,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         )
         projection["kb_documents"][0]["answer_summary"] = "세종 O'Brien \\ 경로"
         projection["kb_documents"][0]["fee"] = None
-        sql = render_seed_sql(projection).decode("utf-8")
+        sql = render_seed_sql(
+            projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertIn("세종 O''Brien \\ 경로", sql)
         self.assertIn("'2026-07-18'::date", sql)
         self.assertIn("NULL::text", sql)
@@ -716,7 +941,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertNotIn(mutated_summary.encode("utf-8"), bundle.kb_records_bytes)
 
     def test_seed_sql_has_fixed_principal_lock_order_preflight_and_guards(self) -> None:
-        sql = render_seed_sql(self.projection).decode("utf-8")
+        sql = render_seed_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertTrue(sql.startswith("BEGIN;\n"))
         self.assertTrue(sql.endswith("COMMIT;\n"))
         self.assertIn("pg_advisory_xact_lock(20260719001)", sql)
@@ -759,8 +987,11 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertNotIn("format(", sql)
         self.assertIn("KB-WASTE-03", sql)
 
-    def test_membership_guard_counts_the_pair_before_checking_all_options(self) -> None:
-        sql = render_seed_sql(self.projection).decode("utf-8")
+    def test_legacy_membership_guard_counts_pair_before_checking_options(self) -> None:
+        sql = render_seed_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         query_start = sql.index("pg_catalog.count(*)")
         query_end = sql.index("IF v_total_memberships", query_start)
         membership_query = sql[query_start:query_end]
@@ -777,6 +1008,32 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
             sql,
         )
 
+    def test_successor_guard_uses_three_independent_option_checks(self) -> None:
+        guard = data_seed_release.SUCCESSOR_RELEASE_PROFILE.membership_guard
+        payloads = (
+            render_seed_sql(self.projection, membership_guard=guard),
+            render_compensation_sql(self.projection, membership_guard=guard),
+        )
+
+        for payload in payloads:
+            sql = payload.decode("utf-8")
+            principal = sql.split(
+                "DO $data_seed_assert_principal$", maxsplit=1
+            )[1].split("$data_seed_assert_principal$;", maxsplit=1)[0]
+            self.assertEqual(1, principal.count("IF NOT EXISTS ("))
+            self.assertEqual(2, principal.count("OR NOT EXISTS ("))
+            for option in ("admin_option", "inherit_option", "set_option"):
+                self.assertEqual(1, principal.count(f"memberships.{option}"))
+            for forbidden in ("count(*)", "bool_and", "<> 1"):
+                self.assertNotIn(forbidden, principal)
+            self.assertIn("DATA_SEED_MEMBERSHIP_INVALID", principal)
+
+    def test_unknown_membership_guard_fails_closed(self) -> None:
+        for renderer in (render_seed_sql, render_compensation_sql):
+            with self.subTest(renderer=renderer.__name__):
+                with self.assertRaisesRegex(ValueError, "MEMBERSHIP_GUARD_INVALID"):
+                    renderer(self.projection, membership_guard="unsupported")
+
     def test_expected_rows_cover_every_seed_owned_column(self) -> None:
         expected = render_expected_rows(self.projection)
         for cte in (
@@ -792,7 +1049,10 @@ class DataSeedProjectionAndSqlTests(unittest.TestCase):
         self.assertIn("department_label", expected)
 
     def test_compensation_is_guarded_and_deletes_in_fk_safe_order(self) -> None:
-        sql = render_compensation_sql(self.projection).decode("utf-8")
+        sql = render_compensation_sql(
+            self.projection,
+            membership_guard=data_seed_release.INITIAL_RELEASE_PROFILE.membership_guard,
+        ).decode("utf-8")
         self.assertIn("DATA_SEED_COMPENSATION_OPERATIONAL_ROWS_PRESENT", sql)
         self.assertGreaterEqual(sql.count("EXCEPT ALL"), 8)
         guard = sql.index("DATA_SEED_COMPENSATION_PROJECTION_MISMATCH")

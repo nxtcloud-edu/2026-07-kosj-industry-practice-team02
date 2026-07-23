@@ -335,20 +335,36 @@ try {
         "scripts.tests.test_verify_data_seed_runner"
     )
 
-    $dataSeedReleaseToken = "data/official/releases/0.1.0-initial.1"
-    $dataSeedReleaseDirectory = Join-Path $repoRoot "data\official\releases\0.1.0-initial.1"
-    $dataSeedReleaseMarker = Join-Path $dataSeedReleaseDirectory "release_manifest.json"
-    $dataSeedReleaseSchema = Join-Path $repoRoot "data\schemas\data-seed\v1\release-manifest.schema.json"
+    $dataSeedInitialReleaseToken = "data/official/releases/0.1.0-initial.1"
+    $dataSeedInitialReleaseDirectory = Join-Path $repoRoot "data\official\releases\0.1.0-initial.1"
+    $dataSeedInitialReleaseMarker = Join-Path $dataSeedInitialReleaseDirectory "release_manifest.json"
+    $dataSeedInitialReleaseSchema = Join-Path $repoRoot "data\schemas\data-seed\v1\release-manifest.schema.json"
     if (
-        -not (Test-Path -LiteralPath $dataSeedReleaseMarker -PathType Leaf) -or
-        -not (Test-Path -LiteralPath $dataSeedReleaseSchema -PathType Leaf)
+        -not (Test-Path -LiteralPath $dataSeedInitialReleaseMarker -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $dataSeedInitialReleaseSchema -PathType Leaf)
     ) {
-        $script:CurrentStep = "VERIFY-DATA-SEED-RELEASE"
+        $script:CurrentStep = "VERIFY-DATA-SEED-RELEASE-INITIAL"
         throw "VERIFY_DATA_SEED_RELEASE_ARTIFACT_MISSING"
     }
-    Invoke-NativeStep -StepId "VERIFY-DATA-SEED-RELEASE" -Executable $apiPython -Arguments @(
+    Invoke-NativeStep -StepId "VERIFY-DATA-SEED-RELEASE-INITIAL" -Executable $apiPython -Arguments @(
         "-B", "scripts/promote_data_seed.py", "verify-release",
-        "--release-dir", $dataSeedReleaseToken
+        "--release-dir", $dataSeedInitialReleaseToken
+    )
+
+    $dataSeedSuccessorReleaseToken = "data/official/releases/0.1.0-initial.2"
+    $dataSeedSuccessorReleaseDirectory = Join-Path $repoRoot "data\official\releases\0.1.0-initial.2"
+    $dataSeedSuccessorReleaseMarker = Join-Path $dataSeedSuccessorReleaseDirectory "release_manifest.json"
+    $dataSeedSuccessorReleaseSchema = Join-Path $repoRoot "data\schemas\data-seed\v2\release-manifest.schema.json"
+    if (
+        -not (Test-Path -LiteralPath $dataSeedSuccessorReleaseMarker -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $dataSeedSuccessorReleaseSchema -PathType Leaf)
+    ) {
+        $script:CurrentStep = "VERIFY-DATA-SEED-RELEASE-SUCCESSOR"
+        throw "VERIFY_DATA_SEED_RELEASE_ARTIFACT_MISSING"
+    }
+    Invoke-NativeStep -StepId "VERIFY-DATA-SEED-RELEASE-SUCCESSOR" -Executable $apiPython -Arguments @(
+        "-B", "scripts/promote_data_seed.py", "verify-release",
+        "--release-dir", $dataSeedSuccessorReleaseToken
     )
 
     $dataSeedDispatcher = Join-Path $repoRoot "supabase\seed.sql"
@@ -358,7 +374,7 @@ try {
     }
     Invoke-NativeStep -StepId "VERIFY-LOCAL-SEED" -Executable $apiPython -Arguments @(
         "-B", "scripts/promote_data_seed.py", "verify-local-seed",
-        "--release-dir", $dataSeedReleaseToken
+        "--release-dir", $dataSeedSuccessorReleaseToken
     )
 
     Invoke-NativeStep -StepId "LINT-WEB" -Executable "corepack.cmd" -Arguments @(

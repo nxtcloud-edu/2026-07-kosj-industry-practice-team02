@@ -17,7 +17,7 @@
 - 개인정보·중복·담당 기관·기준일 확인
 - 승인 또는 반려
 
-MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할 전환**으로 두 역할을 시연한다. 데모 헤더는 인증이 아니다. 백엔드는 `actor_id`, `actor_role`, `created_by`를 검사해 작성자 본인 승인을 거부한다. public 환경에서는 별도 승인된 서버측 gate가 없으면 관리자 UI와 API를 비활성화한다. 실제 운영 단계에서는 기관 SSO와 RBAC로 확장한다.
+MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할 전환**으로 두 역할을 시연한다. 고정 demo actor는 작성자 `OPERATOR-LOCAL-001`, 승인자 `PM-LOCAL-001`이며, 데모 헤더는 인증이 아니다. 백엔드는 `actor_id`, `actor_role`, `created_by`를 검사해 작성자 본인 승인을 거부한다. public 환경에서는 별도 승인된 서버측 gate가 없으면 관리자 UI와 API를 비활성화한다. 실제 운영 단계에서는 기관 SSO와 RBAC로 확장한다.
 
 ## 2. 후보 전환 규칙
 
@@ -32,8 +32,9 @@ MVP에서는 local/private 환경의 `/admin` 상단에서만 **데모용 역할
 모호한 질문은 FOLLOWUP이며 후보 전환 대상이 아니다. `PRIVACY_UNRESOLVED`도 운영 개선용
 실패 질문이 아니며 후보·사유 확인 상태 머신에 진입하지 않는다.
 
-`PRIVACY_UNRESOLVED` 행은 D-045로 확정된 후속 정책 목표다. 현재 active API 계약·DB enum·route는
-기존 4개 reason을 유지하며, 별도 consumer 명세와 forward migration 승인이 끝난 뒤 적용한다.
+`PRIVACY_UNRESOLVED`는 Q-MVP-001/D-058의 API 3.0.0-draft와 local/private `/api/v1/chat`에
+적용됐다. 7/25 local 경로에서는 질문 text·실패 질문 행·interaction DB event를 만들지 않는다.
+원격/public 운영과 persistent privacy metadata는 reserved `00700` 단계의 별도 승인 전까지 금지한다.
 
 ### 사유 확인 불변조건
 

@@ -1,6 +1,6 @@
 # DATA-SEED-002 successor immutable release correction design
 
-- Status: Review — Q-SEED-002=A selected; written specification and execution plan not yet approved
+- Status: Approved / In Progress — Q-SEED-002=A selected; Q-MVP-001=A/D-058 approved immediate execution on 2026-07-22
 - Date: 2026-07-20
 - Owner: Backend·Data·Security
 - Related: D-044, A-030, ADR-0015, ADR-0016, ADR-0017, DATA-SEED-001 actual report
@@ -224,8 +224,8 @@ full actual DB cycle. Final review must separately check specification complianc
 
 ## 12. Human gates and completion boundary
 
-Human approval is still required for this written specification and its execution plan. A later
-`계획 승인, 구현 시작` or equivalent authorizes the local filesystem/dispatcher/disposable-DB work
+Q-MVP-001=A and the user's `즉시 실행` instruction on 2026-07-22 approved this written specification
+and its execution plan. That approval authorizes the local filesystem/dispatcher/disposable-DB work
 and the one existing pgTAP membership-predicate alignment in the plan, but not public deployment,
 `00700`, PII contract work, WASTE-03 or `/ready=200`.
 

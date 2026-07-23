@@ -1,6 +1,6 @@
-"""Secret-free verification of the initial official seed in disposable local DBs.
+"""Secret-free verification of the successor official seed in disposable local DBs.
 
-This is an initial-release-only verification tool.  It reads release SQL into
+This is a successor-release-only verification tool.  It reads release SQL into
 memory, uses only the existing psycopg dependency, and never persists or emits a
 DSN.  The PowerShell runner is the supported orchestration boundary.
 """
@@ -24,12 +24,11 @@ if __package__ in {None, ""}:
 
 from scripts.data_seed_release import (
     CANONICAL_DRAFT_RELATIVE_PATH,
-    CANONICAL_RELEASE_RELATIVE_PATH,
     KB_DOCUMENT_FIELDS,
     KB_QUESTION_EXAMPLE_FIELDS,
     OFFICE_FIELDS,
     OFFICE_SERVICE_MAPPING_FIELDS,
-    RELEASE_VERSION,
+    SUCCESSOR_RELEASE_PROFILE,
     ReleaseVerificationError,
     build_seed_projection,
     canonical_json_bytes,
@@ -39,6 +38,8 @@ from scripts.data_seed_release import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+RELEASE_VERSION = SUCCESSOR_RELEASE_PROFILE.version
+CANONICAL_RELEASE_RELATIVE_PATH = Path(SUCCESSOR_RELEASE_PROFILE.canonical_token)
 ADMIN_DSN_ENVIRONMENT = "SEJONG_ADMIN_DATABASE_URL"
 EXPECTED_ADMIN_IDENTITY = ("postgres", "127.0.0.1", 54322, "postgres")
 ALLOWED_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})
@@ -340,15 +341,9 @@ SELECT
   session_user,
   current_user,
   current_database(),
-  pg_catalog.count(*)::integer,
-  COALESCE(
-    pg_catalog.bool_and(
-      memberships.admin_option
-      AND memberships.inherit_option
-      AND memberships.set_option
-    ),
-    false
-  )
+  COALESCE(pg_catalog.bool_or(memberships.admin_option), false),
+  COALESCE(pg_catalog.bool_or(memberships.inherit_option), false),
+  COALESCE(pg_catalog.bool_or(memberships.set_option), false)
 FROM pg_catalog.pg_auth_members AS memberships
 JOIN pg_catalog.pg_roles AS granted_role ON granted_role.oid = memberships.roleid
 JOIN pg_catalog.pg_roles AS member_role ON member_role.oid = memberships.member
@@ -357,7 +352,7 @@ WHERE granted_role.rolname = 'sejong_schema_owner'
 GROUP BY session_user, current_user, current_database()
 """.strip()
     ).fetchone()
-    if row != ("postgres", "postgres", "postgres", 1, True):
+    if row != ("postgres", "postgres", "postgres", True, True, True):
         raise ValueError("DATABASE_SESSION_IDENTITY_INVALID")
 
 

@@ -4,18 +4,78 @@ import os
 import secrets
 import stat
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
+from urllib.parse import quote
 
 import psycopg
 from psycopg import sql
-from psycopg.conninfo import make_conninfo
+from psycopg.conninfo import conninfo_to_dict
 
 
 ROLE_NAME = "sejong_local_login"
 TARGET_ENV_KEY = "DATABASE_URL"
 CAPABILITY_ROLE_NAME = "sejong_backend"
+EXPECTED_ADMIN_IDENTITY = ("postgres", "127.0.0.1", 54322, "postgres")
+ALLOWED_ADMIN_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV_PATH = REPOSITORY_ROOT / "apps" / "api" / ".env"
+
+
+def _assert_no_ambient_libpq_environment(environment: Mapping[str, str]) -> None:
+    if any(
+        name.upper().startswith("PG") and value != ""
+        for name, value in environment.items()
+    ):
+        raise ValueError("AMBIENT_LIBPQ_ENVIRONMENT_INVALID")
+
+
+def _validate_admin_dsn(value: str) -> None:
+    if (
+        not value
+        or value != value.strip()
+        or any(character in value for character in "\x00\r\n")
+    ):
+        raise ValueError("ADMIN_DSN_IDENTITY_INVALID")
+    try:
+        values = conninfo_to_dict(value)
+        password = values.get("password")
+        port_text = values.get("port")
+        if (
+            set(values) != ALLOWED_ADMIN_CONNINFO_KEYS
+            or not isinstance(password, str)
+            or not password
+            or any(character in password for character in "\x00\r\n")
+            or not isinstance(port_text, str)
+            or not port_text.isascii()
+            or not port_text.isdecimal()
+        ):
+            raise ValueError
+        identity = (
+            values.get("user", ""),
+            values.get("host", ""),
+            int(port_text),
+            values.get("dbname", ""),
+        )
+    except (TypeError, UnicodeError, ValueError, psycopg.Error):
+        raise ValueError("ADMIN_DSN_IDENTITY_INVALID") from None
+    if identity != EXPECTED_ADMIN_IDENTITY:
+        raise ValueError("ADMIN_DSN_IDENTITY_INVALID")
+
+
+def _build_backend_database_url(password: str) -> str:
+    if not password or any(character in password for character in "\x00\r\n"):
+        raise ValueError("BACKEND_PASSWORD_INVALID")
+    try:
+        encoded_user = quote(ROLE_NAME, safe="")
+        encoded_password = quote(password, safe="")
+        encoded_database = quote(EXPECTED_ADMIN_IDENTITY[3], safe="")
+    except UnicodeError:
+        raise ValueError("BACKEND_PASSWORD_INVALID") from None
+    return (
+        f"postgresql://{encoded_user}:{encoded_password}"
+        f"@{EXPECTED_ADMIN_IDENTITY[1]}:{EXPECTED_ADMIN_IDENTITY[2]}/{encoded_database}"
+    )
 
 
 def update_env_assignment(path: Path, key: str, value: str) -> None:
@@ -70,11 +130,15 @@ def update_env_assignment(path: Path, key: str, value: str) -> None:
 
 
 def provision(admin_dsn: str, env_path: Path) -> None:
-    if not admin_dsn.strip():
-        raise ValueError("ADMIN_DATABASE_URL_REQUIRED")
+    _assert_no_ambient_libpq_environment(os.environ)
+    _validate_admin_dsn(admin_dsn)
 
     password = secrets.token_urlsafe(32)
-    with psycopg.connect(admin_dsn, autocommit=False) as connection:
+    with psycopg.connect(
+        admin_dsn,
+        hostaddr=EXPECTED_ADMIN_IDENTITY[1],
+        autocommit=False,
+    ) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (ROLE_NAME,))
             role_exists = cursor.fetchone() is not None
@@ -100,7 +164,7 @@ def provision(admin_dsn: str, env_path: Path) -> None:
             )
         connection.commit()
 
-    backend_dsn = make_conninfo(admin_dsn, user=ROLE_NAME, password=password)
+    backend_dsn = _build_backend_database_url(password)
     # PostgreSQL and filesystem replacement cannot share a transaction. A file failure keeps the
     # previous env bytes intact; rerunning provisioning safely rotates the database password again.
     update_env_assignment(env_path, TARGET_ENV_KEY, backend_dsn)

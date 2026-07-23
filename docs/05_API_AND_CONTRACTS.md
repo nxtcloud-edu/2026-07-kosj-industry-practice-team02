@@ -7,7 +7,9 @@
 - 계약 변경은 영향 분석, 테스트, 버전, 구현 노트를 동반한다.
 - breaking change는 인간 승인과 ADR이 필요하다.
 - source metadata는 서버가 결합한다.
-- API spec revision은 `2.0.1-draft`이며 route namespace·상태 enum·wire 동작은 `2.0.0-draft`와 동일하다. patch revision은 `/health`·ready-state `/ready` 200 본문과 FALLBACK의 추가 필드 거부를 양 계약에서 엄격히 일치시킨다.
+- API spec revision은 `3.1.0-draft`다. SUCCESS/FOLLOWUP/5개 사유별 FALLBACK,
+  `PRIVACY_UNRESOLVED` 고정 문구, HTTPS 전용 출처·기관 링크, local/private admin 성공·오류
+  envelope를 OpenAPI·standalone schema·Pydantic·생성 TypeScript가 같은 fixture로 검증한다.
 
 ## 대화 문맥 계약
 
@@ -38,11 +40,17 @@ GET  /api/v1/admin/quality-summary
 MVP에서 실제 인증 대신 검증 가능한 역할 분리를 위해 다음 헤더를 사용할 수 있다.
 
 ```text
-X-Demo-Actor-Id: operator-demo
+X-Demo-Actor-Id: OPERATOR-LOCAL-001 | PM-LOCAL-001
 X-Demo-Role: OPERATOR | APPROVER
 ```
 
-이는 운영 인증이 아니며 loopback/local test 시연에서만 허용한다. 초기 public 환경에서는 `/admin`과 `/api/v1/admin/*`를 비활성화한다. 향후 공개 관리자 시연은 별도 승인된 서버측 gate, deny-by-default DB 권한/RLS, CORS/CSRF 검증을 함께 갖춘 뒤에만 허용한다.
+`X-Demo-Actor-Id`는 local fixture의 `OPERATOR-LOCAL-001` 또는 `PM-LOCAL-001`만 사용한다. 이는 운영 인증이 아니며 loopback/local test 시연에서만 허용한다. 초기 public 환경에서는 `/admin`과 `/api/v1/admin/*`를 비활성화한다. 향후 공개 관리자 시연은 별도 승인된 서버측 gate, deny-by-default DB 권한/RLS, CORS/CSRF 검증을 함께 갖춘 뒤에만 허용한다.
+
+## Chat retry 경계
+
+- `POST /api/v1/chat`는 선택적 UUID `Idempotency-Key` header를 받는다. 같은 논리적 Web 재시도는 같은 key를 유지하며, 매 HTTP 요청의 correlation `request_id`와는 별개다.
+- local/private DB에는 domain-separated HMAC request digest, 독립 claim token, 5분 lease와 안전한 구조화 응답만 저장한다. 원문·마스킹 질문·correlation ID·IP·기기 식별자는 저장하지 않는다.
+- 동일 key/동일 digest의 완료 결과는 replay하며, digest 충돌은 값 없는 422, 유효 lease의 진행 중 요청은 retryable 503이다. 행의 논리 TTL은 24시간이고 startup 및 최대 60초 주기 purge 실패 시 readiness를 닫는다.
 
 ## 오류 모델
 
