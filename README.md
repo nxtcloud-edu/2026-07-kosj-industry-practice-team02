@@ -31,6 +31,17 @@
 │
 └─ Backend API (apps/api) + 계약(contracts) + 데이터 릴리스(data)
 ```
+## 저장소 안내
+
+핵심 경로만 보시면 됩니다:
+- `apps/web` 시민·관리자 UI / `apps/api` 백엔드 / `contracts` API 계약(정합의 기준)
+- `data` 공식 데이터 원본 / `supabase`·`database` 스키마·마이그레이션
+- `docs/implementation-notes` 구현 기록 97건 (INDEX.md로 탐색)
+- 실행: §6 또는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md`
+
+루트의 `CODEX_*`, `OVERLAY_INSTALL`, `PACKAGE_MANIFEST`, `.agents`,
+`.codex`, `.superpowers`, `AGENTS.md`는 AI 에이전트 협업 체계(작업
+규칙·스킬·패키징) 파일이며, `legacy/`는 기획 단계 원본 보존입니다.
 
 ## 2. 해결하려는 문제
 
@@ -73,7 +84,7 @@
 ## 6. 실행 방법 (로컬 전체 시스템)
 
 > 요구: Node 24 / pnpm 11 / Python 3.12 / uv / Docker Desktop.
-> 상세 절차는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md` 참고 (버전 대조·DB 초기화·seed 적재·검수 시나리오 포함).
+> 상세 절차는 `docs/implementation-notes/IMP-20260724-011-pr8-owner-integration-and-actual-web-evidence.md`의 정식 seed 적재 절차 참고 (버전 대조·DB 초기화·검수 시나리오 포함).
 
 ```bash
 # 1. 클론 및 의존성
