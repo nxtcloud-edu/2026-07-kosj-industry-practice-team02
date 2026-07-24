@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DATA-SEED initial release office-service mappings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_version", "records"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "release_version": {"type": "string", "const": "0.1.0-initial.1"},
+    "records": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "office_public_id", "intent", "department_label", "evidence_source_url",
+          "last_verified_at", "created_by", "approved_by", "approved_at"
+        ],
+        "properties": {
+          "office_public_id": {"type": "string", "pattern": "^OFFICE-(?:AREUM|DODAM|JOCHIWON)$"},
+          "intent": {"enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL"]},
+          "department_label": {"type": ["string", "null"]},
+          "evidence_source_url": {"type": "string", "format": "https-url"},
+          "last_verified_at": {"type": "string", "format": "date"},
+          "created_by": {"type": "string", "const": "AI-DATA-BACKEND"},
+          "approved_by": {"type": "string", "const": "PM-LOCAL-001"},
+          "approved_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

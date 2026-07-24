@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "시연용 샘플 오류입니다.",
+    "retryable": true
+  }
+}

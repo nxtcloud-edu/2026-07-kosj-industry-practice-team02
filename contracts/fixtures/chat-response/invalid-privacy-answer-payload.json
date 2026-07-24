@@ -1,0 +1,16 @@
+{
+  "request_id": "acacacac-acac-4cac-8cac-acacacacacac",
+  "answer_status": "FALLBACK",
+  "intent": "UNKNOWN",
+  "confidence": null,
+  "summary": "시연용 샘플 금지된 답변 payload",
+  "sources": [],
+  "fallback": {
+    "reason": "PRIVACY_UNRESOLVED",
+    "title": "시연용 샘플 개인정보 재질문",
+    "message": "시연용 샘플 안내입니다.",
+    "candidate_eligible": false,
+    "office": null
+  },
+  "context_token": null
+}

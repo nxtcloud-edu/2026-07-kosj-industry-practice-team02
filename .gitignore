@@ -1,0 +1,66 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.netrc
+_netrc
+.authinfo
+.authinfo.gpg
+.pypirc
+.npmrc.local
+
+# Node
+node_modules/
+.pnpm-store/
+.next/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+
+# Runtime / local DB / logs
+*.log
+logs/
+.tmp/
+tmp/
+.tools/
+supabase/.temp/
+supabase/.branches/
+*.sqlite
+*.sqlite3
+
+# Generated artifacts
+artifacts/
+dist/
+build/
+playwright-report/
+test-results/
+backups/
+
+# Codex local state
+.codex/local/
+.worktrees/
+.superpowers/

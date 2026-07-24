@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "source_manifest_sha256": "c293e5ac32bae030eadf383d8d9511dc16eac834e51e996273ae8b7e39616657",
+  "version": "2.109.1",
+  "platform": "windows-amd64",
+  "relative_path": ".tools/supabase/v2.109.1-sejong-loopback/supabase.exe",
+  "sha256": "751068e73834c5da58ac7c5287a1d66a82ad356f508637b0478d6531cdb3941c"
+}

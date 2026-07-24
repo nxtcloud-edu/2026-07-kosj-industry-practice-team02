@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/supabase/cli.git",
+    "tag": "v2.109.1",
+    "tag_object_sha1": "9d25ff8b5b0fba3c6f0ef000e7dd658c8d710c38",
+    "commit_sha1": "6d4c19870ed213ba7f682f117d0345c8a40bfa94"
+  },
+  "go": {
+    "version": "1.25.11",
+    "platform": "windows-amd64",
+    "url": "https://dl.google.com/go/go1.25.11.windows-amd64.zip",
+    "sha256": "b7401f1b41517428e537493316256fb7cf03c66a130a0103ab07f3a2152e2112"
+  },
+  "patch": {
+    "relative_path": "scripts/patches/supabase-cli-v2.109.1-db-loopback.patch",
+    "size_bytes": 1824,
+    "sha256": "109c096480e8185d761e9ce8fba10e93efc55190c42eab978f769a6993833f7d",
+    "allowed_files": [
+      "apps/cli-go/internal/db/start/start_test.go",
+      "apps/cli-go/internal/db/start/start.go"
+    ]
+  },
+  "workspace": {
+    "checkout_a": "s/a",
+    "checkout_b": "s/b",
+    "max_tracked_relative_file_path_length": 134,
+    "max_absolute_file_path_length": 248
+  },
+  "build": {
+    "working_directory": "apps/cli-go",
+    "version": "2.109.1",
+    "goos": "windows",
+    "goarch": "amd64",
+    "cgo_enabled": "0",
+    "goproxy": "https://proxy.golang.org",
+    "gosumdb": "sum.golang.org",
+    "goprivate": "",
+    "gonoproxy": "",
+    "gonosumdb": "",
+    "goinsecure": "",
+    "goenv": "off",
+    "gowork": "off",
+    "gotoolchain": "local",
+    "goflags": "",
+    "goamd64": "v1",
+    "goexperiment": "",
+    "flags": [
+      "-trimpath",
+      "-buildvcs=false"
+    ],
+    "ldflags": "-s -w -X github.com/supabase/cli/internal/utils.Version=2.109.1"
+  }
+}

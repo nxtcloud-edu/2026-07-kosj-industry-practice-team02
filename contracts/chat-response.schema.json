@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/chat-response.schema.json",
+  "title": "ChatResponse",
+  "oneOf": [
+    { "$ref": "#/$defs/successResponse" },
+    { "$ref": "#/$defs/followupResponse" },
+    { "$ref": "#/$defs/fallbackResponse" }
+  ],
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "title", "url", "last_verified_at"],
+      "properties": {
+        "source_id": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "last_verified_at": { "type": "string", "format": "date" },
+        "used_fields": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "office": {
+      "type": "object",
+      "required": ["id", "region", "office_name", "address", "phone", "source_title", "last_verified_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "region": { "type": "string" },
+        "office_name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "opening_hours": { "type": ["string", "null"] },
+        "map_url": { "type": ["string", "null"], "format": "uri", "pattern": "^https://" },
+        "source_title": { "type": "string" },
+        "source_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "last_verified_at": { "type": "string", "format": "date" }
+      }
+    },
+    "fallbackPayloadBase": {
+      "type": "object",
+      "required": ["reason", "title", "message", "candidate_eligible"],
+      "properties": {
+        "reason": { "enum": ["INSUFFICIENT_GROUNDING", "PERSONAL_LOOKUP", "LEGAL_JUDGMENT", "OUT_OF_SCOPE", "PRIVACY_UNRESOLVED"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "next_actions": { "type": "array", "items": { "type": "string" } },
+        "candidate_eligible": { "type": "boolean" },
+        "office": { "anyOf": [{ "$ref": "#/$defs/office" }, { "type": "null" }] }
+      }
+    },
+    "insufficientGroundingFallback": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackPayloadBase" },
+        { "type": "object", "required": ["reason", "candidate_eligible"], "properties": { "reason": { "const": "INSUFFICIENT_GROUNDING" }, "candidate_eligible": { "const": true } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "personalLookupFallback": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackPayloadBase" },
+        { "type": "object", "required": ["reason", "candidate_eligible"], "properties": { "reason": { "const": "PERSONAL_LOOKUP" }, "candidate_eligible": { "const": false } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "legalJudgmentFallback": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackPayloadBase" },
+        { "type": "object", "required": ["reason", "candidate_eligible"], "properties": { "reason": { "const": "LEGAL_JUDGMENT" }, "candidate_eligible": { "const": false } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "outOfScopeFallback": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackPayloadBase" },
+        { "type": "object", "required": ["reason", "candidate_eligible"], "properties": { "reason": { "const": "OUT_OF_SCOPE" }, "candidate_eligible": { "const": false } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "privacyUnresolvedFallback": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackPayloadBase" },
+        { "type": "object", "required": ["reason", "title", "message", "next_actions", "candidate_eligible", "office"], "properties": { "reason": { "const": "PRIVACY_UNRESOLVED" }, "title": { "const": "개인정보를 안전하게 처리하지 못했어요" }, "message": { "const": "개인정보를 빼거나 표현을 바꿔서 다시 질문해 주세요." }, "next_actions": { "type": "array", "items": { "const": "이름, 주소, 전화번호, 접수번호 등을 적지 마세요." }, "minItems": 1, "maxItems": 1 }, "candidate_eligible": { "const": false }, "office": { "type": "null" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "chatResponseBase": {
+      "type": "object",
+      "required": ["request_id", "answer_status", "intent", "sources", "context_token"],
+      "properties": {
+        "request_id": { "type": "string", "format": "uuid" },
+        "answer_status": { "enum": ["SUCCESS", "FOLLOWUP", "FALLBACK"] },
+        "intent": { "enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL", "OUT_OF_SCOPE", "UNKNOWN"] },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "summary": { "type": ["string", "null"] },
+        "procedure_steps": { "type": "array", "items": { "type": "string" } },
+        "required_documents": { "type": "array", "items": { "type": "string" } },
+        "processing_time": { "type": ["string", "null"] },
+        "fee": { "type": ["string", "null"] },
+        "department": { "type": ["string", "null"] },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+        "followup_options": { "type": "array", "items": { "type": "string" } },
+        "fallback": {
+          "anyOf": [
+            { "$ref": "#/$defs/insufficientGroundingFallback" },
+            { "$ref": "#/$defs/personalLookupFallback" },
+            { "$ref": "#/$defs/legalJudgmentFallback" },
+            { "$ref": "#/$defs/outOfScopeFallback" },
+            { "$ref": "#/$defs/privacyUnresolvedFallback" },
+            { "type": "null" }
+          ]
+        },
+        "context_token": { "type": ["string", "null"], "minLength": 1, "maxLength": 2048 }
+      }
+    },
+    "successResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/chatResponseBase" },
+        {
+          "type": "object",
+          "required": ["answer_status", "intent", "sources", "office"],
+          "properties": {
+            "answer_status": { "const": "SUCCESS" },
+            "intent": { "enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL"] },
+            "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+            "office": { "anyOf": [{ "$ref": "#/$defs/office" }, { "type": "null" }] },
+            "fallback": { "type": "null" },
+            "followup_options": { "type": "array", "maxItems": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "followupResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/chatResponseBase" },
+        {
+          "type": "object",
+          "required": ["answer_status", "intent", "sources", "followup_options", "office"],
+          "properties": {
+            "answer_status": { "const": "FOLLOWUP" },
+            "intent": { "enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL", "UNKNOWN"] },
+            "summary": { "type": "null" },
+            "procedure_steps": { "type": "array", "maxItems": 0 },
+            "required_documents": { "type": "array", "maxItems": 0 },
+            "processing_time": { "type": "null" },
+            "fee": { "type": "null" },
+            "department": { "type": "null" },
+            "sources": { "type": "array", "maxItems": 0 },
+            "office": { "type": "null" },
+            "followup_options": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "fallback": { "type": "null" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "fallbackResponseBase": {
+      "allOf": [
+        { "$ref": "#/$defs/chatResponseBase" },
+        {
+          "type": "object",
+          "required": ["answer_status", "intent", "sources", "fallback", "context_token"],
+          "properties": {
+            "answer_status": { "const": "FALLBACK" },
+            "intent": { "enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL", "OUT_OF_SCOPE", "UNKNOWN"] },
+            "confidence": { "type": "null" },
+            "summary": { "type": "null" },
+            "procedure_steps": { "type": "array", "maxItems": 0 },
+            "required_documents": { "type": "array", "maxItems": 0 },
+            "processing_time": { "type": "null" },
+            "fee": { "type": "null" },
+            "department": { "type": "null" },
+            "sources": { "type": "array", "maxItems": 0 },
+            "followup_options": { "type": "array", "maxItems": 0 },
+            "fallback": {
+              "oneOf": [
+                { "$ref": "#/$defs/insufficientGroundingFallback" },
+                { "$ref": "#/$defs/personalLookupFallback" },
+                { "$ref": "#/$defs/legalJudgmentFallback" },
+                { "$ref": "#/$defs/outOfScopeFallback" },
+                { "$ref": "#/$defs/privacyUnresolvedFallback" }
+              ]
+            },
+            "context_token": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "insufficientGroundingResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackResponseBase" },
+        { "type": "object", "required": ["intent", "fallback"], "properties": { "intent": { "enum": ["MOVE_IN_RESIDENT_REGISTRATION", "CERTIFICATE_ISSUANCE", "BULKY_WASTE", "LOCAL_TAX_GENERAL"] }, "fallback": { "$ref": "#/$defs/insufficientGroundingFallback" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "personalLookupResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackResponseBase" },
+        { "type": "object", "required": ["intent", "fallback"], "properties": { "intent": { "const": "UNKNOWN" }, "fallback": { "$ref": "#/$defs/personalLookupFallback" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "legalJudgmentResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackResponseBase" },
+        { "type": "object", "required": ["intent", "fallback"], "properties": { "intent": { "const": "UNKNOWN" }, "fallback": { "$ref": "#/$defs/legalJudgmentFallback" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "outOfScopeResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackResponseBase" },
+        { "type": "object", "required": ["intent", "fallback"], "properties": { "intent": { "const": "OUT_OF_SCOPE" }, "fallback": { "$ref": "#/$defs/outOfScopeFallback" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "privacyUnresolvedResponse": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/fallbackResponseBase" },
+        { "type": "object", "required": ["intent", "confidence", "fallback"], "properties": { "intent": { "const": "UNKNOWN" }, "confidence": { "type": "null" }, "fallback": { "$ref": "#/$defs/privacyUnresolvedFallback" } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "fallbackResponse": {
+      "oneOf": [
+        { "$ref": "#/$defs/insufficientGroundingResponse" },
+        { "$ref": "#/$defs/personalLookupResponse" },
+        { "$ref": "#/$defs/legalJudgmentResponse" },
+        { "$ref": "#/$defs/outOfScopeResponse" },
+        { "$ref": "#/$defs/privacyUnresolvedResponse" }
+      ]
+    }
+  }
+}

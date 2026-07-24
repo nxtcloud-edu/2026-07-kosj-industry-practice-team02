@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InteractionEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "interaction_id",
+    "occurred_at",
+    "intent",
+    "answer_status",
+    "source_count",
+    "response_time_ms",
+    "is_test"
+  ],
+  "properties": {
+    "interaction_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "answer_status": {
+      "enum": [
+        "SUCCESS",
+        "FOLLOWUP",
+        "FALLBACK",
+        "SYSTEM_ERROR"
+      ]
+    },
+    "fallback_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "used_source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "response_time_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selected_region": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "routed_office_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "is_test": {
+      "type": "boolean"
+    }
+  },
+  "not": {
+    "required": [
+      "question",
+      "raw_question",
+      "answer_text"
+    ]
+  }
+}

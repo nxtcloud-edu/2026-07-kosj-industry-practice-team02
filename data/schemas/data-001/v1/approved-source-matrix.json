@@ -1,0 +1,342 @@
+{
+  "content_artifacts": [
+    {
+      "path": "kb_records.json",
+      "sha256": "38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365"
+    },
+    {
+      "path": "offices.json",
+      "sha256": "fe942ce476c7d78f5b17deb10fd3b53e5b673f3ae36cf67a042823ccd51a7af0"
+    },
+    {
+      "path": "office_service_mappings.json",
+      "sha256": "a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b"
+    }
+  ],
+  "draft_version": "0.1.0-draft.1",
+  "kb_records": [
+    {
+      "category": "CERTIFICATE_ISSUANCE",
+      "id": "KB-CERT-01",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "주민등록표 등본(초본) 발급",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000015&typeSn=01"
+    },
+    {
+      "category": "CERTIFICATE_ISSUANCE",
+      "id": "KB-CERT-02",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "주민등록표 등본(초본) 발급",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000015&typeSn=01"
+    },
+    {
+      "category": "CERTIFICATE_ISSUANCE",
+      "id": "KB-CERT-03",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "주민등록표 등본(초본) 발급",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000015&typeSn=01"
+    },
+    {
+      "category": "CERTIFICATE_ISSUANCE",
+      "id": "KB-CERT-04",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "주민등록표 열람",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000014&typeSn=01"
+    },
+    {
+      "category": "CERTIFICATE_ISSUANCE",
+      "id": "KB-CERT-05",
+      "last_verified_at": "2026-07-18",
+      "provider": "정부24(행정안전부)",
+      "source_title": "무인민원발급안내",
+      "source_url": "https://plus.gov.kr/portal/custcntr/utztngd/unmncvlcptissugd/"
+    },
+    {
+      "category": "MOVE_IN_RESIDENT_REGISTRATION",
+      "id": "KB-MOVE-01",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "전입신고",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000016&typeSn=01"
+    },
+    {
+      "category": "MOVE_IN_RESIDENT_REGISTRATION",
+      "id": "KB-MOVE-02",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "전입신고",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000016&typeSn=01"
+    },
+    {
+      "category": "MOVE_IN_RESIDENT_REGISTRATION",
+      "id": "KB-MOVE-03",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "전입신고",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000016&typeSn=01"
+    },
+    {
+      "category": "MOVE_IN_RESIDENT_REGISTRATION",
+      "id": "KB-MOVE-04",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 주민과",
+      "source_title": "주민등록 관련 통보서비스 (전입신고, 세대주변경, 주민등록증, 주민등록표, 주소변경사실)",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13110000039&typeSn=01"
+    },
+    {
+      "category": "MOVE_IN_RESIDENT_REGISTRATION",
+      "id": "KB-MOVE-05",
+      "last_verified_at": "2026-07-18",
+      "provider": "국가법령정보센터",
+      "source_title": "주민등록법",
+      "source_url": "https://www.law.go.kr/LSW/lsInfoP.do?lsId=001655&urlMode=lsInfoP"
+    },
+    {
+      "category": "LOCAL_TAX_GENERAL",
+      "id": "KB-TAX-01",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부·한국지역정보개발원",
+      "source_title": "위택스",
+      "source_url": "https://www.wetax.go.kr/main.do"
+    },
+    {
+      "category": "LOCAL_TAX_GENERAL",
+      "id": "KB-TAX-02",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부·한국지역정보개발원",
+      "source_title": "위택스 로그인(자동차세 개인 고지 확인 경계)",
+      "source_url": "https://www.wetax.go.kr/login.do"
+    },
+    {
+      "category": "LOCAL_TAX_GENERAL",
+      "id": "KB-TAX-03",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 지방세정책과",
+      "source_title": "정부24 지방세 납세증명서 발급",
+      "source_url": "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=13100000056&tp_seq=01"
+    },
+    {
+      "category": "LOCAL_TAX_GENERAL",
+      "id": "KB-TAX-04",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 지방세정책과",
+      "source_title": "정부24 지방세 세목별 과세증명서 발급",
+      "source_url": "https://plus.gov.kr/search/searchdtl/?srvcId=13100000084&typeSn=05"
+    },
+    {
+      "category": "LOCAL_TAX_GENERAL",
+      "id": "KB-TAX-05",
+      "last_verified_at": "2026-07-18",
+      "provider": "행정안전부 지방세정책과",
+      "source_title": "정부24 지방세 납부확인서 발급",
+      "source_url": "https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=13110000017&HighCtgCD=A09002&tp_seq=01"
+    },
+    {
+      "category": "BULKY_WASTE",
+      "id": "KB-WASTE-01",
+      "last_verified_at": "2026-07-18",
+      "provider": "세종특별자치시시설관리공단",
+      "source_title": "배출신청안내",
+      "source_url": "https://www.sjwaste.kr/board?menuId=MENU00303&siteId=null"
+    },
+    {
+      "category": "BULKY_WASTE",
+      "id": "KB-WASTE-02",
+      "last_verified_at": "2026-07-18",
+      "provider": "세종특별자치시시설관리공단",
+      "source_title": "배출신청안내",
+      "source_url": "https://www.sjwaste.kr/board?menuId=MENU00303&siteId=null"
+    },
+    {
+      "category": "BULKY_WASTE",
+      "id": "KB-WASTE-03",
+      "last_verified_at": "2026-07-18",
+      "provider": "세종특별자치시시설관리공단",
+      "source_title": "배출항목선택",
+      "source_url": "https://www.sjwaste.kr/wasteApp/appCategoryPopup.do?menuId=MENU00305"
+    },
+    {
+      "category": "BULKY_WASTE",
+      "id": "KB-WASTE-04",
+      "last_verified_at": "2026-07-18",
+      "provider": "세종특별자치시시설관리공단",
+      "source_title": "배출항목선택",
+      "source_url": "https://www.sjwaste.kr/wasteApp/appCategoryPopup.do?menuId=MENU00305"
+    },
+    {
+      "category": "BULKY_WASTE",
+      "id": "KB-WASTE-05",
+      "last_verified_at": "2026-07-18",
+      "provider": "세종특별자치시시설관리공단",
+      "source_title": "배출신청안내",
+      "source_url": "https://www.sjwaste.kr/board?menuId=MENU00303&siteId=null"
+    }
+  ],
+  "mappings": [
+    {
+      "department_label": "안전도시과 환경경제",
+      "evidence_source_url": "https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460",
+      "intent": "BULKY_WASTE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-AREUM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정과 일반민원",
+      "evidence_source_url": "https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460",
+      "intent": "CERTIFICATE_ISSUANCE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-AREUM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정과 세무부동산",
+      "evidence_source_url": "https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460",
+      "intent": "LOCAL_TAX_GENERAL",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-AREUM",
+      "recommended_decision": "REJECT"
+    },
+    {
+      "department_label": "민원행정과 일반민원",
+      "evidence_source_url": "https://www.sejong.go.kr/areum/sub02_01.do?cmsNo=1460",
+      "intent": "MOVE_IN_RESIDENT_REGISTRATION",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-AREUM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "주민생활",
+      "evidence_source_url": "https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457",
+      "intent": "BULKY_WASTE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-DODAM",
+      "recommended_decision": "REJECT"
+    },
+    {
+      "department_label": "민원행정",
+      "evidence_source_url": "https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457",
+      "intent": "CERTIFICATE_ISSUANCE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-DODAM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정",
+      "evidence_source_url": "https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457",
+      "intent": "LOCAL_TAX_GENERAL",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-DODAM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정",
+      "evidence_source_url": "https://www.sejong.go.kr/dodam/sub02_01.do?cmsNo=1457",
+      "intent": "MOVE_IN_RESIDENT_REGISTRATION",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-DODAM",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "안전도시과 청소환경",
+      "evidence_source_url": "https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424",
+      "intent": "BULKY_WASTE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-JOCHIWON",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정과 일반민원",
+      "evidence_source_url": "https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424",
+      "intent": "CERTIFICATE_ISSUANCE",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-JOCHIWON",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정과 세무부동산",
+      "evidence_source_url": "https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424",
+      "intent": "LOCAL_TAX_GENERAL",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-JOCHIWON",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    },
+    {
+      "department_label": "민원행정과 일반민원",
+      "evidence_source_url": "https://www.sejong.go.kr/jochiwon/sub02_01.do?cmsNo=1424",
+      "intent": "MOVE_IN_RESIDENT_REGISTRATION",
+      "last_verified_at": "2026-07-18",
+      "office_public_id": "OFFICE-JOCHIWON",
+      "recommended_decision": "APPROVE_INITIAL_RELEASE"
+    }
+  ],
+  "offices": [
+    {
+      "address": "(30100) 세종특별자치시 보듬3로 114(아름동)",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/26471721",
+      "office_name": "아름동 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-6300",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-AREUM",
+      "region": "아름동",
+      "source_title": "아름동 행정복지센터 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/areum/sub02_02.do?cmsNo=1461"
+    },
+    {
+      "address": "(30098) 세종특별자치시 보람로 77(도담동)",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/23346315",
+      "office_name": "도담동 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-6200",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-DODAM",
+      "region": "도담동",
+      "source_title": "도담동 행정복지센터 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/dodam/sub02_02.do?cmsNo=1458"
+    },
+    {
+      "address": "(30024) 세종특별자치시 조치원읍 새내16길 17",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/19342218",
+      "office_name": "북세종 통합 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-5000",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-JOCHIWON",
+      "region": "조치원읍",
+      "source_title": "조치원읍 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/jochiwon/sub02_02.do?cmsNo=1425"
+    }
+  ],
+  "schema_version": 1,
+  "source_audits": [
+    {
+      "path": "docs/data-lineage/source-audits/data-001-move-cert-source-audit.md",
+      "sha256": "2781768e30103d5a25deb83d640a27c69e1fc600461338dd310296bffc97b103"
+    },
+    {
+      "path": "docs/data-lineage/source-audits/data-001-office-mapping-audit.md",
+      "sha256": "6222c99274245c9fb81be155ee5a1804d9656037cf1db66c8d51e694884521e1"
+    },
+    {
+      "path": "docs/data-lineage/source-audits/data-001-tax-source-audit.md",
+      "sha256": "8763c8cb459056b62c73f9ce7440f93193b7023dab6f1dda0d16e60c111d4105"
+    },
+    {
+      "path": "docs/data-lineage/source-audits/data-001-waste-source-audit.md",
+      "sha256": "f71919da9b4d3df3dced088504aaff663ec881c4005fa5281d5dd2ebfe476d6b"
+    }
+  ],
+  "source_registry": {
+    "path": "data/official/kb_source_registry.csv",
+    "sha256": "0d90d45fc1e8a3520a7381b6f849fe2c7e40ad73b3782a1225ca04f557f346f7"
+  },
+  "verified_at": "2026-07-18"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "sejong-ai",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0",
+    "pnpm": "11.13.0"
+  },
+  "scripts": {
+    "contracts:generate": "node packages/shared-contracts/scripts/generate-api.mjs",
+    "contracts:check": "node packages/shared-contracts/scripts/generate-api.mjs --check"
+  }
+}

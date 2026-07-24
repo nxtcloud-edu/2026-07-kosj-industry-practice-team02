@@ -1,0 +1,837 @@
+openapi: 3.1.0
+info:
+  title: Sejong Civil AI API
+  version: 3.1.0-draft
+  description: |
+    Final-scope draft. Validate through discovery/interview before implementation.
+    Admin routes are local/private demo surfaces, not public authentication boundaries.
+x-admin-exposure-policy: local-private-only-unless-server-gate-approved
+x-chat-context-policy:
+  mode: client-carried-signed
+  ttl-seconds: 900
+  server-persistence: none
+  raw-transcript-persistence: prohibited
+  browser-storage: current-tab-memory-only
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Process health
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+  /ready:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: Required dependencies and seed data ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadyResponse' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/chat:
+    post:
+      operationId: createChatAnswer
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200':
+          description: Success, follow-up, or safe fallback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/offices:
+    get:
+      operationId: listOffices
+      parameters:
+        - in: query
+          name: region
+          required: true
+          schema: { type: string, enum: [아름동, 도담동, 조치원읍] }
+        - in: query
+          name: intent
+          required: true
+          schema: { $ref: '#/components/schemas/SupportedIntent' }
+      responses:
+        '200':
+          description: Official office matches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Office' }
+  /api/v1/admin/failed-questions:
+    get:
+      operationId: listFailedQuestions
+      parameters:
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+        - { in: query, name: reason, schema: { $ref: '#/components/schemas/StoredFailureReason' } }
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/FailedQuestionStatus' } }
+      responses:
+        '200':
+          description: Masked failures only
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FailedQuestionListResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/failed-questions/{id}:
+    get:
+      operationId: getFailedQuestion
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      responses:
+        '200':
+          description: Failed question detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FailedQuestionDetailResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+        '404': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/failed-questions/{id}/reason:
+    patch:
+      operationId: confirmFallbackReason
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonConfirmationRequest' }
+      responses:
+        '200':
+          description: Reason confirmed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReasonConfirmationResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+        '404': { $ref: '#/components/responses/AdminError' }
+        '409': { $ref: '#/components/responses/AdminError' }
+        '422': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/kb-candidates:
+    get:
+      operationId: listKBCandidates
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      responses:
+        '200':
+          description: Candidate list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KBCandidateListResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+    post:
+      operationId: createKBCandidate
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KBCandidateCreate' }
+      responses:
+        '201':
+          description: Draft candidate created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KBCandidateCreateResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+        '409': { $ref: '#/components/responses/AdminError' }
+        '422': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/kb-candidates/{id}/submit:
+    post:
+      operationId: submitKBCandidate
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      responses:
+        '200':
+          description: Candidate pending approval
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KBCandidateSubmitResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+        '404': { $ref: '#/components/responses/AdminError' }
+        '409': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/kb-candidates/{id}/review:
+    patch:
+      operationId: reviewKBCandidate
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+        - { $ref: '#/components/parameters/DemoActorId' }
+        - { $ref: '#/components/parameters/DemoRole' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CandidateReviewRequest' }
+      responses:
+        '200':
+          description: Review applied; approval activates KB atomically
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KBCandidateReviewResponse' }
+        '403': { $ref: '#/components/responses/AdminError' }
+        '404': { $ref: '#/components/responses/AdminError' }
+        '409': { $ref: '#/components/responses/AdminError' }
+        '422': { $ref: '#/components/responses/AdminError' }
+  /api/v1/admin/quality-summary:
+    get:
+      operationId: getQualitySummary
+      parameters: [ { $ref: '#/components/parameters/DemoActorId' }, { $ref: '#/components/parameters/DemoRole' } ]
+      responses:
+        '200':
+          description: "Values labeled by source: event, evaluation, or mock"
+        '403': { $ref: '#/components/responses/AdminError' }
+components:
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: |
+        Optional UUID identifying one logical chat submission across retries. It is
+        distinct from the per-HTTP-request correlation request_id. Reusing a completed
+        key with the same request replays the stored safe response; reusing it with a
+        different request is rejected without echoing input.
+      schema: { type: string, format: uuid }
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    DemoActorId:
+      in: header
+      name: X-Demo-Actor-Id
+      required: true
+      description: Local/private demo actor only; not an authentication credential.
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    DemoRole:
+      in: header
+      name: X-Demo-Role
+      required: true
+      description: Local/private role switch only; reject when admin routes are not privately gated.
+      schema: { type: string, enum: [OPERATOR, APPROVER] }
+  responses:
+    AdminError:
+      description: Stable local/private admin error without request input echo.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AdminErrorEnvelope' }
+    ValidationError:
+      description: Value-free request validation error without request input echo.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationErrorEnvelope' }
+    ServiceUnavailable:
+      description: No safe response can be produced from approved ACTIVE KB and currently available dependencies.
+      headers:
+        Retry-After:
+          description: Suggested retry delay in seconds.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ServiceUnavailableEnvelope' }
+          example:
+            error:
+              code: SERVICE_UNAVAILABLE
+              message: 잠시 후 다시 시도해 주세요.
+              request_id: 7d444840-9dc0-11d1-b245-5ffdce74fad2
+              retryable: true
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { const: ok }
+    ReadyResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { const: ready }
+    Intent:
+      type: string
+      enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL, OUT_OF_SCOPE, UNKNOWN]
+    SupportedIntent:
+      type: string
+      enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+    ChatAnswerStatus:
+      type: string
+      description: SYSTEM_ERROR is represented by the HTTP 503 envelope, not a 200 ChatResponse.
+      enum: [SUCCESS, FOLLOWUP, FALLBACK]
+    FallbackReason:
+      type: string
+      enum: [INSUFFICIENT_GROUNDING, PERSONAL_LOOKUP, LEGAL_JUDGMENT, OUT_OF_SCOPE, PRIVACY_UNRESOLVED]
+    StoredFailureReason:
+      type: string
+      description: OUT_OF_SCOPE never creates a failed_questions row.
+      enum: [INSUFFICIENT_GROUNDING, PERSONAL_LOOKUP, LEGAL_JUDGMENT]
+    FailedQuestionStatus:
+      type: string
+      enum: [NEW, REASON_CONFIRMED]
+    ServiceUnavailableEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, request_id, retryable]
+          properties:
+            code: { const: SERVICE_UNAVAILABLE }
+            message: { type: string, minLength: 1, maxLength: 200 }
+            request_id: { type: string, format: uuid }
+            retryable: { const: true }
+    ValidationErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ValidationErrorDetail' }
+    ValidationErrorDetail:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: VALIDATION_ERROR }
+        message: { const: 입력값을 확인해 주세요. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    AdminErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/AdminError' }
+    AdminError:
+      oneOf:
+        - { $ref: '#/components/schemas/AdminRouteDisabledError' }
+        - { $ref: '#/components/schemas/AdminForbiddenError' }
+        - { $ref: '#/components/schemas/AdminNotFoundError' }
+        - { $ref: '#/components/schemas/AdminInvalidStateError' }
+        - { $ref: '#/components/schemas/AdminValidationFailedError' }
+    AdminRouteDisabledError:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: ADMIN_ROUTE_DISABLED }
+        message: { const: 관리자 기능을 사용할 수 없습니다. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    AdminForbiddenError:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: ADMIN_FORBIDDEN }
+        message: { const: 이 작업을 수행할 권한이 없습니다. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    AdminNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: ADMIN_NOT_FOUND }
+        message: { const: 대상을 찾을 수 없습니다. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    AdminInvalidStateError:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: ADMIN_INVALID_STATE }
+        message: { const: 현재 상태에서는 이 작업을 수행할 수 없습니다. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    AdminValidationFailedError:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code: { const: ADMIN_VALIDATION_FAILED }
+        message: { const: 입력값을 확인해 주세요. }
+        request_id: { type: string, format: uuid }
+        retryable: { const: false }
+    ChatRequest:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 1000 }
+        context_token:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 2048
+          description: >
+            Optional signed conversational context. Clients treat it as opaque and
+            keep it only in current-tab memory. Missing, null, expired, invalid,
+            or unsupported tokens are treated as no context, not authentication
+            failures. The token is never a source of official facts or authority.
+        selected_region: { type: [string, 'null'], enum: [아름동, 도담동, 조치원읍, null] }
+        simple_language: { type: boolean, default: false }
+    Source:
+      type: object
+      additionalProperties: false
+      required: [source_id, title, url, last_verified_at]
+      properties:
+        source_id: { type: string }
+        title: { type: string }
+        url: { type: string, format: uri, pattern: '^https://' }
+        last_verified_at: { type: string, format: date }
+        used_fields: { type: array, items: { type: string } }
+    Office:
+      type: object
+      required: [id, region, office_name, address, phone, source_title, last_verified_at]
+      properties:
+        id: { type: string }
+        region: { type: string }
+        office_name: { type: string }
+        address: { type: string }
+        phone: { type: string }
+        opening_hours: { type: [string, 'null'] }
+        map_url: { type: [string, 'null'], format: uri, pattern: '^https://' }
+        source_title: { type: string }
+        source_url: { type: string, format: uri, pattern: '^https://' }
+        last_verified_at: { type: string, format: date }
+    FallbackPayloadBase:
+      type: object
+      required: [reason, title, message, candidate_eligible]
+      properties:
+        reason: { $ref: '#/components/schemas/FallbackReason' }
+        title: { type: string }
+        message: { type: string }
+        next_actions: { type: array, items: { type: string } }
+        candidate_eligible: { type: boolean }
+        office: { anyOf: [ { $ref: '#/components/schemas/Office' }, { type: 'null' } ] }
+    InsufficientGroundingFallback:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackPayloadBase' }
+        - type: object
+          required: [reason, candidate_eligible]
+          properties:
+            reason: { const: INSUFFICIENT_GROUNDING }
+            candidate_eligible: { const: true }
+      unevaluatedProperties: false
+    PersonalLookupFallback:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackPayloadBase' }
+        - type: object
+          required: [reason, candidate_eligible]
+          properties:
+            reason: { const: PERSONAL_LOOKUP }
+            candidate_eligible: { const: false }
+      unevaluatedProperties: false
+    LegalJudgmentFallback:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackPayloadBase' }
+        - type: object
+          required: [reason, candidate_eligible]
+          properties:
+            reason: { const: LEGAL_JUDGMENT }
+            candidate_eligible: { const: false }
+      unevaluatedProperties: false
+    OutOfScopeFallback:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackPayloadBase' }
+        - type: object
+          required: [reason, candidate_eligible]
+          properties:
+            reason: { const: OUT_OF_SCOPE }
+            candidate_eligible: { const: false }
+      unevaluatedProperties: false
+    PrivacyUnresolvedFallback:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackPayloadBase' }
+        - type: object
+          required: [reason, title, message, next_actions, candidate_eligible, office]
+          properties:
+            reason: { const: PRIVACY_UNRESOLVED }
+            title: { const: 개인정보를 안전하게 처리하지 못했어요 }
+            message: { const: 개인정보를 빼거나 표현을 바꿔서 다시 질문해 주세요. }
+            next_actions:
+              type: array
+              items: { const: '이름, 주소, 전화번호, 접수번호 등을 적지 마세요.' }
+              minItems: 1
+              maxItems: 1
+            candidate_eligible: { const: false }
+            office: { type: 'null' }
+      unevaluatedProperties: false
+    Fallback:
+      oneOf:
+        - { $ref: '#/components/schemas/InsufficientGroundingFallback' }
+        - { $ref: '#/components/schemas/PersonalLookupFallback' }
+        - { $ref: '#/components/schemas/LegalJudgmentFallback' }
+        - { $ref: '#/components/schemas/OutOfScopeFallback' }
+        - { $ref: '#/components/schemas/PrivacyUnresolvedFallback' }
+    ChatResponseBase:
+      type: object
+      required: [request_id, answer_status, intent, sources, context_token]
+      properties:
+        request_id: { type: string, format: uuid }
+        answer_status: { $ref: '#/components/schemas/ChatAnswerStatus' }
+        intent: { $ref: '#/components/schemas/Intent' }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        summary: { type: [string, 'null'] }
+        procedure_steps: { type: array, items: { type: string } }
+        required_documents: { type: array, items: { type: string } }
+        processing_time: { type: [string, 'null'] }
+        fee: { type: [string, 'null'] }
+        department: { type: [string, 'null'] }
+        sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
+        followup_options: { type: array, items: { type: string } }
+        fallback: { anyOf: [ { $ref: '#/components/schemas/Fallback' }, { type: 'null' } ] }
+        context_token:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 2048
+          description: >
+            Fresh signed 15-minute context for current-tab memory. SUCCESS and
+            FOLLOWUP may return a token; FALLBACK always returns null. Never log,
+            persist, display, or use it as authentication.
+    SuccessResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/ChatResponseBase' }
+        - type: object
+          required: [answer_status, intent, sources, office]
+          properties:
+            answer_status: { const: SUCCESS }
+            intent:
+              enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+            sources: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Source' } }
+            office: { anyOf: [ { $ref: '#/components/schemas/Office' }, { type: 'null' } ] }
+            fallback: { type: 'null' }
+            followup_options: { type: array, maxItems: 0 }
+      unevaluatedProperties: false
+    FollowupResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/ChatResponseBase' }
+        - type: object
+          required: [answer_status, intent, sources, followup_options, office]
+          properties:
+            answer_status: { const: FOLLOWUP }
+            intent:
+              enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL, UNKNOWN]
+            summary: { type: 'null' }
+            procedure_steps: { type: array, maxItems: 0 }
+            required_documents: { type: array, maxItems: 0 }
+            processing_time: { type: 'null' }
+            fee: { type: 'null' }
+            department: { type: 'null' }
+            sources: { type: array, maxItems: 0 }
+            office: { type: 'null' }
+            followup_options: { type: array, minItems: 1, items: { type: string } }
+            fallback: { type: 'null' }
+      unevaluatedProperties: false
+    FallbackResponseBase:
+      allOf:
+        - { $ref: '#/components/schemas/ChatResponseBase' }
+        - type: object
+          required: [answer_status, intent, sources, fallback, context_token]
+          properties:
+            answer_status: { const: FALLBACK }
+            intent: { $ref: '#/components/schemas/Intent' }
+            confidence: { type: 'null' }
+            summary: { type: 'null' }
+            procedure_steps: { type: array, maxItems: 0 }
+            required_documents: { type: array, maxItems: 0 }
+            processing_time: { type: 'null' }
+            fee: { type: 'null' }
+            department: { type: 'null' }
+            sources: { type: array, maxItems: 0 }
+            followup_options: { type: array, maxItems: 0 }
+            fallback: { $ref: '#/components/schemas/Fallback' }
+            context_token: { type: 'null' }
+    InsufficientGroundingResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackResponseBase' }
+        - type: object
+          required: [intent, fallback]
+          properties:
+            intent:
+              enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+            fallback: { $ref: '#/components/schemas/InsufficientGroundingFallback' }
+      unevaluatedProperties: false
+    PersonalLookupResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackResponseBase' }
+        - type: object
+          required: [intent, fallback]
+          properties:
+            intent: { const: UNKNOWN }
+            fallback: { $ref: '#/components/schemas/PersonalLookupFallback' }
+      unevaluatedProperties: false
+    LegalJudgmentResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackResponseBase' }
+        - type: object
+          required: [intent, fallback]
+          properties:
+            intent: { const: UNKNOWN }
+            fallback: { $ref: '#/components/schemas/LegalJudgmentFallback' }
+      unevaluatedProperties: false
+    OutOfScopeResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackResponseBase' }
+        - type: object
+          required: [intent, fallback]
+          properties:
+            intent: { const: OUT_OF_SCOPE }
+            fallback: { $ref: '#/components/schemas/OutOfScopeFallback' }
+      unevaluatedProperties: false
+    PrivacyUnresolvedResponse:
+      type: object
+      allOf:
+        - { $ref: '#/components/schemas/FallbackResponseBase' }
+        - type: object
+          required: [intent, confidence, fallback]
+          properties:
+            intent: { const: UNKNOWN }
+            confidence: { type: 'null' }
+            fallback: { $ref: '#/components/schemas/PrivacyUnresolvedFallback' }
+      unevaluatedProperties: false
+    FallbackResponse:
+      oneOf:
+        - { $ref: '#/components/schemas/InsufficientGroundingResponse' }
+        - { $ref: '#/components/schemas/PersonalLookupResponse' }
+        - { $ref: '#/components/schemas/LegalJudgmentResponse' }
+        - { $ref: '#/components/schemas/OutOfScopeResponse' }
+        - { $ref: '#/components/schemas/PrivacyUnresolvedResponse' }
+    ChatResponse:
+      oneOf:
+        - { $ref: '#/components/schemas/SuccessResponse' }
+        - { $ref: '#/components/schemas/FollowupResponse' }
+        - { $ref: '#/components/schemas/FallbackResponse' }
+    FailedQuestion:
+      type: object
+      additionalProperties: false
+      x-sejong-state-invariant: failed-question-state-v1
+      required: [id, masked_question, intent, fallback_reason, candidate_eligible, status, created_at, text_expires_at, text_purged_at]
+      properties:
+        id: { type: string, format: uuid }
+        masked_question:
+          type: [string, 'null']
+          description: Null only after the 30-day text retention job has purged the field.
+        intent: { $ref: '#/components/schemas/SupportedIntent' }
+        fallback_reason: { $ref: '#/components/schemas/StoredFailureReason' }
+        candidate_eligible: { type: boolean }
+        status: { type: string, enum: [NEW, REASON_CONFIRMED] }
+        created_at: { type: string, format: date-time }
+        text_expires_at:
+          type: string
+          format: date-time
+          description: Expiry of masked_question only; exactly 30 days after creation.
+        text_purged_at:
+          type: ['string', 'null']
+          format: date-time
+          description: Actual purge time; null while masked_question is retained.
+      allOf:
+        - if:
+            properties:
+              fallback_reason: { const: INSUFFICIENT_GROUNDING }
+            required: [fallback_reason]
+          then:
+            properties:
+              candidate_eligible: { const: true }
+          else:
+            properties:
+              candidate_eligible: { const: false }
+        - if:
+            properties:
+              masked_question: { type: 'null' }
+            required: [masked_question]
+          then:
+            properties:
+              text_purged_at: { type: string, format: date-time }
+          else:
+            properties:
+              text_purged_at: { type: 'null' }
+    FailedQuestionListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FailedQuestion' }
+        total: { type: integer, minimum: 0 }
+    FailedQuestionDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [item]
+      properties:
+        item: { $ref: '#/components/schemas/FailedQuestion' }
+    ReasonConfirmationResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { const: REASON_CONFIRMED }
+    ReasonConfirmationRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { $ref: '#/components/schemas/StoredFailureReason' }
+    KBCandidateStatus:
+      type: string
+      enum: [DRAFTED, PENDING_APPROVAL, APPROVED, REJECTED]
+    KBCandidateSummary:
+      type: object
+      additionalProperties: false
+      x-sejong-state-invariant: kb-candidate-state-v1
+      required: [id, failed_question_id, title, representative_question, data_origin, category, answer_summary, procedure_steps, required_documents, processing_time, fee, department, source_title, source_url, last_verified_at, caution, status, created_by, reviewed_by, review_comment, approved_at, activated_kb_id, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        failed_question_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        representative_question: { type: string, minLength: 1, maxLength: 1000 }
+        data_origin: { type: string, enum: [OFFICIAL, MOCK] }
+        category:
+          type: string
+          enum: [MOVE_IN_RESIDENT_REGISTRATION, CERTIFICATE_ISSUANCE, BULKY_WASTE, LOCAL_TAX_GENERAL]
+        answer_summary: { type: string, minLength: 1 }
+        procedure_steps: { type: array, items: { type: string } }
+        required_documents: { type: array, items: { type: string } }
+        processing_time: { type: [string, 'null'] }
+        fee: { type: [string, 'null'] }
+        department: { type: string, minLength: 1 }
+        source_title: { type: string, minLength: 1 }
+        source_url: { type: string, format: uri, pattern: '^https://' }
+        last_verified_at: { type: string, format: date }
+        caution: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/KBCandidateStatus' }
+        created_by: { type: string, minLength: 1, maxLength: 100 }
+        reviewed_by: { type: [string, 'null'], minLength: 1, maxLength: 100 }
+        review_comment: { type: [string, 'null'], minLength: 1, maxLength: 1000 }
+        approved_at: { type: [string, 'null'], format: date-time }
+        activated_kb_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      allOf:
+        - if:
+            properties:
+              status: { enum: [DRAFTED, PENDING_APPROVAL] }
+            required: [status]
+          then:
+            properties:
+              reviewed_by: { type: 'null' }
+              review_comment: { type: 'null' }
+              approved_at: { type: 'null' }
+              activated_kb_id: { type: 'null' }
+        - if:
+            properties:
+              status: { const: APPROVED }
+            required: [status]
+          then:
+            properties:
+              reviewed_by: { type: string, minLength: 1, maxLength: 100 }
+              review_comment: { type: string, minLength: 1, maxLength: 1000 }
+              approved_at: { type: string, format: date-time }
+              activated_kb_id: { type: string, format: uuid }
+        - if:
+            properties:
+              status: { const: REJECTED }
+            required: [status]
+          then:
+            properties:
+              reviewed_by: { type: string, minLength: 1, maxLength: 100 }
+              review_comment: { type: string, minLength: 1, maxLength: 1000 }
+              approved_at: { type: 'null' }
+              activated_kb_id: { type: 'null' }
+    KBCandidateListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/KBCandidateSummary' }
+        total: { type: integer, minimum: 0 }
+    KBCandidateCreateResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { const: DRAFTED }
+    KBCandidateSubmitResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { const: PENDING_APPROVAL }
+    KBCandidateReviewResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+    CandidateReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, review_comment]
+      properties:
+        decision: { type: string, enum: [APPROVED, REJECTED] }
+        review_comment: { type: string, minLength: 1, maxLength: 1000, pattern: '\\S' }
+    KBCandidateCreate:
+      type: object
+      additionalProperties: false
+      required: [failed_question_id, title, representative_question, category, answer_summary, department, source_title, source_url, last_verified_at]
+      properties:
+        failed_question_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        representative_question:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Human-generalized question that must pass PII validation; not a long-term copy of masked_question.
+        category: { $ref: '#/components/schemas/SupportedIntent' }
+        answer_summary: { type: string, minLength: 1 }
+        procedure_steps: { type: array, items: { type: string } }
+        required_documents: { type: array, items: { type: string } }
+        processing_time: { type: [string, 'null'] }
+        fee: { type: [string, 'null'] }
+        department: { type: string, minLength: 1 }
+        source_title: { type: string, minLength: 1 }
+        source_url: { type: string, format: uri, pattern: '^https://' }
+        last_verified_at: { type: string, format: date }
+        caution: { type: [string, 'null'] }

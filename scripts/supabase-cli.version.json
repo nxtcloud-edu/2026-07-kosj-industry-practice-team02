@@ -1,0 +1,9 @@
+{
+  "version": "2.109.1",
+  "release": "v2.109.1",
+  "published_at": "2026-07-07T09:00:28Z",
+  "asset": "supabase_2.109.1_windows_amd64.zip",
+  "size_bytes": 75309565,
+  "url": "https://github.com/supabase/cli/releases/download/v2.109.1/supabase_2.109.1_windows_amd64.zip",
+  "sha256": "d0d270692cf78b8aa56545461f02cdf929ce9bb94e95e5e66404fd0e7d2c0c16"
+}

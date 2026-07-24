@@ -1,0 +1,326 @@
+"""Explicit local/private dependency composition.
+
+Use this module as an application factory. Importing ``sejong_ai_api.main``
+continues to avoid environment and database access.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Protocol, cast
+from urllib.parse import quote
+from uuid import UUID, uuid4
+
+from fastapi import FastAPI
+from psycopg import Error as PsycopgError
+from psycopg.conninfo import conninfo_to_dict
+
+from sejong_ai_api.admin.service import AdminRepository, AdminService
+from sejong_ai_api.chat.context import ContextTokenCodec
+from sejong_ai_api.chat.idempotency import ChatIdempotencyRepository
+from sejong_ai_api.chat.readiness import ReadinessRepository, RepositoryReadinessProbe
+from sejong_ai_api.chat.service import (
+    ChatRepository,
+    ChatResult,
+    ChatService,
+    ChatUnavailableError,
+)
+from sejong_ai_api.contracts.chat import ChatRequest
+from sejong_ai_api.db.models import PurgeResult
+from sejong_ai_api.db.pool import _ambient_libpq_environment_is_clear, create_pool
+from sejong_ai_api.db.repository import PsycopgSejongRepository
+from sejong_ai_api.main import create_app
+
+_LOCAL_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+_ALLOWED_ENV_KEYS = frozenset({"DATABASE_URL", "CONTEXT_TOKEN_SECRET"})
+_ALLOWED_DATABASE_CONNINFO_KEYS = frozenset({"user", "password", "host", "port", "dbname"})
+_EXPECTED_DATABASE_IDENTITY = ("sejong_local_login", "127.0.0.1", 54322, "postgres")
+_MIN_CONTEXT_SECRET_BYTES = 32
+_DEFAULT_PURGE_INTERVAL_SECONDS = 60.0
+
+
+@dataclass(frozen=True, slots=True)
+class LocalSettings:
+    database_url: str = field(repr=False)
+    context_token_secret: bytes = field(repr=False)
+
+
+class LocalPool(Protocol):
+    async def open(self, *, wait: bool = False) -> None: ...
+
+    async def close(self) -> None: ...
+
+
+class LocalRepository(
+    ChatRepository,
+    ReadinessRepository,
+    AdminRepository,
+    ChatIdempotencyRepository,
+    Protocol,
+):
+    async def purge_expired_chat_idempotency(self) -> PurgeResult: ...
+
+
+class GuardedChatResponder:
+    """Keep chat closed until the approved local projection is ready."""
+
+    __slots__ = ("_probe", "_service")
+
+    def __init__(self, probe: RepositoryReadinessProbe, service: ChatService) -> None:
+        self._probe = probe
+        self._service = service
+
+    async def answer(
+        self,
+        request: ChatRequest,
+        *,
+        request_id: UUID | None = None,
+        idempotency_key: UUID | None = None,
+    ) -> ChatResult:
+        if not await self._probe.check_ready():
+            raise ChatUnavailableError()
+        try:
+            return await self._service.answer(
+                request,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+            )
+        except ChatUnavailableError:
+            self._probe.mark_unavailable()
+            raise ChatUnavailableError() from None
+
+
+def load_local_settings(
+    *,
+    environ: Mapping[str, str] | None = None,
+    env_path: Path | None = None,
+) -> LocalSettings | None:
+    """Load only the two local runtime values, preferring the process environment."""
+
+    source = os.environ if environ is None else environ
+    if not _ambient_libpq_environment_is_clear(source) or not _ambient_libpq_environment_is_clear(
+        os.environ
+    ):
+        return None
+    selected: dict[str, str] = {}
+    for key in _ALLOWED_ENV_KEYS:
+        if key in source:
+            selected[key] = source[key]
+
+    if len(selected) != len(_ALLOWED_ENV_KEYS):
+        file_values = _read_allowlisted_env(env_path if env_path is not None else _LOCAL_ENV_PATH)
+        if file_values is None:
+            return None
+        for key in _ALLOWED_ENV_KEYS:
+            if key not in selected and key in file_values:
+                selected[key] = file_values[key]
+
+    database_dsn = selected.get("DATABASE_URL")
+    secret_text = selected.get("CONTEXT_TOKEN_SECRET")
+    if not _valid_database_url(database_dsn) or not _valid_env_value(secret_text):
+        return None
+    valid_database_url = cast(str, database_dsn)
+    valid_secret_text = cast(str, secret_text)
+    try:
+        secret = valid_secret_text.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
+    if len(secret) < _MIN_CONTEXT_SECRET_BYTES:
+        return None
+    return LocalSettings(database_url=valid_database_url, context_token_secret=secret)
+
+
+def create_local_app(
+    *,
+    environ: Mapping[str, str] | None = None,
+    env_path: Path | None = None,
+    pool_factory: Callable[[str], LocalPool] | None = None,
+    repository_factory: Callable[[object], LocalRepository] | None = None,
+    purge_interval_seconds: float = _DEFAULT_PURGE_INTERVAL_SECONDS,
+) -> FastAPI:
+    """Build one fail-closed local application without eager network access."""
+
+    settings = load_local_settings(environ=environ, env_path=env_path)
+    if settings is None or type(purge_interval_seconds) is not float or purge_interval_seconds <= 0:
+        return create_app()
+
+    selected_pool_factory = pool_factory if pool_factory is not None else _default_pool_factory
+    selected_repository_factory = (
+        repository_factory if repository_factory is not None else _default_repository_factory
+    )
+    try:
+        pool = selected_pool_factory(settings.database_url)
+        repository = selected_repository_factory(pool)
+        probe = RepositoryReadinessProbe(repository)
+        service = ChatService(
+            repository=repository,
+            context_codec=ContextTokenCodec(
+                secret=settings.context_token_secret,
+                clock=lambda: int(time.time()),
+            ),
+            request_id_factory=uuid4,
+            monotonic_ns=time.monotonic_ns,
+            is_test=False,
+            idempotency_repository=repository,
+            idempotency_secret=settings.context_token_secret,
+            idempotency_claim_factory=uuid4,
+        )
+        responder = GuardedChatResponder(probe, service)
+    except Exception:
+        return create_app()
+
+    application = create_app(
+        readiness_probe=probe,
+        chat_responder=responder,
+        admin_enabled=True,
+        admin_service=AdminService(repository),
+    )
+
+    @asynccontextmanager
+    async def local_lifespan(_application: FastAPI) -> AsyncIterator[None]:
+        stop_purge = asyncio.Event()
+        purge_task: asyncio.Task[None] | None = None
+        try:
+            await pool.open(wait=True)
+            await _purge_expired_private_records(repository)
+            await probe.refresh()
+            purge_task = asyncio.create_task(
+                _run_periodic_purge(
+                    repository,
+                    probe,
+                    stop_purge,
+                    purge_interval_seconds,
+                )
+            )
+        except Exception:
+            probe.disable()
+        try:
+            yield
+        finally:
+            stop_purge.set()
+            if purge_task is not None:
+                with suppress(Exception):
+                    await purge_task
+            with suppress(Exception):
+                await pool.close()
+            probe.disable()
+
+    application.router.lifespan_context = local_lifespan
+    return application
+
+
+async def _purge_expired_private_records(repository: LocalRepository) -> None:
+    await repository.purge_expired_failed_question_text()
+    await repository.purge_expired_chat_idempotency()
+
+
+async def _run_periodic_purge(
+    repository: LocalRepository,
+    probe: RepositoryReadinessProbe,
+    stop: asyncio.Event,
+    interval_seconds: float,
+) -> None:
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            try:
+                await _purge_expired_private_records(repository)
+            except Exception:
+                probe.disable()
+                return
+
+
+def _read_allowlisted_env(path: Path) -> dict[str, str] | None:
+    values: dict[str, str] = {}
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            for raw_line in stream:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("export "):
+                    line = line.removeprefix("export ").lstrip()
+                key, separator, raw_value = line.partition("=")
+                key = key.strip()
+                if key not in _ALLOWED_ENV_KEYS:
+                    continue
+                if not separator or key in values:
+                    return None
+                value = raw_value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                    value = value[1:-1]
+                values[key] = value
+    except (OSError, UnicodeError):
+        return None
+    return values
+
+
+def _valid_env_value(value: object) -> bool:
+    return (
+        type(value) is str
+        and bool(value)
+        and value == value.strip()
+        and "\x00" not in value
+        and "\r" not in value
+        and "\n" not in value
+    )
+
+
+def _valid_database_url(value: object) -> bool:
+    if not _valid_env_value(value):
+        return False
+    candidate_dsn = cast(str, value)
+    if not candidate_dsn.startswith("postgresql://"):
+        return False
+    try:
+        values = conninfo_to_dict(candidate_dsn)
+        password = values.get("password")
+        port_text = values.get("port")
+        if (
+            set(values) != _ALLOWED_DATABASE_CONNINFO_KEYS
+            or not isinstance(password, str)
+            or not password
+            or any(character in password for character in "\x00\r\n")
+            or not isinstance(port_text, str)
+            or not port_text.isascii()
+            or not port_text.isdecimal()
+        ):
+            return False
+        identity = (
+            values.get("user", ""),
+            values.get("host", ""),
+            int(port_text),
+            values.get("dbname", ""),
+        )
+        if identity != _EXPECTED_DATABASE_IDENTITY:
+            return False
+        canonical_url = (
+            f"postgresql://{quote(identity[0], safe='')}:{quote(password, safe='')}"
+            f"@{identity[1]}:{identity[2]}/{quote(identity[3], safe='')}"
+        )
+    except (TypeError, UnicodeError, ValueError, PsycopgError):
+        return False
+    return candidate_dsn == canonical_url
+
+
+def _default_pool_factory(database_url: str) -> LocalPool:
+    return cast(LocalPool, create_pool(database_url))
+
+
+def _default_repository_factory(pool: object) -> LocalRepository:
+    return cast(LocalRepository, PsycopgSejongRepository(cast(Any, pool)))
+
+
+__all__ = [
+    "GuardedChatResponder",
+    "LocalSettings",
+    "create_local_app",
+    "load_local_settings",
+]

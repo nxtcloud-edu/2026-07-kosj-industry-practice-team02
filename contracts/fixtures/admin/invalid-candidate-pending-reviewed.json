@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "failed_question_id": "10000000-0000-4000-8000-000000000001",
+      "title": "시연용 샘플 대형폐기물 후보",
+      "representative_question": "시연용 샘플 대형폐기물을 버리는 방법은 무엇인가요?",
+      "data_origin": "OFFICIAL",
+      "category": "BULKY_WASTE",
+      "answer_summary": "시연용 샘플 답변 요약",
+      "procedure_steps": ["시연용 샘플 절차"],
+      "required_documents": [],
+      "processing_time": null,
+      "fee": "시연용 샘플 수수료",
+      "department": "시연용 샘플 담당부서",
+      "source_title": "시연용 샘플 공식 출처 — 실제 데이터 아님",
+      "source_url": "https://example.invalid/admin/candidate-source",
+      "last_verified_at": "2026-07-15",
+      "caution": null,
+      "status": "PENDING_APPROVAL",
+      "created_by": "OPERATOR-LOCAL-001",
+      "reviewed_by": "PM-LOCAL-001",
+      "review_comment": null,
+      "approved_at": null,
+      "activated_kb_id": null,
+      "created_at": "2026-07-22T03:00:00+09:00",
+      "updated_at": "2026-07-22T03:00:00+09:00"
+    }
+  ],
+  "total": 1
+}

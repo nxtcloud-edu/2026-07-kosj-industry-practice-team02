@@ -1,0 +1,51 @@
+{
+  "draft_version": "0.1.0-draft.1",
+  "records": [
+    {
+      "address": "(30100) 세종특별자치시 보듬3로 114(아름동)",
+      "created_by": "AI-DATA-BACKEND",
+      "data_origin": "OFFICIAL",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/26471721",
+      "office_name": "아름동 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-6300",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-AREUM",
+      "region": "아름동",
+      "source_title": "아름동 행정복지센터 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/areum/sub02_02.do?cmsNo=1461"
+    },
+    {
+      "address": "(30098) 세종특별자치시 보람로 77(도담동)",
+      "created_by": "AI-DATA-BACKEND",
+      "data_origin": "OFFICIAL",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/23346315",
+      "office_name": "도담동 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-6200",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-DODAM",
+      "region": "도담동",
+      "source_title": "도담동 행정복지센터 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/dodam/sub02_02.do?cmsNo=1458"
+    },
+    {
+      "address": "(30024) 세종특별자치시 조치원읍 새내16길 17",
+      "created_by": "AI-DATA-BACKEND",
+      "data_origin": "OFFICIAL",
+      "last_verified_at": "2026-07-18",
+      "map_url": "https://place.map.kakao.com/19342218",
+      "office_name": "북세종 통합 행정복지센터",
+      "opening_hours": "평일 09:00~18:00",
+      "phone": "044-301-5000",
+      "provider": "세종특별자치시",
+      "public_id": "OFFICE-JOCHIWON",
+      "region": "조치원읍",
+      "source_title": "조치원읍 찾아오시는 길",
+      "source_url": "https://www.sejong.go.kr/jochiwon/sub02_02.do?cmsNo=1425"
+    }
+  ],
+  "schema_version": 1
+}

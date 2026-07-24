@@ -1,0 +1,18 @@
+{
+  "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "answer_status": "FALLBACK",
+  "intent": "UNKNOWN",
+  "confidence": null,
+  "sources": [],
+  "fallback": {
+    "reason": "PRIVACY_UNRESOLVED",
+    "title": "시연용 샘플 마스킹 실패 원문",
+    "message": "시연용 샘플 원문을 그대로 다시 보내 주세요.",
+    "next_actions": [
+      "시연용 샘플 원문을 복사하세요."
+    ],
+    "candidate_eligible": false,
+    "office": null
+  },
+  "context_token": null
+}

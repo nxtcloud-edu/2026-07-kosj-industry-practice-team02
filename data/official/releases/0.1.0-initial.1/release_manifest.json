@@ -1,0 +1,55 @@
+{
+  "approval": {
+    "path": "approval_manifest.json",
+    "reviewed_at": "2026-07-18T17:06:19Z",
+    "reviewed_by": "PM-LOCAL-001",
+    "sha256": "466d7af44cc36a9ee1ea1eed3d90f0e6fa1627fc57c03de5377c6f9f9fef5b6a"
+  },
+  "artifacts": [
+    {
+      "path": "compensation.sql",
+      "record_count": 0,
+      "sha256": "6fde4e35e185453ca1bba42af4440fc0f935257efbc1701f84cc349ecedc2368"
+    },
+    {
+      "path": "kb_records.json",
+      "record_count": 19,
+      "sha256": "831a0c01c9cdb08130febb122ebcad7d7b4fd9e7d846764d0d49d3e3c02402ec"
+    },
+    {
+      "path": "office_service_mappings.json",
+      "record_count": 10,
+      "sha256": "361ba3f4024abdfc7f1d0b4c8107d3aff708e377ac309bc18beda7613bfccebd"
+    },
+    {
+      "path": "offices.json",
+      "record_count": 3,
+      "sha256": "d83d48ff56cb945ddbb262e26c7d876dbc4b34af9b038048884057ab54e10b4e"
+    },
+    {
+      "path": "seed.sql",
+      "record_count": 0,
+      "sha256": "42d67828bb23c0eb0fa17ae2daa7d457fd71806b7cc796a54643dd975597783d"
+    }
+  ],
+  "excluded_record_ids": [
+    "KB-WASTE-03",
+    "OFFICE-AREUM:LOCAL_TAX_GENERAL",
+    "OFFICE-DODAM:BULKY_WASTE"
+  ],
+  "generator": "data-seed-release-v1",
+  "projection": {
+    "kb": 19,
+    "mapping": 10,
+    "mock": 0,
+    "office": 3,
+    "rejected_mapping": 2,
+    "withheld_kb": 1
+  },
+  "release_id": "sejong-official-0.1.0-initial.1",
+  "release_version": "0.1.0-initial.1",
+  "released_at": "2026-07-19T00:20:31Z",
+  "schema_version": 1,
+  "seed_semantic_sha256": "c838a4aa5eb1675d93fbaebd99b63d823490eb172c64cc356c5f72114cc1e4eb",
+  "source_draft_version": "0.1.0-draft.1"
+}

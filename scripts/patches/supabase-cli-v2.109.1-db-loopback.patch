@@ -1,0 +1,44 @@
+diff --git a/apps/cli-go/internal/db/start/start_test.go b/apps/cli-go/internal/db/start/start_test.go
+--- a/apps/cli-go/internal/db/start/start_test.go
++++ b/apps/cli-go/internal/db/start/start_test.go
+@@ -11,6 +11,7 @@ import (
+ 	"github.com/docker/docker/api/types"
+ 	"github.com/docker/docker/api/types/container"
+ 	"github.com/docker/docker/api/types/volume"
++	"github.com/docker/go-connections/nat"
+ 	"github.com/h2non/gock"
+ 	"github.com/spf13/afero"
+ 	"github.com/stretchr/testify/assert"
+@@ -23,6 +24,21 @@ import (
+ 	"github.com/supabase/cli/pkg/pgtest"
+ )
+ 
++func TestNewHostConfigBindsDatabaseToIPv4Loopback(t *testing.T) {
++	originalPort := utils.Config.Db.Port
++	t.Cleanup(func() {
++		utils.Config.Db.Port = originalPort
++	})
++	utils.Config.Db.Port = 54322
++
++	hostConfig := NewHostConfig()
++	bindings := hostConfig.PortBindings[nat.Port("5432/tcp")]
++
++	require.Len(t, bindings, 1)
++	assert.Equal(t, "127.0.0.1", bindings[0].HostIP)
++	assert.Equal(t, "54322", bindings[0].HostPort)
++}
++
+ func TestInitBranch(t *testing.T) {
+ 	t.Run("throws error on permission denied", func(t *testing.T) {
+ 		// Setup in-memory fs
+diff --git a/apps/cli-go/internal/db/start/start.go b/apps/cli-go/internal/db/start/start.go
+--- a/apps/cli-go/internal/db/start/start.go
++++ b/apps/cli-go/internal/db/start/start.go
+@@ -119,6 +119,6 @@ func NewHostConfig() container.HostConfig {
+ 	hostPort := strconv.FormatUint(uint64(utils.Config.Db.Port), 10)
+ 	hostConfig := container.HostConfig{
+-		PortBindings:  nat.PortMap{"5432/tcp": []nat.PortBinding{{HostPort: hostPort}}},
++		PortBindings:  nat.PortMap{"5432/tcp": []nat.PortBinding{{HostIP: "127.0.0.1", HostPort: hostPort}}},
+ 		RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyUnlessStopped},
+ 		Binds: []string{
+ 			utils.DbId + ":/var/lib/postgresql/data",

@@ -1,0 +1,15 @@
+{
+  "request_id": "aeaeaeae-aeae-4eae-8eae-aeaeaeaeaeae",
+  "answer_status": "FOLLOWUP",
+  "intent": "UNKNOWN",
+  "sources": [
+    {
+      "source_id": "synthetic-source-003",
+      "title": "시연용 샘플 금지된 출처",
+      "url": "https://example.invalid/sources/003",
+      "last_verified_at": "2026-07-15"
+    }
+  ],
+  "followup_options": ["시연용 샘플 선택지"],
+  "context_token": "synthetic-context-token"
+}

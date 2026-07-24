@@ -1,0 +1,14 @@
+{
+  "request_id": "99999999-9999-4999-8999-999999999999",
+  "answer_status": "FALLBACK",
+  "intent": "OUT_OF_SCOPE",
+  "sources": [],
+  "fallback": {
+    "reason": "OUT_OF_SCOPE",
+    "title": "시연용 샘플 폴백",
+    "message": "시연용 샘플 안내입니다.",
+    "candidate_eligible": false,
+    "provider_debug": "시연용 샘플 금지 필드"
+  },
+  "context_token": null
+}

@@ -1,0 +1,61 @@
+{
+  "approval": {
+    "path": "approval_manifest.json",
+    "reviewed_at": "2026-07-18T17:06:19Z",
+    "reviewed_by": "PM-LOCAL-001",
+    "sha256": "466d7af44cc36a9ee1ea1eed3d90f0e6fa1627fc57c03de5377c6f9f9fef5b6a"
+  },
+  "artifacts": [
+    {
+      "path": "compensation.sql",
+      "record_count": 0,
+      "sha256": "4b0994db69b0297a63607c3e65b835fd15bef359b8280eee9042f3760cd2b1f1"
+    },
+    {
+      "path": "kb_records.json",
+      "record_count": 19,
+      "sha256": "1c4c303d8f0057d285023ba18a3d2829fcf856c1140baa270456aaf061c0fdaf"
+    },
+    {
+      "path": "office_service_mappings.json",
+      "record_count": 10,
+      "sha256": "2fdffda6ff3019d3c0848f5611505a73e8ea0c25617bc9c6ed5f8780849f8697"
+    },
+    {
+      "path": "offices.json",
+      "record_count": 3,
+      "sha256": "3eea2eb46cae9367c55e2f13d52186a74a3c48f0143f7cc79c40a08606ec6f79"
+    },
+    {
+      "path": "seed.sql",
+      "record_count": 0,
+      "sha256": "44dc7f3c0d6c4d473119b1dcb1871e8a0133c305eac40ce8fbf36e3b7937b1e7"
+    }
+  ],
+  "correction": {
+    "decision_id": "D-044",
+    "predecessor_manifest_sha256": "e8863a633d28125ad2c0f0323d60467236d08618e767833fc7c09444f1a6e4a2",
+    "predecessor_release_version": "0.1.0-initial.1",
+    "reason": "POSTGRES17_EFFECTIVE_MEMBERSHIP_OPTION_UNION"
+  },
+  "excluded_record_ids": [
+    "KB-WASTE-03",
+    "OFFICE-AREUM:LOCAL_TAX_GENERAL",
+    "OFFICE-DODAM:BULKY_WASTE"
+  ],
+  "generator": "data-seed-release-v2",
+  "projection": {
+    "kb": 19,
+    "mapping": 10,
+    "mock": 0,
+    "office": 3,
+    "rejected_mapping": 2,
+    "withheld_kb": 1
+  },
+  "release_id": "sejong-official-0.1.0-initial.2",
+  "release_version": "0.1.0-initial.2",
+  "released_at": "2026-07-20T11:41:24Z",
+  "schema_version": 2,
+  "seed_semantic_sha256": "c838a4aa5eb1675d93fbaebd99b63d823490eb172c64cc356c5f72114cc1e4eb",
+  "source_draft_version": "0.1.0-draft.1"
+}

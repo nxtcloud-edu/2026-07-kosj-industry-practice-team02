@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DATA-001 office staging records",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "draft_version", "records"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "draft_version": {"type": "string", "pattern": "^0\\.1\\.0-draft\\.1$"},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["public_id", "data_origin", "region", "office_name", "address", "phone", "opening_hours", "map_url", "provider", "source_title", "source_url", "last_verified_at", "created_by"],
+        "properties": {
+          "public_id": {"type": "string", "pattern": "^OFFICE-(?:AREUM|DODAM|JOCHIWON)$"},
+          "data_origin": {"enum": ["OFFICIAL"]},
+          "region": {"enum": ["아름동", "도담동", "조치원읍"]},
+          "office_name": {"type": "string", "minLength": 1},
+          "address": {"type": "string", "minLength": 1},
+          "phone": {"type": "string", "minLength": 1},
+          "opening_hours": {"type": ["string", "null"]},
+          "map_url": {"type": ["string", "null"], "format": "https-url"},
+          "provider": {"type": "string", "minLength": 1},
+          "source_title": {"type": "string", "minLength": 1},
+          "source_url": {"type": "string", "format": "https-url"},
+          "last_verified_at": {"type": "string", "format": "date"},
+          "created_by": {"const": "AI-DATA-BACKEND"}
+        }
+      }
+    }
+  }
+}

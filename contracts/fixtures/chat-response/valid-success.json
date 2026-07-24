@@ -1,0 +1,25 @@
+{
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "answer_status": "SUCCESS",
+  "intent": "MOVE_IN_RESIDENT_REGISTRATION",
+  "sources": [
+    {
+      "source_id": "synthetic-source-001",
+      "title": "시연용 샘플 출처 — 공식 데이터 아님",
+      "url": "https://example.invalid/sources/001",
+      "last_verified_at": "2026-07-15"
+    }
+  ],
+  "office": {
+    "id": "synthetic-office-001",
+    "region": "아름동",
+    "office_name": "시연용 샘플 행정복지센터",
+    "address": "시연용 샘플 주소",
+    "phone": "000-000-0000",
+    "opening_hours": null,
+    "map_url": "https://example.invalid/offices/001",
+    "source_title": "시연용 샘플 출처 — 공식 데이터 아님",
+    "last_verified_at": "2026-07-15"
+  },
+  "context_token": "synthetic-context-token"
+}

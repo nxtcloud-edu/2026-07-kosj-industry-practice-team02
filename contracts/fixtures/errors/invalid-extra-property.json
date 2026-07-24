@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "시연용 샘플 오류입니다.",
+    "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "retryable": true,
+    "provider": "synthetic-provider"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "answer_status": "FALLBACK",
+  "intent": "UNKNOWN",
+  "confidence": null,
+  "sources": [],
+  "fallback": {
+    "reason": "PRIVACY_UNRESOLVED",
+    "title": "개인정보를 안전하게 처리하지 못했어요",
+    "message": "개인정보를 빼거나 표현을 바꿔서 다시 질문해 주세요.",
+    "next_actions": [
+      "이름, 주소, 전화번호, 접수번호 등을 적지 마세요."
+    ],
+    "candidate_eligible": false,
+    "office": null
+  },
+  "context_token": null
+}

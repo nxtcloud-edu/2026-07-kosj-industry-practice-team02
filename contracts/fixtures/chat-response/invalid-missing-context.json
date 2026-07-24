@@ -1,0 +1,7 @@
+{
+  "request_id": "77777777-7777-4777-8777-777777777777",
+  "answer_status": "FOLLOWUP",
+  "intent": "UNKNOWN",
+  "sources": [],
+  "followup_options": ["시연용 샘플 선택지"]
+}
