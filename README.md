@@ -84,7 +84,7 @@
 ## 6. 실행 방법 (로컬 전체 시스템)
 
 > 요구: Node 24 / pnpm 11 / Python 3.12 / uv / Docker Desktop.
-> 상세 절차는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md` 참고 (버전 대조·DB 초기화·seed 적재·검수 시나리오 포함).
+> 상세 절차는 `docs/implementation-notes/IMP-20260724-011-pr8-owner-integration-and-actual-web-evidence.md`의 정식 seed 적재 절차 참고 (버전 대조·DB 초기화·검수 시나리오 포함).
 
 ```bash
 # 1. 클론 및 의존성
