@@ -194,6 +194,52 @@ describe("citizen chat screen", () => {
     expect(await screen.findByText("아름동에 살아요")).toBeInTheDocument();
   });
 
+  it("offers a region entry point on a region-less bulky-waste answer and resends with selected_region (SFR-004)", async () => {
+    const regionlessBulky = {
+      ...SUCCESS_RESPONSE,
+      request_id: "88888888-8888-4888-8888-888888888888",
+      intent: "BULKY_WASTE",
+      summary: "대형폐기물은 신고 후 지정한 배출일 전날 저녁에 내놓으면 됩니다.",
+      office: null,
+      context_token: "signed-bulky-context",
+    } satisfies ChatResponse;
+    const regionalBulky = {
+      ...regionlessBulky,
+      request_id: "99999999-9999-4999-8999-999999999990",
+      summary: "아름동은 지정한 배출일 전날 저녁에 지정 장소에 내놓으면 됩니다.",
+      office: OFFICE,
+    } satisfies ChatResponse;
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(regionlessBulky)
+      .mockResolvedValueOnce(regionalBulky);
+    render(<ChatScreen transport={transportWith(send)} />);
+
+    // 질문에 동을 써도 selected_region 없이 온 답변엔 칩 대신 진입점이 뜬다
+    ask("아름동에서 대형폐기물은 언제 내놓나요?");
+    const entry = await screen.findByRole("button", {
+      name: "우리 동 기준으로 보기",
+    });
+
+    // 진입점 → 동 선택 → 같은 질문을 selected_region 포함해 재전송
+    fireEvent.click(entry);
+    fireEvent.click(await screen.findByRole("button", { name: "아름동" }));
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(send.mock.calls[1][0]).toEqual({
+      question: "아름동에서 대형폐기물은 언제 내놓나요?",
+      selected_region: "아름동",
+      simple_language: true,
+      context_token: "signed-bulky-context",
+    } satisfies ChatRequest);
+
+    // 갱신된 카드에는 "○○동 기준" 칩과 동 변경 버튼이 노출된다
+    expect(await screen.findByText("아름동 기준")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "동 변경" }),
+    ).toBeInTheDocument();
+  });
+
   it.each([
     ["INSUFFICIENT_GROUNDING", true, "LOCAL_TAX_GENERAL"],
     ["PERSONAL_LOOKUP", false, "UNKNOWN"],

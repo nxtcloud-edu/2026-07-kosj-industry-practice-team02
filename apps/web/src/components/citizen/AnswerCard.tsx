@@ -155,6 +155,11 @@ export default function AnswerCard({
 }) {
   const [showRegionSelect, setShowRegionSelect] = useState(false);
 
+  // 동 미지정 대형폐기물 답변에는 "우리 동 기준으로 보기" 진입점을 연다.
+  // 대형폐기물만 배출일·배출장소가 동에 따라 달라지므로 여기로 한정한다 (SFR-004).
+  const showRegionEntry =
+    Boolean(onRegionChange) && !region && response.intent === "BULKY_WASTE";
+
   // 출처 또는 최종 확인일 누락 → 답변 카드 렌더링 금지 (SER-003)
   const hasValidSources =
     response.sources.length > 0 &&
@@ -202,7 +207,7 @@ export default function AnswerCard({
         <span className="rounded-[8px] border border-primary-border bg-primary-light px-2.5 py-1 text-caption font-extrabold text-primary">
           {INTENT_LABEL[response.intent]}
         </span>
-        {region && (
+        {region ? (
           <span className="flex items-center rounded-[8px] bg-bg-sub px-2.5 py-1 text-caption font-bold text-text-sub">
             {region} 기준
             {onRegionChange && (
@@ -216,6 +221,30 @@ export default function AnswerCard({
               </button>
             )}
           </span>
+        ) : (
+          showRegionEntry && (
+            <button
+              type="button"
+              aria-expanded={showRegionSelect}
+              onClick={() => setShowRegionSelect((v) => !v)}
+              className="-my-1 flex min-h-11 items-center gap-1 rounded-[8px] border border-primary-border bg-primary-light px-3 text-caption font-bold text-primary hover:bg-hover-tint active:bg-hover-tint"
+            >
+              <svg
+                aria-hidden="true"
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              우리 동 기준으로 보기
+            </button>
+          )
         )}
       </div>
 
@@ -287,12 +316,13 @@ export default function AnswerCard({
             )}
           </dl>
 
-          {/* "동 변경" 인라인 동 선택 (SFR-004 - 별도 온보딩 화면 없음) */}
+          {/* 인라인 동 선택 (SFR-004 - 별도 온보딩 화면 없음).
+              region 있으면 "동 변경", 없으면 "우리 동 기준으로 보기" 진입 */}
           {onRegionChange && showRegionSelect && (
             <div className="rounded-cell bg-bg-sub p-3">
               <RegionSelect
                 current={region}
-                label="다른 동으로 변경"
+                label={region ? "다른 동으로 변경" : "우리 동 선택"}
                 onSelect={(dong) => {
                   setShowRegionSelect(false);
                   if (dong !== region) onRegionChange(dong);

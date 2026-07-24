@@ -421,9 +421,9 @@ function BotResponse({
         <AnswerCard
           response={response}
           region={message.region}
-          onRegionChange={
-            message.region ? (dong) => onRegionChange(message, dong) : undefined
-          }
+          // region 유무와 무관하게 전달 - region 미지정 대형폐기물 답변의
+          // "우리 동 기준으로 보기" 진입점도 이 콜백으로 재질의한다 (SFR-004)
+          onRegionChange={(dong) => onRegionChange(message, dong)}
         />
       );
     case "FOLLOWUP":
