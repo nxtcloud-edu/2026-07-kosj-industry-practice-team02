@@ -2,12 +2,14 @@
 
 ## 제품
 
-- 서비스명: 세종 민원 AI 길잡이
+- 대외 서비스명·플랫폼명: 세종 민원이음(민원이음)
+- 내부 문제 정의·프로젝트 설명명: 세종 민원 AI 길잡이
 - 구조: 시민용 민원 AI 플랫폼 + 관리자용 AI 민원 운영센터
 - 기준 문장: **모르면 지어내지 않고, 알면 끝까지 안내한다.**
 - 차별점: 실패 질문을 공식 KB 후보로 전환하고 담당자가 승인하는 개선 루프
-- 현재 실제 개발 협업: 사용자 owner 1명 + Frontend 팀원 1명. PM·Frontend·Backend·AI/Data는
-  책임 역할 구분이며 Backend·DB·계약·데이터·보안의 최종 책임은 사용자가 가진다.
+- 팀 구성과 책임: 김정하(PM/Frontend/발표), 곽태성(Backend·Git 통합 owner),
+  이유라(AI/Data), 오현송(AI/Data). Git 코드 통합은 Backend owner와 Frontend 담당자가
+  중심이 되고 AI/Data 담당자는 배정 KB·검색·테스트셋·품질 검증을 책임진다.
 
 ## 구현 범위
 
@@ -101,8 +103,9 @@
 - local Web 개발 origin: `allowedDevOrigins: ["127.0.0.1"]`는 사용자 지시에 따라 별도 Frontend
   PR에서만 반영한다. 현재 owner 통합 PR에 섞지 않으며 public CORS·배포 allowlist 승인이 아니다.
 - local seed 실행: `supabase/config.toml`의 `[db.seed].enabled=false`를 유지한다. `db reset`은
-  migration만 재현하며, 승인된 immutable `.2`는 별도 정식 `seed-cycle → verify-final →
-  provision_local_database_login` 단계로만 적용한다. 자동 seed 또는 임의 SQL 적용은 금지한다.
+  migration만 재현한다. 정식 actual 순서는 local login provision과 API용 `DATABASE_URL`
+  생성 → 승인된 immutable `.2` `seed-cycle` → `verify-final`이다. 자동 seed 또는 임의 SQL
+  적용은 금지한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
 - chat 재시도: optional UUID `Idempotency-Key`를 logical 질문 단위로 유지하고 correlation request ID와 분리한다. local DB에는 HMAC request digest, 독립 opaque claim token·5분 lease와 안전 응답만 논리 TTL 24시간 동안 보관하며 원문·마스킹 질문·correlation ID는 저장하지 않는다. startup과 60초 주기 purge를 사용하고 public retention은 재승인한다.

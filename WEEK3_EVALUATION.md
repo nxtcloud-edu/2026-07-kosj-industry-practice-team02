@@ -7,13 +7,13 @@
 - Source commit: `4cc2f4e5e478668e1d7216fddc08874c9285274b`
 - Source commit time: `2026-07-24T14:19:04+09:00`
 - Evaluation repository: `nxtcloud-edu/2026-07-kosj-industry-practice-team02`
-- Evaluation branch: `submission/week3-mvp`
+- Evaluation target: `main` (pull request review 후에만 반영)
 - Teammate integration base: evaluation `main` commit `2c6fe4f41d5abdb6ef03463c64d39dc81df06955`
 - Packaging rule: source의 tracked 파일을 별도 staging archive로 export했으며 private `.git`은 복사하지 않음
 
-평가 commit SHA는 commit 생성 뒤 PR과 최종 작업 보고서에 기록합니다. commit이 자기 SHA를
-본문에 포함할 수 없으므로 이 문서에는 source SHA와 통합 기준 SHA를 고정합니다. 평가 `main`의
-선행 Web 수정은 이 branch에 통합했고, export 과정에서 source의 private `.git`은 복사하지 않았습니다.
+평가 commit SHA는 Git history와 pull request에 기록합니다. commit이 자기 SHA를 본문에 포함할
+수 없으므로 이 문서에는 source SHA와 통합 기준 SHA를 고정합니다. 평가 `main`의 선행 Web
+수정은 snapshot에 통합했고, export 과정에서 source의 private `.git`은 복사하지 않았습니다.
 
 ## 2. 포함 범위
 
@@ -25,7 +25,7 @@
 - `scripts`, `tools/web-e2e`
 - `.github/workflows/frontend-ci.yml`
 - 활성 source-of-truth, ADR, data lineage, 운영·보안 문서
-- 잠금 파일과 빈 값의 `.env.example`
+- 잠금 파일과 비밀값 칸은 비어 있고 비민감 local 기본값만 있는 `.env.example`
 
 ## 3. 제외 범위
 
@@ -61,10 +61,10 @@
 `supabase/migrations`가 DB 실행 권위입니다. `supabase/config.toml`의 `[db.seed].enabled=false`를 바꾸지 않습니다.
 
 1. patched local Supabase에서 migration reset
-2. immutable `0.1.0-initial.2`를 별도 `seed-cycle`
-3. `verify-final`로 ACTIVE 19 / office 3 / mapping 10 확인
-4. local login provision
-5. API 시작 후 `/ready=200` 확인
+2. local login provision과 API용 `DATABASE_URL` 생성
+3. immutable `0.1.0-initial.2`를 별도 `seed-cycle`
+4. `verify-final`로 ACTIVE 19 / office 3 / mapping 10 확인
+5. process-only context secret을 설정하고 API 시작 후 `/ready=200` 확인
 
 `db reset`만 실행한 빈 DB를 seeded DB로 간주하지 않습니다.
 
@@ -82,6 +82,8 @@
 [MVP-001-SAMPLE-20-RESULT.md](docs/test-reports/MVP-001-SAMPLE-20-RESULT.md)에 별도 기록했습니다.
 
 `KB-WASTE-03`은 local runtime 승인 흐름에서 생성되며 immutable `.2` release 파일을 수정하지 않습니다.
+실제 준비·실행 명령과 runtime을 유지하는 seed 순서는 [README의 §6.3](README.md)을
+따릅니다. 전체 `verify_data_seed.ps1`은 완료 후 runtime을 종료하는 별도 disposable gate입니다.
 
 ## 7. PERSONAL_LOOKUP 무저장 정책
 
@@ -106,7 +108,7 @@
 
 ## 9. Snapshot 검증
 
-아래 결과는 이 공개 export 폴더에서 새로 실행해 PR 설명과 최종 보고서에 기록합니다.
+아래 결과는 공개 export와 병합 후 fresh clone에서 실행해 확인했습니다.
 
 | Gate | 결과 |
 |---|---|

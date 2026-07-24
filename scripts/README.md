@@ -26,13 +26,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/verify_database.ps1
 
-# immutable approved release 19/3/10
+# immutable approved release의 실패·동시성·보상·재실행 방지 검증
+# 주의: 성공·실패와 무관하게 자신이 소유한 local DB runtime을 종료한다.
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2
 ```
 
 이 경로는 disposable local DB 전용입니다. remote project, 실제 데이터, stock CLI fallback과
-volume 삭제를 허용하지 않습니다.
+volume 삭제를 허용하지 않습니다. 실행 가능한 19/3/10 DB를 유지해 API와 Web을 연결할 때는
+이 gate를 API 직전에 실행하지 말고, 루트 [README의 §6.3](../README.md)의
+`verify_database` → 별도 `seed-cycle` → `verify-final` 절차를 따릅니다.
 
 ## API 실행
 
@@ -41,7 +44,8 @@ uv run --project apps/api --frozen python scripts/run_local_api.py --port 8000
 ```
 
 import-safe 기본 API는 DB와 approved seed가 없으면 `/ready=503`입니다. 검증된 local DB와
-`official_data=0.1.0-initial.2`가 준비됐을 때만 `/ready=200`입니다.
+`official_data=0.1.0-initial.2`, process-only `CONTEXT_TOKEN_SECRET`이 준비됐을 때만
+`/ready=200`입니다. actual `/admin` Web 환경변수도 루트 README §6.3을 따릅니다.
 
 ## Upstage 합성 평가
 
