@@ -16,8 +16,6 @@ effective membership-option union guard를 적용한 게시·검증된 immutable
 ACTIVE 19·READY·AI 승격은 주장하지 않고 `official_data=0.0.0-not-populated`를 유지한다.
 search-path-sensitive relation-name observer를 OID equality로 바꾼 `eb74ac8`은 독립 검토
 0/0/0과 commit까지 끝났지만 추가 actual 실행은 아직 승인되지 않았다. `.1`과 `.2` byte는
-수정·삭제하지 않는다. 상세
-hash·시도·cleanup·다음 gate는
-[`DATA-SEED-002-0.1.0-initial.2.md`](../../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)와
-[`DATA-SEED-002-LOCAL-VERIFICATION.md`](../../docs/test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md)를
-따른다.
+수정·삭제하지 않는다. 상세 hash·시도·cleanup·다음 gate는 공개 snapshot에 포함된
+[`DATA-SEED-002-0.1.0-initial.2.md`](../../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)를
+따른다. 원본 저장소의 내부 실행 보고서는 평가 snapshot에서 제외했다.

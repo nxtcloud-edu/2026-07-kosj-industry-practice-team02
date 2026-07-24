@@ -4,7 +4,7 @@
 
 세종 민원 AI 길잡이는 시민의 일상어 질문을 승인된 공식 행정 지식과 연결하고, 근거가 부족한 질문을 사람의 작성·별도 승인 절차를 거쳐 새 ACTIVE KB로 개선하는 local/private MVP입니다.
 
-이 공개 저장소는 private 개발 저장소 `Sejong_AI`의 검증된 tracked 파일을 평가용으로 패키징한 snapshot입니다. 비밀값, 로컬 DB 데이터, 실제 개인정보, 로그·trace, dependency/build 산출물과 private Git 이력은 포함하지 않습니다.
+이 공개 저장소는 private 개발 저장소 `Sejong_AI`의 검증된 tracked 파일과 평가 저장소 `main`에 먼저 반영된 팀원 Web 후속 수정을 평가용으로 패키징한 snapshot입니다. 최종 작업 트리에는 비밀값, 로컬 DB 데이터, 실제 개인정보, 로그·trace와 dependency/build 산출물을 포함하지 않습니다. 평가 저장소 `main`에는 팀원의 선행 통합으로 source commit ancestry가 이미 존재하며, 이번 snapshot 작업은 private `.git`을 복사하거나 새 비밀 이력을 추가하지 않았습니다.
 
 ## 구현 범위
 

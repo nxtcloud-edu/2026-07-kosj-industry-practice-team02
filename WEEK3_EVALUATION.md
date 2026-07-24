@@ -8,9 +8,14 @@
 - Source commit time: `2026-07-24T14:19:04+09:00`
 - Evaluation repository: `nxtcloud-edu/2026-07-kosj-industry-practice-team02`
 - Evaluation branch: `submission/week3-mvp`
+- Teammate integration base: evaluation `main` commit `2c6fe4f41d5abdb6ef03463c64d39dc81df06955`
 - Packaging rule: source의 tracked 파일을 별도 staging archive로 export했으며 private `.git`은 복사하지 않음
 
 평가 commit SHA는 commit 생성 뒤 Draft PR과 최종 작업 보고서에 기록합니다. commit이 자기 SHA를 본문에 포함할 수 없으므로 이 문서에는 source SHA만 고정합니다.
+작업 도중 평가 `main`에 팀원의 `allowedDevOrigins`, 멘토 QA UI, 지역 선택 정합과 runbook/README
+후속 변경이 먼저 병합돼 해당 `main`을 통합했다. 이 선행 `main`에는 source commit ancestry가 이미
+공개돼 있었고, history secret scanner 결과는 finding 0이었다. 일반 PR은 이미 공개된 과거 commit을
+삭제할 수 없으므로 history rewrite 필요 여부는 저장소 owner의 별도 결정이다.
 
 ## 2. 포함 범위
 
@@ -24,7 +29,7 @@
 
 ## 3. 제외 범위
 
-- `.git`, private Git history, `.worktrees`, `.tools`, `.venv`, `node_modules`, `.next`, coverage
+- 최종 작업 트리의 `.git` metadata, `.worktrees`, `.tools`, `.venv`, `node_modules`, `.next`, coverage
 - 실제 `.env`, key, token, DSN, Docker/Supabase local data
 - Playwright trace·screenshot·video, test runtime artifact, 실제 로그
 - 실제 개인정보와 로컬 사용자 경로가 있는 discovery 기록
@@ -104,6 +109,10 @@
 |---|---|
 | secret scan | PASS — tracked/export tree에서 secret pattern 0 |
 | API lint/typecheck/test | PASS — Ruff, strict Mypy 87 files, pytest 1,782 passed / DB-only 8 skipped |
-| Web lint/typecheck/test/build | PASS — ESLint, TypeScript, Vitest 48/48, Next production build |
+| Web lint/typecheck/test/build | PASS — ESLint, TypeScript, Vitest 49/49, Next production build |
+| Web fixture E2E | PASS — 390/430/desktop 18/18 |
 | shared contracts | PASS — 89/89 |
 | preserved PDF/notice | PASS |
+
+팀원 통합 뒤 Web gate, 3개 viewport fixture E2E, 문서 링크, worktree/history secret scan과
+최종 diff 검사를 다시 실행해 모두 통과했다.

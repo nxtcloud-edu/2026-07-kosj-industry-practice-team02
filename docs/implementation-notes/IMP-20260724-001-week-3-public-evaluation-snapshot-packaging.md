@@ -3,11 +3,12 @@
 - Date/Time (KST): 2026-07-24T14:42:11+09:00
 - Task ID: WEEK3-MVP-SNAPSHOT-001
 - Type: release-packaging-security-documentation
-- Status: Done — Draft PR publication pending
+- Status: Done — Draft PR human review pending
 - Author/Agent: Codex
 - Branch: `submission/week3-mvp`
 - Evaluation base commit: `343ac1a`
 - Source commit: `4cc2f4e5e478668e1d7216fddc08874c9285274b`
+- Teammate integration base: evaluation `main` `2c6fe4f41d5abdb6ef03463c64d39dc81df06955`
 - Related: `README.md`, `WEEK3_EVALUATION.md`, `docs/00_SOURCE_OF_TRUTH.md`
 
 ## 1. 사용자 요청과 완료 기준
@@ -42,8 +43,8 @@ private `Sejong_AI/main`을 새 폴더에 clone하고 검증된 tracked 파일�
 ## 3. 시작 전 상태
 
 - source private `main`: PR #9 squash commit `4cc2f4e`, clean.
-- evaluation `main`: `README.md`, `notice.md`, 입찰제안서 PDF, `data/README.md`.
-- 후속 Web 접근성·actual 연동·runbook 수정은 PR #9 commit에 포함됐다.
+- 최초 clone 시 evaluation `main`: `README.md`, `notice.md`, 입찰제안서 PDF, `data/README.md`.
+- 작업 중 evaluation `main`이 `2c6fe4f`로 전진해 팀원 Web/멘토 QA/runbook 변경과 source ancestry를 먼저 포함했다.
 - 평가 원격에 `submission/week3-mvp` branch는 없었다.
 
 ## 4. 미지의 영역·가정·인터뷰
@@ -52,6 +53,7 @@ private `Sejong_AI/main`을 새 폴더에 clone하고 검증된 tracked 파일�
 |---|---|---|---|---|
 | SNAPSHOT-PUBLIC-001 | 보안 | 내부 이력·운영 trace 공개 여부 | 평가에 필요한 활성 코드/계약/데이터만 포함 | private history·local 경로 유출 방지 |
 | SNAPSHOT-DB-001 | 실행 | actual DB 재실행 여부 | 이번 export에서는 DB를 변경하지 않고 source의 검증 증거와 정식 절차 기록 | remote/public DB 사용 0 |
+| SNAPSHOT-HISTORY-001 | 보안 | 평가 main에 이미 공개된 source ancestry | 값 없는 history scanner finding 0 확인; 일반 PR로 과거 이력 삭제 불가 | owner가 별도 history rewrite 필요 여부 결정 |
 
 ## 5. 설계 결정과 대안
 
@@ -96,14 +98,14 @@ DB·공식 release는 실행하거나 수정하지 않았다. immutable `.2`의 
 
 | 축 | Before | After | 변경 이유 |
 |---|---|---|---|
-| Application | 0.8.0-pr8-frontend-baseline | 동일 | 제품 코드 변경 없음 |
-| Web | 0.5.0-pr8-citizen-admin-baseline | 동일 | Web 로직 변경 없음 |
+| Application | 0.8.0-pr8-frontend-baseline | 동일 | 팀원 후속 UI 수정 통합, 공개 계약 변경 없음 |
+| Web | 0.5.0-pr8-citizen-admin-baseline | 동일 | 지역 선택·접근성·관리자 UI 후속 수정 통합 |
 | API | 3.1.0-draft | 동일 | API/계약 변경 없음 |
 | DB schema | 0.4.0-local | 동일 | migration 변경 없음 |
 | Official data | 0.1.0-initial.2 | 동일 | immutable release 변경 없음 |
 | Mock data | 0.0.0-not-populated | 동일 | mock 승격 없음 |
 | Prompt set | 0.1.0-upstage-solar-pro3-synthetic | 동일 | provider 호출 0 |
-| Test suite | 1.5.0-pr8-web-baseline | 동일 | 기존 test 재실행 |
+| Test suite | 1.5.0-pr8-web-baseline | 동일 | Vitest 49개와 fixture E2E 18개 재실행 |
 | Docs | 2.16.0 | 2.16.1 | 평가 README/WEEK3/note |
 
 ## 8. 명령과 테스트 증거
@@ -115,9 +117,11 @@ DB·공식 release는 실행하거나 수정하지 않았다. immutable `.2`의 
 | API Ruff format/check | PASS | 87 files | local terminal |
 | API strict Mypy | PASS | 87 files | local terminal |
 | API pytest (`--directory apps/api`) | PASS | 1,782 passed, DB-only 8 skipped, warning 1 | local terminal |
-| Web ESLint/TypeScript/Vitest | PASS | 11 files, 48 tests | local terminal |
+| Web ESLint/TypeScript/Vitest | PASS | 11 files, 49 tests | local terminal |
 | Web Next production build | PASS | `/`, `/chat`, `/admin*` routes | local terminal |
+| Web fixture Playwright | PASS | 390/430/desktop, 18 tests | local terminal |
 | shared contracts | PASS | 89 tests | local terminal |
+| worktree/history secret scan | PASS | finding 0 | local terminal |
 | PDF/notice diff | PASS | 변경 0 | `git diff --` |
 
 ### 미실행 검증과 이유
@@ -130,7 +134,7 @@ DB·공식 release는 실행하거나 수정하지 않았다. immutable `.2`의 
 
 - Privacy: 실제 질문·PII·로그·local user path를 export하지 않았다.
 - Security: `.env`, key/token/DSN, private `.git`, Docker/Supabase state, dependency/build artifact를 제외했다.
-- Accessibility: 제품 변경 없음. source의 Web 자동 접근성 gate를 보존했다.
+- Accessibility: 팀원 후속 focus ring·semantic link 수정과 3개 viewport E2E를 검토·검증했다.
 - Performance/cost: provider/remote 호출 0. local dependency install과 검증만 수행했다.
 
 ## 10. 데이터와 출처 영향
@@ -149,6 +153,7 @@ DB·공식 release는 실행하거나 수정하지 않았다. immutable `.2`의 
 ## 12. AI 내부 구현 세부 — 필요할 때만 보면 되는 내용
 
 - source archive에는 tracked pathspec만 사용했고 private `.git`을 통과시키지 않았다.
+- 팀원 integration은 최신 evaluation `main`에서 가져오고, 최종 트리에서 내부 협업/agent/legacy/trace 경로를 다시 제거했다.
 - 의존성은 public clone에서 새로 생성됐으며 ignored `.venv`, `node_modules`, `.next`는 stage하지 않는다.
 
 ## 13. 인수인계·재현·롤백
@@ -170,7 +175,7 @@ DB·공식 release는 실행하거나 수정하지 않았다. immutable `.2`의 
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- Draft PR human review/merge만 Pending.
+- Draft PR human review/merge와 이미 공개된 evaluation history의 유지/재작성 판단이 Pending.
 - public deployment, remote DB, 실제 provider 연결은 계속 별도 승인 대상.
 
 ## 15. 자체 리뷰

@@ -82,14 +82,11 @@ concurrency A/B, 19/3/10 seed, replay·compensation guard, final citizen 19/excl
 operational 0와 cleanup을 모두 PASS했다. final exact-owned runtime process/container는 0이다.
 `.1`·`.2` immutable artifacts는 변경하지 않았다. `/ready=200`과 20번째 ACTIVE regression은 별도
 final local application rehearsal에서 PASS했으며, 이 seed report를 public/remote readiness로 확장하지
-않는다. 상세 evidence는
-[`DATA-SEED-002 lineage`](../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)와
-[`DATA-SEED-002 local verification`](../docs/test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md)을
-따른다.
+않는다. 공개 snapshot의 상세 evidence는
+[`DATA-SEED-002 lineage`](../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)를
+따르며, 원본 저장소의 내부 실행 보고서는 평가 snapshot에서 제외했다.
 
 현재 근거는 [ADR-0008](../docs/adr/0008-supabase-cli-sql-migrations.md),
 [ADR-0011](../docs/adr/0011-layered-database-and-backend-enforcement.md),
-[ADR-0012](../docs/adr/0012-deferred-active-question-trigger-execution.md),
-[승인된 설계](../docs/superpowers/specs/2026-07-16-db-001-layered-enforcement-design.md),
-[차단된 실행계획](../docs/superpowers/plans/2026-07-16-db-001-layered-enforcement.md),
-[local baseline candidate report](../docs/test-reports/DB-001-LOCAL-BASELINE.md)다.
+[ADR-0012](../docs/adr/0012-deferred-active-question-trigger-execution.md)다.
+원본 저장소의 내부 설계·실행계획·baseline 보고서는 평가 snapshot에서 제외했다.

@@ -87,6 +87,14 @@ export default function FallbackCard({ fallback }: { fallback: Fallback }) {
           <h2 className="text-card-title font-extrabold text-text [text-wrap:pretty]">
             {fallback.title}
           </h2>
+          {/* OUT_OF_SCOPE 안내 보강 (멘토 QA): 계약 message 앞에 한 줄 추가.
+              FOLLOWUP 문맥 이탈도 FALLBACK OUT_OF_SCOPE로 이 카드에 도달하므로
+              동일 문구 경로 - 구조 변경 없이 여기 한 곳만 보강한다 */}
+          {code === "OUT_OF_SCOPE" && (
+            <p className="mt-1.5 text-body-lg font-semibold text-text [text-wrap:pretty]">
+              말씀하신 내용으로는 안내할 항목을 찾지 못했어요.
+            </p>
+          )}
           <p className="mt-1.5 text-body-lg font-semibold text-text [text-wrap:pretty]">
             {fallback.message}
           </p>
