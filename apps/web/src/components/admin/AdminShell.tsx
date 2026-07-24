@@ -152,28 +152,6 @@ export default function AdminShell({
     return null;
   };
 
-  /** 시연 역할 선택 - local/private 역할 스위치, 인증 아님 (계약 X-Demo-Role) */
-  const roleSelect = (id: string) => (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-table-head font-semibold text-admin-nav-soft">
-        시연 역할 · 인증 아님
-      </label>
-      <select
-        id={id}
-        value={role}
-        onChange={(event) => setRole(event.target.value as AdminActor["role"])}
-        className="min-h-11 rounded-btn-s border border-white/20 bg-white/[0.07] px-2.5 text-note font-semibold text-white"
-      >
-        <option value="OPERATOR" className="text-text">
-          작성 운영자 · OPERATOR-LOCAL-001
-        </option>
-        <option value="APPROVER" className="text-text">
-          별도 승인자 · PM-LOCAL-001
-        </option>
-      </select>
-    </div>
-  );
-
   return (
     <AdminContext.Provider value={contextValue}>
       {/* fixture 모드 상시 배너 - 공지·사이드바와 구분되는 앰버 톤 (태성 리뷰 2) */}
@@ -194,14 +172,17 @@ export default function AdminShell({
                 <span className="text-tie-line">이음</span>센터
               </span>
             </Link>
+            {/* 상단 바 우측 간결 드롭다운 = 시연 환경 축약형 (멘토 QA).
+                현재 actor는 aria-label로 스크린리더에 알린다 */}
             <label className="sr-only" htmlFor="demo-role-mobile">
               시연 역할
             </label>
             <select
               id="demo-role-mobile"
+              aria-label={`시연 역할 선택 · 현재 ${actor.actorId} · 인증 아님`}
               value={role}
               onChange={(event) => setRole(event.target.value as AdminActor["role"])}
-              className="min-h-9 max-w-[46%] rounded-btn-s border border-white/20 bg-white/[0.07] px-2 text-[13px] font-semibold text-white"
+              className="demo-role-select min-h-9 max-w-[46%] rounded-btn-s border border-white/20 bg-white/[0.07] px-2 text-[13px] font-semibold text-white"
             >
               <option value="OPERATOR" className="text-text">
                 작성 운영자
@@ -304,26 +285,59 @@ export default function AdminShell({
             </ul>
           </nav>
 
-          {/* 시연 역할 스위치 - 작성자·검수자 분리(자기검수 금지) 시연용 */}
-          {roleSelect("demo-role")}
-          <p className="px-0.5 text-table-head leading-[1.5] text-admin-nav-soft">
-            현재 시연 actor
-            <br />
-            <b className="text-white">{actor.actorId}</b>
-          </p>
-          {mode === "fixture" ? (
-            <p className="rounded-btn bg-white/[0.07] px-3 py-2 text-table-head font-bold text-admin-nav-soft">
-              시연용 샘플 데이터
-            </p>
-          ) : (
-            <p className="rounded-btn bg-white/[0.07] px-3 py-2 text-table-head font-bold text-admin-nav-soft">
-              실제 local DB API 연결
-            </p>
-          )}
+          {/* 하단 고정 그룹: 시연 환경 패널 + 철학 카드 (멘토 QA).
+              흩어져 있던 시연 라벨·actor·샘플 뱃지를 단일 카드로 통합한다.
+              작성자·검수자 분리(자기검수 금지) 시연은 그대로 - 기능 변경 없음 */}
+          <div className="mt-auto flex flex-col gap-3.5">
+            {/* 시연 환경 패널 - 메뉴와 상단 헤어라인으로 구분 */}
+            <div className="border-t border-white/10 pt-3.5">
+              <div className="rounded-btn bg-white/[0.07] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-bold text-white">
+                    시연 환경
+                  </span>
+                  <span className="text-[11px] font-semibold text-admin-nav-soft">
+                    인증 아님
+                  </span>
+                </div>
+                {/* actor 드롭다운(네이비 테마) - 현재 actor는 시각 중복을 피해
+                    aria-label로만 남긴다. 흰 배경 select 금지 */}
+                <label htmlFor="demo-role" className="sr-only">
+                  시연 역할 선택
+                </label>
+                <select
+                  id="demo-role"
+                  aria-label={`시연 역할 선택 · 현재 ${actor.actorId} · 인증 아님`}
+                  value={role}
+                  onChange={(event) =>
+                    setRole(event.target.value as AdminActor["role"])
+                  }
+                  className="demo-role-select mt-2 min-h-11 w-full rounded-btn-s border border-white/20 bg-white/[0.07] px-2.5 text-note font-semibold text-white"
+                >
+                  <option value="OPERATOR" className="text-text">
+                    작성 운영자 · OPERATOR-LOCAL-001
+                  </option>
+                  <option value="APPROVER" className="text-text">
+                    별도 승인자 · PM-LOCAL-001
+                  </option>
+                </select>
+                {/* 데이터 출처 - 버튼처럼 보이지 않게 점 아이콘 + 캡션으로 강등 */}
+                <p className="mt-2.5 flex items-center gap-1.5 text-table-head font-semibold text-admin-nav-soft">
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-admin-nav-soft"
+                  />
+                  {mode === "fixture"
+                    ? "시연용 샘플 데이터"
+                    : "실제 local DB API 연결"}
+                </p>
+              </div>
+            </div>
 
-          {/* 최하단 철학 카드 (§5-1) */}
-          <div className="mt-auto rounded-btn bg-white/[0.07] p-3 text-table-head leading-[1.5] text-admin-nav-soft">
-            {PHILOSOPHY[pathname] ?? PHILOSOPHY["/admin"]}
+            {/* 철학 카드 (§5-1) */}
+            <div className="rounded-btn bg-white/[0.07] p-3 text-table-head leading-[1.5] text-admin-nav-soft">
+              {PHILOSOPHY[pathname] ?? PHILOSOPHY["/admin"]}
+            </div>
           </div>
         </aside>
         <div className="min-w-0 flex-1 bg-bg-admin">{children}</div>
