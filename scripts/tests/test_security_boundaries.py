@@ -177,12 +177,18 @@ class EnvironmentBoundaryTest(unittest.TestCase):
         parsed = assignments(path)
         self.assertEqual(
             set(parsed),
-            {"API_INTERNAL_BASE_URL", "ADMIN_UI_ENABLED", "ADMIN_UI_MODE"},
+            {
+                "API_INTERNAL_BASE_URL",
+                "CHAT_UI_MODE",
+                "ADMIN_UI_ENABLED",
+                "ADMIN_UI_MODE",
+            },
         )
         if parsed.get("API_INTERNAL_BASE_URL") != "http://127.0.0.1:8000":
             raise AssertionError("web API base URL does not match the approved local default")
+        self.assertEqual(parsed.get("CHAT_UI_MODE"), "actual")
         self.assertEqual(parsed.get("ADMIN_UI_ENABLED"), "false")
-        self.assertEqual(parsed.get("ADMIN_UI_MODE"), "fixture")
+        self.assertEqual(parsed.get("ADMIN_UI_MODE"), "actual")
         text = path.read_text(encoding="utf-8")
         self.assertNotIn("NEXT_PUBLIC_", text)
         for name in (
@@ -207,17 +213,16 @@ class EnvironmentBoundaryTest(unittest.TestCase):
             "SUPABASE_ANON_KEY": "",
             "SUPABASE_SERVICE_ROLE_KEY": "",
             "LLM_PROVIDER": "disabled",
-            "LLM_MODEL": "deepseek-v4-flash",
+            "LLM_MODEL": "solar-pro3",
             "LLM_API_KEY": "",
-            "LLM_BASE_URL": "",
+            "LLM_BASE_URL": "https://api.upstage.ai/v1",
             "LLM_TIMEOUT_SECONDS": "15",
             "LLM_MAX_RETRIES": "1",
             "LLM_MAX_CONCURRENCY": "1",
+            "LLM_MAX_INPUT_TOKENS": "4096",
             "LLM_MAX_OUTPUT_TOKENS": "1024",
-            "LLM_THINKING_ENABLED": "false",
             "LLM_RUN_ATTEMPT_CAP": "30",
-            "DEEPSEEK_ENABLED": "false",
-            "DEEPSEEK_SYNTHETIC_EVALUATION_MODE": "false",
+            "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
             "CONTEXT_TOKEN_SECRET": "",
             "CONTEXT_TOKEN_TTL_SECONDS": "900",
             "PII_RETENTION_DAYS": "30",
