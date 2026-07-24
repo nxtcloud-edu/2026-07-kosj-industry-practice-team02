@@ -12,6 +12,117 @@ python -B scripts/validate_data_staging.py validate --draft-dir data/staging/dat
 
 위 Python 유틸리티와 `scripts/tests/`의 저장소 경계 검사는 Python 표준 라이브러리만 사용한다.
 
+## Upstage 합성 평가 runner
+
+```powershell
+python -B scripts/run_upstage_synthetic_evaluation.py
+python -B scripts/run_upstage_synthetic_evaluation.py --review
+```
+
+이 runner는 local/private 환경의 exact Upstage `solar-pro3` 설정과 canonical
+`data/evaluation/sample_questions_20.csv`의 `T-01`~`T-10`만 사용한다. local DB readiness가
+PASS한 뒤에만 client/provider를 만들며, 모델·URL·key·fixture·출력 경로·cap·질문은 CLI로 받을 수
+없다. `--review`는 stdin/stdout이 모두 TTY인 경우에만 첫 valid 합성 결과 10건을 메모리에서
+검수하고 1~5점과 closed reason code만 받는다.
+
+본문 없는 aggregate JSON은 고정 ignored 경로
+`artifacts/llm-002/upstage-synthetic-evaluation.json`에 원자적으로 기록된다. 정상 종료는
+`LLM_EVALUATION_COMPLETE`, 고정 `REPORT`, `OVERALL_PASS` 세 줄만 출력한다. 설정/인수/TTY 오류는
+exit `2`, local DB/readiness 오류는 exit `3`, 실행·무결성 오류는 exit `4`이며 오류 상세·key·DSN·
+질문·답변은 출력하지 않는다. 이 도구는 실제 시민/free-input/public/remote provider 연결을
+활성화하지 않는다.
+
+## Q-PM local actual 개선 루프 runner
+
+```powershell
+python -B scripts/verify_actual_mvp_regression.py
+```
+
+이 runner는 **state-changing local/private 전용**이다. 인수를 받지 않으며 clean reset과 immutable
+`.2` seed로 ACTIVE 19를 확인하고 local login과 process-only `CONTEXT_TOKEN_SECRET`,
+`SEJONG_ADMIN_DATABASE_URL`을 준비한 뒤 정확히 한 번 실행한다. 성공 뒤 DB는 ACTIVE 20이므로
+같은 상태에서 재실행하지 말고 disposable local DB를 다시 reset+seed한다. 실패는
+`ACTUAL_MVP_REGRESSION_FAILED` 한 줄과 nonzero exit만 내며 질문·UUID·DSN·secret·provider
+payload를 출력하지 않는다.
+
+정상 성공 stdout은 아래 고정 15줄이다.
+
+```text
+PASS ready
+PASS initial-active count=19
+PASS personal-lookup persistence event_delta=0 failed_delta=0
+PASS initial-fallback
+PASS business-replay
+PASS insufficient-grounding event_delta=1 failed_delta=1
+PASS failed-new count=1
+PASS reason-confirmed
+PASS candidate-created
+PASS candidate-submitted
+PASS self-approval-blocked
+PASS candidate-approved
+PASS improved-requery public_id=KB-WASTE-03
+PASS old-replay
+PASS final-active total=20 categories=4 count_each=5
+```
+
+첫 delta는 `interaction_events`와 `failed_questions` 두 table에만 대한 무변화 증거다. 별도 근거
+부족 질문은 두 count를 정확히 1씩 늘린다. candidate `activated_kb_id`는 내부 UUID이며 public
+`KB-WASTE-03`은 최종 chat source에서 증명한다. 이 runner는 Upstage key/network/provider,
+remote DB, Docker 외부 노출, public admin·배포를 사용하거나 승인하지 않는다.
+
+### Opt-in actual desktop browser
+
+backend runner가 성공한 DB는 이미 ACTIVE 20이므로, browser evidence 전에 다시 disposable reset과
+immutable `.2` seed로 clean ACTIVE 19를 만든다. `supabase/config.toml`의
+`[db.seed].enabled=false`는 그대로 유지하므로 `db reset --local`은 migration만 replay하며
+`supabase/seed.sql`을 자동 실행하지 않는다. patched CLI에서 얻은 local admin DSN을 값 출력 없이
+process-only `SEJONG_ADMIN_DATABASE_URL`에 둔 상태에서 아래 **별도 정식 seed 단계**를 순서대로
+실행한다. 하나라도 실패하면 API/E2E를 시작하지 않는다.
+
+```powershell
+$releaseVersion = "0.1.0-initial.2"
+.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe db reset --local
+apps/api/.venv/Scripts/python.exe -B scripts/verify_data_seed_db.py `
+  seed-cycle --release-version $releaseVersion
+apps/api/.venv/Scripts/python.exe -B scripts/verify_data_seed_db.py `
+  verify-final --release-version $releaseVersion
+apps/api/.venv/Scripts/python.exe -B scripts/provision_local_database_login.py
+```
+
+`seed-cycle`과 `verify-final`은 immutable `.2`의 exact ACTIVE 19/office 3/mapping 10을 확인한다.
+마지막 provision은 ignored `apps/api/.env`의 `DATABASE_URL`만 회전한다. admin DSN, 생성된 login
+password 또는 `.env` 내용을 출력·복사·커밋하지 않는다. 첫 터미널에서 실제 secret을 출력하지
+않고 local API를 시작한다.
+
+```powershell
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+[Environment]::SetEnvironmentVariable(
+  "CONTEXT_TOKEN_SECRET",
+  [Convert]::ToBase64String($bytes),
+  "Process"
+)
+apps/api/.venv/Scripts/python.exe -B scripts/run_local_api.py --port 8000
+```
+
+`/ready=200`을 확인한 뒤 두 번째 터미널의 저장소 루트에서 actual opt-in과 state-changing desktop
+spec을 정확히 한 번 실행한다. Playwright config가 `E2E_ACTUAL=1`일 때만 `actual-desktop` project와
+`*.actual.spec.ts`를 수집하고, Web server에 actual admin transport를 전달한다.
+
+```powershell
+$env:E2E_ACTUAL = "1"
+$env:API_INTERNAL_BASE_URL = "http://127.0.0.1:8000"
+$env:CI = "true"
+corepack pnpm --filter @sejong-ai/web build
+corepack pnpm --dir tools/web-e2e test -- `
+  --project=actual-desktop e2e/admin-core-loop.actual.spec.ts
+```
+
+PASS 뒤 DB는 final ACTIVE 20이다. 첫 터미널의 API를 `Ctrl+C`로 종료하고 두 터미널의 위 process
+env를 제거한다. 실제 질문·PII·provider key를 넣지 않으며, 실패 trace/screenshot은 local
+Git-ignored test artifact로만 취급한다. 다시 실행하려면 반드시 clean19부터 복구한다.
+
 ## 협업 전환 검사기
 
 ### 전체 reachable Git history 비밀 검사

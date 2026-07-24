@@ -44,7 +44,7 @@
   `official_data=0.1.0-initial.2`로 승격한다. 이 seed 증거 자체는 `/ready=200`, 20번째 ACTIVE 또는
   public/remote 운영을 뜻하지 않으며 `.1`·`.2`·v1 불변은 유지한다. 별도 final local application
   rehearsal은 `/ready=200`, governed `KB-WASTE-03` 19→20 flow와 final four fields×5를 PASS했지만,
-  public/remote/DeepSeek/deployment 증거는 여전히 없다.
+  public/remote/external-provider/deployment 증거는 여전히 없다.
 - 표본 질문 20개 + 개선 전후 회귀 테스트 1개
 - 실패 질문 mock 20~30건, 운영 이벤트 mock 50~100건, KB 후보 mock 5~10건
 - 시민 기관 정보는 공식 데이터만 사용
@@ -73,8 +73,12 @@
 - 초기 runtime 마스커는 표준 라이브러리 기반 결정론적 typed rule engine으로 구현한다. 원문 값 없는 고정 토큰만 반환하고 안전한 결과를 만들 수 없으면 텍스트 저장·실패 질문 row·provider 호출을 금지하며 metadata-only event만 허용한다.
 - 시민 입력이 번호를 “공식 대표번호”라고 표시해도 그 label은 신뢰하지 않고 모든 phone-shaped value를 마스킹한다. 공식 기관 연락처는 승인된 KB·기관 메타데이터를 서버가 결합한 카드에서만 제공한다.
 - 안전한 마스킹 text를 만들 수 없으면 HTTP 200 `PRIVACY_UNRESOLVED`로 개인정보를 빼거나 표현을 바꿔 다시 질문하도록 안내한다. 질문 text·source/context/office·provider·실패 질문 행·후보는 0이다. Q-MVP-001은 public response enum 동결을 승인했고, 7/25 local milestone에서는 DB event를 만들지 않는다. persistent metadata DB migration은 reserved public `00700` 이후 별도 승인·실행한다.
-- 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니며 실제 시민 질문의 DeepSeek 전송 금지는 유지한다.
-- DeepSeek 외부 호출은 local/private의 서버 검증 합성 fixture에만 허용; 실제 시민·PII·민감정보·공개 운영은 금지
+- 마스킹 성공은 저장·합성 fixture provider 호출의 필요조건일 뿐 충분조건이 아니며 실제 시민 질문의 외부 LLM 전송 금지는 유지한다.
+- Q-LLM-005=A: 외부 합성 평가 공급자는 Upstage exact `solar-pro3`다. local/private의 서버
+  검증 canonical `T-01`~`T-10`만 최대 30 outbound attempt로 평가하며 실제 시민·PII·민감정보·
+  자유 입력·공개 운영은 금지한다. D-066/D-067로 written specification과 실행계획이 승인돼
+  구현 중이며 Task 1 fail-closed settings는 review clean이다. key/network call은 아직 0이다.
+  평가 통과 뒤에도 실제 시민 연결은 선택지 B의 별도 승인 대상이다.
 - 화면 transcript와 대화 token은 현재 탭 메모리에만 유지; 서버 세션·raw transcript·token 영속 저장 금지
 
 ## 기술
@@ -83,10 +87,22 @@
 - Backend: FastAPI + Python
 - 개발 기준: Node 24.x+pnpm, Python 3.12+uv
 - DB/Search: Supabase PostgreSQL + Supabase CLI 버전 SQL migration + 키워드·메타데이터 검색; MVP embedding off
-- LLM: 사용자 기존 DeepSeek API 잔액, local/private 합성 fixture 전용, 정확히 `deepseek-v4-flash`, thinking off, max output 1024, concurrency 1, retry 최대 1회, run당 외부 전송 시도 총 30회; provider adapter와 disabled/template fallback 필수
+- LLM: Upstage direct API, exact `solar-pro3`, local/private canonical 합성 fixture 전용,
+  max output 1024, concurrency 1, retry 최대 1회, run당 outbound attempt 총 30회;
+  provider adapter와 disabled/template fallback 필수. 실제 구현·actual call은 승인된 명세와
+  후속 실행계획 뒤에만 수행한다.
 - 초기 실행: local-first, 외부 인프라 예산 0원
-- 현재 웹 진입: `/`의 CTA는 입력·저장·API 호출 없는 정적 `/chat` 준비 화면으로 연결한다.
-  실제 질문 입력·공식 KB 답변은 API-CHAT/WEB-CHAT/READY gate 이후에만 활성화한다.
+- 현재 웹 기준선: 사람이 병합한 Frontend PR #8과 owner 통합 commit `c15f61b`부터 local/private
+  `/chat`과 `/admin`은 typed actual transport가 기본이고 fixture는 명시적 개발·테스트 mode에서만
+  사용한다. public 관리자·remote DB·공개 배포 승인은 여전히 없으며 서버 gate 없이 활성화하지 않는다.
+  PR #8의 `/admin/*` 하위 경로는 local/private 관리자 view이며 공개 제품 페이지 범위 확장으로
+  해석하지 않는다. `/`, `/chat`, `/admin`의 공개 3페이지 범위는 그대로다. 하위 경로를 영구
+  구조로 유지할지는 `WEB-ROUTE-SCOPE-001`의 인간 범위 검토 전까지 Pending이다.
+- local Web 개발 origin: `allowedDevOrigins: ["127.0.0.1"]`는 사용자 지시에 따라 별도 Frontend
+  PR에서만 반영한다. 현재 owner 통합 PR에 섞지 않으며 public CORS·배포 allowlist 승인이 아니다.
+- local seed 실행: `supabase/config.toml`의 `[db.seed].enabled=false`를 유지한다. `db reset`은
+  migration만 재현하며, 승인된 immutable `.2`는 별도 정식 `seed-cycle → verify-final →
+  provision_local_database_login` 단계로만 적용한다. 자동 seed 또는 임의 SQL 적용은 금지한다.
 - 향후 배포 추천: Vercel(Frontend) + Render(Backend) + Supabase(DB); 공개 배포는 계정·리전·로그·CORS·예산 별도 승인 후
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
 - chat 재시도: optional UUID `Idempotency-Key`를 logical 질문 단위로 유지하고 correlation request ID와 분리한다. local DB에는 HMAC request digest, 독립 opaque claim token·5분 lease와 안전 응답만 논리 TTL 24시간 동안 보관하며 원문·마스킹 질문·correlation ID는 저장하지 않는다. startup과 60초 주기 purge를 사용하고 public retention은 재승인한다.
@@ -113,8 +129,8 @@
 - Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. 사용자는
   2026-07-21 GitHub UI에서 `Only select repositories / Sejong_AI`를 확인했고 secret 없는
   `sejong-ai-cloud-docs` environment를 저장했다. Task 6은 App scope와 environment creation까지
-  완료됐고 docs-only task·Draft PR·사람 병합 evidence 전에는 partial이다. DeepSeek
-  key·DB DSN·context secret을 Cloud에 넣지 않으며 Docker/Supabase actual과 DeepSeek 합성 실호출은 local-only다.
+  완료됐고 docs-only task·Draft PR·사람 병합 evidence 전에는 partial이다. LLM API
+  key·DB DSN·context secret을 Cloud에 넣지 않으며 Docker/Supabase actual과 Upstage 합성 실호출은 local-only다.
 - 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
   remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.
 - 오류 계약: 정책 응답은 HTTP 200, 승인 근거로 안전 응답을 만들 수 없는 시스템 불능만 HTTP 503 `SERVICE_UNAVAILABLE`
@@ -159,21 +175,32 @@
 - 실행 순서는 owner PR 통합·Frontend PR #4 note-ID 교정, DATA-SEED-002 19 ACTIVE, PII/chat
   계약, deterministic chat API와 `/chat`, 실패 질문·후보·별도 승인·20번째 ACTIVE, 최소
   `/admin`, 표본 20·회귀 1·보안·데모다.
-- 7월 25일 뒤로 미루는 항목은 DeepSeek 품질 튜닝, 고급 UI polish, 100명 부하, 자동 백업,
-  public deployment와 deferred `00700`이다. 실제 시민 DeepSeek 전송과 public/remote 사용은
+- 7월 25일 뒤로 미룬 항목 중 외부 LLM은 Q-LLM-005=A에 따라 Upstage 합성 품질 평가로
+  시작한다. 고급 UI polish, 100명 부하, 자동 백업, public deployment와 deferred `00700`은
+  계속 별도다. 실제 시민 외부 LLM 전송과 public/remote 사용은
   계속 금지한다.
 - 일정 단축으로도 PII 원문 0, ACTIVE/OFFICIAL-only, server-bound source, author≠reviewer,
   official/mock 분리, 390/430 keyboard/contrast 최소선은 완화하지 않는다.
 - local/private `/admin`의 role selector는 demo actor 선택일 뿐 인증/RBAC가 아니다. public
   mode에서는 server-side gate 없이 관리자 router와 UI를 노출하지 않는다.
+- Q-PM-DEMO-001=B/D-068로 PM 데모의 두 정책 질문을 분리한다. #4 개인조회는
+  `UNKNOWN/PERSONAL_LOOKUP/candidate=false` 정책 결과를 반환하고 질문 text·interaction event·failed row를
+  만들지 않는다. #5는 별도의 지원 범위 내 `INSUFFICIENT_GROUNDING` 질문으로 event와 eligible
+  failed row부터 별도 승인자에 의한 20번째 ACTIVE, 동일 질문 SUCCESS까지 시연한다.
 - 2026-07-22 actual continuation은 final local DB에서 one NEW failure→reason confirm→candidate
   submit→same-writer block→different approver→`KB-WASTE-03` SUCCESS와 `/ready=200`을 확인했다.
   FastAPI JSON pre-parse와 strict UUID/date의 canonical wire mismatch는 request field validator의
   exact-string-only 변환으로 보정했고, 전역 strictness와 public admin 금지는 유지했다. final API
   1,640, Web 48/lint/type/build/E2E 15, contracts 89, clean DB pgTAP 9/356·integration 8/8, root offline과
   deterministic sample T-01~T-20 20/20을 PASS했다.
-- MVP-001은 local/private AI scope complete의 **Review**다. Draft PR review/merge, manual demo와
-  accessibility는 인간 Pending이고 DeepSeek actual/tuning, 100-user, automated backup, advanced UI,
+- MVP-001은 local/private AI scope complete의 **Review**다. PR #6과 Frontend PR #8은 사람이
+  병합했고, owner 후속은 current PR #8 UI로 PERSONAL 미저장→별도 IG→사유 확정→OFFICIAL
+  후보→별도 승인자·checklist 3/3→20번째 ACTIVE→동일 질문 SUCCESS·정확한 공식 출처를 actual
+  browser 1/1로 재검증했다. feedback dialog의 focus 이동·trap·Escape·focus restore도 Web
+  unit gate를 통과했다. Draft PR 검토와 manual demo는 인간 Pending이다. Upstage 합성 평가는 LLM-002의 승인된 명세와
+  실행계획으로 offline Tasks 1~6 review clean이며 key/network/model-quality actual은 0이다.
+  actual call은 local human Task 7 gate 뒤다. 100-user,
+  automated backup, advanced UI,
   public/remote deploy와 `00700`은 deferred다. local role selector는 production authentication이 아니다.
 
 ## 제출 정보
@@ -183,4 +210,4 @@
 - 대표 연락처: [직접 입력]
 - 제출일: [직접 입력]
 - 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.3.1
+- 문서 버전: v2.4.0

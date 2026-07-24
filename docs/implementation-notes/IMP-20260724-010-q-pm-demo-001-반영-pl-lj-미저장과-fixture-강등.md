@@ -1,13 +1,14 @@
-# IMP-20260724-002 — Q-PM-DEMO-001 반영: PL·LJ 완전 미저장과 fixture 강등
+# IMP-20260724-010 — Q-PM-DEMO-001 반영: PL·LJ 완전 미저장과 fixture 강등
 
 - Date/Time (KST): 2026-07-24
 - Task ID: WEB-QPM-DEMO-001
 - Type: implementation/security/frontend
-- Status: Done (AI scope) — PR #8 Draft push, merge는 인간 결정
+- Status: Done — PR #8 merged; owner integration에서 note ID·INDEX 정규화
 - Author/Agent: Claude Code (결정: PM Q-PM-DEMO-001·Q-MVP-002/D-059, 명세: 곽태성)
-- Branch: `feat/web-p1-complete` (PR #8, Draft 유지)
-- Base: `9989ff8` (태성 리뷰 반영, IMP-20260724-001)
-- Related: `MISMATCH_REPORT.md` C1/E1(계약 vs 백엔드 저장 범위 충돌 — 본 결정으로 해소 방향 확정), `apps/web/CLAUDE.md` §15, `apps/web/DESIGN.md` 부록 B
+- Branch: `feat/web-p1-complete` (PR #8 source branch; owner integration `c15f61b`에 병합)
+- Base: `9989ff8` (태성 리뷰 반영, IMP-20260724-009로 정규화)
+- Related: [PR #8 역사적 mismatch 감사 C1/E1](../audits/FRONTEND_PR8_MISMATCH_REPORT.md),
+  D-059/D-068, `apps/web/CLAUDE.md` §15, `apps/web/DESIGN.md` 부록 B
 
 ## 1. 사용자 요청과 완료 기준
 
@@ -19,7 +20,7 @@ PM 결정 Q-PM-DEMO-001을 태성 명세대로 반영. `contracts/`·`apps/api/`
 
 ### Acceptance Criteria
 
-- [x] 질문 원문 URL 전달 제거 (`/chat?q=`·useSearchParams 폐지, 상태 전달) — IMP-20260724-001에서 선반영, 본 세션에서 유지 확인
+- [x] 질문 원문 URL 전달 제거 (`/chat?q=`·useSearchParams 폐지, 상태 전달) — IMP-20260724-009에서 선반영, 본 세션에서 유지 확인
 - [x] PERSONAL_LOOKUP·LEGAL_JUDGMENT 미저장화: enqueueFailure에서 두 사유 제거, 초기 fixture PL 행 제거, 해당 폴백 "질문 내용은 저장되지 않았습니다" 표시 (INSUFFICIENT_GROUNDING만 30일 보관 고지)
 - [x] fixture 강등: OFFICIAL 판정·APPROVED/ACTIVE 전환 로직 제거(전부 MOCK), fixture 승인·반려 버튼 비활성(사유 툴팁), 전 화면 샘플 배너, 미설정 기본 actual
 - [x] 데모 #5 정합: 근거 부족 예시를 "침대 2인용 프레임 수수료" 계열로 교체 (fixture 문안만, 백엔드 시드 무변경)
@@ -33,11 +34,11 @@ PM 결정 Q-PM-DEMO-001을 태성 명세대로 반영. `contracts/`·`apps/api/`
 
 | 항목 | 기록 |
 |---|---|
-| Who | 결정: PM(Q-PM-DEMO-001)·Q-MVP-002/D-059. 명세: 곽태성. 구현: Claude Code. 병합: owner pending. |
-| When | 2026-07-24 KST, PR #8 Draft 단계. |
+| Who | 결정: PM(Q-PM-DEMO-001)·Q-MVP-002/D-059. 명세: 곽태성. 구현: Claude Code. 병합: owner/local integration `c15f61b`. |
+| When | 2026-07-24 KST, PR #8 Draft 구현 뒤 owner integration 완료. |
 | Where | `apps/web/src`(demo-fixtures·FallbackCard·KbCandidateReview·kb-candidates page·admin-flow.test), `apps/web/{README.md,CLAUDE.md,DESIGN.md,.env.example}`, `docs/implementation-notes/`. contracts/api/database/supabase·manifest/lockfile 무변경. |
 | What | ① PL·LJ 실패 행 완전 미저장(초기 fixture PL 행 제거 포함) ② 폴백 저장 고지를 ISG만 30일 보관으로 축소 ③ fixture 후보 전부 MOCK·판정(승인·반려·ACTIVE) 비활성 ④ 데모 #5 근거 부족 예시를 침대 프레임 수수료로 재구성 ⑤ 문서: 기준선/변경 구분 append, fixture=개발 도구, actual 실행 가이드 |
-| Why | 개인정보 최소수집 강화 — 개인별 조회·법적 판단 질문은 본인 식별 맥락 가능성이 높아 마스킹 후에도 미보관. MISMATCH_REPORT C1(계약 3종 저장 vs 백엔드 1종 저장 충돌)을 "1종 저장"으로 확정. fixture가 공식 데이터·실제 승인 흐름처럼 보이는 위험 제거(전부 MOCK + 배너 + 판정 비활성). |
+| Why | 개인정보 최소수집 강화 — 개인별 조회·법적 판단 질문은 본인 식별 맥락 가능성이 높아 마스킹 후에도 미보관. D-059/D-068이 [역사적 감사 C1](../audits/FRONTEND_PR8_MISMATCH_REPORT.md)의 당시 모호성을 local/private의 "INSUFFICIENT_GROUNDING만 저장"으로 해소했다. fixture가 공식 데이터·실제 승인 흐름처럼 보이는 위험 제거(전부 MOCK + 배너 + 판정 비활성). |
 | How | fixture transport의 `enqueueFailure`를 ISG 전용 시그니처로 축소, `reviewCandidate`는 항상 거부(throw), `data_origin` 고정 "MOCK". UI는 `reviewLocked` prop(=`mode==="fixture"`)으로 판정 바 비활성 + 사유 캡션·title 툴팁. 라우팅은 침대/프레임 키워드를 대형폐기물 SUCCESS 분기보다 먼저 검사. |
 | How much | 코드 5파일 + 테스트 1파일 재작성 + 문서 4파일 + 노트/INDEX. 테스트 40/40. |
 
@@ -83,9 +84,10 @@ Not run: actual 경로 end-to-end (local Supabase/Postgres + run_local_api.py
 
 ## 5. 위험과 롤백
 
-- 위험: 계약 `StoredFailureReason`은 여전히 3종을 정의한다 — 백엔드가 향후
-  계약대로 3종을 저장하게 되면 폴백 고지 문구를 되돌려야 한다 (계약 정리는
-  MISMATCH_REPORT 제안 ⑥, 별도 트랙).
+- 경계: 계약 `StoredFailureReason` enum의 3종 범위는 PERSONAL_LOOKUP·
+  LEGAL_JUDGMENT 저장을 승인하지 않는다. D-059/D-068의 local/private 생성 정책은
+  `INSUFFICIENT_GROUNDING`만 저장하도록 유지되며, 이를 넓히려면 공개 계약과 개인정보
+  정책에 대한 별도 인간 승인·결정 로그·테스트가 먼저 필요하다.
 - 위험: actual 경로 데모 리허설(#5 침대 프레임 시나리오)은 백엔드 KB/시드
   상태에 의존 — 백엔드 시드는 이 PR에서 건드리지 않았으므로 리허설에서
   근거 부족 판정이 실제로 나는지 확인 필요.
