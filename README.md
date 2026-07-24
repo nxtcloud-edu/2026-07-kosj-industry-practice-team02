@@ -1,203 +1,149 @@
-# 세종 민원 AI 길잡이 — Codex Ready Repository
+# 세종 민원이음 (플랫폼명: 민원이음)
 
-이 저장소는 기존 스타터 패키지와 최종 확정 개발 기준을 합쳐, Codex가 **오래된 범위를 정답으로 오인하지 않고**, 발견 → 인터뷰 → 계획 → 구현 → 테스트 → 구현 노트 → 인수인계 순서로 작업하도록 구성한 개발 준비본이다.
+> **2026년 7월 고려대 세종 산업체 실습 프로젝트 — 2팀**
+> 대상 공고: 공고번호 2026-세종-0001, AI 기반 시민 민원 통합 응대 플랫폼 구축
+> 프로젝트 기간: 2026. 07. 06. ~ 2026. 07. 31.
 
-## 가장 먼저 할 일
+시민과 행정을 잇고, 실패 질문을 지식베이스 개선으로 잇습니다.
 
-1. 이 폴더를 Git 저장소 루트로 연다.
-2. `AGENTS.md`를 확인한다. Codex는 프로젝트 작업 전 `AGENTS.md`를 자동으로 읽는 방식으로 프로젝트 지침을 적용한다.
-3. Codex의 첫 메시지로 `CODEX_START_PROMPT.md` 본문을 입력한다.
-4. Codex가 저장소 감사를 끝내고 질문할 때까지 큰 코드 변경을 승인하지 않는다.
-5. 인터뷰에 답한 뒤 실행계획을 검토하고 `진행`이라고 명시한다.
+---
 
-## 권장 Codex 확인 명령
+## 1. 프로젝트 소개
 
-Codex CLI를 사용한다면 저장소 루트에서 다음처럼 활성 지침을 확인할 수 있다.
+민원이음은 시민이 일상어로 민원을 질문하면 공식 출처로 검증된 행정 지식베이스에 근거해 절차, 서류, 담당 기관을 안내하고, 답변하지 못한 질문을 관리자 화면 **이음센터**에서 지식베이스 개선 후보로 전환하는 **실패를 학습 가능한 운영 과제로 바꾸는 플랫폼**이다.
 
-```bash
-codex --ask-for-approval never "현재 적용 중인 프로젝트 지침 파일과 핵심 규칙을 요약해줘. 코드 변경은 하지 마."
-```
-
-Codex 공식 가이드의 핵심 원칙을 반영했다.
-
-- `AGENTS.md`는 저장소의 지속적 프로젝트 지침으로 자동 로드된다.
-- 복잡하거나 모호한 작업은 계획과 인터뷰를 먼저 수행한다.
-- 테스트·검증·diff 리뷰까지 완료 기준에 포함한다.
-- 반복 가능한 절차는 저장소 스킬로 분리할 수 있다.
-
-## 권위 구조
+플랫폼은 세 가지 실패에서 배운다 — AI가 답하지 못한 것(폴백), 시민이 만족하지 못한 것(불만족), 현장과 달랐던 것(신고). 세 채널 모두 비텍스트 메타데이터 기준으로 집계하며, KB 후보 생성은 지원 범위 내 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정한다.
 
 ```text
-AGENTS.md                       Codex 행동 규칙
-CODEX_START_PROMPT.md           첫 세션 발견·인터뷰 프롬프트
-docs/00_SOURCE_OF_TRUTH.md      문서 권위와 충돌 해결
-docs/source-of-truth/           최종 확정 제품·정책·RFP 기준
-docs/adr/                       아키텍처 결정 기록
-contracts/                      API·JSON 계약 초안
-supabase/migrations/            DB executable timestamp authority
-database/                       local baseline 논리 projection·보상·absence proof
-docs/implementation-notes/      모든 작업의 재현 가능한 기록
-legacy/                         오래된 스타터·문서, 비권위 참고자료
+세종 민원이음
+├─ 시민용 "민원이음"
+│  ├─ 4개 분야 민원 질의응답 (전입·주민등록, 대형폐기물, 증명서 발급, 지방세)
+│  ├─ 절차·서류·수수료·처리 기간 카드 + 출처·최종 확인일 표기 + 공식 신청 딥링크
+│  ├─ 후속질문(모호 질문)과 폴백(근거 부족·개인 조회·법적 판단·범위 밖)
+│  ├─ 개인정보 입력 즉시 마스킹, 대화 맥락은 탭 메모리 + 15분 서명형 context_token
+│  └─ 모바일 우선, 기본 화면 명도 대비 4.5:1 이상 (KWCAG 2.2 주요 항목)
+│
+└─ 관리자용 "이음센터"
+   ├─ [P0] 실패 질문 목록 → 폴백 사유 확인 → KB 후보 작성 → 담당자 승인
+   ├─ [P0] Overview KPI (질문 수, 성공률, 폴백률, 응답시간, 출처 표기율)
+   └─ [P1] 민원 통계(유형·시간대·지역), 현장 불일치 신고 카운트
 ```
 
-## 현재 상태
+## 2. 해결하려는 문제
 
-- 최종 제품과 정책 문서는 확정됨.
-- local/private MVP는 final DB의 dedicated Windows application probe에서 `/ready=200`을 확인했고,
-  clean governed rehearsal로 19→20 ACTIVE와 `KB-WASTE-03` 재질의 SUCCESS를 확인했다. import-safe
-  기본 앱과 public/remote readiness는 별도다. final API 1,640, Web unit 48/lint/type/build/E2E 15,
-  contracts 89, clean DB pgTAP 9/356·integration 8/8와 root `verify.ps1 -Offline`이 PASS했다.
-  현재 상태는 local/private AI scope complete의 **Review**이며 인간 Draft PR review/merge와 manual
-  demo/accessibility가 남았다.
-- 독립 local Git과 root workspace 계약은 준비됨: Node 24.12.0, pnpm 11.13.0, Python 3.12.13, uv 0.11.28.
-- 개인 GitHub private source remote, Frontend 팀원 전체 수직 흐름 소유, 허용 frontend-only PR
-  자가 병합, Codex Cloud Draft-PR-only 운영 명세와
-  [COLLAB-001 실행계획](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md)은
-  승인·부분 실행됐다. private `tskwak111/Sejong_AI` bootstrap, matching `main`, hosted policy/Frontend
-  CI와 `koregy` write/variable evidence는 검증됐다. PR #1 merge와 post-merge CI, Codex App
-  `Only select repositories / Sejong_AI` 사용자 확인도 완료됐다. Task 5는 부분 완료로 teammate
-  MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이 남았고, Cloud Draft-PR/manual
-  merge와 Frontend onboarding rehearsal도 Pending이다. Q-GIT-004=A로 본인 author
-  email의 private collaborator 공개와 기존 history·SHA 보존은 확정됐다.
-- root `package.json`은 dependency-free이며 API dependency는 `apps/api/pyproject.toml`·`uv.lock`, Web dependency는 `apps/web/package.json`·root `pnpm-lock.yaml`에 격리됨.
-- 역사적 pre-import 기준선에서는 공식/mock DB row 0과 `/ready=503`이 의도한 상태였다. 이는 당시
-  검증 기록이며 현재 상태가 아니다. 이후 supported actual seed와 application rehearsal이 local DB
-  19→20 ACTIVE 및 `/ready=200`을 별도 증명했다.
-- 공유 계약 package는 OpenAPI 3.1.0-draft, standalone JSON Schema·strict Pydantic과 생성 TypeScript의
-  drift를 검증한다. optional UUID `Idempotency-Key`는 correlation request ID와 분리한다.
-- DB-001 disposable local/private 기준선은 patched Supabase CLI 2.109.1, PostgreSQL 17.6,
-  현재 9개 forward/rollback, forced RLS/capability, pgTAP 9 files/356 assertions와 backend
-  integration·rollback·absence·reset/replay 증거를 갖췄다. 실행 권위는 `supabase/migrations/`, 논리 projection은
-  `database/schema-v1.draft.sql`이다.
-- Windows PowerShell 5.1+ root gate와 별도 Docker DB gate가 exact runtime, frozen install,
-  Web/API/계약, secret/package/diff, reset/rollback/replay를 검증한다. initial seed actual DB 반영과
-  application `/ready` probe는 서로 다른 증거로 관리한다.
-- DATA-SEED-002 immutable `0.1.0-initial.2` filesystem release와 byte-identical local dispatcher는
-  불변으로 유지된다. observer 수정 뒤 지원 actual cycle이 baseline·identity·forced rollback,
-  concurrency A/B, 19/3/10 seed, compensation/replay, final projection과 cleanup을 모두 PASS했다.
-  따라서 `official_data=0.1.0-initial.2`이며 final runtime process/container는 0이다. 이 immutable
-  19/3/10 seed 증거 자체는 `/ready=200`·20번째 ACTIVE를 뜻하지 않는다. 이 둘은 별도 final local
-  application rehearsal에서 PASS했으며, public/remote readiness는 계속 뜻하지 않는다.
-- canonical T-01~T-20 deterministic pure-service 평가는 20/20(SUCCESS 10/10, FOLLOWUP 2/2,
-  FALLBACK 8/8)이다. provider/remote/public 또는 HTTP source-card QA로 일반화하지 않는다.
-- 기존 FastAPI·CSV·정적 HTML 스타터는 `legacy/`에 보존됨.
-- `contracts/`의 API spec revision은 3.1.0-draft다. SUCCESS/FOLLOWUP/5개 정책 폴백,
-  HTTPS 전용 공식 링크와 local/private admin envelope를 판별 union으로 동결했다. DB executable authority는 timestamp
-  migrations이며 `database/`의 `0.4.0-local` projection은 실제 검증된 local 기준선의 읽기용
-  투영이다. 공개·원격 DB 기준선이나 production readiness를 뜻하지 않는다.
-- Q-LLM-005=A로 외부 합성 평가 공급자는 Upstage exact `solar-pro3`다. 승인된 offline Tasks
-  1~6은 fail-closed 설정, strict source-free JSON, bounded HTTPX, grounded evaluator,
-  content-free report/runner와 security/architecture gate까지 review clean이다. key/network/model
-  quality actual은 아직 0이며 Task 7 local human gate 전에는 실행하지 않는다. 실제 시민·공개
-  경로는 계속 deterministic disabled/template provider다.
-- 권장 배포는 Vercel + Render + Supabase이며 실제 계정·리전·비밀값은 별도 확인이 필요함.
-- Q-SEC-003=A/D-046으로 exact privileged function 22 signatures의 property-only `00700`
-  hardening 방향은 확정됐지만 public 준비까지 구현을 보류했다. 그전에는 local/private 전용이며
-  remote/public 배포, public admin/API, public backend DB credential 사용을 금지한다.
+| 문제 영역 | 현황 | 해결 방향 |
+|---|---|---|
+| 행정 효율 | 단순 반복 문의에 인력이 소모됨 | 반복 민원을 24시간 자동응대로 분리 |
+| 시민 접근성 | 야간, 주말, 휴일에는 즉시 안내받기 어려움 | 승인 KB 기반 상시 응대 채널 |
+| 정보 정확성 | 창구마다 안내 기준이 다를 수 있음 | 공식 출처 검증 KB + 출처·확인일 표기 답변 |
+| 운영 개선 | 어떤 행정 정보가 부족한지 알기 어려움 | 실패 질문 → KB 후보 → 담당자 승인의 개선 루프 |
 
-## GitHub·Cloud 협업 준비
+## 3. 핵심 설계 원칙
 
-- 상세 권한·병합·비밀 경계:
-  [승인된 협업 설계](docs/superpowers/specs/2026-07-20-github-codex-cloud-collaboration-design.md)
-- Frontend 담당자 시작점:
-  [Frontend collaborator handoff](docs/handoffs/HANDOFF-20260720-FRONTEND-COLLABORATOR.md)
-- 원격 생성·CI·Codex 연결 순서:
-  [COLLAB-001 실행계획](docs/superpowers/plans/2026-07-20-github-codex-cloud-collaboration-transition.md)
+- **모르면 지어내지 않고, 알면 끝까지 안내한다.** 출처 없는 답변 금지, 불확실하면 사유와 함께 담당 채널 연결.
+- **시민 실사용 경로는 승인 KB 기반 template 안전 경로.** 실제 시민 자유 입력은 마스킹 여부와 무관하게 외부 LLM으로 전송하지 않는다. 외부 LLM(deepseek-v4-flash / upstage 비교 선택)은 local·private 합성 fixture 평가 전용이며 provider 호출은 기본 비활성화.
+- **개인정보 최소주의.** 질문 원문은 어느 시점에도 저장하지 않는다. 개선 대상 실패 질문의 masked_question만 30일 보관 후 텍스트를 NULL로 파기(메타데이터·후보 연결은 유지). 후속질문·범위 밖 질문 텍스트는 저장하지 않는다.
+- **폴백 사유는 4개** — INSUFFICIENT_GROUNDING(근거 부족), PERSONAL_LOOKUP(개인별 조회), LEGAL_JUDGMENT(법적 판단), OUT_OF_SCOPE(범위 밖). AMBIGUOUS는 후속질문 트리거, PERSONAL_INFO는 마스킹·보안 처리 계층.
 
-private GitHub source remote는 public Web/API나 remote DB 배포가 아니다. Cloud에는 LLM API key,
-DB DSN과 context secret을 넣지 않고 Codex는 branch와 Draft PR까지만 만든다. Docker/Supabase와
-Upstage 합성 actual 검증은 계속 local-only다.
+## 4. 기술 스택
 
-## 개발 런타임 계약
+| 영역 | 기술 |
+|---|---|
+| Frontend | Next.js + TypeScript + Tailwind CSS |
+| Backend | FastAPI + Python |
+| Database | Supabase (PostgreSQL) |
+| Vector Search | pgvector (Supabase 내장) |
+| AI | 승인 KB 기반 template 경로 + Embedding 검색, LLM adapter(합성 평가 전용) |
+| Chart | Recharts |
+| 지도 | 공식 지도 링크 (P0) — 내장 지도·GPS·거리 계산은 Phase 2 |
+| Deployment | Vercel(FE) + Render(BE) + Supabase(DB) — 공개 배포는 별도 보안 승인 후 |
 
-```text
-Node       24.12.0      .node-version
-pnpm       11.13.0      package.json#packageManager
-Python     3.12.13      .python-version
-uv         0.11.28      uv.toml#required-version
-```
+## 5. 데이터
 
-`pnpm-workspace.yaml`은 `apps/*`와 `packages/*`만 활성 workspace로 포함한다. `uv.toml`은 지원되지 않는 uv 버전의 실행을 즉시 거부한다. `.tools/`, `.worktrees/`, `.superpowers/`, dependency/build cache는 Git에 넣지 않는다. root 계약은 `python -B -m unittest scripts.tests.test_repository_scaffold -v`, Web은 `corepack pnpm install --frozen-lockfile --ignore-scripts` 후 `test`·`typecheck`·`lint`·`build` script로 검증한다. 공유 계약은 `corepack.cmd pnpm --filter @sejong-ai/shared-contracts test`로 검증한다.
+`data/` 폴더의 JSON이 유일한 원본이며 DB와 엑셀 스냅샷은 산출물이다. 자세한 규칙은 `data/README.md` 참고.
 
-## 단일 로컬 검증
+- 공식 출처 검증 KB **20건** (정부24·위택스·세종시설관리공단 URL 대조, ACTIVE 18 / DRAFT 2) → 4개 분야 100건 이상으로 확장
+- 기관 정보 4건(→ 읍면동 행정복지센터 실데이터 추가, 20건 이상 목표), 지역·민원 매핑 12건, 테스트 질문 20문항(정답 라벨), 비식별 mock 로그 300건(생성 스크립트)
+- 커밋 전 `python data/scripts/validate.py` 필수 — ID 중복, 필수 필드, 마스킹 누락 개인정보 패턴 차단
 
-저장소 루트에서 다음 명령을 실행한다.
+## 6. 실행 방법
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
-```
-
-기본 검증을 한 번 통과해 dependency cache가 준비된 뒤에는 warm-cache 오프라인 재현도 확인할 수 있다.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Offline
-```
-
-`-Offline`은 미리 받은 cache의 재사용 가능성을 검증하며 빈 PC의 최초 설치를 대신하지 않는다. 러너는 파일을 삭제하거나 서버를 띄우지 않고, 실패 시 하위 명령의 내용 대신 stable step ID와 종료코드만 표시한다. 실제 `/health`·`/ready` HTTP smoke는 서버를 명시적으로 실행하는 별도 검증이다.
-
-Docker Desktop이 실행 중일 때 DB 기준선은 별도 gate로 검증한다.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_patched_supabase.ps1 -VerifyOnly
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify_database.ps1 -SkipStart
-```
-
-이 gate의 reset/compensation은 disposable local DB 전용이다. remote project, 실제 데이터,
-Docker volume에는 실행하지 않는다.
-
-Q-SEC-004/005의 Docker 전역 보정만으로는 IPv6 wildcard가 남았으므로, D-031/D-032의 tracked
-source/runtime manifest와 project-local patched binary를 DB 실행 권위로 사용한다. 2026-07-18
-역사적 gate에서 actual binding이 정확히 하나의 `127.0.0.1:54322`였고 당시 pgTAP 8 files/320, backend integration,
-역순 보상·absence·reset/replay, final container/process 0이 모두 PASS했다. runner는 여전히 actual
-binding을 reset 전에 검사하며 stock/PATH fallback과 `db diff`를 허용하지 않는다. current source gate는
-9 forward/rollback·pgTAP 9 files/356 assertions이며, 이후 official `.2` seed 19/3/10과 별도 application
-rehearsal의 `/ready=200`·20번째 ACTIVE까지 local actual로 PASS했다.
-D-046의 deferred `00700` 구현·검증 전까지 public/remote는 차단된다. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/), [Supabase local development](https://supabase.com/docs/guides/local-development/)
-
-`73f300b`는 DB child를 bounded process tree로 실행·종료·dispose하도록 보정했다. focused 1/1,
-runner 50/50, patched 24/24와 독립 review 0/0/0 뒤 final-code DB gate도 102.746s에 PASS했고 exact
-loopback·stop·container 0/0·volume/prune 0을 재확인했다.
-
-다른 현재 디렉터리에서 실행할 때는 `-File`에 이 저장소의 `scripts/verify.ps1` 절대 경로를 전달한다. 러너는 호출된 파일 위치를 기준으로 저장소 루트를 찾는다.
-
-## 개발 시 절대 혼동하지 말 것
-
-기존 업로드 패키지에는 다음 오래된 범위가 남아 있었다.
-
-- 10개 이상 민원 분야
-- 100개 테스트
-- mock 신청 상태 조회
-- 다국어·음성
-- 급증 분석·자동 추천·주간 리포트
-- 가상 기관 주소와 전화번호
-
-현재 확정 범위는 4개 분야, 20개 표본, 회귀 테스트 1개, 관리자 승인형 개선 루프이다. 자세한 차이는 `docs/02_CURRENT_REPO_AUDIT.md`를 참조한다.
-
-## 구현 노트 생성
+> ⚠️ MVP 개발 진행에 따라 업데이트 예정. 현재 `/ready=503`이 정상 상태(공식 데이터 적재 전).
 
 ```bash
-python scripts/new_implementation_note.py --title "초기 저장소 감사" --task-id DISC-001 --type discovery
+# 1. 저장소 클론
+git clone https://github.com/nxtcloud-edu/2026-07-kosj-industry-practice-team02.git
+cd 2026-07-kosj-industry-practice-team02
+
+# 2. Backend
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload   # http://localhost:8000 (health/readiness 제공)
+
+# 3. Frontend
+cd frontend
+npm install
+npm run dev                      # http://localhost:3000
 ```
 
-생성된 노트는 `docs/implementation-notes/`와 `INDEX.md`에 반영된다.
+환경 변수는 `.env.example` 참고. API 키 등 비밀 값과 `exports/`(엑셀 스냅샷)는 커밋하지 않는다. LLM provider 호출은 기본 비활성화이며 평가 환경에서만 명시적으로 켠다.
 
-## 패키지 구성
+## 7. 팀원 역할
 
-- `apps/`: 신규 활성 애플리케이션 위치
-- `packages/`: 프론트·백엔드 공용 계약/타입 위치
-- `contracts/`: OpenAPI·JSON Schema
-- `supabase/migrations/`: DB 실행 권위와 `supabase/tests/database/` pgTAP
-- `database/`: 논리 projection·역순 disposable-local compensation·absence proof
-- `data/`: 공식·평가·mock 데이터의 활성 위치
-- `docs/`: 권위 문서, ADR, 구현 노트, 계획, 테스트, 인수인계
-- `scripts/`: 노트 생성·상태 캡처·드리프트 검사
-- `legacy/`: 사용자가 업로드한 이전 스타터 전체
+| 이름 | 역할 | 담당 영역 | 핵심 책임 |
+|---|---|---|---|
+| 김정하 | PM / 문서 / 발표 | 기획, 제안서, 발표자료 | 방향성 유지, 요구사항 대응, 산출물 통합, 프론트 마크업 분담 |
+| 곽태성 | Fullstack | 시민용 + 관리자 UI, API, DB | 화면 구현, 반응형, 접근성, 서버, 통계 API, 배포 |
+| 이유라 | AI / Data | KB(증명서 발급, 지방세), 검색 | 지식베이스 구축·검증, RAG 파이프라인, 통계 API 백업 |
+| 오현송 | AI / Data | KB(전입·주민등록, 대형폐기물), QA | 지식베이스 구축·검증, 테스트셋, 품질 평가, 통계 API 백업 |
 
-## 제출 전 사용자 직접 입력 항목
+## 8. 품질 기준 (제안서 7.3)
 
-- 팀명
-- 팀원과 역할
-- 대표 연락처
-- 제출일
-- 실제 배포 계정·URL·비밀값
+| 지표 | 목표 | 측정 방식 |
+|---|---|---|
+| 의도 분류 정확도 | 85% 이상 | 테스트 질문 정답 라벨과 비교 |
+| 답변 정확도 | 80% 이상 | 수동 평가 |
+| 출처 표기율 | 100% | 답변별 출처 카드 확인 |
+| 폴백 적절성 | 90% 이상 | 위험 질문 처리 결과 확인 |
+| 개인정보 마스킹 | 100% | 원문 로그 저장 여부 확인 |
+| 응답시간 | 평균 3초 이내 | 평균·p95·오류율 병행 실측 |
+| 모바일 UI 오류 | 0건 | 390px, 430px 화면 확인 |
+
+- 확정: **핵심 20문항 회귀 채점**(매 빌드) + 개선 전후 회귀 테스트. 100문항은 확장 목표. 결과는 표본 기준이며 전체 민원 정확도로 일반화하지 않는다.
+- 문항 판정: SUCCESS는 정답 라벨 일치 + 출처·확인일 표시, FOLLOWUP은 단정 없는 조건 질문, FALLBACK은 사유 + 공식 채널 안내. 과소 폴백과 과잉 폴백 모두 실패로 집계.
+
+## 9. 시연 (최종 발표 데모 5문항 — 제안서 7.5에 사전 확정)
+
+1. 정상 — "전입신고는 언제까지 해야 하나요?" (14일 + 출처·확인일 + 정부24 딥링크)
+2. 정상 — "아름동에서 대형폐기물은 언제 내놓나요?" (지역 조건 + 실데이터)
+3. 후속질문 — "이사했는데 뭐 해야 하나요?" (선택지 + 이사 묶음 제안)
+4. 폴백 — "제 자동차세 얼마 나왔나요?" (추측 없이 사유 안내 + 위택스·담당 채널 연결)
+5. 선순환 — #4의 실패 질문이 이음센터에서 사유 분류 → KB 후보 → 담당자 승인까지 화면 전환 시연
+
+배포 링크·시연 영상·스크린샷: 3주차 MVP 이후 추가 (TBD)
+
+## 10. 프로젝트 일정
+
+| 주차 | 기간 | 핵심 목표 | 완료 판정 기준 |
+|---|---|---|---|
+| 1주차 (완료) | 7/6 ~ 7/10 | RFP 분석, 문제 정의, 기본 설계 | 아이디어노트 기한 내 제출, 멘토 피드백 반영 |
+| 2주차 (완료) | 7/13 ~ 7/17 | 입찰 제안서, 핵심 설계 확정 | 1차 KB 20건 검증 완료, 제안서 제출 |
+| 3주차 | 7/20 ~ 7/24 | 시민 핵심 흐름 + 이음센터 P0 한 흐름 구현 | 20문항 SUCCESS 정확도 80% 이상, P0 흐름 end-to-end 시연 |
+| 4주차 | 7/27 ~ 7/31 | 기능 동결, 품질 개선, 발표 | 20문항 회귀 리포트, 데모 5문항 무중단 완주, 출처 없는 단정 답변 0건 |
+
+## 11. 브랜치 및 커밋 규칙
+
+```text
+main                      : 최종 안정 버전
+develop                   : 통합 개발 브랜치
+feature/citizen-chat      : 시민용 민원이음
+feature/admin-dashboard   : 이음센터
+feature/kb-search         : 지식베이스 검색
+feature/api-logs          : 로그/통계 API
+```
+
+커밋 메시지는 Conventional Commits(`feat:`, `fix:`, `docs:`, `refactor:`)를 따르고, 데이터 변경 커밋 전에는 `validate.py`를 실행한다.
+
+---
+
+> 본 프로젝트는 고려대 세종 계절학기 산업체 실습의 학습용 프로젝트이며, 공고문의 발주기관과 예산 등은 실제와 무관한 가상 정보이다.
