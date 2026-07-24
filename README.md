@@ -12,21 +12,24 @@
 
 민원이음은 시민이 일상어로 민원을 질문하면 공식 출처로 검증된 행정 지식베이스에 근거해 절차, 서류, 담당 기관을 안내하고, 답변하지 못한 질문을 관리자 화면 **이음센터**에서 지식베이스 개선 후보로 전환하는 **실패를 학습 가능한 운영 과제로 바꾸는 플랫폼**이다.
 
-플랫폼은 세 가지 실패에서 배운다 — AI가 답하지 못한 것(폴백), 시민이 만족하지 못한 것(불만족), 현장과 달랐던 것(신고). 세 채널 모두 비텍스트 메타데이터 기준으로 집계하며, KB 후보 생성은 지원 범위 내 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정한다.
+시민의 실패 질문은 이음센터에서 사유 확인 → KB 후보 초안(AI 작성) → 별도 승인자 승인 → ACTIVE 반영으로 이어지며, 승인된 KB는 다음 시민 답변부터 사용된다. KB 후보 생성은 지원 범위 내 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정한다.
 
 ```text
 세종 민원이음
-├─ 시민용 "민원이음"
+├─ 시민용 "민원이음" (apps/web)
 │  ├─ 4개 분야 민원 질의응답 (전입·주민등록, 대형폐기물, 증명서 발급, 지방세)
-│  ├─ 절차·서류·수수료·처리 기간 카드 + 출처·최종 확인일 표기 + 공식 신청 딥링크
+│  ├─ 절차·서류·수수료·처리 기간 정보 표 + 출처·최종 확인일 표기 + 공식 신청 딥링크
 │  ├─ 후속질문(모호 질문)과 폴백(근거 부족·개인 조회·법적 판단·범위 밖)
-│  ├─ 개인정보 입력 즉시 마스킹, 대화 맥락은 탭 메모리 + 15분 서명형 context_token
+│  ├─ 지역(동) 선택 기반 담당 기관 안내 (시범 지역: 아름동·도담동·조치원읍)
+│  ├─ 개인정보 입력 마스킹, 대화 맥락은 탭 메모리 + 15분 서명형 context_token
 │  └─ 모바일 우선, 기본 화면 명도 대비 4.5:1 이상 (KWCAG 2.2 주요 항목)
 │
-└─ 관리자용 "이음센터"
-   ├─ [P0] 실패 질문 목록 → 폴백 사유 확인 → KB 후보 작성 → 담당자 승인
-   ├─ [P0] Overview KPI (질문 수, 성공률, 폴백률, 응답시간, 출처 표기율)
-   └─ [P1] 민원 통계(유형·시간대·지역), 현장 불일치 신고 카운트
+├─ 관리자용 "이음센터" (apps/web/admin)
+│  ├─ [P0] 실패 질문 목록 → 사유 확정 → KB 후보 작성 → 별도 승인자 승인 (자기검수 금지)
+│  ├─ [P0] 운영 현황 KPI (질문 수, 성공률, 폴백률, 응답시간, 출처 표기율)
+│  └─ [P1] 민원 통계(유형·시간대·지역), 현장 불일치 신고 카운트
+│
+└─ Backend API (apps/api) + 계약(contracts) + 데이터 릴리스(data)
 ```
 
 ## 2. 해결하려는 문제
@@ -41,108 +44,113 @@
 ## 3. 핵심 설계 원칙
 
 - **모르면 지어내지 않고, 알면 끝까지 안내한다.** 출처 없는 답변 금지, 불확실하면 사유와 함께 담당 채널 연결.
-- **시민 실사용 경로는 승인 KB 기반 template 안전 경로.** 실제 시민 자유 입력은 마스킹 여부와 무관하게 외부 LLM으로 전송하지 않는다. 외부 LLM(deepseek-v4-flash / upstage 비교 선택)은 local·private 합성 fixture 평가 전용이며 provider 호출은 기본 비활성화.
-- **개인정보 최소주의.** 질문 원문은 어느 시점에도 저장하지 않는다. 개선 대상 실패 질문의 masked_question만 30일 보관 후 텍스트를 NULL로 파기(메타데이터·후보 연결은 유지). 후속질문·범위 밖 질문 텍스트는 저장하지 않는다.
+- **시민 실사용 경로는 승인 KB 기반 template 안전 경로.** 시민 응답 경로는 LLM을 호출하지 않는다(호출당 비용 0, 환각 구조적 차단). 외부 LLM(Upstage Solar 구성)은 local·private 합성 평가 전용이며 provider 호출은 기본 비활성화(`LLM_PROVIDER=disabled`).
+- **개인정보 최소주의.** 질문 원문은 어느 시점에도 저장하지 않는다. 마스킹 텍스트 보관은 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정해 30일 후 NULL 파기하며, **개인별 조회·법적 판단 질문은 텍스트·이벤트·실패 행을 일절 생성하지 않는다** (제출 이후 최소수집 원칙을 강화한 팀 결정 Q-MVP-002 / D-059). 질문 원문은 URL·히스토리·로그에도 남지 않는다.
+- **AI는 제안하고, 판정은 사람이 한다.** KB 후보는 AI 초안으로 시작하되 출처 URL 검증과 승인은 담당자 몫이며, 작성자는 자기 초안을 승인할 수 없다(별도 승인자 필수).
 - **폴백 사유는 4개** — INSUFFICIENT_GROUNDING(근거 부족), PERSONAL_LOOKUP(개인별 조회), LEGAL_JUDGMENT(법적 판단), OUT_OF_SCOPE(범위 밖). AMBIGUOUS는 후속질문 트리거, PERSONAL_INFO는 마스킹·보안 처리 계층.
 
 ## 4. 기술 스택
 
 | 영역 | 기술 |
 |---|---|
-| Frontend | Next.js + TypeScript + Tailwind CSS |
-| Backend | FastAPI + Python |
-| Database | Supabase (PostgreSQL) |
-| Vector Search | pgvector (Supabase 내장) |
-| AI | 승인 KB 기반 template 경로 + Embedding 검색, LLM adapter(합성 평가 전용) |
-| Chart | Recharts |
-| 지도 | 공식 지도 링크 (P0) — 내장 지도·GPS·거리 계산은 Phase 2 |
-| Deployment | Vercel(FE) + Render(BE) + Supabase(DB) — 공개 배포는 별도 보안 승인 후 |
+| Monorepo | pnpm workspace (`apps/web`, `apps/api`, `packages/shared-contracts`) |
+| Frontend | Next.js 16 + TypeScript + Tailwind CSS (`apps/web`) |
+| Backend | FastAPI + Python 3.12, uv (`apps/api`) |
+| Database | Supabase (PostgreSQL), 로컬은 patched Supabase CLI + Docker |
+| 계약 | OpenAPI v1 + JSON Schema (`contracts/`), 생성 TS 타입으로 FE·BE 정합 강제 |
+| AI | 승인 KB 기반 template 경로 + 검색, LLM adapter(합성 평가 전용, 기본 비활성) |
+| E2E | Playwright — fixture(UI)·actual(local API+DB) 분리 게이트 |
+| Deployment | 로컬 실증 데모(run_local_api + local DB). 공개 배포는 별도 보안 승인 후 |
 
 ## 5. 데이터
 
-`data/` 폴더의 JSON이 유일한 원본이며 DB와 엑셀 스냅샷은 산출물이다. 자세한 규칙은 `data/README.md` 참고.
+`data/` 폴더가 원본이며 승인된 seed-cycle 릴리스를 통해서만 DB에 적재한다. 자세한 규칙은 `data/README.md` 참고.
 
-- 공식 출처 검증 KB **20건** (정부24·위택스·세종시설관리공단 URL 대조, ACTIVE 18 / DRAFT 2) → 4개 분야 100건 이상으로 확장
-- 기관 정보 4건(→ 읍면동 행정복지센터 실데이터 추가, 20건 이상 목표), 지역·민원 매핑 12건, 테스트 질문 20문항(정답 라벨), 비식별 mock 로그 300건(생성 스크립트)
-- 커밋 전 `python data/scripts/validate.py` 필수 — ID 중복, 필수 필드, 마스킹 누락 개인정보 패턴 차단
+- 공식 출처 검증 KB **ACTIVE 19건** 시드 (정부24·위택스·세종시설관리공단 등 allowlist 6개 도메인 URL 대조) — 시연 중 선순환 루프로 20건째가 승인·반영되는 구성
+- 기관 정보 3건(아름동·도담동·조치원읍 — 동 2 + 읍 1 유형 커버), 지역·민원 매핑 10건, 테스트 질문 20문항(정답 라벨)
+- KB 확장은 대량 입력이 아니라 실패 질문 → AI 초안 → 담당자 출처 검증·승인 파이프라인으로 수행
 
-## 6. 실행 방법
+## 6. 실행 방법 (로컬 전체 시스템)
 
-> ⚠️ MVP 개발 진행에 따라 업데이트 예정. 현재 `/ready=503`이 정상 상태(공식 데이터 적재 전).
+> 요구: Node 24 / pnpm 11 / Python 3.12 / uv / Docker Desktop.
+> 상세 절차는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md` 참고 (버전 대조·DB 초기화·seed 적재·검수 시나리오 포함).
 
 ```bash
-# 1. 저장소 클론
+# 1. 클론 및 의존성
 git clone https://github.com/nxtcloud-edu/2026-07-kosj-industry-practice-team02.git
 cd 2026-07-kosj-industry-practice-team02
+corepack pnpm install --frozen-lockfile --ignore-scripts
+uv sync --project apps/api --frozen
 
-# 2. Backend
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload   # http://localhost:8000 (health/readiness 제공)
+# 2. 환경 변수 (.env.example 복사 후 값 설정 — 비밀값 커밋 금지)
+#    apps/api/.env         : DATABASE_URL, CONTEXT_TOKEN_SECRET 등
+#    apps/web/.env.local   : CHAT_UI_MODE=actual, ADMIN_UI_MODE=actual 등
 
-# 3. Frontend
-cd frontend
-npm install
-npm run dev                      # http://localhost:3000
+# 3. 로컬 DB (Docker 실행 상태에서) — schema 검증 + 승인 seed 적재
+powershell -File scripts/verify_database.ps1 -SkipRollbackReplay
+#    적재 후 ACTIVE KB 19건 확인, API /ready=200 이 정상
+
+# 4. Backend
+uv run --project apps/api --frozen python scripts/run_local_api.py   # 127.0.0.1:8000
+
+# 5. Frontend
+corepack pnpm --filter @sejong-ai/web dev                            # 127.0.0.1:3000
 ```
 
-환경 변수는 `.env.example` 참고. API 키 등 비밀 값과 `exports/`(엑셀 스냅샷)는 커밋하지 않는다. LLM provider 호출은 기본 비활성화이며 평가 환경에서만 명시적으로 켠다.
+LLM provider 호출은 기본 비활성화이며 시민 응답 경로는 LLM 없이 동작한다.
 
 ## 7. 팀원 역할
 
 | 이름 | 역할 | 담당 영역 | 핵심 책임 |
 |---|---|---|---|
-| 김정하 | PM / 문서 / 발표 | 기획, 제안서, 발표자료 | 방향성 유지, 요구사항 대응, 산출물 통합, 프론트 마크업 분담 |
-| 곽태성 | Fullstack | 시민용 + 관리자 UI, API, DB | 화면 구현, 반응형, 접근성, 서버, 통계 API, 배포 |
-| 이유라 | AI / Data | KB(증명서 발급, 지방세), 검색 | 지식베이스 구축·검증, RAG 파이프라인, 통계 API 백업 |
-| 오현송 | AI / Data | KB(전입·주민등록, 대형폐기물), QA | 지식베이스 구축·검증, 테스트셋, 품질 평가, 통계 API 백업 |
+| 김정하 | PM / Frontend / 발표 | 기획·제안서, 시민 화면·이음센터 UI, 디자인 시스템 | 방향성 유지, 요구사항 대응, 프론트엔드 구현(화면·반응형·접근성), 산출물 통합, 발표 |
+| 곽태성 | Backend / 계약·인프라 | API·DB·contracts, 데이터 릴리스, CI·협업 정책 | 서버 구현, 계약 정의와 검증, DB·seed 파이프라인, 저장소 거버넌스 |
+| 이유라 | AI / Data | KB(증명서 발급, 지방세), 검색 | 지식베이스 구축·검증, 검색 파이프라인 |
+| 오현송 | AI / Data | KB(전입·주민등록, 대형폐기물), QA | 지식베이스 구축·검증, 테스트셋, 품질 평가 |
 
 ## 8. 품질 기준 (제안서 7.3)
 
 | 지표 | 목표 | 측정 방식 |
 |---|---|---|
 | 의도 분류 정확도 | 85% 이상 | 테스트 질문 정답 라벨과 비교 |
-| 답변 정확도 | 80% 이상 | 수동 평가 |
+| 답변 정확도 | 80% 이상 | 20문항 회귀 채점 |
 | 출처 표기율 | 100% | 답변별 출처 카드 확인 |
-| 폴백 적절성 | 90% 이상 | 위험 질문 처리 결과 확인 |
-| 개인정보 마스킹 | 100% | 원문 로그 저장 여부 확인 |
+| 폴백 적절성 | 90% 이상 | 위험 질문 처리 결과 확인 (과소·과잉 폴백 모두 실패 집계) |
+| 개인정보 마스킹 | 100% | 원문 저장·전송 여부 확인 |
 | 응답시간 | 평균 3초 이내 | 평균·p95·오류율 병행 실측 |
 | 모바일 UI 오류 | 0건 | 390px, 430px 화면 확인 |
 
-- 확정: **핵심 20문항 회귀 채점**(매 빌드) + 개선 전후 회귀 테스트. 100문항은 확장 목표. 결과는 표본 기준이며 전체 민원 정확도로 일반화하지 않는다.
-- 문항 판정: SUCCESS는 정답 라벨 일치 + 출처·확인일 표시, FOLLOWUP은 단정 없는 조건 질문, FALLBACK은 사유 + 공식 채널 안내. 과소 폴백과 과잉 폴백 모두 실패로 집계.
+핵심 20문항 회귀 채점 결과는 `docs/` 테스트 리포트 참조. 결과는 표본 기준이며 전체 민원 정확도로 일반화하지 않는다.
 
-## 9. 시연 (최종 발표 데모 5문항 — 제안서 7.5에 사전 확정)
+## 9. 시연 시나리오 (최종 발표 데모 5문항)
+
+> 제출 제안서 7.5의 사전 확정 시나리오를 기준선으로 하되, 제출 이후 개인정보
+> 최소수집 강화 결정(Q-MVP-002 / D-059)에 따라 #4·#5를 의도적으로 변경했다.
+> 변경 사유와 기준선은 `apps/web/CLAUDE.md`와 팀 결정 기록에 보존한다.
 
 1. 정상 — "전입신고는 언제까지 해야 하나요?" (14일 + 출처·확인일 + 정부24 딥링크)
-2. 정상 — "아름동에서 대형폐기물은 언제 내놓나요?" (지역 조건 + 실데이터)
-3. 후속질문 — "이사했는데 뭐 해야 하나요?" (선택지 + 이사 묶음 제안)
-4. 폴백 — "제 자동차세 얼마 나왔나요?" (추측 없이 사유 안내 + 위택스·담당 채널 연결)
-5. 선순환 — #4의 실패 질문이 이음센터에서 사유 분류 → KB 후보 → 담당자 승인까지 화면 전환 시연
+2. 정상 — "아름동에서 대형폐기물은 언제 내놓나요?" (동 선택 기반 담당 기관 안내)
+3. 후속질문 — "이사했는데 뭐 해야 하나요?" (단정 없는 선택지 제시)
+4. 폴백·개인정보 — "제 자동차세 얼마 나왔나요?" (추측 없이 위택스·담당 채널 연결, **질문 텍스트·실패 행 미저장 고지**)
+5. 선순환 — 근거 부족 질문("침대 2인용 프레임 배출 수수료")이 실패 큐 도착 → 사유 확정 → AI 초안 → **별도 승인자** 승인 → ACTIVE(**KB 19→20건**) → 같은 질문 재질의 시 SUCCESS
 
-배포 링크·시연 영상·스크린샷: 3주차 MVP 이후 추가 (TBD)
+배포 링크·시연 영상: 최종 리허설 후 추가 (TBD)
 
 ## 10. 프로젝트 일정
 
 | 주차 | 기간 | 핵심 목표 | 완료 판정 기준 |
 |---|---|---|---|
 | 1주차 (완료) | 7/6 ~ 7/10 | RFP 분석, 문제 정의, 기본 설계 | 아이디어노트 기한 내 제출, 멘토 피드백 반영 |
-| 2주차 (완료) | 7/13 ~ 7/17 | 입찰 제안서, 핵심 설계 확정 | 1차 KB 20건 검증 완료, 제안서 제출 |
-| 3주차 | 7/20 ~ 7/24 | 시민 핵심 흐름 + 이음센터 P0 한 흐름 구현 | 20문항 SUCCESS 정확도 80% 이상, P0 흐름 end-to-end 시연 |
+| 2주차 (완료) | 7/13 ~ 7/17 | 입찰 제안서, 핵심 설계 확정 | 1차 KB 검증 완료, 제안서 제출 |
+| 3주차 (완료) | 7/20 ~ 7/24 | 시민 핵심 흐름 + 이음센터 P0 구현, FE·BE 통합 | 로컬 전체 시스템(actual) 기동, P0 흐름 end-to-end 검수, 20문항 회귀 |
 | 4주차 | 7/27 ~ 7/31 | 기능 동결, 품질 개선, 발표 | 20문항 회귀 리포트, 데모 5문항 무중단 완주, 출처 없는 단정 답변 0건 |
 
-## 11. 브랜치 및 커밋 규칙
+## 11. 저장소 운영
 
-```text
-main                      : 최종 안정 버전
-develop                   : 통합 개발 브랜치
-feature/citizen-chat      : 시민용 민원이음
-feature/admin-dashboard   : 이음센터
-feature/kb-search         : 지식베이스 검색
-feature/api-logs          : 로그/통계 API
-```
-
-커밋 메시지는 Conventional Commits(`feat:`, `fix:`, `docs:`, `refactor:`)를 따르고, 데이터 변경 커밋 전에는 `validate.py`를 실행한다.
+- 정본 개발 저장소에서 owner 리뷰 기반으로 통합하며, 본 저장소는 진행상황 평가용 미러다.
+- 브랜치: `main`(안정) + `feat/*`·`fix/*` 작업 브랜치. Collaboration policy CI가 owner 검토 필요 변경을 자동 분류한다.
+- **진행 중 작업**: `fix/web-dev-origin-127`(Next 16 dev 환경 수정), `fix/web-mentor-qa`(멘토 QA 반영·지역 선택 UI) — owner 리뷰 후 main 반영 예정.
+- 커밋 메시지는 Conventional Commits(`feat:`, `fix:`, `docs:`)를 따르고, 구현 노트를 `docs/implementation-notes/`에 기록한다 (INDEX 관리).
 
 ---
 
