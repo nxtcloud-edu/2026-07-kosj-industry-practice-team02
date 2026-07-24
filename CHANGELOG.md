@@ -14,6 +14,10 @@
 - Upstage `solar-pro3` adapter는 서버 allowlist의 합성 평가 전용이며 시민 자유 입력과 public
   provider 연결에는 사용하지 않습니다.
 - 평가용 README, 직접 증거, 비밀 검사와 GitHub Frontend CI를 추가했습니다.
+- 대외 서비스명 `세종 민원이음`, 실제 팀 역할, 문제·구조·원칙·일정·5문항 데모를 첫 진입
+  README에 복원하고 검증된 현재 실행 절차와 결합했습니다.
+- actual 실행용 persistent seed 절차와 완료 후 runtime을 종료하는 종합 seed gate를 분리해
+  fresh-clone 실행 순서를 교정했습니다.
 
 ## Current versions
 

@@ -10,26 +10,14 @@
 
 ## fresh local 재현
 
-```powershell
-corepack pnpm install --frozen-lockfile --ignore-scripts
-uv sync --project apps/api --frozen
+실행 권위는 루트 [README의 §6.3](../README.md)입니다. 핵심 순서는
+patched CLI bootstrap → `verify_database.ps1` → 같은 runtime에 별도 `.2` `seed-cycle`과
+`verify-final` → process-only context secret → API → actual Web입니다.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts/bootstrap_patched_supabase.ps1 -Install
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts/verify_database.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2
-
-uv run --project apps/api --frozen python scripts/run_local_api.py --port 8000
-```
-
-별도 터미널:
-
-```powershell
-$env:API_INTERNAL_BASE_URL = "http://127.0.0.1:8000"
-corepack pnpm --filter @sejong-ai/web dev
-```
+`verify_data_seed.ps1`은 failure rollback·동시성·보상·재실행 방지까지 확인하는 **독립적인
+disposable gate**입니다. 완료 시 자신이 소유한 runtime을 종료하므로 API 실행 직전에 이어
+붙이지 않습니다. actual Web은 `CHAT_UI_MODE=actual`, `ADMIN_UI_ENABLED=true`,
+`ADMIN_UI_MODE=actual`을 명시해야 `/admin` 승인 루프를 사용할 수 있습니다.
 
 DB와 seed가 없으면 `/health=200`, `/ready=503`이 정상입니다. 검증된 schema, login과 approved
 19/3/10 seed가 있으면 `/ready=200`이어야 합니다.

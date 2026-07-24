@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-24T20:02:48+09:00
 - Task ID: SNAPSHOT-DOC-AUDIT-001
 - Type: documentation-review
-- Status: Ready for merge — hosted CI pending
+- Status: Done — PR #3 squash merged, hosted Frontend CI passed
 - Author/Agent: Codex
 - Branch: `submission/week3-mvp`
 - Base commit: `5b775db`
@@ -188,7 +188,8 @@ blob과 다시 비교하고 임의 편집하지 않는다. 공식 `.1`/`.2`, mig
 
 ## 14. 남은 위험·미해결 질문·다음 단계
 
-- hosted Frontend CI green 확인과 PR squash merge가 이 commit 이후의 마지막 단계다.
+- 후속 평가자 감사에서 대외 서비스명·팀 역할과 actual runtime 유지형 실행 절차를 다시
+  확인하며, 결과는 `IMP-20260724-004`에 기록한다.
 - 실제 발표 당일 수동 리허설은 운영 작업이며 automated acceptance gate는 완료됐다.
 
 ## 15. 자체 리뷰
