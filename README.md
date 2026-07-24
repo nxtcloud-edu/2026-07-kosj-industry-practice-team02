@@ -103,7 +103,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
 ```
 
-평가 snapshot의 출처, 제외 범위, 정책과 실제 검증 결과는 [WEEK3_EVALUATION.md](WEEK3_EVALUATION.md)에 정리돼 있습니다.
+평가 snapshot의 출처, 제외 범위, 정책과 실제 검증 결과는
+[WEEK3_EVALUATION.md](WEEK3_EVALUATION.md)에 정리돼 있습니다. 결정론적 표본 20개 결과는
+[MVP-001-SAMPLE-20-RESULT.md](docs/test-reports/MVP-001-SAMPLE-20-RESULT.md)에서 바로 확인할 수
+있습니다.
 
 ## 안전 경계
 

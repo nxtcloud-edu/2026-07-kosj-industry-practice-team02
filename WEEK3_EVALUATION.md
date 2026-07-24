@@ -76,6 +76,9 @@
 4. 동일 작성자의 승인은 차단
 5. 다른 승인자가 승인
 6. ACTIVE 20, 분야별 5개 확인
+
+결정론적 표본 20개 분포와 결과는
+[MVP-001-SAMPLE-20-RESULT.md](docs/test-reports/MVP-001-SAMPLE-20-RESULT.md)에 별도 기록했습니다.
 7. 같은 질문 재질의: SUCCESS와 공식 출처 확인
 
 `KB-WASTE-03`은 local runtime 승인 흐름에서 생성되며 immutable `.2` release 파일을 수정하지 않습니다.
@@ -112,6 +115,7 @@
 | Web lint/typecheck/test/build | PASS — ESLint, TypeScript, Vitest 49/49, Next production build |
 | Web fixture E2E | PASS — 390/430/desktop 18/18 |
 | shared contracts | PASS — 89/89 |
+| deterministic sample | PASS — 20/20, exact-matrix meta test 포함 21 passed / skip 0 |
 | preserved PDF/notice | PASS |
 
 팀원 통합 뒤 Web gate, 3개 viewport fixture E2E, 문서 링크, worktree/history secret scan과
