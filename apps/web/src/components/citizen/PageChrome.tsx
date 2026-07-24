@@ -74,13 +74,21 @@ export function ChatHeader() {
             <path d="m15 18-6-6 6-6" />
           </svg>
         </Link>
-        <span className="shrink-0 text-primary">
-          <Logo className="h-6 w-6" />
-        </span>
-        {/* 워드마크 문법(볼드·검정 수정): 세종·민원 text 볼드 / 이음 primary */}
-        <h1 className="text-card-title font-extrabold text-text">
-          세종 민원<span className="text-primary">이음</span>
-        </h1>
+        {/* 로고(심볼 + 워드마크) = 첫 화면 홈 링크 (멘토 QA). 뒤로가기와 별개로
+            로고 클릭 시에도 / 로 이동한다 - 시민 헤더와 동일 동작 */}
+        <Link
+          href="/"
+          aria-label="세종 민원이음 첫 화면으로"
+          className="inline-flex items-center gap-2.5 rounded-btn-s"
+        >
+          <span className="shrink-0 text-primary">
+            <Logo className="h-6 w-6" />
+          </span>
+          {/* 워드마크 문법(볼드·검정 수정): 세종·민원 text 볼드 / 이음 primary */}
+          <h1 className="text-card-title font-extrabold text-text">
+            세종 민원<span className="text-primary">이음</span>
+          </h1>
+        </Link>
       </div>
     </header>
   );
