@@ -3,11 +3,11 @@
 - Date/Time (KST): 2026-07-24T20:44:33+09:00
 - Task ID: SNAPSHOT-HYBRID-README-001
 - Type: documentation-review
-- Status: Ready for Draft PR — human merge required
+- Status: Done — Draft PR #4 open, human merge required
 - Author/Agent: Codex
 - Branch: `codex/week3-final-evaluator-audit`
 - Base commit: `2f3c056f212fb397a3b51a2cb33c9514a5523f81`
-- Related: public evaluation repository PR #3, `README.md`, `WEEK3_EVALUATION.md`
+- Related: public evaluation repository PR #3, Draft PR #4, `README.md`, `WEEK3_EVALUATION.md`
 
 ## 1. 사용자 요청과 완료 기준
 
@@ -119,6 +119,7 @@
 | current tree / reachable Git history secret scan | PASS — finding 0 |
 | product·contract·DB·official data diff boundary | PASS — 변경 0 |
 | `git diff --check` | PASS |
+| Draft PR #4 hosted Frontend CI | PASS — scope detection·summary green, docs-only frontend gate skipped |
 
 API 성능 test 1건은 API·Web·contracts·data suite를 동시에 실행했을 때만 2.10초로 기준을
 넘었지만, 해당 test 단독 3회는 0.91/0.87/0.86초, API 전체 단독은 1,782 passed였다. 제품
@@ -174,7 +175,8 @@ README → WEEK3_EVALUATION → sample-20 report 순으로 읽고, 공개 배포
 
 ## 14. 남은 위험·다음 단계
 
-- Draft PR hosted CI와 GitHub diff를 사람이 검토한 뒤 merge 여부를 결정한다.
+- Draft PR #4는 mergeable이고 hosted CI가 green이다. GitHub diff를 사람이 검토한 뒤 merge
+  여부를 결정한다.
 - 발표 당일 actual DB를 19 기준선으로 새로 준비해 5문항을 수동 리허설한다.
 
 ## 15. 자체 리뷰
