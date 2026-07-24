@@ -42,7 +42,7 @@ docs           source-of-truth, ADR, notes, reports
 scripts        reproducible project tooling
 ```
 
-기존 스타터는 `legacy/`로 유지한다. 신규 앱 스캐폴딩 전 Codex가 패키지 관리자, 런타임 버전, 마이그레이션 도구, CI 환경을 인터뷰한다.
+현재 snapshot은 위 구조의 실행 가능한 API·Web·공유 계약·DB migration·공식 데이터를 포함한다.
 
 ## 3. Chat 처리 경계
 
@@ -64,8 +64,8 @@ scripts        reproducible project tooling
 합성 평가 공급자 모델은 정확히 Upstage `solar-pro3`로 고정한다. max output 1024,
 concurrency 1, 논리 요청당 재시도 최대 1회, 명시적 process run당 재시도를 포함한 실제
 outbound attempt 총 30회를 강제한다. 도메인 서비스가 공급자 API에 직접 의존하지 않도록
-다음 인터페이스를 둔다. 이 adapter는 LLM-002 계획 승인 전 미구현이며 시민 chat 기본 경로는
-deterministic template다.
+다음 인터페이스를 둔다. adapter와 합성 평가 runner는 offline 검증까지 구현됐으며 actual
+network/model-quality 평가는 아직 실행하지 않았다. 시민 chat 기본 경로는 deterministic template다.
 
 ```python
 class LLMProvider(Protocol):
@@ -138,15 +138,15 @@ NEW
   함수만 실행한다. FastAPI repository도 고정 SQL 9개만 사용한다.
 - RLS는 8 table 모두 ENABLE+FORCE이고 owner-only policy를 사용한다.
 - 시민 read는 `ACTIVE + OFFICIAL` KB와 `OFFICIAL` 기관만 반환한다.
-- executable authority는 forward migration 6개이며 disposable-local compensation은
-  `00600 → 00500 → 00400 → 00300 → 00200 → 00100`이다.
-- `database/schema-v1.draft.sql`은 검증된 `0.3.0-local`의 읽기 전용 논리 투영이며 권한·함수·trigger
+- executable authority는 forward migration 9개이며 disposable-local compensation은
+  `00670 → 00660 → 00650 → 00600 → 00500 → 00400 → 00300 → 00200 → 00100`이다.
+- `database/schema-v1.draft.sql`은 검증된 `0.4.0-local`의 읽기 전용 논리 투영이며 권한·함수·trigger
   실행 근거가 아니다.
 - tracked source manifest와 runtime manifest는 build input과 binary authority를 분리한다. runner는
   `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`만 허용하고 stock/PATH fallback을 두지 않는다.
-- 2026-07-18 actual gate는 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`, fresh pgTAP 282,
-  backend integration 8/8, 6단계 compensation/absence/reset/replay와 final container 0/0을 증명했다.
-  이로써 manifest `database_schema=0.3.0-local`은 disposable local/private 기준선으로 활성화됐다.
+- actual gate는 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`, fresh pgTAP 9 files/356 assertions,
+  backend integration 8/8, 9단계 compensation/absence/reset/replay와 final container 0/0을 증명했다.
+  이로써 manifest `database_schema=0.4.0-local`은 disposable local/private 기준선으로 활성화됐다.
 - `73f300b`는 DB child와 descendant를 bounded process tree로 실행해 timeout/failure/success 모두에서
   종료·dispose·환경 복원을 보장한다. runner 50/50, patched 24/24와 final-code DB gate가 재검증했다.
 - Q-SEC-003=A/D-046으로 exact 22 signature property-only `00700` 방향은 확정했지만 구현은

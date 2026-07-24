@@ -36,9 +36,10 @@ Q-SEC-003 선택지 A를 채택하되 실행 시점을 public 준비 단계로 �
 
 ## Consequences
 
-결정은 확정됐지만 현재 executable migration은 여전히 `00100`~`00600` 여섯 개다.
-`database_schema=0.3.0-local`, pgTAP 282와 compensation order는 이번 문서 작업에서 변하지
-않는다. public readiness는 `00700` 구현·검증과 별도 배포 승인이 모두 끝날 때까지 Blocked다.
+결정은 확정됐지만 property-only public 준비 migration `00700`은 여전히 구현하지 않았다.
+후속 local 기능을 포함한 현재 executable 기준선은 `00100`~`00670` 아홉 개,
+`database_schema=0.4.0-local`, pgTAP 9 files/356 assertions다. public readiness는
+`00700` 구현·검증과 별도 배포 승인이 모두 끝날 때까지 Blocked다.
 
 ## Rollback
 

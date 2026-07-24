@@ -11,11 +11,9 @@
 - Teammate integration base: evaluation `main` commit `2c6fe4f41d5abdb6ef03463c64d39dc81df06955`
 - Packaging rule: source의 tracked 파일을 별도 staging archive로 export했으며 private `.git`은 복사하지 않음
 
-평가 commit SHA는 commit 생성 뒤 Draft PR과 최종 작업 보고서에 기록합니다. commit이 자기 SHA를 본문에 포함할 수 없으므로 이 문서에는 source SHA만 고정합니다.
-작업 도중 평가 `main`에 팀원의 `allowedDevOrigins`, 멘토 QA UI, 지역 선택 정합과 runbook/README
-후속 변경이 먼저 병합돼 해당 `main`을 통합했다. 이 선행 `main`에는 source commit ancestry가 이미
-공개돼 있었고, history secret scanner 결과는 finding 0이었다. 일반 PR은 이미 공개된 과거 commit을
-삭제할 수 없으므로 history rewrite 필요 여부는 저장소 owner의 별도 결정이다.
+평가 commit SHA는 commit 생성 뒤 PR과 최종 작업 보고서에 기록합니다. commit이 자기 SHA를
+본문에 포함할 수 없으므로 이 문서에는 source SHA와 통합 기준 SHA를 고정합니다. 평가 `main`의
+선행 Web 수정은 이 branch에 통합했고, export 과정에서 source의 private `.git`은 복사하지 않았습니다.
 
 ## 2. 포함 범위
 
@@ -23,7 +21,9 @@
 - `contracts`, `packages/shared-contracts`
 - `database`, `supabase/migrations`, `supabase/tests`
 - `data/official`, `data/staging`, `data/schemas`, `data/evaluation`, 표시된 mock 문서
+- 데이터 검증 테스트가 요구하는 canonical `data/processed` 검토 패킷·검증 보고서 2개
 - `scripts`, `tools/web-e2e`
+- `.github/workflows/frontend-ci.yml`
 - 활성 source-of-truth, ADR, data lineage, 운영·보안 문서
 - 잠금 파일과 빈 값의 `.env.example`
 
@@ -34,8 +34,8 @@
 - Playwright trace·screenshot·video, test runtime artifact, 실제 로그
 - 실제 개인정보와 로컬 사용자 경로가 있는 discovery 기록
 - 비권위 `legacy/`
-- private 협업용 `.github`, agent/Cloud 설정과 내부 구현 노트·실행계획·감사 trace
-- 재생성 가능한 `data/processed`
+- Frontend CI를 제외한 private 협업용 GitHub/agent/Cloud 설정과 내부 실행계획·감사 trace
+- 그 밖의 재생성 가능한 `data/processed`
 
 평가 저장소에 이미 있던 `[2026-세종-0001] 입찰제안서_세종 민원이음_2팀.pdf`와 `notice.md`는 수정하지 않았습니다.
 
@@ -76,10 +76,10 @@
 4. 동일 작성자의 승인은 차단
 5. 다른 승인자가 승인
 6. ACTIVE 20, 분야별 5개 확인
+7. 같은 질문 재질의: SUCCESS와 공식 출처 확인
 
 결정론적 표본 20개 분포와 결과는
 [MVP-001-SAMPLE-20-RESULT.md](docs/test-reports/MVP-001-SAMPLE-20-RESULT.md)에 별도 기록했습니다.
-7. 같은 질문 재질의: SUCCESS와 공식 출처 확인
 
 `KB-WASTE-03`은 local runtime 승인 흐름에서 생성되며 immutable `.2` release 파일을 수정하지 않습니다.
 
@@ -106,7 +106,7 @@
 
 ## 9. Snapshot 검증
 
-아래 결과는 이 공개 export 폴더에서 새로 실행해 Draft PR 설명과 최종 보고서에 기록합니다.
+아래 결과는 이 공개 export 폴더에서 새로 실행해 PR 설명과 최종 보고서에 기록합니다.
 
 | Gate | 결과 |
 |---|---|

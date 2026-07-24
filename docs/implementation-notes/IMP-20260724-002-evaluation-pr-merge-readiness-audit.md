@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-24T19:39:51+09:00
 - Task ID: SNAPSHOT-REVIEW-001
 - Type: decision
-- Status: Done — Draft PR human merge pending
+- Status: Done — included in final reviewed PR
 - Author/Agent: Codex
 - Branch: submission/week3-mvp
 - Base commit: 427c5f7

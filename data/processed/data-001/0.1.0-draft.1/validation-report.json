@@ -1,0 +1,25 @@
+{
+  "approval_projection": {
+    "initial_kb": 19,
+    "initial_mapping": 10,
+    "initial_office": 3,
+    "rejected_mapping": 2,
+    "withheld_kb": 1
+  },
+  "artifact_hashes": {
+    "kb_records.json": "38d0c801b3dab3962b5cd01fe15a43a60121963b53e8b1f7ac65304d07267365",
+    "office_service_mappings.json": "a0fb8f3c423c0b0b199ed27cdb35cf40efa9011e7ae3d6736f420fc175ee4e1b",
+    "offices.json": "fe942ce476c7d78f5b17deb10fd3b53e5b673f3ae36cf67a042823ccd51a7af0"
+  },
+  "counts": {
+    "kb": 20,
+    "mapping": 12,
+    "office": 3
+  },
+  "draft_version": "0.1.0-draft.1",
+  "issues": [],
+  "recommendation_projection": null,
+  "schema_version": 1,
+  "valid": true,
+  "warnings": []
+}

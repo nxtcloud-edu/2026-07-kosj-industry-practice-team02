@@ -4,7 +4,10 @@
 
 세종 민원 AI 길잡이는 시민의 일상어 질문을 승인된 공식 행정 지식과 연결하고, 근거가 부족한 질문을 사람의 작성·별도 승인 절차를 거쳐 새 ACTIVE KB로 개선하는 local/private MVP입니다.
 
-이 공개 저장소는 private 개발 저장소 `Sejong_AI`의 검증된 tracked 파일과 평가 저장소 `main`에 먼저 반영된 팀원 Web 후속 수정을 평가용으로 패키징한 snapshot입니다. 최종 작업 트리에는 비밀값, 로컬 DB 데이터, 실제 개인정보, 로그·trace와 dependency/build 산출물을 포함하지 않습니다. 평가 저장소 `main`에는 팀원의 선행 통합으로 source commit ancestry가 이미 존재하며, 이번 snapshot 작업은 private `.git`을 복사하거나 새 비밀 이력을 추가하지 않았습니다.
+이 저장소는 3주차 평가를 위한 실행 가능한 공개 snapshot입니다. 검증된 API·Web·공유 계약·DB
+migration·공식 데이터와 재현 문서를 포함하며, 비밀값·local DB 상태·실제 개인정보·로그/trace·
+dependency/build 산출물은 포함하지 않습니다. 정확한 provenance와 검증 결과는
+[WEEK3_EVALUATION.md](WEEK3_EVALUATION.md)에 기록했습니다.
 
 ## 구현 범위
 
@@ -15,6 +18,12 @@
 - `INSUFFICIENT_GROUNDING` 실패 → KB 후보 → 작성자와 다른 승인자 → 20번째 ACTIVE → 동일 질문 재질의 SUCCESS
 - `PERSONAL_LOOKUP`: `intent=UNKNOWN`, `candidate_eligible=false`, 질문 text/event/failed row 미저장
 - 서버가 승인 KB에서 출처명·URL·확인일을 결합하며 LLM이 출처를 만들지 않음
+
+## 역할 분담
+
+- Owner / Backend·AI/Data·Security·Docs: API, DB, 공식 데이터, 개인정보·근거 정책, 통합 검증
+- Frontend collaborator: `/`, `/chat`, `/admin`, typed API client, 반응형·접근성, Web unit/E2E
+- PM reviewer: 공식 데이터와 KB 후보의 별도 검수·승인
 
 ## 저장소 구조
 
@@ -51,7 +60,22 @@ uv sync --project apps/api --frozen
 
 ## 로컬 실행
 
-local DB와 승인 seed가 준비되지 않은 import-safe 기본 API는 의도적으로 `/ready=503`입니다. 아래 정식 seed 절차와 local login 준비가 성공한 뒤에만 local API가 `/ready=200`을 반환합니다.
+local DB와 승인 seed가 준비되지 않은 import-safe 기본 API는 의도적으로 `/ready=503`입니다.
+아래 정식 seed 절차와 local login 준비가 성공한 뒤에만 local API가 `/ready=200`을 반환합니다.
+Docker Desktop을 켠 뒤 먼저 다음 절차를 수행합니다.
+
+```powershell
+# 짧은 영문 경로의 checkout에서 실행
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/bootstrap_patched_supabase.ps1 -Install
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify_database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2
+```
+
+첫 명령이 프로젝트 전용 patched Supabase CLI를 `.tools/`에 생성합니다. `.tools/`는 재생성 가능한
+로컬 도구이므로 저장소에는 포함하지 않습니다.
 
 ```powershell
 # API — process-only DATABASE_URL과 32-byte 이상 CONTEXT_TOKEN_SECRET 필요
@@ -69,16 +93,6 @@ corepack pnpm --filter @sejong-ai/web dev
 ## 정식 seed와 19→20 승인 흐름
 
 `supabase/config.toml`은 `[db.seed].enabled=false`를 유지합니다. 따라서 `db reset --local`은 migration만 재현하며 seed를 자동 실행하지 않습니다. local admin DSN은 출력하지 않고 process-only `SEJONG_ADMIN_DATABASE_URL`로 전달합니다.
-
-```powershell
-$releaseVersion = "0.1.0-initial.2"
-.\.tools\supabase\v2.109.1-sejong-loopback\supabase.exe db reset --local
-apps/api/.venv/Scripts/python.exe -B scripts/verify_data_seed_db.py `
-  seed-cycle --release-version $releaseVersion
-apps/api/.venv/Scripts/python.exe -B scripts/verify_data_seed_db.py `
-  verify-final --release-version $releaseVersion
-apps/api/.venv/Scripts/python.exe -B scripts/provision_local_database_login.py
-```
 
 정식 `.2` seed의 시작 상태는 ACTIVE KB 19개, 공식 기관 3개, 승인 매핑 10개입니다. 별도 local rehearsal은 `/ready=200`을 확인한 뒤 근거 부족 질문을 저장하고, `KB-WASTE-03` 후보를 작성자와 다른 승인자가 승인해 20번째 ACTIVE로 만들고, 동일 질문의 SUCCESS와 공식 출처를 확인합니다.
 

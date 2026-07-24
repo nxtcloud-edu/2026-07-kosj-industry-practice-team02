@@ -4,7 +4,6 @@
 > **프로젝트 기간**: 2026-07-06 ~ 2026-07-31
 > **책임 역할**: PM·Frontend·Backend·AI/Data 4개; 현재 실제 개발 협업은 사용자 owner + Frontend 팀원 1명
 > **문서 버전**: v2.4.0
-> **팀명·팀원·연락처·제출일**: 제출 전 직접 입력
 
 ## 1. 프로젝트 정의
 
@@ -174,8 +173,8 @@ INSUFFICIENT_GROUNDING 저장→사유 확정→승인된 OFFICIAL 후보→작�
 3/3→20번째 ACTIVE→동일 질문 SUCCESS·서버 결합 공식 출처를 actual desktop browser 1/1로
 재검증했다. feedback dialog keyboard focus gate와 Web 390/430/desktop fixture 18/18도 통과했다.
 `[db.seed].enabled=false`는 유지하고 reset 뒤 immutable `.2`의 정식 seed 단계를 별도로 실행한다.
-`allowedDevOrigins: ["127.0.0.1"]`는 현재 owner PR이 아닌 별도 Frontend PR 과제다. Draft PR
-review/merge와 manual demo는 인간 Pending이다.
+`allowedDevOrigins: ["127.0.0.1"]` 후속도 통합됐다. automated demo gate는 완료됐으며 실제 발표
+당일의 수동 리허설만 운영 절차로 남는다.
 
 ## 7. 시스템 설계
 
@@ -195,28 +194,15 @@ review/merge와 manual demo는 인간 Pending이다.
 
 ### 저장소·협업·변경 통합
 
-- current history는 private `tskwak111/Sejong_AI` monorepo에 연결됐다. initial push SHA는
-  `5e09deccc7205503df07d938b6d4a88f4d5a327e`, PR #1 historical merge SHA는
-  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 해당 SHA의 post-merge policy and frozen Frontend CI
-  hosted runs passed, and `koregy` collaborator write/variable evidence is verified. current remote
-  authority는 `git fetch origin` 뒤 `origin/main`으로 동적 확인하며 어떤 local `main`도 같다고 전제하지 않는다.
-  Task 5 is partial: teammate MFA/recovery and the first Task 7 PR-only/no-direct-main-push rehearsal are
-  human-only Pending. Q-GIT-004=A/D-053의 author/committer history·SHA 보존은 유지한다.
-  COLLAB-001은 남은 Task 6~7 rehearsal까지 In Progress다.
-- GitHub Free·0원으로 시작하므로 private branch protection/CODEOWNERS 강제를 전제하지 않는다.
-  PR-only 팀 규칙, 변경 범위 분류, CI와 작은 revert 가능한 PR을 사용한다.
-- Frontend 팀원은 `/`, `/chat`, `/admin`, typed client, 모든 화면 상태, 반응형·접근성과 frontend
-  unit/E2E를 소유한다. 자가 병합은 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web 구현 노트
-  하나와 INDEX append만 포함한 green PR로 제한한다.
+- current remote authority는 `git fetch origin` 뒤 `origin/main`으로 확인하며 local `main`이 같다고
+  전제하지 않는다. 작은 task branch·PR·CI와 revert 가능한 commit을 사용한다.
+- Frontend 역할은 `/`, `/chat`, `/admin`, typed client, 모든 화면 상태, 반응형·접근성과 frontend
+  unit/E2E를 소유한다.
 - 공개 계약·backend·DB·migration·official data·privacy/security policy·dependency/lockfile 변경은
   사용자 검토 대상이다. 계약 간극은 frontend 임의 타입이 아니라 Issue와 owner contract PR로
   해결한다.
-- Codex Cloud는 `codex/<task-id>-<slug>` branch와 Draft PR까지만 만들고 사용자가 병합한다.
-  App installation의 `Only select repositories / Sejong_AI`와 secret-free `sejong-ai-cloud-docs`
-  환경 저장은 사용자 확인됐다. Cloud docs-only task/Draft-PR/manual-merge rehearsal은 Pending이다.
-  비밀·외부 LLM 실호출·Docker/Supabase actual 검증은 Cloud에서 금지한다.
-- private GitHub source remote는 D-046이 차단하는 remote/public application·DB deployment와
-  별개이며 이를 해제하지 않는다.
+- source remote는 D-046이 차단하는 remote/public application·DB deployment와 별개이며 이를
+  해제하지 않는다. 비밀·외부 LLM 실호출·Docker/Supabase actual 검증은 승인된 local 환경에서만 한다.
 
 ### 핵심 데이터 저장
 
@@ -301,7 +287,7 @@ gitignored trace/screenshot이 남을 수 있으므로 이것을 DB 무저장 �
 | Backend | API·DB·마스킹·상태·배포 | 승인 권한·이벤트·성능 |
 | AI/Data·민원 운영자 | KB·검색·폴백·평가 | 공식 KB 10건+후보 작성 |
 
-사용자는 Backend·DB·공개 계약·공식 데이터·보안·배포 결정과 Codex Cloud PR의 최종 merge를
+사용자는 Backend·DB·공개 계약·공식 데이터·보안·배포 결정과 PR의 최종 merge를
 책임진다. Frontend 팀원은 구현자이며 공식 데이터 승인자나 PM reviewer가 아니다.
 
 ## 10. 주차별 실행계획
@@ -329,8 +315,8 @@ gitignored trace/screenshot이 남을 수 있으므로 이것을 DB 무저장 �
 ### Q-MVP-001 가속 마일스톤: 7/22~7/25
 
 기존 주차표의 최종 범위는 유지하되 현재 저장소의 실제 선후관계에 맞춰 local/private 핵심 루프를
-아래 순서로 재배치한다. 상세 task/명령/담당 경계는 승인된
-`docs/superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md`가 소유한다.
+아래 순서로 재배치한다. 현재 실행·검증 절차는 ADR-0020,
+`README.md`와 `WEEK3_EVALUATION.md`가 소유한다.
 
 | 날짜 | Owner/BE·Data·Security | Frontend 팀원 | PM·QA | 일일 완료 gate |
 |---|---|---|---|---|

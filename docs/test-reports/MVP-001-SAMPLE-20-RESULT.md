@@ -20,5 +20,5 @@
 | └ OUT_OF_SCOPE | 2/2 |
 
 T-16은 보수적 마스킹과 정책 outcome 경계를 포함해 통과했다. 이 결과는 결정론적 pure-service
-평가이며 DeepSeek/provider 품질, remote/public 운영, 실제 시민 정확도 또는 HTTP source-card 화면
+평가이며 Upstage/provider 품질, remote/public 운영, 실제 시민 정확도 또는 HTTP source-card 화면
 QA를 증명하지 않는다. HTTP·DB 실제 개선 루프 근거는 별도 local lineage가 소유한다.

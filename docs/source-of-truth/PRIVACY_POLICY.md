@@ -96,7 +96,7 @@ text_purged_at
 ## 7. Upstage 외부 LLM 합성 평가 경계
 
 Q-LLM-005=A/D-065로 provider는 Upstage direct API exact `solar-pro3`로 변경한다. API key는
-ignored backend local 환경변수에만 두고 브라우저·저장소·GitHub·Codex Cloud·문서·로그에
+ignored backend local 환경변수에만 두고 브라우저·저장소·GitHub·외부 자동화 환경·문서·로그에
 값이나 잔액을 남기지 않는다. `max_tokens=1024`, 동시 외부 호출 1개, 논리 요청당 재시도 최대
 1회, 한 process run에서 재시도를 포함한 실제 outbound attempt 총 30회를 강제한다.
 

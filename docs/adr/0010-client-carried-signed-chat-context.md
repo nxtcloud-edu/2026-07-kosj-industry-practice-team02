@@ -19,7 +19,10 @@
 
 ## Public contract and versioning
 
-`ChatRequest.session_id`를 제거하고 `context_token`을 추가하며, `ChatResponse`에 required nullable `context_token`과 FALLBACK-null 불변조건을 추가한다. 이는 공개 draft의 breaking change이므로 `contracts/AGENTS.md`에 따라 API spec revision을 `1.0.0-draft`에서 `2.0.0-draft`로 올린다. 아직 구현·외부 소비자가 없으므로 route namespace `/api/v1/chat`은 유지한다.
+`ChatRequest.session_id`를 제거하고 `context_token`을 추가하며, `ChatResponse`에 required nullable
+`context_token`과 FALLBACK-null 불변조건을 추가한다. 이는 공개 draft의 breaking change이므로
+`docs/12_VERSIONING_AND_RELEASES.md`에 따라 API spec revision을 `1.0.0-draft`에서
+`2.0.0-draft`로 올린다. 아직 구현·외부 소비자가 없으므로 route namespace `/api/v1/chat`은 유지한다.
 
 ## Consequences and verification
 

@@ -1,13 +1,16 @@
 # ADR-0011: DB와 백엔드의 계층형 안전 규칙 강제
 
-- Status: Accepted design; Q-SEC-006=A/D-031 approved, patched CLI/full gate pending before `0.3.0-local`
+- Status: Accepted; implemented in disposable `0.4.0-local`, public `00700` hardening deferred
 - Date: 2026-07-16
 - Deciders: 사용자, Codex
 - Related: Q-DB-002, Q-SEC-002, Q-WF-001, D-025/D-026/D-027, ADR-0003/0004/0007/0008, DB-001
 
 ## Context
 
-현재 `database/schema-v1.draft.sql`은 6개 enum, 8개 table, 5개 index의 논리 참고본이다. 실행 migration, 권한, 원자적 승인 함수, 30일 파기 실행 함수, DB 통합 테스트가 없다. 백엔드만 정책을 강제하면 직접 SQL, 다른 writer, 동시 요청이 자기 승인 금지·ACTIVE 전용 검색·텍스트 파기·감사 일관성을 우회할 수 있다.
+이 ADR 채택 당시 `database/schema-v1.draft.sql`은 6개 enum, 8개 table, 5개 index의 논리
+참고본이었고 실행 migration, 권한, 원자적 승인 함수, 30일 파기 실행 함수, DB 통합 테스트가
+없었다. 백엔드만 정책을 강제하면 직접 SQL, 다른 writer, 동시 요청이 자기 승인 금지·ACTIVE
+전용 검색·텍스트 파기·감사 일관성을 우회할 수 있다.
 
 ## Decision
 
@@ -87,11 +90,12 @@ event source, actor, 상태별 table을 전면 분리하면 무결성은 강해�
 
 ## Local completion boundary
 
-DB-001에는 pgTAP 6 files/282 assertions, real backend integration 8/8, 6단계
-compensation/absence/reset/replay의 역사적 기능 증거가 있다. 그러나 Task 10에서 Docker actual
+이 문단의 6 files/282 assertions와 6단계 기록은 ADR 채택 당시의 역사적 gate다. 이후 local
+기능 migration이 추가된 현재 기준선은 9 files/356 assertions, real backend integration 8/8,
+9단계 compensation/absence/reset/replay와 `database_schema=0.4.0-local`이다. 당시 Task 10에서 Docker actual
 port가 wildcard로 해석됐으므로 runner는 reset 전에 fail-closed했고 manifest는
 `0.2.0-draft`를 유지한다. Q-SEC-004=A/D-029의 `default-local-port-binding`과
 Q-SEC-005=A/D-030의 `local-only-port-binding`도 actual `127.0.0.1`+`::`를 남겼다.
 Q-SEC-006=A/D-031의 patched CLI 구현, exact single `127.0.0.1:54322`, full
-DB/root/static gate와 independent review 뒤에만 `0.3.0-local`로 기록한다. A-021/Q-SEC-003은
+DB/root/static gate와 independent review 뒤에만 당시 `0.3.0-local`로 기록했다. A-021/Q-SEC-003은
 별도 public-release blocker이며 `00700`을 인간 결정 없이 추가하지 않는다.
