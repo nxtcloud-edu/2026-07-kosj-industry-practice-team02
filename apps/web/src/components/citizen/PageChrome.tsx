@@ -35,7 +35,14 @@ export function CitizenHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-border-soft bg-white">
       <div className="mx-auto flex w-full max-w-[680px] items-center justify-between px-5 py-3">
-        <Wordmark symbolClassName="h-7 w-7" />
+        {/* 로고 = 첫 화면 홈 링크 (멘토 QA). 접근명은 워드마크 텍스트로 충분하나 명시한다 */}
+        <Link
+          href="/"
+          aria-label="세종 민원이음 첫 화면으로"
+          className="inline-flex rounded-btn-s"
+        >
+          <Wordmark symbolClassName="h-7 w-7" />
+        </Link>
         <span className="text-[13px] font-semibold text-text-sub">
           세종특별자치시
         </span>

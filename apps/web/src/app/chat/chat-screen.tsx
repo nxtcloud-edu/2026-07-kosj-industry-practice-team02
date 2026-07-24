@@ -62,6 +62,14 @@ type FailedDraft = Readonly<{
 
 export type ChatTransportMode = "fixture" | "actual";
 
+/**
+ * 로딩 스켈레톤 최소 노출 시간(멘토 QA). 응답이 이보다 빨라도 스켈레톤을
+ * 300ms 채운 뒤 카드로 전환해 깜빡임을 없앤다. 응답이 더 느리면 추가 지연은
+ * 없다(도착 즉시 전환). 논리 상태(loading·inFlight·context_token)는 지연하지
+ * 않고 화면 카드 노출만 미룬다 - 연속 질문/토큰 승계에 영향 없음.
+ */
+const MIN_SKELETON_MS = 300;
+
 export default function ChatScreen({
   transportMode = "actual",
   transport: providedTransport,
@@ -80,6 +88,8 @@ export default function ChatScreen({
   );
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  // 스켈레톤 최소 노출(300ms) 잔여 구간 - loading이 내려가도 이 동안 스켈레톤 유지
+  const [skeletonHold, setSkeletonHold] = useState(false);
   const [input, setInput] = useState("");
   const [failedDraft, setFailedDraft] = useState<FailedDraft | null>(null);
   const idRef = useRef(0);
@@ -87,8 +97,30 @@ export default function ChatScreen({
   const askedInitial = useRef(false);
   const contextTokenRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
+  // 최소 노출을 채우려고 미뤄둔 카드 노출 작업과 그 타이머
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCommitRef = useRef<(() => void) | null>(null);
 
   const nextId = () => `msg-${++idRef.current}`;
+
+  /** 미뤄둔 카드 노출을 즉시 확정한다(타이머 만료 또는 다음 질문 시작 시) */
+  const flushPendingCommit = useCallback(() => {
+    if (commitTimerRef.current !== null) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    const commit = pendingCommitRef.current;
+    pendingCommitRef.current = null;
+    commit?.();
+  }, []);
+
+  // 언마운트 시 미완 타이머만 정리(확정 setState는 하지 않는다)
+  useEffect(
+    () => () => {
+      if (commitTimerRef.current !== null) clearTimeout(commitTimerRef.current);
+    },
+    [],
+  );
 
   const sendRequest = useCallback(
     async (
@@ -98,9 +130,13 @@ export default function ChatScreen({
       { appendUserMessage = true }: { appendUserMessage?: boolean } = {},
     ) => {
       if (inFlightRef.current) return;
+      // 새 질문 시작 전, 미뤄둔 이전 카드를 먼저 확정 노출한다
+      flushPendingCommit();
       inFlightRef.current = true;
       setLoading(true);
+      setSkeletonHold(false);
       setFailedDraft(null);
+      const skeletonShownAt = Date.now();
       if (appendUserMessage) {
         setMessages((prev) => [
           ...prev,
@@ -108,37 +144,57 @@ export default function ChatScreen({
         ]);
       }
 
+      // 화면에 카드/오류를 반영하는 작업 - 최소 노출을 채운 뒤 실행한다
+      let applyResult: () => void = () => {};
       try {
         const response = await transport.send(request, options);
-        // FALLBACK은 계약상 context_token이 항상 null - 탭 메모리 갱신 (§9)
+        // context_token은 다음 질문에 필요하므로 즉시 갱신한다(노출만 지연).
+        // FALLBACK은 계약상 항상 null - 탭 메모리 초기화 (§9)
         contextTokenRef.current =
           response.answer_status === "FALLBACK" ? null : response.context_token;
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "bot",
-            id: response.request_id,
-            response,
-            question: request.question,
-            region: request.selected_region ?? null,
-          },
-        ]);
-        setInput((current) =>
-          current.trim() === request.question ? "" : current,
-        );
+        applyResult = () => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "bot",
+              id: response.request_id,
+              response,
+              question: request.question,
+              region: request.selected_region ?? null,
+            },
+          ]);
+          setInput((current) =>
+            current.trim() === request.question ? "" : current,
+          );
+        };
       } catch (error) {
-        setFailedDraft({
-          idempotencyKey: options.idempotencyKey,
-          request,
-          displayText,
-          retryable: !(error instanceof ChatTransportError) || error.retryable,
-        });
+        applyResult = () => {
+          setFailedDraft({
+            idempotencyKey: options.idempotencyKey,
+            request,
+            displayText,
+            retryable:
+              !(error instanceof ChatTransportError) || error.retryable,
+          });
+        };
       } finally {
+        // 논리 상태는 즉시 해제(버튼·연속 질문 차단 없음), 카드 노출만 최소 노출까지 지연
         inFlightRef.current = false;
         setLoading(false);
+        const remaining = MIN_SKELETON_MS - (Date.now() - skeletonShownAt);
+        if (remaining > 0) {
+          setSkeletonHold(true);
+          pendingCommitRef.current = () => {
+            setSkeletonHold(false);
+            applyResult();
+          };
+          commitTimerRef.current = setTimeout(flushPendingCommit, remaining);
+        } else {
+          applyResult();
+        }
       }
     },
-    [transport],
+    [flushPendingCommit, transport],
   );
 
   /** 새 논리 질문 - Idempotency-Key를 새로 발급한다 */
@@ -186,7 +242,7 @@ export default function ChatScreen({
     bottomRef.current?.scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
     });
-  }, [messages, loading]);
+  }, [messages, loading, skeletonHold]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,7 +280,7 @@ export default function ChatScreen({
         aria-live="polite"
         className="mx-auto flex w-full max-w-[680px] flex-1 flex-col gap-4 px-5 py-5"
       >
-        {messages.length === 0 && !loading && (
+        {messages.length === 0 && !loading && !skeletonHold && (
           <p className="py-8 text-center text-body text-text-sub">
             궁금한 민원을 입력해 주세요.
           </p>
@@ -251,7 +307,7 @@ export default function ChatScreen({
             />
           ),
         )}
-        {loading && <LoadingSkeleton />}
+        {(loading || skeletonHold) && <LoadingSkeleton />}
 
         {/* 네트워크·서버 오류 - 재시도가 주인공, 뱃지만 danger 톤 (§6-4).
             재시도는 같은 Idempotency-Key를 재사용한다 (계약). */}

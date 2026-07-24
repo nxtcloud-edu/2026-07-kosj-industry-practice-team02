@@ -182,13 +182,18 @@ export default function AdminShell({
         {/* 768px 미만: 상단 고정 바 - 로고 줄 + 메뉴 탭 줄 (모바일 정비 1) */}
         <header className="sticky top-0 z-40 bg-admin-nav md:hidden">
           <div className="flex h-14 items-center justify-between gap-2 px-4">
-            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
-            <span className="flex items-center gap-1.5 text-[17px] font-extrabold text-white">
+            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색.
+                로고 = 운영 현황 홈 링크 (멘토 QA, 사이드바와 동일 동작) */}
+            <Link
+              href="/admin"
+              aria-label="이음센터 운영 현황으로"
+              className="flex items-center gap-1.5 rounded-btn-s text-[17px] font-extrabold text-white"
+            >
               <Logo className="h-5 w-5 shrink-0 text-white" />
               <span>
                 <span className="text-tie-line">이음</span>센터
               </span>
-            </span>
+            </Link>
             <label className="sr-only" htmlFor="demo-role-mobile">
               시연 역할
             </label>
@@ -242,17 +247,26 @@ export default function AdminShell({
           </nav>
         </header>
 
-        <aside className="hidden w-[216px] shrink-0 flex-col gap-[22px] bg-admin-nav px-3.5 py-[22px] md:flex">
-          {/* 브랜드 - 로고 심볼 흰색 변형 (§5-1) */}
+        {/* 사이드바 sticky 고정 (멘토 QA): 본문 스크롤 중에도 상단 고정.
+            h-screen + self-start로 뷰포트 높이 고정, 내용 초과 시 내부 스크롤.
+            모바일(md 미만)은 상단 바 레이아웃이라 영향 없음 */}
+        <aside className="hidden w-[216px] shrink-0 flex-col gap-[22px] bg-admin-nav px-3.5 py-[22px] md:sticky md:top-0 md:flex md:h-screen md:self-start md:overflow-y-auto">
+          {/* 브랜드 - 로고 심볼 흰색 변형 (§5-1). 로고 = 운영 현황 홈 링크 (멘토 QA) */}
           <div className="px-2">
-            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-tie-line">
-              <Logo className="h-4 w-4 shrink-0 text-white" />
-              세종 민원이음 관리자
-            </span>
-            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
-            <p className="mt-0.5 text-[20px] font-extrabold text-white">
-              <span className="text-tie-line">이음</span>센터
-            </p>
+            <Link
+              href="/admin"
+              aria-label="이음센터 운영 현황으로"
+              className="block rounded-btn-s"
+            >
+              <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-tie-line">
+                <Logo className="h-4 w-4 shrink-0 text-white" />
+                세종 민원이음 관리자
+              </span>
+              {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
+              <p className="mt-0.5 text-[20px] font-extrabold text-white">
+                <span className="text-tie-line">이음</span>센터
+              </p>
+            </Link>
           </div>
 
           <nav aria-label="관리자 메뉴">
