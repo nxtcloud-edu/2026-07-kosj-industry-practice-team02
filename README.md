@@ -31,6 +31,17 @@
 │
 └─ Backend API (apps/api) + 계약(contracts) + 데이터 릴리스(data)
 ```
+## 저장소 안내
+
+핵심 경로만 보시면 됩니다:
+- `apps/web` 시민·관리자 UI / `apps/api` 백엔드 / `contracts` API 계약(정합의 기준)
+- `data` 공식 데이터 원본 / `supabase`·`database` 스키마·마이그레이션
+- `docs/implementation-notes` 구현 기록 97건 (INDEX.md로 탐색)
+- 실행: §6 또는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md`
+
+루트의 `CODEX_*`, `OVERLAY_INSTALL`, `PACKAGE_MANIFEST`, `.agents`,
+`.codex`, `.superpowers`, `AGENTS.md`는 AI 에이전트 협업 체계(작업
+규칙·스킬·패키징) 파일이며, `legacy/`는 기획 단계 원본 보존입니다.
 
 ## 2. 해결하려는 문제
 
