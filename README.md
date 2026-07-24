@@ -1,168 +1,133 @@
-# 세종 민원이음 (플랫폼명: 민원이음)
+# 세종 민원 AI 길잡이 — 3주차 MVP
 
-> **2026년 7월 고려대 세종 산업체 실습 프로젝트 — 2팀**
-> 대상 공고: 공고번호 2026-세종-0001, AI 기반 시민 민원 통합 응대 플랫폼 구축
-> 프로젝트 기간: 2026. 07. 06. ~ 2026. 07. 31.
+> 모르면 지어내지 않고, 알면 끝까지 안내한다.
 
-시민과 행정을 잇고, 실패 질문을 지식베이스 개선으로 잇습니다.
+세종 민원 AI 길잡이는 시민의 일상어 질문을 승인된 공식 행정 지식과 연결하고, 근거가 부족한 질문을 사람의 작성·별도 승인 절차를 거쳐 새 ACTIVE KB로 개선하는 local/private MVP입니다.
 
----
+이 저장소는 3주차 평가를 위한 실행 가능한 공개 snapshot입니다. 검증된 API·Web·공유 계약·DB
+migration·공식 데이터와 재현 문서를 포함하며, 비밀값·local DB 상태·실제 개인정보·로그/trace·
+dependency/build 산출물은 포함하지 않습니다. 정확한 provenance와 검증 결과는
+[WEEK3_EVALUATION.md](WEEK3_EVALUATION.md)에 기록했습니다.
 
-## 1. 프로젝트 소개
+## 구현 범위
 
-민원이음은 시민이 일상어로 민원을 질문하면 공식 출처로 검증된 행정 지식베이스에 근거해 절차, 서류, 담당 기관을 안내하고, 답변하지 못한 질문을 관리자 화면 **이음센터**에서 지식베이스 개선 후보로 전환하는 **실패를 학습 가능한 운영 과제로 바꾸는 플랫폼**이다.
+- 시민 화면: `/`, `/chat`
+- local/private 관리자 화면: `/admin`
+- 분야: 전입·주민등록, 증명서 발급, 대형폐기물, 지방세 일반 안내
+- FastAPI `/api/v1/chat`: 개인정보 마스킹 → 정책 분류 → ACTIVE KB 검색 → 근거 gate → 구조화 답변 또는 안전한 폴백
+- `INSUFFICIENT_GROUNDING` 실패 → KB 후보 → 작성자와 다른 승인자 → 20번째 ACTIVE → 동일 질문 재질의 SUCCESS
+- `PERSONAL_LOOKUP`: `intent=UNKNOWN`, `candidate_eligible=false`, 질문 text/event/failed row 미저장
+- 서버가 승인 KB에서 출처명·URL·확인일을 결합하며 LLM이 출처를 만들지 않음
 
-시민의 실패 질문은 이음센터에서 사유 확인 → KB 후보 초안(AI 작성) → 별도 승인자 승인 → ACTIVE 반영으로 이어지며, 승인된 KB는 다음 시민 답변부터 사용된다. KB 후보 생성은 지원 범위 내 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정한다.
+## 역할 분담
+
+- Owner / Backend·AI/Data·Security·Docs: API, DB, 공식 데이터, 개인정보·근거 정책, 통합 검증
+- Frontend collaborator: `/`, `/chat`, `/admin`, typed API client, 반응형·접근성, Web unit/E2E
+- PM reviewer: 공식 데이터와 KB 후보의 별도 검수·승인
+
+## 저장소 구조
 
 ```text
-세종 민원이음
-├─ 시민용 "민원이음" (apps/web)
-│  ├─ 4개 분야 민원 질의응답 (전입·주민등록, 대형폐기물, 증명서 발급, 지방세)
-│  ├─ 절차·서류·수수료·처리 기간 정보 표 + 출처·최종 확인일 표기 + 공식 신청 딥링크
-│  ├─ 후속질문(모호 질문)과 폴백(근거 부족·개인 조회·법적 판단·범위 밖)
-│  ├─ 지역(동) 선택 기반 담당 기관 안내 (시범 지역: 아름동·도담동·조치원읍)
-│  ├─ 개인정보 입력 마스킹, 대화 맥락은 탭 메모리 + 15분 서명형 context_token
-│  └─ 모바일 우선, 기본 화면 명도 대비 4.5:1 이상 (KWCAG 2.2 주요 항목)
-│
-├─ 관리자용 "이음센터" (apps/web/admin)
-│  ├─ [P0] 실패 질문 목록 → 사유 확정 → KB 후보 작성 → 별도 승인자 승인 (자기검수 금지)
-│  ├─ [P0] 운영 현황 KPI (질문 수, 성공률, 폴백률, 응답시간, 출처 표기율)
-│  └─ [P1] 민원 통계(유형·시간대·지역), 현장 불일치 신고 카운트
-│
-└─ Backend API (apps/api) + 계약(contracts) + 데이터 릴리스(data)
+apps/api/                 FastAPI API, 개인정보·검색·승인 흐름
+apps/web/                 Next.js 시민·관리자 UI
+packages/shared-contracts/ OpenAPI/JSON Schema/TypeScript 공유 계약
+contracts/                공개 API 계약
+supabase/migrations/      실행 가능한 DB migration 권위
+database/                 local DB 논리 projection·rollback
+data/official/            승인된 immutable 공식 데이터 release
+data/evaluation/          표본 질문
+tools/web-e2e/            Playwright 브라우저 검증
+scripts/                  검증·seed·local 실행 도구
 ```
-## 저장소 안내
 
-핵심 경로만 보시면 됩니다:
-- `apps/web` 시민·관리자 UI / `apps/api` 백엔드 / `contracts` API 계약(정합의 기준)
-- `data` 공식 데이터 원본 / `supabase`·`database` 스키마·마이그레이션
-- `docs/implementation-notes` 구현 기록 97건 (INDEX.md로 탐색)
-- 실행: §6 또는 `docs/implementation-notes/PM_FULL_SYSTEM_LOCAL_RUNBOOK.md`
+## 요구 버전
 
-루트의 `CODEX_*`, `OVERLAY_INSTALL`, `PACKAGE_MANIFEST`, `.agents`,
-`.codex`, `.superpowers`, `AGENTS.md`는 AI 에이전트 협업 체계(작업
-규칙·스킬·패키징) 파일이며, `legacy/`는 기획 단계 원본 보존입니다.
+| 도구 | 버전 |
+|---|---:|
+| Node.js | 24.12.0 |
+| pnpm | 11.13.0 |
+| Python | 3.12.13 |
+| uv | 0.11.28 |
 
-## 2. 해결하려는 문제
+## 설치
 
-| 문제 영역 | 현황 | 해결 방향 |
-|---|---|---|
-| 행정 효율 | 단순 반복 문의에 인력이 소모됨 | 반복 민원을 24시간 자동응대로 분리 |
-| 시민 접근성 | 야간, 주말, 휴일에는 즉시 안내받기 어려움 | 승인 KB 기반 상시 응대 채널 |
-| 정보 정확성 | 창구마다 안내 기준이 다를 수 있음 | 공식 출처 검증 KB + 출처·확인일 표기 답변 |
-| 운영 개선 | 어떤 행정 정보가 부족한지 알기 어려움 | 실패 질문 → KB 후보 → 담당자 승인의 개선 루프 |
-
-## 3. 핵심 설계 원칙
-
-- **모르면 지어내지 않고, 알면 끝까지 안내한다.** 출처 없는 답변 금지, 불확실하면 사유와 함께 담당 채널 연결.
-- **시민 실사용 경로는 승인 KB 기반 template 안전 경로.** 시민 응답 경로는 LLM을 호출하지 않는다(호출당 비용 0, 환각 구조적 차단). 외부 LLM(Upstage Solar 구성)은 local·private 합성 평가 전용이며 provider 호출은 기본 비활성화(`LLM_PROVIDER=disabled`).
-- **개인정보 최소주의.** 질문 원문은 어느 시점에도 저장하지 않는다. 마스킹 텍스트 보관은 근거 부족(INSUFFICIENT_GROUNDING) 실패에 한정해 30일 후 NULL 파기하며, **개인별 조회·법적 판단 질문은 텍스트·이벤트·실패 행을 일절 생성하지 않는다** (제출 이후 최소수집 원칙을 강화한 팀 결정 Q-MVP-002 / D-059). 질문 원문은 URL·히스토리·로그에도 남지 않는다.
-- **AI는 제안하고, 판정은 사람이 한다.** KB 후보는 AI 초안으로 시작하되 출처 URL 검증과 승인은 담당자 몫이며, 작성자는 자기 초안을 승인할 수 없다(별도 승인자 필수).
-- **폴백 사유는 4개** — INSUFFICIENT_GROUNDING(근거 부족), PERSONAL_LOOKUP(개인별 조회), LEGAL_JUDGMENT(법적 판단), OUT_OF_SCOPE(범위 밖). AMBIGUOUS는 후속질문 트리거, PERSONAL_INFO는 마스킹·보안 처리 계층.
-
-## 4. 기술 스택
-
-| 영역 | 기술 |
-|---|---|
-| Monorepo | pnpm workspace (`apps/web`, `apps/api`, `packages/shared-contracts`) |
-| Frontend | Next.js 16 + TypeScript + Tailwind CSS (`apps/web`) |
-| Backend | FastAPI + Python 3.12, uv (`apps/api`) |
-| Database | Supabase (PostgreSQL), 로컬은 patched Supabase CLI + Docker |
-| 계약 | OpenAPI v1 + JSON Schema (`contracts/`), 생성 TS 타입으로 FE·BE 정합 강제 |
-| AI | 승인 KB 기반 template 경로 + 검색, LLM adapter(합성 평가 전용, 기본 비활성) |
-| E2E | Playwright — fixture(UI)·actual(local API+DB) 분리 게이트 |
-| Deployment | 로컬 실증 데모(run_local_api + local DB). 공개 배포는 별도 보안 승인 후 |
-
-## 5. 데이터
-
-`data/` 폴더가 원본이며 승인된 seed-cycle 릴리스를 통해서만 DB에 적재한다. 자세한 규칙은 `data/README.md` 참고.
-
-- 공식 출처 검증 KB **ACTIVE 19건** 시드 (정부24·위택스·세종시설관리공단 등 allowlist 6개 도메인 URL 대조) — 시연 중 선순환 루프로 20건째가 승인·반영되는 구성
-- 기관 정보 3건(아름동·도담동·조치원읍 — 동 2 + 읍 1 유형 커버), 지역·민원 매핑 10건, 테스트 질문 20문항(정답 라벨)
-- KB 확장은 대량 입력이 아니라 실패 질문 → AI 초안 → 담당자 출처 검증·승인 파이프라인으로 수행
-
-## 6. 실행 방법 (로컬 전체 시스템)
-
-> 요구: Node 24 / pnpm 11 / Python 3.12 / uv / Docker Desktop.
-> 상세 절차는 `docs/implementation-notes/IMP-20260724-011-pr8-owner-integration-and-actual-web-evidence.md`의 정식 seed 적재 절차 참고 (버전 대조·DB 초기화·검수 시나리오 포함).
-
-```bash
-# 1. 클론 및 의존성
-git clone https://github.com/nxtcloud-edu/2026-07-kosj-industry-practice-team02.git
-cd 2026-07-kosj-industry-practice-team02
+```powershell
 corepack pnpm install --frozen-lockfile --ignore-scripts
 uv sync --project apps/api --frozen
-
-# 2. 환경 변수 (.env.example 복사 후 값 설정 — 비밀값 커밋 금지)
-#    apps/api/.env         : DATABASE_URL, CONTEXT_TOKEN_SECRET 등
-#    apps/web/.env.local   : CHAT_UI_MODE=actual, ADMIN_UI_MODE=actual 등
-
-# 3. 로컬 DB (Docker 실행 상태에서) — schema 검증 + 승인 seed 적재
-powershell -File scripts/verify_database.ps1 -SkipRollbackReplay
-#    적재 후 ACTIVE KB 19건 확인, API /ready=200 이 정상
-
-# 4. Backend
-uv run --project apps/api --frozen python scripts/run_local_api.py   # 127.0.0.1:8000
-
-# 5. Frontend
-corepack pnpm --filter @sejong-ai/web dev                            # 127.0.0.1:3000
 ```
 
-LLM provider 호출은 기본 비활성화이며 시민 응답 경로는 LLM 없이 동작한다.
+`.env.example`, `apps/api/.env.example`, `apps/web/.env.example`은 값이 비어 있는 템플릿입니다. 실제 `.env`, API key, DSN은 커밋하지 않습니다. Upstage 호출은 합성 평가 전용이며 시민 질문 경로에서는 기본 비활성입니다.
 
-## 7. 팀원 역할
+## 로컬 실행
 
-| 이름 | 역할 | 담당 영역 | 핵심 책임 |
-|---|---|---|---|
-| 김정하 | PM / Frontend / 발표 | 기획·제안서, 시민 화면·이음센터 UI, 디자인 시스템 | 방향성 유지, 요구사항 대응, 프론트엔드 구현(화면·반응형·접근성), 산출물 통합, 발표 |
-| 곽태성 | Backend / 계약·인프라 | API·DB·contracts, 데이터 릴리스, CI·협업 정책 | 서버 구현, 계약 정의와 검증, DB·seed 파이프라인, 저장소 거버넌스 |
-| 이유라 | AI / Data | KB(증명서 발급, 지방세), 검색 | 지식베이스 구축·검증, 검색 파이프라인 |
-| 오현송 | AI / Data | KB(전입·주민등록, 대형폐기물), QA | 지식베이스 구축·검증, 테스트셋, 품질 평가 |
+local DB와 승인 seed가 준비되지 않은 import-safe 기본 API는 의도적으로 `/ready=503`입니다.
+아래 정식 seed 절차와 local login 준비가 성공한 뒤에만 local API가 `/ready=200`을 반환합니다.
+Docker Desktop을 켠 뒤 먼저 다음 절차를 수행합니다.
 
-## 8. 품질 기준 (제안서 7.3)
+```powershell
+# 짧은 영문 경로의 checkout에서 실행
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/bootstrap_patched_supabase.ps1 -Install
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify_database.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/verify_data_seed.ps1 -ReleaseVersion 0.1.0-initial.2
+```
 
-| 지표 | 목표 | 측정 방식 |
-|---|---|---|
-| 의도 분류 정확도 | 85% 이상 | 테스트 질문 정답 라벨과 비교 |
-| 답변 정확도 | 80% 이상 | 20문항 회귀 채점 |
-| 출처 표기율 | 100% | 답변별 출처 카드 확인 |
-| 폴백 적절성 | 90% 이상 | 위험 질문 처리 결과 확인 (과소·과잉 폴백 모두 실패 집계) |
-| 개인정보 마스킹 | 100% | 원문 저장·전송 여부 확인 |
-| 응답시간 | 평균 3초 이내 | 평균·p95·오류율 병행 실측 |
-| 모바일 UI 오류 | 0건 | 390px, 430px 화면 확인 |
+첫 명령이 프로젝트 전용 patched Supabase CLI를 `.tools/`에 생성합니다. `.tools/`는 재생성 가능한
+로컬 도구이므로 저장소에는 포함하지 않습니다.
 
-핵심 20문항 회귀 채점 결과는 `docs/` 테스트 리포트 참조. 결과는 표본 기준이며 전체 민원 정확도로 일반화하지 않는다.
+```powershell
+# API — process-only DATABASE_URL과 32-byte 이상 CONTEXT_TOKEN_SECRET 필요
+uv run --project apps/api --frozen python scripts/run_local_api.py --port 8000
 
-## 9. 시연 시나리오 (최종 발표 데모 5문항)
+# Web — 별도 터미널
+$env:API_INTERNAL_BASE_URL = "http://127.0.0.1:8000"
+corepack pnpm --filter @sejong-ai/web dev
+```
 
-> 제출 제안서 7.5의 사전 확정 시나리오를 기준선으로 하되, 제출 이후 개인정보
-> 최소수집 강화 결정(Q-MVP-002 / D-059)에 따라 #4·#5를 의도적으로 변경했다.
-> 변경 사유와 기준선은 `apps/web/CLAUDE.md`와 팀 결정 기록에 보존한다.
+- Web: `http://127.0.0.1:3000`
+- API health: `http://127.0.0.1:8000/health`
+- API readiness: `http://127.0.0.1:8000/ready`
 
-1. 정상 — "전입신고는 언제까지 해야 하나요?" (14일 + 출처·확인일 + 정부24 딥링크)
-2. 정상 — "아름동에서 대형폐기물은 언제 내놓나요?" (동 선택 기반 담당 기관 안내)
-3. 후속질문 — "이사했는데 뭐 해야 하나요?" (단정 없는 선택지 제시)
-4. 폴백·개인정보 — "제 자동차세 얼마 나왔나요?" (추측 없이 위택스·담당 채널 연결, **질문 텍스트·실패 행 미저장 고지**)
-5. 선순환 — 근거 부족 질문("침대 2인용 프레임 배출 수수료")이 실패 큐 도착 → 사유 확정 → AI 초안 → **별도 승인자** 승인 → ACTIVE(**KB 19→20건**) → 같은 질문 재질의 시 SUCCESS
+## 정식 seed와 19→20 승인 흐름
 
-배포 링크·시연 영상: 최종 리허설 후 추가 (TBD)
+`supabase/config.toml`은 `[db.seed].enabled=false`를 유지합니다. 따라서 `db reset --local`은 migration만 재현하며 seed를 자동 실행하지 않습니다. local admin DSN은 출력하지 않고 process-only `SEJONG_ADMIN_DATABASE_URL`로 전달합니다.
 
-## 10. 프로젝트 일정
+정식 `.2` seed의 시작 상태는 ACTIVE KB 19개, 공식 기관 3개, 승인 매핑 10개입니다. 별도 local rehearsal은 `/ready=200`을 확인한 뒤 근거 부족 질문을 저장하고, `KB-WASTE-03` 후보를 작성자와 다른 승인자가 승인해 20번째 ACTIVE로 만들고, 동일 질문의 SUCCESS와 공식 출처를 확인합니다.
 
-| 주차 | 기간 | 핵심 목표 | 완료 판정 기준 |
-|---|---|---|---|
-| 1주차 (완료) | 7/6 ~ 7/10 | RFP 분석, 문제 정의, 기본 설계 | 아이디어노트 기한 내 제출, 멘토 피드백 반영 |
-| 2주차 (완료) | 7/13 ~ 7/17 | 입찰 제안서, 핵심 설계 확정 | 1차 KB 검증 완료, 제안서 제출 |
-| 3주차 (완료) | 7/20 ~ 7/24 | 시민 핵심 흐름 + 이음센터 P0 구현, FE·BE 통합 | 로컬 전체 시스템(actual) 기동, P0 흐름 end-to-end 검수, 20문항 회귀 |
-| 4주차 | 7/27 ~ 7/31 | 기능 동결, 품질 개선, 발표 | 20문항 회귀 리포트, 데모 5문항 무중단 완주, 출처 없는 단정 답변 0건 |
+## 검증
 
-## 11. 저장소 운영
+```powershell
+# API
+uv run --directory apps/api --frozen ruff format --check .
+uv run --directory apps/api --frozen ruff check .
+uv run --directory apps/api --frozen mypy src tests
+uv run --directory apps/api --frozen pytest -q
 
-- 정본 개발 저장소에서 owner 리뷰 기반으로 통합하며, 본 저장소는 진행상황 평가용 미러다.
-- 브랜치: `main`(안정) + `feat/*`·`fix/*` 작업 브랜치. Collaboration policy CI가 owner 검토 필요 변경을 자동 분류한다.
-- **진행 중 작업**: `fix/web-dev-origin-127`(Next 16 dev 환경 수정), `fix/web-mentor-qa`(멘토 QA 반영·지역 선택 UI) — owner 리뷰 후 main 반영 예정.
-- 커밋 메시지는 Conventional Commits(`feat:`, `fix:`, `docs:`)를 따르고, 구현 노트를 `docs/implementation-notes/`에 기록한다 (INDEX 관리).
+# Web
+corepack pnpm --filter @sejong-ai/web lint
+corepack pnpm --filter @sejong-ai/web typecheck
+corepack pnpm --filter @sejong-ai/web test
+corepack pnpm --filter @sejong-ai/web build
 
----
+# 공유 계약과 공개 snapshot 보안
+corepack pnpm --filter @sejong-ai/shared-contracts test
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
+```
 
-> 본 프로젝트는 고려대 세종 계절학기 산업체 실습의 학습용 프로젝트이며, 공고문의 발주기관과 예산 등은 실제와 무관한 가상 정보이다.
+평가 snapshot의 출처, 제외 범위, 정책과 실제 검증 결과는
+[WEEK3_EVALUATION.md](WEEK3_EVALUATION.md)에 정리돼 있습니다. 결정론적 표본 20개 결과는
+[MVP-001-SAMPLE-20-RESULT.md](docs/test-reports/MVP-001-SAMPLE-20-RESULT.md)에서 바로 확인할 수
+있습니다.
+
+## 안전 경계
+
+- 질문 원문, 실제 개인정보, IP·기기 ID를 애플리케이션 DB에 저장하지 않습니다.
+- `PERSONAL_LOOKUP`, `LEGAL_JUDGMENT`, `OUT_OF_SCOPE`, `PRIVACY_UNRESOLVED`는 후보로 만들지 않습니다.
+- 시민 검색은 ACTIVE+OFFICIAL KB만 사용합니다.
+- 작성자는 자기 후보를 승인할 수 없습니다.
+- 이 snapshot은 local/private MVP 증거이며 public 배포·remote DB·실사용 운영 승인이 아닙니다.
+
+기존 평가 저장소의 입찰제안서 PDF와 `notice.md`는 원본 그대로 보존했습니다.

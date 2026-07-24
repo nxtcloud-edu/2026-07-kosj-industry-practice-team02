@@ -3,9 +3,9 @@
 - Status: local/private runtime evidence only — 2026-07-22 KST PASS
 - Scope: one approved candidate workflow from initial 19 ACTIVE to final 20 ACTIVE
 - Source boundary: existing PM-approved `KB-WASTE-03` official source metadata only
-- Related: [MVP-001 plan](../superpowers/plans/2026-07-22-four-day-local-private-core-loop-mvp.md),
-  [MVP implementation note](../implementation-notes/IMP-20260722-004-q-mvp-001-4일-local-private-핵심-개선-루프-명세와-실행.md),
-  [DATA-SEED-002 `.2` lineage](DATA-SEED-002-0.1.0-initial.2.md)
+- Related: [DATA-SEED-002 `.2` lineage](DATA-SEED-002-0.1.0-initial.2.md).
+  The private source repository's internal plan and implementation note are intentionally excluded
+  from this public evaluation snapshot.
 
 ## Lineage boundary
 

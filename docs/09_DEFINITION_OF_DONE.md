@@ -1,4 +1,7 @@
-# Definition of Done
+# 작업별 Definition of Done (template)
+
+아래의 빈 체크박스는 반복 사용하는 작업 완료 기준이며 현재 snapshot의 미완료 목록이 아니다.
+현재 평가 결과는 `WEEK3_EVALUATION.md`와 `docs/test-reports/`를 따른다.
 
 ## 모든 작업 공통
 

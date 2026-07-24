@@ -34,8 +34,8 @@ project-local 도구로 build한다.
 - 어떤 검증 실패도 reset, credential, SQL, schema version 승격 전에 fail closed한다.
 - `db diff` shadow DB, 공개 API, DB migration/data, production dependency는 바꾸지 않는다.
 
-상세 artifact 경계와 acceptance criteria는
-`docs/superpowers/specs/2026-07-17-q-sec-006-patched-supabase-cli-design.md`가 권위다.
+상세 artifact 경계와 acceptance criteria는 `docs/15_DEPLOYMENT_AND_OPERATIONS.md`,
+`scripts/bootstrap_patched_supabase.ps1`과 `tools/manifests/`가 권위다.
 
 ## Alternatives considered
 

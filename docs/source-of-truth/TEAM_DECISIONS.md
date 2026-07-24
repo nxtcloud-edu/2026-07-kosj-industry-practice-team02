@@ -107,17 +107,8 @@
 - 관리자: 초기 local/private 전용, public 환경에서는 서버측 gate 없이는 `/admin`과 관리자 API 비활성
 - chat 재시도: optional UUID `Idempotency-Key`를 logical 질문 단위로 유지하고 correlation request ID와 분리한다. local DB에는 HMAC request digest, 독립 opaque claim token·5분 lease와 안전 응답만 논리 TTL 24시간 동안 보관하며 원문·마스킹 질문·correlation ID는 저장하지 않는다. startup과 60초 주기 purge를 사용하고 public retention은 재승인한다.
 - local 관리자 read: immutable `00650`, chat idempotency: immutable `00660`을 사용한다. 둘 다 reserved public `00700` 앞의 local/private capability이며 public admin·remote DB·배포 승인이 아니다.
-- 저장소: private `tskwak111/Sejong_AI`에 `5e09deccc7205503df07d938b6d4a88f4d5a327e`를 ordinary
-  first push로 연결했고, PR #1 historical merge SHA는
-  `ce8a6085fb57670ca74e009ed45e3d02d784c24b`다. 현재 remote authority는 `git fetch origin` 뒤
-  `origin/main`으로 확인하며 별도 worktree의 local `main`과 같다고 전제하지 않는다. repository는 private이고
-  PR #1 SHA의 post-merge hosted policy `29782433649`와 Frontend CI `29782433682`가 통과했다.
-  `koregy`의 accepted write access·repository variable·read-only default Actions permissions도 검증됐다.
-  Task 5는 partial이며 teammate MFA/recovery와 첫 Task 7 PR-only/no-direct-main-push rehearsal이
-  남는다. Q-GIT-004=A/D-053에 따라 author/committer history·SHA는 보존한다.
-- 협업 비용·강제 경계: Q-GIT-002=A로 GitHub Free·초기 0원을 유지한다. private repository의
-  branch protection/CODEOWNERS 강제를 전제하지 않고 PR·CI·scope classification과 팀 규칙을
-  사용하며, merge 버튼이 보이는 것은 정책상 허가를 뜻하지 않는다.
+- 저장소: remote authority는 `git fetch origin` 뒤 `origin/main`으로 확인하며 별도 worktree의 local
+  `main`과 같다고 전제하지 않는다. PR·CI·scope classification과 작은 revert 가능한 commit을 사용한다.
 - Frontend 소유권: Q-OWN-001=A로 인간 Frontend 팀원이 `/`, `/chat`, `/admin`, typed API client,
   loading/empty/error/offline, 반응형·접근성, unit/E2E를 소유한다. `apps/web/**`,
   `tools/web-e2e/**`와 자신의 frontend 구현 노트만 직접 쓰며 계약·backend·DB·migration·official
@@ -126,13 +117,9 @@
   병합할 수 있다. exact self-merge allowlist는 `apps/web/src/**`, `tools/web-e2e/e2e/**`, 신규 web
   구현 노트 1개와 그 INDEX append뿐이다. 기존 note/INDEX 행·env/package/lockfile/config·공개
   계약·backend·DB·data·security·`.github`가 포함되면 사용자 검토로 승격한다.
-- Codex Cloud: Q-CLOUD-001=A로 branch와 Draft PR까지만 수행하고 사람이 병합한다. 사용자는
-  2026-07-21 GitHub UI에서 `Only select repositories / Sejong_AI`를 확인했고 secret 없는
-  `sejong-ai-cloud-docs` environment를 저장했다. Task 6은 App scope와 environment creation까지
-  완료됐고 docs-only task·Draft PR·사람 병합 evidence 전에는 partial이다. LLM API
-  key·DB DSN·context secret을 Cloud에 넣지 않으며 Docker/Supabase actual과 Upstage 합성 실호출은 local-only다.
-- 원격 의미: private GitHub는 source collaboration/off-device tracked-history이고 public Web/API,
-  remote DB, admin 공개, D-046의 `00700` 또는 public deployment 승인이 아니다.
+- 원격 의미: source remote는 public Web/API, remote DB, admin 공개, D-046의 `00700` 또는 public
+  deployment 승인이 아니다. LLM API key·DB DSN·context secret은 외부 자동화 환경에 넣지 않으며
+  Docker/Supabase actual과 Upstage 합성 실호출은 local-only다.
 - 오류 계약: 정책 응답은 HTTP 200, 승인 근거로 안전 응답을 만들 수 없는 시스템 불능만 HTTP 503 `SERVICE_UNAVAILABLE`
 - 대화 기억: 화면 기록은 현재 탭 메모리, 짧은 구조화 문맥은 15분 서명형 client-carried `context_token`; 서버 세션·raw 대화문·token 저장 금지, token은 인증이나 공식 사실 근거가 아님
 - DB role bootstrap: PostgreSQL 17 non-superuser migration runner를 유지한다. role은 처음부터 안전 속성으로 생성하고, replay에서는 runner가 허용받은 `NOLOGIN`·`NOCREATEDB`·`NOCREATEROLE`만 재적용한 뒤 `NOSUPERUSER`·`NOREPLICATION`·`NOBYPASSRLS`, membership, role setting을 catalog로 검증한다. 안전하지 않으면 중단하며 privileged 자동 downgrade/bootstrap은 도입하지 않는다.
@@ -191,13 +178,15 @@
   submit→same-writer block→different approver→`KB-WASTE-03` SUCCESS와 `/ready=200`을 확인했다.
   FastAPI JSON pre-parse와 strict UUID/date의 canonical wire mismatch는 request field validator의
   exact-string-only 변환으로 보정했고, 전역 strictness와 public admin 금지는 유지했다. final API
-  1,640, Web 48/lint/type/build/E2E 15, contracts 89, clean DB pgTAP 9/356·integration 8/8, root offline과
+  1,782(DB-only 8 skipped), Web 49/lint/type/build/E2E 18, contracts 89, clean DB pgTAP
+  9/356·integration 8/8, root offline과
   deterministic sample T-01~T-20 20/20을 PASS했다.
 - MVP-001은 local/private AI scope complete의 **Review**다. PR #6과 Frontend PR #8은 사람이
   병합했고, owner 후속은 current PR #8 UI로 PERSONAL 미저장→별도 IG→사유 확정→OFFICIAL
   후보→별도 승인자·checklist 3/3→20번째 ACTIVE→동일 질문 SUCCESS·정확한 공식 출처를 actual
   browser 1/1로 재검증했다. feedback dialog의 focus 이동·trap·Escape·focus restore도 Web
-  unit gate를 통과했다. Draft PR 검토와 manual demo는 인간 Pending이다. Upstage 합성 평가는 LLM-002의 승인된 명세와
+  unit gate를 통과했다. automated demo gate는 완료됐고 발표 당일 수동 리허설만 운영 절차로
+  남는다. Upstage 합성 평가는 LLM-002의 승인된 명세와
   실행계획으로 offline Tasks 1~6 review clean이며 key/network/model-quality actual은 0이다.
   actual call은 local human Task 7 gate 뒤다. 100-user,
   automated backup, advanced UI,
@@ -205,9 +194,5 @@
 
 ## 제출 정보
 
-- 팀명: [직접 입력]
-- 팀원·역할: [직접 입력]
-- 대표 연락처: [직접 입력]
-- 제출일: [직접 입력]
-- 최종 확인란: `팀 대표 확인`
-- 문서 버전: v2.4.0
+평가 제출 식별 정보는 저장소 루트의 보존된 입찰제안서 PDF와 `notice.md`를 따른다.
+이 source-of-truth의 문서 버전은 v2.4.0이다.

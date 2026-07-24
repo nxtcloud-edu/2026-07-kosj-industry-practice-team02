@@ -2,11 +2,10 @@
 
 세종 민원이음(시민)·이음센터(관리자)의 Next.js 웹 앱이다. 시민 첫 화면 `/`,
 시민 대화 화면 `/chat`, local/private 이음센터 `/admin`(운영 현황·실패 질문
-관리·KB 후보 승인)을 제공한다. 이 폴더의 `CLAUDE.md`와 `DESIGN.md`는 Frontend
-구현·시각 참고 문서다. 제품·보안·데이터·계약 권위는 `../../AGENTS.md`,
+관리·KB 후보 승인)을 제공한다. 평가 실행·검증은 `../../README.md`와
+`../../WEEK3_EVALUATION.md`, 제품·보안·데이터·계약 권위는
 `../../docs/00_SOURCE_OF_TRUTH.md`, `../../docs/source-of-truth/`와
-`../../contracts/`가 우선하며, 참고 문서의 역사적 제출 기준선이 현재 승인을
-대체하지 않는다.
+`../../contracts/`를 따른다.
 
 ## 현재 동작
 
@@ -51,7 +50,8 @@
 
 1. local Supabase/Postgres 기동 (저장소 루트 README의 DB 기준선 가이드 —
    patched supabase CLI + `supabase/migrations/` 권위).
-2. local API 실행: `python scripts/run_local_api.py`
+2. local API 실행:
+   `uv run --project apps/api --frozen python scripts/run_local_api.py`
    (기본 `http://127.0.0.1:8000`).
 3. `apps/web/.env.local` 설정:
 

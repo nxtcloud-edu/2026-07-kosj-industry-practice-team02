@@ -47,10 +47,11 @@
 
 DB-001 local baseline은 다음 영구 gate를 요구한다.
 
-- pgTAP 6 files / 282 assertions
+- pgTAP 9 files / 356 assertions
 - real backend integration 8/8, DB URL 부재 환경 exact 8 skips(`local DB gate only`)
-- 006-only compensation posture와 이전 5 files / 274 assertions 보존
-- full compensation `006→005→004→003→002→001`, absence proof, reset/replay,
+- latest-only compensation posture와 이전 migration assertions 보존
+- full compensation `00670→00660→00650→00600→00500→00400→00300→00200→00100`,
+  absence proof, reset/replay,
   두 번째 pgTAP/integration
 - 두 연결 사유 확인·후보·승인 concurrency와 30일 purge 경계/멱등성
 - synthetic fixture cleanup 뒤 8 table group row 합계 0
@@ -58,9 +59,9 @@ DB-001 local baseline은 다음 영구 gate를 요구한다.
 - no-seed `/health=200`, `/ready=503`
 
 과거 DB 증거만으로는 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
-2026-07-18 fresh run은 patched `-VerifyOnly` 10.033s, full disposable DB gate 90.508s, exact one
-`127.0.0.1:54322`, 두 pgTAP phase exit 0(현재 6 files/282), backend integration 8/8, 6개
-compensation/absence/reset/replay, final container 0/0을 증명했다. 이어 root gate 956.658s,
+최종 fresh run은 exact one `127.0.0.1:54322`, 두 pgTAP phase exit 0(현재 9 files/356),
+backend integration 8/8, 9개 compensation/absence/reset/replay, final container 0/0을
+증명했다. 이어 root gate와
 package·secret·protected diff, combined patched/runner tooling 73/73가 모두 PASS했다. 이 결과는
 공개 운영의 보안·용량·백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로
 사용하지 않는다.

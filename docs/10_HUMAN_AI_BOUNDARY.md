@@ -28,9 +28,8 @@
 - 문서 링크·색인·오탈자
 - 성능에 영향 없는 파일 배치
 
-AI 자율 범위에는 branch 작성, Draft PR 준비와 검증 증거 정리가 포함될 수 있지만 merge, repository
-visibility 변경, collaborator/App 권한 부여, secret 등록, 공개 배포는 포함되지 않는다. Codex Cloud는
-Q-CLOUD-001=A에 따라 스스로 merge하지 않는다.
+자동화 범위에는 branch 작성, PR 준비와 검증 증거 정리가 포함될 수 있지만 merge, repository
+visibility 변경, collaborator/App 권한 부여, secret 등록, 공개 배포는 포함되지 않는다.
 
 ## 경계가 애매할 때
 

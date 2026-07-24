@@ -58,12 +58,12 @@ remote/public 배포는 `00700` 전체 검증 전 금지한다.
 저장소 루트에서 실행한다.
 
 ```powershell
-.\.tools\uv\uv.exe sync --project apps/api --frozen
-.\.tools\uv\uv.exe run --directory apps/api --frozen pytest -q
-.\.tools\uv\uv.exe run --directory apps/api --frozen ruff format --check .
-.\.tools\uv\uv.exe run --directory apps/api --frozen ruff check .
-.\.tools\uv\uv.exe run --directory apps/api --frozen mypy src tests
-.\.tools\uv\uv.exe run --project apps/api --frozen python scripts/run_local_api.py
+uv sync --project apps/api --frozen
+uv run --directory apps/api --frozen pytest -q
+uv run --directory apps/api --frozen ruff format --check .
+uv run --directory apps/api --frozen ruff check .
+uv run --directory apps/api --frozen mypy src tests
+uv run --project apps/api --frozen python scripts/run_local_api.py
 ```
 
 API 서버는 저장소 루트의 전용 runner로만 시작한다. 이 runner는 Windows에서 psycopg 호환 event
@@ -71,14 +71,13 @@ loop를 Uvicorn보다 먼저 선택하고, 유효한 local 설정이 없으면 �
 `127.0.0.1` 단일 worker와 access log 비활성 경계를 고정한다. 다른 포트가 필요할 때만
 1024~65535 범위의 정수를 `--port 8123`처럼 전달한다.
 
-2026-07-23 final closeout은 API 1,640 PASS, DB-only 8 skip, 기존 Starlette warning 1,
-subtests 5, Ruff format/check와 strict Mypy 64 files PASS다. 첫 parallel performance 실행은
+평가 snapshot final closeout은 API 1,782 PASS, DB-only 8 skip, 기존 Starlette warning 1,
+subtests 5, Ruff format/check와 strict Mypy 87 files PASS다. 첫 parallel performance 실행은
 `2.007s`로 threshold를 넘었지만 같은 test isolated 3회 `1.07s`/`1.18s`/`1.06s`와 full isolated
 suite가 PASS했다. parallel-load artifact로 기록하며 performance code는 바꾸지 않았다. clean
 disposable API DB integration 8/8과 root `verify.ps1 -Offline` aggregate도 PASS했다.
 
 `uv.lock`은 저장소에 포함하며, 의존성 변경이 승인된 경우에만 다시 생성한다.
 
-Codex managed sandbox가 사용자 uv cache를 읽지 못하는 경우에만 Git-ignored
-`.superpowers/uv-cache`를 `UV_CACHE_DIR`로 지정한다. 일반 개발자 환경의 필수 설정은
-아니다.
+기본 uv cache를 사용할 수 없는 격리 환경에서만 별도의 ignored `UV_CACHE_DIR`를 지정한다.
+일반 개발자 환경의 필수 설정은 아니다.

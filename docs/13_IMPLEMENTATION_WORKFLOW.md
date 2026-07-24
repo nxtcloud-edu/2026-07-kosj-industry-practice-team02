@@ -51,14 +51,11 @@
 
 ## Remote collaboration — 적용된 경우
 
-- 최신 `origin/main`에서 task branch를 만들고 TASK ID 하나만 소유한다.
-- PR에 허용/금지 경로, 실제 테스트 결과, local-only pending gate와 구현 노트를 기록한다.
-- 인간 Frontend 팀원의 허용 frontend-only green PR만 자가 병합할 수 있다.
-- Codex Cloud 결과는 branch와 Draft PR까지이며 사람이 merge한다. local Codex의 merge 권한은
-  현재 task의 명시적 인간 승인 범위만 따른다.
-- GitHub Free의 green check는 기술적으로 병합을 완전히 막는 보안 경계가 아니므로 scope와 인간
-  책임을 별도로 확인한다.
-- private Git source remote와 public application/remote DB deployment를 혼동하지 않는다.
+- 최신 `origin/main`에서 작은 task branch를 만든다.
+- PR에 변경 범위, 실제 테스트 결과와 local-only pending gate를 기록한다.
+- 공유 계약·DB·공식 데이터·보안 정책 변경은 별도 owner review를 거친다.
+- green check는 변경 범위 검토를 대체하지 않으며 자동 merge를 사용하지 않는다.
+- source remote와 public application/remote DB deployment를 혼동하지 않는다.
 
 DB migration 작업은 executable `supabase/migrations/`을 timestamp 순서로 추가하고 이미
 적용·commit된 파일을 수정하지 않는다. 위험 변경마다 `database/rollbacks/`에 disposable-local

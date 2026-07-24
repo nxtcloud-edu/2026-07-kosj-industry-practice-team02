@@ -1,6 +1,6 @@
 # ADR-0022: Upstage Solar Pro 3 합성 평가와 실제 시민 경로 분리
 
-- Status: Accepted design / implementation pending plan approval
+- Status: Accepted; offline adapter/runner implemented, actual provider evaluation deferred
 - Date: 2026-07-23
 - Supersedes: ADR-0005의 DeepSeek provider/model 선택
 - Preserves: ADR-0005의 provider abstraction, 합성 전용, cap, fallback, 출처 서버 결합 원칙
@@ -8,7 +8,9 @@
 ## Context
 
 기존 ADR-0005는 DeepSeek `deepseek-v4-flash`를 local/private 합성 fixture 전용 공급자로
-선택했다. 실제 adapter와 실제 호출은 구현되지 않았고, 결정론적 시민 chat MVP만 완성됐다.
+선택했다. 결정 당시 실제 adapter와 실제 호출은 구현되지 않았고, 결정론적 시민 chat MVP만
+완성된 상태였다. 현재는 adapter·runner·strict validation의 offline gate를 완료했으며 actual
+network/model-quality 실행은 여전히 별도 local human gate 전까지 0이다.
 사용자는 보유·사용할 모델을 Upstage로 바꾸고, 실제 시민 연결 전 한국어 품질·JSON 안정성·비용을
 먼저 합성 평가하기로 Q-LLM-005=A를 확정했다.
 
@@ -53,7 +55,7 @@ payment/top-up, counter reset은 provider를 호출하지 않는다.
 ## References
 
 - Q-LLM-005=A / D-065
-- `docs/superpowers/specs/2026-07-23-upstage-solar-pro3-synthetic-evaluation-design.md`
+- `docs/21_PROMPT_AND_MODEL_POLICY.md`
 - https://console.upstage.ai/api-keys?api=chat
 - https://www.upstage.ai/pricing/api
 - https://www.upstage.ai/privacy-policy

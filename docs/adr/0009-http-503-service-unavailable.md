@@ -11,7 +11,9 @@
 
 provider timeout·empty output·schema invalid 자체는 503 조건이 아니다. ACTIVE KB와 결정론적 템플릿으로 안전한 SUCCESS/FALLBACK을 만들 수 있으면 200으로 degrade한다. 503 요청의 내부 interaction event에는 `answer_status=SYSTEM_ERROR`, `fallback_reason=NULL`을 기록할 수 있다.
 
-이 변경은 기존 200 `ChatResponse`에서 `SYSTEM_ERROR`를 제거하므로 공개 draft 계약의 호환성 파괴다. `contracts/AGENTS.md`의 major-version 규칙과 사용자의 Q-API-001 승인을 따라 API 계약을 `0.2.0-draft`에서 `1.0.0-draft`로 올린다. 아직 구현 소비자와 배포 데이터는 없다.
+이 변경은 기존 200 `ChatResponse`에서 `SYSTEM_ERROR`를 제거하므로 공개 draft 계약의 호환성 파괴다.
+`docs/12_VERSIONING_AND_RELEASES.md`의 major-version 규칙과 사용자의 Q-API-001 승인을 따라 API
+계약을 `0.2.0-draft`에서 `1.0.0-draft`로 올린다. 아직 구현 소비자와 배포 데이터는 없다.
 
 ## Consequences
 
