@@ -3,7 +3,7 @@
 - Date/Time (KST): 2026-07-24T19:39:51+09:00
 - Task ID: SNAPSHOT-REVIEW-001
 - Type: decision
-- Status: In progress — hosted CI result pending
+- Status: Done — Draft PR human merge pending
 - Author/Agent: Codex
 - Branch: submission/week3-mvp
 - Base commit: 427c5f7
@@ -134,12 +134,13 @@ revert하면 원상복구된다.
 | worktree/history secret scan | 이전 PASS | finding 0 | IMP-20260724-001 |
 | Web lint/typecheck/Vitest/build | 이전 PASS | Vitest 49/49 | IMP-20260724-001 |
 | fixture Playwright | 이전 PASS | 390/430/desktop 18/18 | IMP-20260724-001 |
+| GitHub Frontend CI | PASS | run `30087046003`, all 3 jobs success | PR #3 Checks |
 
 ### 미실행 검증과 이유
 
 - Docker/Supabase/Upstage actual은 제품·데이터 변경이 없는 PR readiness 문서/CI 보완이므로
   재실행하지 않는다.
-- hosted frontend CI는 push 뒤 결과를 확인한다.
+- 문서-only 상태 동기화 commit은 push 뒤 동일 workflow의 최종 상태를 다시 확인한다.
 
 ## 9. 보안·개인정보·접근성·성능 영향
 
@@ -194,7 +195,7 @@ PR #3의 hosted check와 Draft 상태를 확인하고, 실패하면 자동 병�
 ## 15. 자체 리뷰
 
 - [x] 요청 충족
-- [ ] 테스트/검증 — push 후 hosted CI 확인 필요
+- [x] 테스트/검증
 - [x] source-of-truth/계약/버전 동기화
 - [x] 개인정보 원문 노출 없음
 - [x] 구현 노트 INDEX 갱신
