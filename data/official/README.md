@@ -1,23 +1,22 @@
-# Official data
+# 공식 데이터 release
 
-`kb_source_registry.csv`는 20개 KB 후보의 출처 관리대장이다. DATA-001의 canonical 20
-KB·3 office·12 mapping과 `PM-LOCAL-001`의 35개 최종 disposition은
-`data/staging/data-001/0.1.0-draft.1/`에 있다.
+`kb_source_registry.csv`는 KB별 공식 출처 관리대장입니다.
 
-`releases/0.1.0-initial.1/`은 historical predecessor이고,
-`releases/0.1.0-initial.2/`는 같은 승인 projection 19 KB·3 office·10 mapping에 PostgreSQL 17
-effective membership-option union guard를 적용한 게시·검증된 immutable successor다.
-`KB-WASTE-03`과 반려 mapping 2건은 두 release 모두에서 제외됐다. 현재
-`supabase/seed.sql`은 `.2` release seed와 byte-identical하지만 `[db.seed].enabled=false`이다.
+현재 실행 기준은 `releases/0.1.0-initial.2/`입니다. 이 release는 PM 승인 결과에서
+ACTIVE KB 19개, 공식 기관 3개, 승인된 기관·서비스 매핑 10개를 고정한 immutable
+artifact입니다.
 
-지원된 actual disposable PostgreSQL 실행 3회는 baseline·identity·failure rollback·concurrency A를
-통과한 뒤 모두 concurrency B에서 멈췄다. bounded diagnostic이 확인한 exact reason은
-`CAPABILITY_WRITE_DID_NOT_BLOCK`이며 마지막 두 실행의 cleanup은 PASS했다. 따라서 PostgreSQL
-ACTIVE 19·READY·AI 승격은 주장하지 않고 `official_data=0.0.0-not-populated`를 유지한다.
-search-path-sensitive relation-name observer를 OID equality로 바꾼 `eb74ac8`은 독립 검토
-0/0/0과 commit까지 끝났지만 추가 actual 실행은 아직 승인되지 않았다. `.1`과 `.2` byte는
-수정·삭제하지 않는다. 상세
-hash·시도·cleanup·다음 gate는
-[`DATA-SEED-002-0.1.0-initial.2.md`](../../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)와
-[`DATA-SEED-002-LOCAL-VERIFICATION.md`](../../docs/test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md)를
-따른다.
+release 파일은 직접 수정하지 않습니다. 내용 변경이 필요하면 사람의 작성·별도 승인 절차를
+거쳐 새로운 버전을 생성해야 합니다.
+
+`supabase/seed.sql`은 `.2`의 `seed.sql`과 동일합니다. 자동 seed는 비활성화되어 있으므로
+로컬 DB 준비 후 다음 검증 명령을 사용합니다.
+
+```powershell
+uv run --project apps/api --frozen python scripts/verify_data_seed_db.py verify-final `
+  --release-version 0.1.0-initial.2
+```
+
+세부 데이터 계보는
+[`DATA-SEED-002-0.1.0-initial.2.md`](../../docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md)를
+참고합니다.
