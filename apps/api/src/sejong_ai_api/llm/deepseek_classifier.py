@@ -17,6 +17,11 @@ from sejong_ai_api.llm.classifier_contracts import (
 from sejong_ai_api.llm.classifier_diagnostics import ClassifierResponseStage
 from sejong_ai_api.llm.classifier_prompt import build_classifier_messages
 from sejong_ai_api.llm.contracts import TokenUsage
+from sejong_ai_api.llm.deepseek_http import (
+    DeepSeekResponseEncodingRejected,
+    DeepSeekResponseTooLarge,
+    read_deepseek_response_bytes,
+)
 from sejong_ai_api.llm.deepseek_settings import DeepSeekClassifierSettings
 from sejong_ai_api.llm.deepseek_usage import parse_deepseek_token_usage
 from sejong_ai_api.llm.limits import (
@@ -31,17 +36,12 @@ _CHAT_COMPLETIONS_PATH = "/chat/completions"
 # 4,096-token allowance is intentionally generous for provider chat framing and special tokens,
 # while leaving the approved roughly 6.5-KiB 20-topic request well inside the 16,384-token cap.
 _DEEPSEEK_CHAT_FRAMING_SPECIAL_TOKEN_MARGIN = 4096
-_DEEPSEEK_RESPONSE_MAX_BYTES = (64 * 1024) - 1
-_DEEPSEEK_RESPONSE_STREAM_CHUNK_BYTES = 4096
+
 ResponseStageObserver = Callable[[ClassifierResponseStage], None]
 
 
 class _ClassifierResponseRejected(RuntimeError):
     """Value-free control flow for a reserved provider response failure."""
-
-
-class _ClassifierResponseTooLarge(RuntimeError):
-    """Value-free control flow for a response crossing the fixed byte cap."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,15 +210,9 @@ class DeepSeekQuestionClassifier:
                     ClassifierResponseStage.HTTP_REJECTED,
                 )
                 return result, DeepSeekResponseObservation(False, None)
-            if not _content_encoding_is_identity(response):
-                result = _ClassifierResponseResult(
-                    None,
-                    ClassifierResponseStage.ENVELOPE_REJECTED,
-                )
-                return result, DeepSeekResponseObservation(True, None)
             try:
-                response_bytes = await _read_bounded_response(response)
-            except _ClassifierResponseTooLarge:
+                response_bytes = await read_deepseek_response_bytes(response)
+            except (DeepSeekResponseEncodingRejected, DeepSeekResponseTooLarge):
                 result = _ClassifierResponseResult(
                     None,
                     ClassifierResponseStage.ENVELOPE_REJECTED,
@@ -267,21 +261,6 @@ def _estimate_deepseek_request_token_upper_bound(
         len(message["role"].encode("utf-8")) + len(message["content"].encode("utf-8"))
         for message in messages
     )
-
-
-async def _read_bounded_response(response: httpx.Response) -> bytes:
-    payload = bytearray()
-    async for chunk in response.aiter_raw(chunk_size=_DEEPSEEK_RESPONSE_STREAM_CHUNK_BYTES):
-        remaining = _DEEPSEEK_RESPONSE_MAX_BYTES - len(payload)
-        if len(chunk) > remaining:
-            raise _ClassifierResponseTooLarge("PROVIDER_RESPONSE_TOO_LARGE")
-        payload.extend(chunk)
-    return bytes(payload)
-
-
-def _content_encoding_is_identity(response: httpx.Response) -> bool:
-    value = response.headers.get("Content-Encoding")
-    return value is None or value.strip(" \t").casefold() == "identity"
 
 
 def _parse_response_bytes(

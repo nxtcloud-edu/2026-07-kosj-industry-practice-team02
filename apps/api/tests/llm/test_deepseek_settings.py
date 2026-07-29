@@ -13,6 +13,11 @@ DEEPSEEK_VALID = {
     "UPSTAGE_GROUNDED_CHAT_MODE": "false",
 }
 
+DEEPSEEK_CHAT_VALID = {
+    **DEEPSEEK_VALID,
+    "LLM_PROVIDER": "deepseek",
+}
+
 
 def test_classifier_provider_selector_defaults_disabled_and_accepts_only_exact_values() -> None:
     from sejong_ai_api.llm.classifier_provider import (
@@ -375,3 +380,160 @@ class _DeepSeekKeyReadFailsMapping(dict[str, str]):
 
     def __contains__(self, key: object) -> bool:
         return True if key == "DEEPSEEK_API_KEY" else super().__contains__(key)
+
+
+def test_loads_exact_deepseek_chat_profile(tmp_path: Path) -> None:
+    from sejong_ai_api.llm.deepseek_settings import (
+        DeepSeekChatSettings,
+        load_deepseek_chat_settings,
+    )
+
+    settings = load_deepseek_chat_settings(
+        environ=DEEPSEEK_CHAT_VALID,
+        env_path=tmp_path / "missing.env",
+    )
+
+    assert isinstance(settings, DeepSeekChatSettings)
+    assert settings.provider == "deepseek"
+    assert settings.model == "deepseek-v4-flash"
+    assert settings.base_url == "https://api.deepseek.com"
+    assert settings.connect_timeout_seconds == 3.0
+    assert settings.timeout_seconds == 10.0
+    assert settings.max_retries == 0
+    assert settings.max_concurrency == 1
+    assert settings.max_input_usage_tokens == 16384
+    assert settings.max_output_tokens == 1024
+    assert settings.temperature == 0.0
+    assert settings.thinking_enabled is False
+    assert settings.classifier_attempt_cap == 80
+    assert settings.generator_attempt_cap == 100
+    assert settings.combined_attempt_cap == 160
+    assert str(settings.session_cost_cap_usd) == "0.20"
+    assert DEEPSEEK_CHAT_VALID["DEEPSEEK_API_KEY"] not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("key", "invalid_value"),
+    (
+        ("LLM_PROVIDER", "DeepSeek"),
+        ("DEEPSEEK_MODEL", "deepseek-v3"),
+        ("DEEPSEEK_BASE_URL", "https://example.invalid"),
+        ("UPSTAGE_SYNTHETIC_EVALUATION_MODE", "true"),
+        ("UPSTAGE_CLASSIFIER_MODE", "true"),
+        ("UPSTAGE_GROUNDED_CHAT_MODE", "true"),
+    ),
+)
+def test_deepseek_chat_settings_reject_non_exact_profiles(
+    tmp_path: Path,
+    key: str,
+    invalid_value: str,
+) -> None:
+    from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
+
+    assert (
+        load_deepseek_chat_settings(
+            environ={**DEEPSEEK_CHAT_VALID, key: invalid_value},
+            env_path=tmp_path / "missing.env",
+        )
+        is None
+    )
+
+
+def test_deepseek_chat_settings_reject_missing_key() -> None:
+    from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
+
+    profile = {
+        key: value for key, value in DEEPSEEK_CHAT_VALID.items() if key != "DEEPSEEK_API_KEY"
+    }
+
+    assert load_deepseek_chat_settings(environ=profile, env_path=Path("missing")) is None
+
+
+@pytest.mark.parametrize("invalid_api_key", ("", 'quoted-key"', "unsafe\nkey", "비밀키"))
+def test_deepseek_chat_settings_reject_missing_or_unsafe_key(
+    tmp_path: Path,
+    invalid_api_key: str,
+) -> None:
+    from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
+
+    assert (
+        load_deepseek_chat_settings(
+            environ={**DEEPSEEK_CHAT_VALID, "DEEPSEEK_API_KEY": invalid_api_key},
+            env_path=tmp_path / "missing.env",
+        )
+        is None
+    )
+
+
+def test_deepseek_chat_dotenv_rejects_duplicate_key(tmp_path: Path) -> None:
+    from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            (
+                *(f"{key}={value}" for key, value in DEEPSEEK_CHAT_VALID.items()),
+                "DEEPSEEK_API_KEY=second-test-key",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_deepseek_chat_settings(environ={}, env_path=env_path) is None
+
+
+def test_deepseek_chat_loader_does_not_use_legacy_upstage_model_authority(
+    tmp_path: Path,
+) -> None:
+    from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
+
+    settings = load_deepseek_chat_settings(
+        environ={
+            **DEEPSEEK_CHAT_VALID,
+            "LLM_MODEL": "legacy-not-deepseek-authority",
+            "LLM_BASE_URL": "https://legacy.invalid/v1",
+        },
+        env_path=tmp_path / "missing.env",
+    )
+
+    assert settings is not None
+    assert settings.model == "deepseek-v4-flash"
+    assert settings.base_url == "https://api.deepseek.com"
+
+
+def test_deepseek_classifier_accepts_validated_deepseek_answer_capability() -> None:
+    from sejong_ai_api.llm.deepseek_settings import (
+        load_deepseek_chat_settings,
+        load_deepseek_classifier_settings,
+    )
+
+    chat_settings = load_deepseek_chat_settings(
+        environ=DEEPSEEK_CHAT_VALID,
+        env_path=Path("missing"),
+    )
+    classifier_settings = load_deepseek_classifier_settings(
+        environ=DEEPSEEK_CHAT_VALID,
+        env_path=Path("missing"),
+        deepseek_chat_settings=chat_settings,
+    )
+
+    assert chat_settings is not None
+    assert classifier_settings is not None
+
+
+def test_deepseek_classifier_rejects_forged_deepseek_answer_capability() -> None:
+    from sejong_ai_api.llm.deepseek_settings import (
+        DeepSeekChatSettings,
+        load_deepseek_classifier_settings,
+    )
+
+    assert (
+        load_deepseek_classifier_settings(
+            environ=DEEPSEEK_CHAT_VALID,
+            env_path=Path("missing"),
+            deepseek_chat_settings=DeepSeekChatSettings(
+                api_key="forged-deepseek-key-not-a-real-secret"
+            ),
+        )
+        is None
+    )

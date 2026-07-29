@@ -28,6 +28,7 @@ from .test_service import (
     FakeIdempotencyRepository,
     FakeQuestionClassifier,
     FakeRepository,
+    insufficient_grounding_setup,
     knowledge_record,
     office_record,
     service,
@@ -194,24 +195,43 @@ async def test_generator_hard_wall_returns_complete_official_template(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "question",
+    ("question", "expected_status", "expected_reason"),
     [
-        "김철수",
-        "신고하고 싶어요.",
-        "침대 프레임 배출 수수료를 알려줘.",
-        "내 자동차세 체납액을 조회해줘.",
-        "전입신고를 안 하면 법적으로 처벌받는지 판단해줘.",
-        "오늘 세종시 날씨를 알려줘.",
+        ("김철수", "FALLBACK", "PRIVACY_UNRESOLVED"),
+        ("신고하고 싶어요.", "FOLLOWUP", None),
+        (
+            "침대 프레임 배출 수수료를 알려줘.",
+            "FALLBACK",
+            "INSUFFICIENT_GROUNDING",
+        ),
+        ("내 자동차세 체납액을 조회해줘.", "FALLBACK", "PERSONAL_LOOKUP"),
+        (
+            "전입신고를 안 하면 법적으로 처벌받는지 판단해줘.",
+            "FALLBACK",
+            "LEGAL_JUDGMENT",
+        ),
+        ("오늘 세종시 날씨를 알려줘.", "FALLBACK", "OUT_OF_SCOPE"),
     ],
 )
-async def test_non_grounded_and_policy_paths_never_call_generator(question: str) -> None:
+async def test_non_grounded_and_policy_paths_never_call_generator(
+    question: str,
+    expected_status: str,
+    expected_reason: str | None,
+) -> None:
     generator = CountingGenerator()
+    repository = FakeRepository()
+    classifier = None
+    if expected_reason == "INSUFFICIENT_GROUNDING":
+        repository, classifier = insufficient_grounding_setup()
 
-    response = await service(FakeRepository(), answer_generator=generator).answer(
-        ChatRequest(question=question)
-    )
+    response = await service(
+        repository,
+        answer_generator=generator,
+        question_classifier=classifier,
+    ).answer(ChatRequest(question=question))
 
-    assert response.answer_status in {"FOLLOWUP", "FALLBACK"}
+    assert response.answer_status == expected_status
+    assert (response.fallback.reason if response.fallback is not None else None) == expected_reason
     assert generator.requests == []
 
 
@@ -343,6 +363,14 @@ async def test_generator_exception_is_discarded_without_persistence_or_response_
         GeneratedChatDraft(
             summary="승인된 안내 요약입니다.",
             procedure_step_ids=["STEP-99"],
+            required_document_ids=[],
+            processing_time_id=None,
+            fee_id=None,
+            department_id="DEPT-01",
+        ),
+        GeneratedChatDraft(
+            summary="승인된 안내 요약입니다.",
+            procedure_step_ids=["STEP-01", "STEP-01"],
             required_document_ids=[],
             processing_time_id=None,
             fee_id=None,

@@ -1,4 +1,4 @@
-"""Fail-closed immutable settings for the local DeepSeek classifier lane."""
+"""Fail-closed immutable settings for local DeepSeek provider lanes."""
 
 import os
 from collections.abc import Mapping
@@ -27,6 +27,7 @@ DEEPSEEK_MAX_CONCURRENCY = 1
 DEEPSEEK_MAX_INPUT_CHARS = 1024
 DEEPSEEK_MAX_INPUT_USAGE_TOKENS = 16384
 DEEPSEEK_MAX_OUTPUT_TOKENS = 128
+DEEPSEEK_CHAT_MAX_OUTPUT_TOKENS = 1024
 DEEPSEEK_TEMPERATURE = 0.0
 DEEPSEEK_THINKING_ENABLED = False
 DEEPSEEK_CLASSIFIER_ATTEMPT_CAP = 80
@@ -34,6 +35,7 @@ DEEPSEEK_GENERATOR_ATTEMPT_CAP = 100
 DEEPSEEK_COMBINED_ATTEMPT_CAP = 160
 
 _KEY_NAME = "DEEPSEEK_API_KEY"
+_DEEPSEEK_CHAT_CAPABILITY = object()
 _EXACT_NON_SECRET_VALUES = {
     "CLASSIFIER_PROVIDER": DEEPSEEK_PROVIDER,
     "DEEPSEEK_MODEL": DEEPSEEK_MODEL,
@@ -41,8 +43,23 @@ _EXACT_NON_SECRET_VALUES = {
     "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
     "UPSTAGE_CLASSIFIER_MODE": "false",
 }
+_CHAT_EXACT_NON_SECRET_VALUES = {
+    "LLM_PROVIDER": DEEPSEEK_PROVIDER,
+    "DEEPSEEK_MODEL": DEEPSEEK_MODEL,
+    "DEEPSEEK_BASE_URL": DEEPSEEK_BASE_URL,
+    "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
+    "UPSTAGE_CLASSIFIER_MODE": "false",
+    "UPSTAGE_GROUNDED_CHAT_MODE": "false",
+}
 _UPSTAGE_GROUNDED_CHAT_MODE_KEY = "UPSTAGE_GROUNDED_CHAT_MODE"
-_SETTINGS_KEYS = frozenset((*_EXACT_NON_SECRET_VALUES, _KEY_NAME, _UPSTAGE_GROUNDED_CHAT_MODE_KEY))
+_SETTINGS_KEYS = frozenset(
+    (
+        *_EXACT_NON_SECRET_VALUES,
+        *_CHAT_EXACT_NON_SECRET_VALUES,
+        _KEY_NAME,
+        _UPSTAGE_GROUNDED_CHAT_MODE_KEY,
+    )
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +92,49 @@ class DeepSeekClassifierSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class DeepSeekChatSettings:
+    """Validated immutable capability for local DeepSeek grounded answers."""
+
+    api_key: str = field(repr=False)
+    provider: str = field(default=DEEPSEEK_PROVIDER, init=False)
+    model: str = field(default=DEEPSEEK_MODEL, init=False)
+    base_url: str = field(default=DEEPSEEK_BASE_URL, init=False)
+    connect_timeout_seconds: float = field(
+        default=DEEPSEEK_CONNECT_TIMEOUT_SECONDS,
+        init=False,
+    )
+    write_timeout_seconds: float = field(
+        default=DEEPSEEK_CONNECT_TIMEOUT_SECONDS,
+        init=False,
+    )
+    pool_timeout_seconds: float = field(
+        default=DEEPSEEK_CONNECT_TIMEOUT_SECONDS,
+        init=False,
+    )
+    read_timeout_seconds: float = field(default=DEEPSEEK_TIMEOUT_SECONDS, init=False)
+    timeout_seconds: float = field(default=DEEPSEEK_TIMEOUT_SECONDS, init=False)
+    max_retries: int = field(default=DEEPSEEK_MAX_RETRIES, init=False)
+    max_concurrency: int = field(default=DEEPSEEK_MAX_CONCURRENCY, init=False)
+    max_input_usage_tokens: int = field(default=DEEPSEEK_MAX_INPUT_USAGE_TOKENS, init=False)
+    max_output_tokens: int = field(default=DEEPSEEK_CHAT_MAX_OUTPUT_TOKENS, init=False)
+    temperature: float = field(default=DEEPSEEK_TEMPERATURE, init=False)
+    thinking_enabled: bool = field(default=DEEPSEEK_THINKING_ENABLED, init=False)
+    classifier_attempt_cap: int = field(default=DEEPSEEK_CLASSIFIER_ATTEMPT_CAP, init=False)
+    generator_attempt_cap: int = field(default=DEEPSEEK_GENERATOR_ATTEMPT_CAP, init=False)
+    combined_attempt_cap: int = field(default=DEEPSEEK_COMBINED_ATTEMPT_CAP, init=False)
+    session_cost_cap_usd: Decimal = field(
+        default=LOCAL_INTERACTIVE_COST_CAP_USD,
+        init=False,
+    )
+    _validation_capability: object | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class _DotenvNonSecretProfile:
     values: Mapping[str, str]
     api_key_assignments: int
@@ -85,6 +145,7 @@ def load_deepseek_classifier_settings(
     environ: Mapping[str, str] | None = None,
     env_path: Path | None = None,
     upstage_chat_settings: UpstageChatSettings | None = None,
+    deepseek_chat_settings: DeepSeekChatSettings | None = None,
 ) -> DeepSeekClassifierSettings | None:
     """Return settings only for the exact approved DeepSeek classifier profile."""
 
@@ -100,8 +161,57 @@ def load_deepseek_classifier_settings(
         environ=process_values,
         env_path=selected_env_path,
         upstage_chat_settings=upstage_chat_settings,
+        deepseek_chat_settings=deepseek_chat_settings,
     )
     return DeepSeekClassifierSettings(api_key=api_key) if api_key is not None else None
+
+
+def load_deepseek_chat_settings(
+    *,
+    environ: Mapping[str, str] | None = None,
+    env_path: Path | None = None,
+) -> DeepSeekChatSettings | None:
+    """Return a capability only for the exact local DeepSeek answer profile."""
+
+    process_values = os.environ if environ is None else environ
+    selected_env_path = env_path if env_path is not None else Path(__file__).parents[3] / ".env"
+    dotenv_profile = _scan_dotenv_non_secret(selected_env_path)
+    if dotenv_profile is None:
+        return None
+
+    non_secret_values = {
+        key: _merged_value(key, process_values, dotenv_profile.values)
+        for key in _CHAT_EXACT_NON_SECRET_VALUES
+    }
+    if any(value is None or not _is_safe_value(value) for value in non_secret_values.values()):
+        return None
+    if any(
+        non_secret_values[key] != expected
+        for key, expected in _CHAT_EXACT_NON_SECRET_VALUES.items()
+    ):
+        return None
+
+    api_key = _read_validated_api_key(
+        environ=process_values,
+        env_path=selected_env_path,
+        dotenv_profile=dotenv_profile,
+    )
+    return _validated_deepseek_chat_settings(api_key=api_key) if api_key is not None else None
+
+
+def is_validated_deepseek_chat_settings(value: object) -> bool:
+    """Return whether the exact chat loader created this capability."""
+
+    return (
+        type(value) is DeepSeekChatSettings
+        and value._validation_capability is _DEEPSEEK_CHAT_CAPABILITY
+    )
+
+
+def _validated_deepseek_chat_settings(*, api_key: str) -> DeepSeekChatSettings:
+    settings = DeepSeekChatSettings(api_key=api_key)
+    object.__setattr__(settings, "_validation_capability", _DEEPSEEK_CHAT_CAPABILITY)
+    return settings
 
 
 def _load_profile_api_key(
@@ -109,6 +219,7 @@ def _load_profile_api_key(
     environ: Mapping[str, str],
     env_path: Path,
     upstage_chat_settings: UpstageChatSettings | None,
+    deepseek_chat_settings: DeepSeekChatSettings | None,
 ) -> str | None:
     dotenv_profile = _scan_dotenv_non_secret(env_path)
     if dotenv_profile is None:
@@ -127,9 +238,23 @@ def _load_profile_api_key(
         environ=environ,
         dotenv_values=dotenv_profile.values,
         upstage_chat_settings=upstage_chat_settings,
+        deepseek_chat_settings=deepseek_chat_settings,
     ):
         return None
 
+    return _read_validated_api_key(
+        environ=environ,
+        env_path=env_path,
+        dotenv_profile=dotenv_profile,
+    )
+
+
+def _read_validated_api_key(
+    *,
+    environ: Mapping[str, str],
+    env_path: Path,
+    dotenv_profile: _DotenvNonSecretProfile,
+) -> str | None:
     api_key: str | None
     if _KEY_NAME in environ:
         api_key = environ[_KEY_NAME]
@@ -147,15 +272,26 @@ def _has_valid_grounded_chat_capability(
     environ: Mapping[str, str],
     dotenv_values: Mapping[str, str],
     upstage_chat_settings: UpstageChatSettings | None,
+    deepseek_chat_settings: DeepSeekChatSettings | None,
 ) -> bool:
+    if upstage_chat_settings is not None and deepseek_chat_settings is not None:
+        return False
+
     grounded_mode = _merged_value(
         _UPSTAGE_GROUNDED_CHAT_MODE_KEY,
         environ,
         dotenv_values,
     )
-    if grounded_mode == "false":
-        return upstage_chat_settings is None
-    return grounded_mode == "true" and is_validated_upstage_chat_settings(upstage_chat_settings)
+    if upstage_chat_settings is not None:
+        return grounded_mode == "true" and is_validated_upstage_chat_settings(upstage_chat_settings)
+    if deepseek_chat_settings is not None:
+        answer_provider = _merged_value("LLM_PROVIDER", environ, dotenv_values)
+        return (
+            grounded_mode == "false"
+            and answer_provider == DEEPSEEK_PROVIDER
+            and is_validated_deepseek_chat_settings(deepseek_chat_settings)
+        )
+    return grounded_mode == "false"
 
 
 def _merged_value(

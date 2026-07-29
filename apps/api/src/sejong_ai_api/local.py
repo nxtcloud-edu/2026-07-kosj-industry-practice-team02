@@ -45,12 +45,14 @@ if TYPE_CHECKING:
     from sejong_ai_api.chat.classification import SafeQuestion
     from sejong_ai_api.chat.service import QuestionClassifierPort
     from sejong_ai_api.chat.topic_catalog import TopicCatalog
+    from sejong_ai_api.llm.chat_runtime import GroundedChatRuntime
     from sejong_ai_api.llm.classifier_contracts import ClassifierDecision
+    from sejong_ai_api.llm.deepseek_settings import DeepSeekChatSettings
     from sejong_ai_api.llm.limits import ProviderAttemptLedger
     from sejong_ai_api.llm.settings import UpstageChatSettings
-    from sejong_ai_api.llm.upstage_chat import GroundedChatRuntime
 
-    type GroundedChatRuntimeFactory = Callable[[UpstageChatSettings], GroundedChatRuntime]
+    type GroundedChatSettings = UpstageChatSettings | DeepSeekChatSettings
+    type GroundedChatRuntimeFactory = Callable[[GroundedChatSettings], GroundedChatRuntime]
     type ClassifierClientFactory = Callable[[], httpx.AsyncClient]
     type ClassifierDelegateFactory = Callable[[httpx.AsyncClient], QuestionClassifierPort]
 
@@ -258,17 +260,17 @@ def create_local_app(
         pool = selected_pool_factory(settings.database_url)
         repository = selected_repository_factory(pool)
         probe = RepositoryReadinessProbe(repository)
-        upstage_chat_settings = _load_optional_upstage_chat_settings(
+        grounded_chat_settings = _load_optional_grounded_chat_settings(
             environ=environ,
             env_path=env_path,
         )
         classifier_runtime = _compose_optional_classifier_runtime(
             environ=environ,
             env_path=env_path,
-            upstage_chat_settings=upstage_chat_settings,
+            grounded_chat_settings=grounded_chat_settings,
         )
         grounded_chat_runtime = _compose_optional_grounded_chat_runtime(
-            chat_settings=upstage_chat_settings,
+            chat_settings=grounded_chat_settings,
             runtime_factory=grounded_chat_runtime_factory,
             ledger=(classifier_runtime.ledger if classifier_runtime is not None else None),
         )
@@ -353,11 +355,11 @@ def create_local_app(
 
 def _compose_optional_grounded_chat_runtime(
     *,
-    chat_settings: UpstageChatSettings | None,
+    chat_settings: GroundedChatSettings | None,
     runtime_factory: GroundedChatRuntimeFactory | None,
     ledger: ProviderAttemptLedger | None,
 ) -> GroundedChatRuntime | None:
-    """Lazily compose the exact local profile without making an outbound request."""
+    """Compose exactly one selected local answer provider without outbound I/O."""
 
     try:
         if chat_settings is None:
@@ -366,24 +368,39 @@ def _compose_optional_grounded_chat_runtime(
             if ledger is not None:
                 return None
             return runtime_factory(chat_settings)
-        from sejong_ai_api.llm.upstage_chat import build_upstage_chat_runtime
 
-        return build_upstage_chat_runtime(chat_settings, ledger=ledger)
+        from sejong_ai_api.llm.deepseek_settings import DeepSeekChatSettings
+        from sejong_ai_api.llm.settings import UpstageChatSettings
+
+        if type(chat_settings) is DeepSeekChatSettings:
+            from sejong_ai_api.llm.deepseek_chat import build_deepseek_chat_runtime
+
+            return build_deepseek_chat_runtime(chat_settings, ledger=ledger)
+        if type(chat_settings) is UpstageChatSettings:
+            from sejong_ai_api.llm.upstage_chat import build_upstage_chat_runtime
+
+            return build_upstage_chat_runtime(chat_settings, ledger=ledger)
+        return None
     except Exception:
         return None
 
 
-def _load_optional_upstage_chat_settings(
+def _load_optional_grounded_chat_settings(
     *,
     environ: Mapping[str, str] | None,
     env_path: Path | None,
-) -> UpstageChatSettings | None:
-    """Load the optional validated generator capability exactly once per app composition."""
+) -> GroundedChatSettings | None:
+    """Load one validated answer capability exactly once per app composition."""
 
     try:
+        from sejong_ai_api.llm.deepseek_settings import load_deepseek_chat_settings
         from sejong_ai_api.llm.settings import load_upstage_chat_settings
 
-        return load_upstage_chat_settings(environ=environ, env_path=env_path)
+        upstage_settings = load_upstage_chat_settings(environ=environ, env_path=env_path)
+        deepseek_settings = load_deepseek_chat_settings(environ=environ, env_path=env_path)
+        if upstage_settings is not None and deepseek_settings is not None:
+            return None
+        return deepseek_settings if deepseek_settings is not None else upstage_settings
     except Exception:
         return None
 
@@ -392,7 +409,7 @@ def _compose_optional_classifier_runtime(
     *,
     environ: Mapping[str, str] | None,
     env_path: Path | None,
-    upstage_chat_settings: UpstageChatSettings | None,
+    grounded_chat_settings: GroundedChatSettings | None,
 ) -> _ClassifierRuntime | None:
     """Lazily compose the exact classifier profile without an eager request."""
 
@@ -407,6 +424,7 @@ def _compose_optional_classifier_runtime(
         from sejong_ai_api.llm.settings import (
             UPSTAGE_MAX_INPUT_TOKENS,
             UPSTAGE_MAX_OUTPUT_TOKENS,
+            UpstageChatSettings,
         )
 
         provider = load_classifier_provider(
@@ -478,6 +496,7 @@ def _compose_optional_classifier_runtime(
             create_deepseek_classifier_client,
         )
         from sejong_ai_api.llm.deepseek_settings import (
+            DeepSeekChatSettings,
             load_deepseek_classifier_settings,
         )
         from sejong_ai_api.llm.deepseek_usage import estimate_deepseek_cost_usd
@@ -485,10 +504,38 @@ def _compose_optional_classifier_runtime(
         deepseek_settings = load_deepseek_classifier_settings(
             environ=environ,
             env_path=env_path,
-            upstage_chat_settings=upstage_chat_settings,
+            upstage_chat_settings=(
+                grounded_chat_settings
+                if type(grounded_chat_settings) is UpstageChatSettings
+                else None
+            ),
+            deepseek_chat_settings=(
+                grounded_chat_settings
+                if type(grounded_chat_settings) is DeepSeekChatSettings
+                else None
+            ),
         )
         if deepseek_settings is None:
             return None
+
+        generator_worst_case_usd = estimate_cost_usd(
+            TokenUsage(
+                input_tokens=UPSTAGE_MAX_INPUT_TOKENS,
+                cached_input_tokens=0,
+                output_tokens=UPSTAGE_MAX_OUTPUT_TOKENS,
+            )
+        )
+        generator_cost_estimator = estimate_cost_usd
+        if type(grounded_chat_settings) is DeepSeekChatSettings:
+            generator_worst_case_usd = estimate_deepseek_cost_usd(
+                TokenUsage(
+                    input_tokens=grounded_chat_settings.max_input_usage_tokens,
+                    cached_input_tokens=0,
+                    output_tokens=grounded_chat_settings.max_output_tokens,
+                )
+            )
+            generator_cost_estimator = estimate_deepseek_cost_usd
+
         ledger = ProviderAttemptLedger(
             classifier_cap=deepseek_settings.classifier_attempt_cap,
             generator_cap=deepseek_settings.generator_attempt_cap,
@@ -501,15 +548,9 @@ def _compose_optional_classifier_runtime(
                     output_tokens=deepseek_settings.max_output_tokens,
                 )
             ),
-            generator_worst_case_usd=estimate_cost_usd(
-                TokenUsage(
-                    input_tokens=UPSTAGE_MAX_INPUT_TOKENS,
-                    cached_input_tokens=0,
-                    output_tokens=UPSTAGE_MAX_OUTPUT_TOKENS,
-                )
-            ),
+            generator_worst_case_usd=generator_worst_case_usd,
             classifier_cost_estimator=estimate_deepseek_cost_usd,
-            generator_cost_estimator=estimate_cost_usd,
+            generator_cost_estimator=generator_cost_estimator,
         )
 
         def deepseek_client_factory() -> httpx.AsyncClient:

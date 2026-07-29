@@ -1,6 +1,5 @@
 """One-attempt Upstage transport boundary for grounded citizen chat."""
 
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -8,7 +7,6 @@ from pydantic import ValidationError
 
 from sejong_ai_api.llm.chat_contracts import (
     GeneratedChatDraft,
-    GroundedAnswerGenerator,
     GroundedChatOutcomeCode,
     GroundedChatRequest,
     GroundedChatResult,
@@ -17,6 +15,7 @@ from sejong_ai_api.llm.chat_prompt import (
     build_grounded_chat_messages,
     estimate_grounded_input_upper_bound,
 )
+from sejong_ai_api.llm.chat_runtime import GroundedChatRuntime
 from sejong_ai_api.llm.contracts import TokenUsage
 from sejong_ai_api.llm.limits import (
     AttemptBudget,
@@ -140,15 +139,6 @@ class UpstageChatGenerator:
             # Provider/transport failures cross this boundary only as a content-free enum.
             # Cancellation and other BaseException subclasses intentionally remain unhandled.
             return _failure(GroundedChatOutcomeCode.TRANSPORT)
-
-
-@dataclass(frozen=True, slots=True)
-class GroundedChatRuntime:
-    generator: GroundedAnswerGenerator
-    client: httpx.AsyncClient
-
-    async def aclose(self) -> None:
-        await self.client.aclose()
 
 
 def build_upstage_chat_runtime(
