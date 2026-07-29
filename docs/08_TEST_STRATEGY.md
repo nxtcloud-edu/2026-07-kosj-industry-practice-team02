@@ -21,6 +21,10 @@
 - retention expiration
 - context token sign/verify, exact 900-second TTL, closed claims, current request precedence
 - Upstage synthetic evaluator outbound cap/retry/concurrency state machine
+- grounded 시민 draft의 fact ID complete/order/allowlist, summary PII·URL·번호·날짜·금액·
+  unsupported-token fail-closed materialization
+- default import/startup/health/readiness의 provider import·use·request 0, disabled `T-01`~`T-20`
+  20/20 skip 0, prompt/log/exception/idempotency payload의 question·provider body·key 0
 
 ### Contract
 
@@ -41,17 +45,22 @@
   unresolved 결과의 provider 호출 0건과 질문-text row 생성 0건을 함께 검증
 - provider timeout/empty/schema invalid의 200 안전 대체 또는 503 분기
 - Upstage exact `solar-pro3`/max 1024, hidden retry off, concurrency 1, run cap 28/29/30 경계
+- local citizen exact 8초·1 attempt·retry 0, supported+masked+ACTIVE/OFFICIAL+grounded 호출 1,
+  그 외 정책·근거 경로 호출 0, idempotency 동시/완료 replay 호출 1 이하
+- `GENERATED`의 공식 fact/source/office byte equality와 모든 provider/schema/fact 오류의
+  완전한 `TEMPLATE` 전환
+- same-key concurrent/replay/commit-uncertainty의 provider call 1 이하, idempotency final safe
+  response만 허용 및 recursive forbidden-content rejection
 - tampered/expired/unknown context token의 silent new-conversation 처리와 token/secret DB·로그 0건
 - Supabase empty DB reset/replay와 명시적 보상 rollback/replay
 - office mapping
 
 DB-001 local baseline은 다음 영구 gate를 요구한다.
 
-- pgTAP 9 files / 356 assertions
+- pgTAP 6 files / 282 assertions
 - real backend integration 8/8, DB URL 부재 환경 exact 8 skips(`local DB gate only`)
-- latest-only compensation posture와 이전 migration assertions 보존
-- full compensation `00670→00660→00650→00600→00500→00400→00300→00200→00100`,
-  absence proof, reset/replay,
+- 006-only compensation posture와 이전 5 files / 274 assertions 보존
+- full compensation `006→005→004→003→002→001`, absence proof, reset/replay,
   두 번째 pgTAP/integration
 - 두 연결 사유 확인·후보·승인 concurrency와 30일 purge 경계/멱등성
 - synthetic fixture cleanup 뒤 8 table group row 합계 0
@@ -59,12 +68,12 @@ DB-001 local baseline은 다음 영구 gate를 요구한다.
 - no-seed `/health=200`, `/ready=503`
 
 과거 DB 증거만으로는 disposable local/private PostgreSQL 기준선 완료를 주장하지 않는다.
-최종 fresh run은 exact one `127.0.0.1:54322`, 두 pgTAP phase exit 0(현재 9 files/356),
-backend integration 8/8, 9개 compensation/absence/reset/replay, final container 0/0을
-증명했다. 이어 root gate와
+2026-07-18 fresh run은 patched `-VerifyOnly` 10.033s, full disposable DB gate 90.508s, exact one
+`127.0.0.1:54322`, 두 pgTAP phase exit 0(현재 6 files/282), backend integration 8/8, 6개
+compensation/absence/reset/replay, final container 0/0을 증명했다. 이어 root gate 956.658s,
 package·secret·protected diff, combined patched/runner tooling 73/73가 모두 PASS했다. 이 결과는
-공개 운영의 보안·용량·백업·TLS·rate limit을 증명하지 않고 A-021 해결 전 public release 근거로
-사용하지 않는다.
+공개 운영의 용량·백업·TLS·rate limit을 증명하지 않는다. A-021/00700 local hardening은
+별도 11-file pgTAP/rollback/replay로 해결했지만 configured remote smoke를 대체하지 않는다.
 
 `73f300b` remediation은 focused descendant cleanup 1/1(15.700s), full runner 50/50(318.556s),
 patched tooling 24/24(262.368s), AST error 0·secret·protected gate와 독립 review 0/0/0을 통과했다.
@@ -73,6 +82,9 @@ patched tooling 24/24(262.368s), AST error 0·secret·protected gate와 독립 r
 ### E2E
 
 - 정상 답변과 출처
+- `GENERATED|TEMPLATE` 텍스트 배지와 두 mode 모두 동일한 공식 출처
+- 두 mode의 source title·HTTPS URL·확인일이 불완전하면 answer card를 fail-closed error로 전환,
+  label/disclosure/source link를 렌더하지 않음
 - 모호 질문 FOLLOWUP
 - PERSONAL_LOOKUP
 - 지역·기관 카드
@@ -105,6 +117,14 @@ patched tooling 24/24(262.368s), AST error 0·secret·protected gate와 독립 r
 - 실패 로그의 안전한 요약
 - 화면 검증 이미지/경로
 - 미실행 항목과 이유
+
+LLM-003의 task-scoped 실제 결과는
+[`LLM-003-GROUNDED-LIVE-CHAT.md`](test-reports/LLM-003-GROUNDED-LIVE-CHAT.md)에만 기록한다.
+최종 provider-disabled root offline gate는 2026-07-26에 PASS했다(637.7초, stdout 2006 bytes,
+stderr 0; root/data/seed/Web/API/contracts/secrets/bundle/package/diff 포함). 별도 D-075 local
+actual도 PII-free fixture 10건 GENERATED 4/TEMPLATE 6, 출처 10/10, 공식 mismatch 0,
+typed write-boundary forbidden-value 위반 0, outbound 10으로 PASS했다.
+두 증거는 분리 기록하며 local actual을 public/remote provider 승인으로 간주하지 않는다.
 
 ## 금지
 

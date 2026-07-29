@@ -91,8 +91,7 @@ applied migration 불변 원칙과 재현 가능한 lineage를 깨므로 거부�
 
 ## Consequences
 
-- 이 ADR 구현 시 executable lineage는 forward/compensation 각각 6단계가 됐다. 후속 local
-  admin·idempotency·public ID migration을 포함한 현재 기준선은 각각 9단계다.
+- executable lineage는 forward/compensation 각각 6단계가 된다.
 - private trigger function 하나가 제한된 definer surface에 추가되므로 catalog·ACL·동시성
   회귀가 완료 gate가 된다.
 - 공개 HTTP 계약, table/data/seed, dependency, retention, 비용, remote/public 배포,

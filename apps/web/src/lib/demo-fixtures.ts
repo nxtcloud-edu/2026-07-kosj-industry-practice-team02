@@ -112,6 +112,7 @@ function moveInAnswer(region: Region | null): ChatResponse {
   return {
     request_id: uuid(),
     answer_status: "SUCCESS",
+    answer_mode: "TEMPLATE",
     intent: "MOVE_IN_RESIDENT_REGISTRATION",
     confidence: 0.96,
     summary:
@@ -149,6 +150,7 @@ function bulkyWasteAnswer(region: Region): ChatResponse {
   return {
     request_id: uuid(),
     answer_status: "SUCCESS",
+    answer_mode: "TEMPLATE",
     intent: "BULKY_WASTE",
     confidence: 0.93,
     summary: `${region}은 인터넷 또는 주민센터에서 배출 신고 후 받은 스티커(납부필증)를 부착하여, 신고 시 지정한 배출일 전날 저녁 지정 장소에 내놓으면 됩니다.`,
@@ -225,11 +227,33 @@ function moveFollowup(): ChatResponse {
   };
 }
 
+/** 증명서의 generic 질문은 서버 순서 그대로 세 가지 선택지로 좁힌다. */
+function certificateFollowup(): ChatResponse {
+  return {
+    request_id: uuid(),
+    answer_status: "FOLLOWUP",
+    intent: "CERTIFICATE_ISSUANCE",
+    confidence: null,
+    summary: null,
+    procedure_steps: [],
+    required_documents: [],
+    processing_time: null,
+    fee: null,
+    department: null,
+    sources: [],
+    followup_options: ["주민등록등본 발급", "주민등록초본 발급", "등본과 초본의 차이"],
+    fallback: null,
+    office: null,
+    context_token: CONTEXT_TOKEN,
+  };
+}
+
 /** 데모 #3 파생: 증명서 발급 SUCCESS (선택지 완주용) */
 function certificateAnswer(region: Region | null): ChatResponse {
   return {
     request_id: uuid(),
     answer_status: "SUCCESS",
+    answer_mode: "TEMPLATE",
     intent: "CERTIFICATE_ISSUANCE",
     confidence: 0.95,
     summary:
@@ -454,9 +478,11 @@ export function routeDemoAnswer(request: ChatRequest): ChatResponse {
   }
 
   // 데모 #3 파생 - 증명서
-  if (q.includes("등본") || q.includes("증명서")) {
+  if (q.includes("등본") || q.includes("초본")) {
     return certificateAnswer(region);
   }
+
+  if (q.includes("증명서")) return certificateFollowup();
 
   // 데모 #4 - PERSONAL_LOOKUP은 완전 미저장 (Q-MVP-002/D-059: 행 미생성)
   if (q.includes("자동차세") || q.includes("재산세") || q.includes("지방세")) {
@@ -566,9 +592,29 @@ function createAdminFixture(): AdminTransport {
       );
       return { id, status: "REASON_CONFIRMED" };
     },
+    async listCivicScopeGaps() {
+      await delay(ADMIN_DELAY_MS);
+      return { items: [], total: 0 };
+    },
+    async reviewCivicScopeGap() {
+      await delay(ADMIN_DELAY_MS);
+      throw new Error("fixture has no official civic scope-gap review queue");
+    },
     async listCandidates() {
       await delay(ADMIN_DELAY_MS);
       return { items: kbCandidates.map((c) => ({ ...c })), total: kbCandidates.length };
+    },
+    async getFeedbackSummary() {
+      await delay(ADMIN_DELAY_MS);
+      return {
+        total: 0,
+        satisfied: 0,
+        dissatisfied: 0,
+        satisfaction_rate: null,
+        category_counts: [],
+        reason_counts: [],
+        recent: [],
+      };
     },
     async createCandidate(actor, request) {
       requireOperator(actor);

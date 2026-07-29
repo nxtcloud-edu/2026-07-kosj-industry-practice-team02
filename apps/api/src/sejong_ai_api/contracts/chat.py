@@ -31,6 +31,7 @@ type FallbackReason = Literal[
     "INSUFFICIENT_GROUNDING",
     "PERSONAL_LOOKUP",
     "LEGAL_JUDGMENT",
+    "CIVIC_SCOPE_GAP",
     "OUT_OF_SCOPE",
     "PRIVACY_UNRESOLVED",
 ]
@@ -40,6 +41,7 @@ type SupportedIntent = Literal[
     "BULKY_WASTE",
     "LOCAL_TAX_GENERAL",
 ]
+type AnswerMode = Literal["GENERATED", "TEMPLATE"]
 type Region = Literal["아름동", "도담동", "조치원읍"]
 type ContextToken = Annotated[str, Field(min_length=1, max_length=2048)]
 type HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
@@ -113,6 +115,7 @@ class ChatResponseBase(StrictPublicModel):
 
 class SuccessResponse(ChatResponseBase):
     answer_status: Literal["SUCCESS"]
+    answer_mode: AnswerMode
     intent: SupportedIntent
     sources: Annotated[list[Source], Field(min_length=1)]
     office: Office | None
@@ -158,8 +161,8 @@ class FallbackResponse(ChatResponseBase):
         if self.fallback.candidate_eligible is not expected_candidate_eligible:
             raise ValueError("fallback candidate eligibility does not match its reason")
 
-        if reason == "OUT_OF_SCOPE" and self.intent != "OUT_OF_SCOPE":
-            raise ValueError("OUT_OF_SCOPE fallback requires OUT_OF_SCOPE intent")
+        if reason in {"CIVIC_SCOPE_GAP", "OUT_OF_SCOPE"} and self.intent != "OUT_OF_SCOPE":
+            raise ValueError("scope fallback requires OUT_OF_SCOPE intent")
         if reason == "INSUFFICIENT_GROUNDING" and self.intent not in {
             "MOVE_IN_RESIDENT_REGISTRATION",
             "CERTIFICATE_ISSUANCE",
@@ -196,6 +199,7 @@ CHAT_RESPONSE_ADAPTER: TypeAdapter[ChatResponse] = TypeAdapter(ChatResponse)
 
 __all__ = [
     "CHAT_RESPONSE_ADAPTER",
+    "AnswerMode",
     "ChatRequest",
     "ChatResponse",
     "FallbackResponse",
@@ -204,5 +208,6 @@ __all__ = [
     "Office",
     "ServiceUnavailableEnvelope",
     "Source",
+    "SupportedIntent",
     "SuccessResponse",
 ]

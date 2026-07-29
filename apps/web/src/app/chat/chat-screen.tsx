@@ -28,6 +28,11 @@ import {
   createChatTransport,
 } from "@/lib/chat-api";
 import { createFixtureChatTransport } from "@/lib/demo-fixtures";
+import {
+  createFeedbackTransport,
+  createFixtureFeedbackTransport,
+  type FeedbackTransport,
+} from "@/lib/feedback-api";
 import { consumePendingQuestion } from "@/lib/pending-question";
 import { isRegion, type Region } from "@/lib/labels";
 import { ChatHeader, NoticeBanner } from "@/components/citizen/PageChrome";
@@ -37,6 +42,11 @@ import FollowupCard from "@/components/citizen/FollowupCard";
 import FallbackCard from "@/components/citizen/FallbackCard";
 import LoadingSkeleton from "@/components/citizen/LoadingSkeleton";
 import PrivacyNotice from "@/components/citizen/PrivacyNotice";
+import RegionSelect from "@/components/citizen/RegionSelect";
+
+const INITIAL_WAITING_MESSAGE = "공식 자료에서 확인하고 있어요.";
+const SEARCHING_WAITING_MESSAGE = "관련 민원과 공식 출처를 찾고 있어요.";
+const VERIFYING_WAITING_MESSAGE = "답변 근거를 다시 확인하고 있어요.";
 
 interface UserMessage {
   role: "user";
@@ -62,21 +72,15 @@ type FailedDraft = Readonly<{
 
 export type ChatTransportMode = "fixture" | "actual";
 
-/**
- * 로딩 스켈레톤 최소 노출 시간(멘토 QA). 응답이 이보다 빨라도 스켈레톤을
- * 300ms 채운 뒤 카드로 전환해 깜빡임을 없앤다. 응답이 더 느리면 추가 지연은
- * 없다(도착 즉시 전환). 논리 상태(loading·inFlight·context_token)는 지연하지
- * 않고 화면 카드 노출만 미룬다 - 연속 질문/토큰 승계에 영향 없음.
- */
-const MIN_SKELETON_MS = 300;
-
 export default function ChatScreen({
   transportMode = "actual",
   transport: providedTransport,
+  feedbackTransport: providedFeedbackTransport,
   createIdempotencyKey = () => crypto.randomUUID(),
 }: {
   transportMode?: ChatTransportMode;
   transport?: ChatTransport;
+  feedbackTransport?: FeedbackTransport;
   createIdempotencyKey?: () => string;
 }) {
   const [transport] = useState<ChatTransport>(
@@ -86,41 +90,29 @@ export default function ChatScreen({
         ? createChatTransport()
         : createFixtureChatTransport()),
   );
+  const [feedbackTransport] = useState<FeedbackTransport>(
+    () =>
+      providedFeedbackTransport ??
+      (transportMode === "actual"
+        ? createFeedbackTransport()
+        : createFixtureFeedbackTransport()),
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  // 스켈레톤 최소 노출(300ms) 잔여 구간 - loading이 내려가도 이 동안 스켈레톤 유지
-  const [skeletonHold, setSkeletonHold] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+  const [waitingMessage, setWaitingMessage] = useState(
+    INITIAL_WAITING_MESSAGE,
+  );
   const [failedDraft, setFailedDraft] = useState<FailedDraft | null>(null);
   const idRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const askedInitial = useRef(false);
   const contextTokenRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
-  // 최소 노출을 채우려고 미뤄둔 카드 노출 작업과 그 타이머
-  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingCommitRef = useRef<(() => void) | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const nextId = () => `msg-${++idRef.current}`;
-
-  /** 미뤄둔 카드 노출을 즉시 확정한다(타이머 만료 또는 다음 질문 시작 시) */
-  const flushPendingCommit = useCallback(() => {
-    if (commitTimerRef.current !== null) {
-      clearTimeout(commitTimerRef.current);
-      commitTimerRef.current = null;
-    }
-    const commit = pendingCommitRef.current;
-    pendingCommitRef.current = null;
-    commit?.();
-  }, []);
-
-  // 언마운트 시 미완 타이머만 정리(확정 setState는 하지 않는다)
-  useEffect(
-    () => () => {
-      if (commitTimerRef.current !== null) clearTimeout(commitTimerRef.current);
-    },
-    [],
-  );
 
   const sendRequest = useCallback(
     async (
@@ -130,13 +122,10 @@ export default function ChatScreen({
       { appendUserMessage = true }: { appendUserMessage?: boolean } = {},
     ) => {
       if (inFlightRef.current) return;
-      // 새 질문 시작 전, 미뤄둔 이전 카드를 먼저 확정 노출한다
-      flushPendingCommit();
       inFlightRef.current = true;
+      setWaitingMessage(INITIAL_WAITING_MESSAGE);
       setLoading(true);
-      setSkeletonHold(false);
       setFailedDraft(null);
-      const skeletonShownAt = Date.now();
       if (appendUserMessage) {
         setMessages((prev) => [
           ...prev,
@@ -144,57 +133,40 @@ export default function ChatScreen({
         ]);
       }
 
-      // 화면에 카드/오류를 반영하는 작업 - 최소 노출을 채운 뒤 실행한다
-      let applyResult: () => void = () => {};
       try {
         const response = await transport.send(request, options);
-        // context_token은 다음 질문에 필요하므로 즉시 갱신한다(노출만 지연).
-        // FALLBACK은 계약상 항상 null - 탭 메모리 초기화 (§9)
+        // The network operation is complete; enable the newly rendered
+        // response controls before React paints them.
+        inFlightRef.current = false;
+        // FALLBACK은 계약상 context_token이 항상 null - 탭 메모리 갱신 (§9)
         contextTokenRef.current =
           response.answer_status === "FALLBACK" ? null : response.context_token;
-        applyResult = () => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "bot",
-              id: response.request_id,
-              response,
-              question: request.question,
-              region: request.selected_region ?? null,
-            },
-          ]);
-          setInput((current) =>
-            current.trim() === request.question ? "" : current,
-          );
-        };
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            id: response.request_id,
+            response,
+            question: request.question,
+            region: request.selected_region ?? null,
+          },
+        ]);
+        setInput((current) =>
+          current.trim() === request.question ? "" : current,
+        );
       } catch (error) {
-        applyResult = () => {
-          setFailedDraft({
-            idempotencyKey: options.idempotencyKey,
-            request,
-            displayText,
-            retryable:
-              !(error instanceof ChatTransportError) || error.retryable,
-          });
-        };
+        setFailedDraft({
+          idempotencyKey: options.idempotencyKey,
+          request,
+          displayText,
+          retryable: !(error instanceof ChatTransportError) || error.retryable,
+        });
       } finally {
-        // 논리 상태는 즉시 해제(버튼·연속 질문 차단 없음), 카드 노출만 최소 노출까지 지연
         inFlightRef.current = false;
         setLoading(false);
-        const remaining = MIN_SKELETON_MS - (Date.now() - skeletonShownAt);
-        if (remaining > 0) {
-          setSkeletonHold(true);
-          pendingCommitRef.current = () => {
-            setSkeletonHold(false);
-            applyResult();
-          };
-          commitTimerRef.current = setTimeout(flushPendingCommit, remaining);
-        } else {
-          applyResult();
-        }
       }
     },
-    [flushPendingCommit, transport],
+    [transport],
   );
 
   /** 새 논리 질문 - Idempotency-Key를 새로 발급한다 */
@@ -212,7 +184,8 @@ export default function ChatScreen({
       void sendRequest(
         {
           question: trimmed,
-          selected_region: opts?.region ?? null,
+          selected_region:
+            opts?.region !== undefined ? opts.region : selectedRegion,
           simple_language: true,
           context_token:
             opts?.contextToken !== undefined
@@ -223,7 +196,7 @@ export default function ChatScreen({
         { idempotencyKey: createIdempotencyKey() },
       );
     },
-    [createIdempotencyKey, sendRequest],
+    [createIdempotencyKey, selectedRegion, sendRequest],
   );
 
   // 첫 화면에서 넘어온 질문 자동 전송 - 탭 메모리 1회성 소비 (태성 리뷰 1)
@@ -242,7 +215,23 @@ export default function ChatScreen({
     bottomRef.current?.scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
     });
-  }, [messages, loading, skeletonHold]);
+  }, [messages, loading]);
+
+  useEffect(() => {
+    if (!loading) return;
+    const searchingTimer = window.setTimeout(
+      () => setWaitingMessage(SEARCHING_WAITING_MESSAGE),
+      2_000,
+    );
+    const verifyingTimer = window.setTimeout(
+      () => setWaitingMessage(VERIFYING_WAITING_MESSAGE),
+      6_000,
+    );
+    return () => {
+      window.clearTimeout(searchingTimer);
+      window.clearTimeout(verifyingTimer);
+    };
+  }, [loading]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,6 +245,7 @@ export default function ChatScreen({
   const selectFollowup = (message: BotMessage, option: string) => {
     const token = message.response.context_token;
     if (isRegion(option)) {
+      setSelectedRegion(option);
       ask(message.question, {
         region: option,
         displayText: `${option}에 살아요`,
@@ -266,13 +256,27 @@ export default function ChatScreen({
     ask(option, { contextToken: token });
   };
 
+  const startNewConversation = () => {
+    if (inFlightRef.current) return;
+    setMessages([]);
+    setInput("");
+    setFailedDraft(null);
+    setWaitingMessage(INITIAL_WAITING_MESSAGE);
+    contextTokenRef.current = null;
+    idRef.current = 0;
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       {/* fixture 모드 상시 배너 - 공지 배너와 구분되는 앰버 톤 (태성 리뷰 2) */}
       {transportMode === "fixture" && <FixtureNotice />}
       {/* 공지 배너 - 시민 전 페이지 최상단 (대화 화면 개정 1) */}
       <NoticeBanner />
-      <ChatHeader />
+      <ChatHeader
+        onNewConversation={startNewConversation}
+        disabled={loading}
+      />
 
       {/* 대화 컬럼 - 데스크톱 680px 고정 (§4-2). 새 답변을 스크린리더에 알린다 */}
       <main
@@ -280,7 +284,7 @@ export default function ChatScreen({
         aria-live="polite"
         className="mx-auto flex w-full max-w-[680px] flex-1 flex-col gap-4 px-5 py-5"
       >
-        {messages.length === 0 && !loading && !skeletonHold && (
+        {messages.length === 0 && !loading && (
           <p className="py-8 text-center text-body text-text-sub">
             궁금한 민원을 입력해 주세요.
           </p>
@@ -296,18 +300,25 @@ export default function ChatScreen({
             <BotResponse
               key={msg.id}
               message={msg}
+              feedbackTransport={feedbackTransport}
               disabled={loading || index !== messages.length - 1}
               onSelectFollowup={selectFollowup}
               onRegionChange={(message, dong) =>
-                ask(message.question, {
-                  region: dong,
-                  displayText: `${dong} 기준으로 다시 알려주세요`,
-                })
+                {
+                  setSelectedRegion(dong);
+                  ask(message.question, {
+                    region: dong,
+                    displayText: `${dong} 기준으로 다시 알려주세요`,
+                  });
+                }
+              }
+              onRelatedQuestion={(message, question) =>
+                ask(question, { contextToken: message.response.context_token })
               }
             />
           ),
         )}
-        {(loading || skeletonHold) && <LoadingSkeleton />}
+        {loading && <LoadingSkeleton message={waitingMessage} />}
 
         {/* 네트워크·서버 오류 - 재시도가 주인공, 뱃지만 danger 톤 (§6-4).
             재시도는 같은 Idempotency-Key를 재사용한다 (계약). */}
@@ -373,12 +384,16 @@ export default function ChatScreen({
           className="mx-auto w-full max-w-[680px] px-5 pt-1 pb-3"
         >
           {/* 개인정보 경고 한 줄 - 입력 위 (§8) */}
+          <div className="pt-2">
+            <RegionSelect current={selectedRegion} onSelect={setSelectedRegion} />
+          </div>
           <PrivacyNotice />
           <div className="mt-2 flex gap-2">
             <label htmlFor="chat-input" className="sr-only">
               질문 입력
             </label>
             <input
+              ref={inputRef}
               id="chat-input"
               type="text"
               value={input}
@@ -407,11 +422,15 @@ function BotResponse({
   disabled,
   onSelectFollowup,
   onRegionChange,
+  onRelatedQuestion,
+  feedbackTransport,
 }: {
   message: BotMessage;
   disabled: boolean;
   onSelectFollowup: (message: BotMessage, option: string) => void;
   onRegionChange: (message: BotMessage, dong: Region) => void;
+  onRelatedQuestion: (message: BotMessage, question: string) => void;
+  feedbackTransport: FeedbackTransport;
 }) {
   const { response } = message;
 
@@ -421,20 +440,32 @@ function BotResponse({
         <AnswerCard
           response={response}
           region={message.region}
-          // region 유무와 무관하게 전달 - region 미지정 대형폐기물 답변의
-          // "우리 동 기준으로 보기" 진입점도 이 콜백으로 재질의한다 (SFR-004)
-          onRegionChange={(dong) => onRegionChange(message, dong)}
+          onRegionChange={
+            message.region ? (dong) => onRegionChange(message, dong) : undefined
+          }
+          onRelatedQuestion={(question) => onRelatedQuestion(message, question)}
+          relatedQuestionsDisabled={disabled}
+          feedbackTransport={feedbackTransport}
         />
       );
     case "FOLLOWUP":
       return (
         <FollowupCard
+          intent={response.intent}
           options={response.followup_options}
           disabled={disabled}
+          requestId={response.request_id}
+          feedbackTransport={feedbackTransport}
           onSelect={(option) => onSelectFollowup(message, option)}
         />
       );
     case "FALLBACK":
-      return <FallbackCard fallback={response.fallback} />;
+      return (
+        <FallbackCard
+          fallback={response.fallback}
+          requestId={response.request_id}
+          feedbackTransport={feedbackTransport}
+        />
+      );
   }
 }

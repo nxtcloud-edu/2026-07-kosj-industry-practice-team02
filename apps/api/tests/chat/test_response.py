@@ -1,15 +1,26 @@
+import inspect
+from dataclasses import fields
 from datetime import date
 from typing import Literal
 from uuid import UUID
 
 import pytest
 
+import sejong_ai_api.chat.followup as followup_module
+from sejong_ai_api.chat.followup import (
+    FollowupPlan,
+    _domain_followup_plan,
+    _followup_plan_from_catalog,
+)
 from sejong_ai_api.chat.response import (
     build_fallback_response,
     build_followup_response,
     build_success_response,
 )
+from sejong_ai_api.chat.topic_catalog import TopicCoverage, build_topic_catalog
+from sejong_ai_api.contracts.chat import SuccessResponse
 from sejong_ai_api.db.models import Intent, KnowledgeRecord, OfficeRecord, Region
+from sejong_ai_api.llm.classifier_contracts import PendingSlot
 
 REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
 
@@ -64,6 +75,7 @@ def test_success_uses_only_the_selected_kb_and_office_metadata() -> None:
     )
 
     assert response.answer_status == "SUCCESS"
+    assert response.answer_mode == "TEMPLATE"
     assert response.intent == record.category.value
     assert response.summary == record.answer_summary
     assert response.procedure_steps == list(record.procedure_steps)
@@ -85,10 +97,35 @@ def test_success_uses_only_the_selected_kb_and_office_metadata() -> None:
     assert response.fallback is None
     assert response.context_token == "signed-token"
     dumped_office = response.model_dump(mode="json")["office"]
-    assert dumped_office is not None
-    assert dumped_office["id"] == office.public_id
-    assert dumped_office["source_title"] == office.source_title
-    assert dumped_office["source_url"] == office.source_url
+    assert dumped_office == {
+        "id": "OFFICE-AREUM",
+        "region": "아름동",
+        "office_name": "아름동 행정복지센터",
+        "address": "세종특별자치시 보듬3로 114",
+        "phone": "044-301-6300",
+        "opening_hours": "평일 09:00~18:00",
+        "map_url": "https://example.invalid/map/areum",
+        "source_title": "세종특별자치시 아름동 안내",
+        "source_url": "https://example.invalid/office/areum",
+        "last_verified_at": "2026-07-20",
+    }
+
+
+def test_success_answer_mode_accepts_only_the_approved_modes() -> None:
+    response = build_success_response(
+        request_id=REQUEST_ID,
+        record=knowledge_record(),
+        office=None,
+        confidence=0.99,
+        context_token=None,
+    )
+
+    assert (
+        SuccessResponse.model_validate(
+            {**response.model_dump(), "answer_mode": "GENERATED"}
+        ).answer_mode
+        == "GENERATED"
+    )
 
 
 def test_success_omits_unavailable_optional_high_risk_fields() -> None:
@@ -110,9 +147,8 @@ def test_success_omits_unavailable_optional_high_risk_fields() -> None:
 def test_followup_is_value_free_and_requires_server_options() -> None:
     response = build_followup_response(
         request_id=REQUEST_ID,
-        intent=Intent.UNKNOWN,
         confidence=None,
-        option_ids=("intent.move-in", "intent.certificate"),
+        plan=_domain_followup_plan(),
         context_token="signed-followup",
     )
 
@@ -120,7 +156,12 @@ def test_followup_is_value_free_and_requires_server_options() -> None:
     assert response.intent == "UNKNOWN"
     assert response.summary is None
     assert response.sources == []
-    assert response.followup_options == ["전입·주민등록", "증명서 발급"]
+    assert response.followup_options == [
+        "전입·주민등록",
+        "증명서 발급",
+        "대형폐기물",
+        "지방세 일반 안내",
+    ]
     assert response.context_token == "signed-followup"
 
 
@@ -130,6 +171,7 @@ def test_followup_is_value_free_and_requires_server_options() -> None:
         ("INSUFFICIENT_GROUNDING", Intent.BULKY_WASTE, True),
         ("PERSONAL_LOOKUP", Intent.UNKNOWN, False),
         ("LEGAL_JUDGMENT", Intent.UNKNOWN, False),
+        ("CIVIC_SCOPE_GAP", Intent.OUT_OF_SCOPE, False),
         ("OUT_OF_SCOPE", Intent.OUT_OF_SCOPE, False),
         ("PRIVACY_UNRESOLVED", Intent.UNKNOWN, False),
     ],
@@ -139,6 +181,7 @@ def test_fallback_matrix_is_closed_and_never_returns_context_or_sources(
         "INSUFFICIENT_GROUNDING",
         "PERSONAL_LOOKUP",
         "LEGAL_JUDGMENT",
+        "CIVIC_SCOPE_GAP",
         "OUT_OF_SCOPE",
         "PRIVACY_UNRESOLVED",
     ],
@@ -163,18 +206,144 @@ def test_fallback_matrix_is_closed_and_never_returns_context_or_sources(
     assert response.fallback.title
     assert response.fallback.message
     assert response.fallback.next_actions
+    if reason == "INSUFFICIENT_GROUNDING":
+        assert (
+            response.fallback.message
+            == "지원 분야이지만 현재 승인된 공식 자료에서 직접 답할 근거를 찾지 못했어요."
+        )
 
 
-def test_response_builders_reject_unknown_server_values() -> None:
-    with pytest.raises(ValueError, match="^FOLLOWUP_OPTION_INVALID$"):
+def test_certificate_followup_uses_exact_three_approved_short_labels() -> None:
+    records = tuple(
+        knowledge_record(
+            public_id=topic_id,
+            category=Intent.CERTIFICATE_ISSUANCE,
+            service_name=service_name,
+        )
+        for topic_id, service_name in (
+            ("KB-CERT-01", "등본과 초본의 차이"),
+            ("KB-CERT-02", "주민등록등본 발급 방법"),
+            ("KB-CERT-03", "주민등록초본 발급 방법"),
+        )
+    )
+    catalog = build_topic_catalog(
+        records,
+        tuple(
+            TopicCoverage(
+                topic_id=record.public_id,
+                intent=record.category,
+                coverage_id=f"COVERAGE-{index}",
+                coverage_label="증명서 발급 테스트 경계",
+            )
+            for index, record in enumerate(records, start=1)
+        ),
+    )
+    plan = _followup_plan_from_catalog(
+        Intent.CERTIFICATE_ISSUANCE,
+        PendingSlot.CERTIFICATE_KIND,
+        catalog,
+    )
+    assert plan is not None
+
+    response = build_followup_response(
+        request_id=REQUEST_ID,
+        confidence=None,
+        plan=plan,
+        context_token="signed-certificate-followup",
+    )
+
+    assert response.followup_options == [
+        "주민등록등본 발급",
+        "주민등록초본 발급",
+        "등본과 초본의 차이",
+    ]
+
+
+def test_followup_module_exposes_only_fixed_or_catalog_plan_factories() -> None:
+    plan_factories = {
+        name: tuple(inspect.signature(value).parameters)
+        for name, value in vars(followup_module).items()
+        if inspect.isfunction(value)
+        and value.__module__ == followup_module.__name__
+        and str(inspect.signature(value).return_annotation)
+        in {"FollowupPlan", "FollowupPlan | None"}
+    }
+
+    assert plan_factories == {
+        "_domain_followup_plan": (),
+        "_followup_plan_from_catalog": ("intent", "pending_slot", "catalog"),
+    }
+    retained_raw_materializers = [
+        value.__name__
+        for factory in (
+            followup_module._domain_followup_plan,
+            followup_module._followup_plan_from_catalog,
+        )
+        for cell in (factory.__closure__ or ())
+        if inspect.isfunction(value := cell.cell_contents)
+        and "options" in inspect.signature(value).parameters
+    ]
+    assert retained_raw_materializers == []
+
+
+def test_followup_plan_stores_only_typed_sources_not_options_or_provenance() -> None:
+    plan = _domain_followup_plan()
+
+    assert tuple(field.name for field in fields(plan)) == (
+        "intent",
+        "pending_slot",
+        "_catalog",
+    )
+    assert "options" not in FollowupPlan.__slots__
+    assert "_provenance" not in FollowupPlan.__slots__
+    assert not hasattr(plan, "_provenance")
+
+
+def test_legitimate_followup_plan_options_cannot_be_replaced() -> None:
+    plan = _domain_followup_plan()
+
+    with pytest.raises((AttributeError, TypeError)):
+        plan.options = ("provider supplied arbitrary option",)  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        object.__setattr__(
+            plan,
+            "options",
+            ("provider supplied arbitrary option",),
+        )
+
+    response = build_followup_response(
+        request_id=REQUEST_ID,
+        confidence=None,
+        plan=plan,
+        context_token=None,
+    )
+    assert response.followup_options == [
+        "전입·주민등록",
+        "증명서 발급",
+        "대형폐기물",
+        "지방세 일반 안내",
+    ]
+
+
+def test_followup_builder_rejects_a_forged_caller_owned_plan() -> None:
+    forged_plan = object.__new__(FollowupPlan)
+    object.__setattr__(forged_plan, "intent", Intent.UNKNOWN)
+    object.__setattr__(forged_plan, "pending_slot", PendingSlot.DOMAIN)
+    object.__setattr__(forged_plan, "_catalog", object())
+
+    with pytest.raises(
+        ValueError,
+        match="^SERVER_OWNED_FOLLOWUP_PLAN_REQUIRED$",
+    ):
         build_followup_response(
             request_id=REQUEST_ID,
-            intent=Intent.UNKNOWN,
             confidence=None,
-            option_ids=("citizen-controlled-value",),  # type: ignore[arg-type]
+            plan=forged_plan,
             context_token=None,
         )
 
+
+def test_response_builders_reject_unknown_server_values() -> None:
     with pytest.raises(ValueError, match="^FALLBACK_REASON_INVALID$"):
         build_fallback_response(
             request_id=REQUEST_ID,

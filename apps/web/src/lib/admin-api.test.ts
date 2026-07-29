@@ -22,12 +22,25 @@ function json(value: unknown, status = 200) {
 }
 
 describe("actual local/private admin API transport", () => {
-  it("maps all seven contract operations to same-origin requests with fixed actor headers", async () => {
+  it("maps all ten contract operations to same-origin requests with fixed actor headers", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(json({ items: [], total: 0 }))
       .mockResolvedValueOnce(json({ item: { id: ID } }))
       .mockResolvedValueOnce(json({ id: ID, status: "REASON_CONFIRMED" }))
       .mockResolvedValueOnce(json({ items: [], total: 0 }))
+      .mockResolvedValueOnce(json({ id: ID, status: "PLANNED" }))
+      .mockResolvedValueOnce(json({ items: [], total: 0 }))
+      .mockResolvedValueOnce(
+        json({
+          total: 0,
+          satisfied: 0,
+          dissatisfied: 0,
+          satisfaction_rate: null,
+          category_counts: [],
+          reason_counts: [],
+          recent: [],
+        }),
+      )
       .mockResolvedValueOnce(json({ id: CANDIDATE_ID, status: "DRAFTED" }, 201))
       .mockResolvedValueOnce(json({ id: CANDIDATE_ID, status: "PENDING_APPROVAL" }))
       .mockResolvedValueOnce(json({ id: CANDIDATE_ID, status: "REJECTED" }));
@@ -52,7 +65,14 @@ describe("actual local/private admin API transport", () => {
     await transport.listFailedQuestions(ACTOR);
     await transport.getFailedQuestion(ACTOR, ID);
     await transport.confirmReason(ACTOR, ID, { reason: "INSUFFICIENT_GROUNDING" });
+    await transport.listCivicScopeGaps(ACTOR, "NEW");
+    await transport.reviewCivicScopeGap(
+      { actorId: "PM-LOCAL-001", role: "APPROVER" },
+      ID,
+      { decision: "PLANNED", review_comment: "다음 범위로 검토" },
+    );
     await transport.listCandidates(ACTOR);
+    await transport.getFeedbackSummary(ACTOR);
     await transport.createCandidate(ACTOR, candidate);
     await transport.submitCandidate(ACTOR, CANDIDATE_ID);
     await transport.reviewCandidate(
@@ -65,28 +85,45 @@ describe("actual local/private admin API transport", () => {
       ["/api/v1/admin/failed-questions", "GET"],
       [`/api/v1/admin/failed-questions/${ID}`, "GET"],
       [`/api/v1/admin/failed-questions/${ID}/reason`, "PATCH"],
+      ["/api/v1/admin/civic-scope-gaps?status=NEW", "GET"],
+      [`/api/v1/admin/civic-scope-gaps/${ID}/review`, "PATCH"],
       ["/api/v1/admin/kb-candidates", "GET"],
+      ["/api/v1/admin/feedback-summary", "GET"],
       ["/api/v1/admin/kb-candidates", "POST"],
       [`/api/v1/admin/kb-candidates/${CANDIDATE_ID}/submit`, "POST"],
       [`/api/v1/admin/kb-candidates/${CANDIDATE_ID}/review`, "PATCH"],
     ]);
 
-    for (const [, init] of fetcher.mock.calls.slice(0, 6)) {
+    for (const [, init] of fetcher.mock.calls.slice(0, 4)) {
       expect(init?.headers).toMatchObject({
         "X-Demo-Actor-Id": "OPERATOR-LOCAL-001",
         "X-Demo-Role": "OPERATOR",
       });
       expect(init?.headers).not.toHaveProperty("X-Request-Id");
     }
-    expect(fetcher.mock.calls[6][1]?.headers).toMatchObject({
+    expect(fetcher.mock.calls[4][1]?.headers).toMatchObject({
+      "X-Demo-Actor-Id": "PM-LOCAL-001",
+      "X-Demo-Role": "APPROVER",
+    });
+    for (const [, init] of fetcher.mock.calls.slice(5, 9)) {
+      expect(init?.headers).toMatchObject({
+        "X-Demo-Actor-Id": "OPERATOR-LOCAL-001",
+        "X-Demo-Role": "OPERATOR",
+      });
+    }
+    expect(fetcher.mock.calls[9][1]?.headers).toMatchObject({
       "X-Demo-Actor-Id": "PM-LOCAL-001",
       "X-Demo-Role": "APPROVER",
     });
     expect(fetcher.mock.calls[2][1]?.body).toBe(JSON.stringify({
       reason: "INSUFFICIENT_GROUNDING",
     }));
-    expect(fetcher.mock.calls[4][1]?.body).toBe(JSON.stringify(candidate));
-    expect(fetcher.mock.calls[6][1]?.body).toBe(JSON.stringify({
+    expect(fetcher.mock.calls[4][1]?.body).toBe(JSON.stringify({
+      decision: "PLANNED",
+      review_comment: "다음 범위로 검토",
+    }));
+    expect(fetcher.mock.calls[7][1]?.body).toBe(JSON.stringify(candidate));
+    expect(fetcher.mock.calls[9][1]?.body).toBe(JSON.stringify({
       decision: "REJECTED",
       review_comment: "근거 보완 필요",
     }));
@@ -104,5 +141,30 @@ describe("actual local/private admin API transport", () => {
     expect(error).toMatchObject({ status: 503, retryable: true });
     expect((error as Error).message).not.toContain("raw question");
     expect((error as Error).message).not.toContain("database");
+  });
+
+  it("keeps only an allowlisted stable error code", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      json(
+        {
+          error: {
+            code: "ADMIN_INVALID_STATE",
+            message: "raw internal workflow detail",
+          },
+        },
+        409,
+      ),
+    );
+
+    const error = await createAdminTransport(fetcher)
+      .submitCandidate(ACTOR, CANDIDATE_ID)
+      .catch((value: unknown) => value);
+
+    expect(error).toMatchObject({
+      status: 409,
+      retryable: false,
+      code: "ADMIN_INVALID_STATE",
+    });
+    expect((error as Error).message).not.toContain("workflow");
   });
 });

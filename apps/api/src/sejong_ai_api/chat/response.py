@@ -7,40 +7,32 @@ from uuid import UUID
 
 from pydantic import AnyUrl
 
+from sejong_ai_api.chat.followup import FollowupPlan
 from sejong_ai_api.contracts.chat import (
+    AnswerMode,
     Fallback,
     FallbackResponse,
     FollowupResponse,
-    Office,
     Source,
     SuccessResponse,
 )
 from sejong_ai_api.db.models import Intent, KnowledgeRecord, OfficeRecord
+from sejong_ai_api.llm.chat_contracts import MaterializedChatAnswer
+from sejong_ai_api.office.response import build_public_office
 
-type FollowupOptionId = Literal[
-    "intent.move-in",
-    "intent.certificate",
-    "intent.bulky-waste",
-    "intent.local-tax",
-]
 type PublicFallbackReason = Literal[
     "INSUFFICIENT_GROUNDING",
     "PERSONAL_LOOKUP",
     "LEGAL_JUDGMENT",
+    "CIVIC_SCOPE_GAP",
     "OUT_OF_SCOPE",
     "PRIVACY_UNRESOLVED",
 ]
 
-_FOLLOWUP_LABELS: dict[FollowupOptionId, str] = {
-    "intent.move-in": "전입·주민등록",
-    "intent.certificate": "증명서 발급",
-    "intent.bulky-waste": "대형폐기물",
-    "intent.local-tax": "지방세 일반 안내",
-}
 _FALLBACK_COPY: dict[PublicFallbackReason, tuple[str, str, tuple[str, ...]]] = {
     "INSUFFICIENT_GROUNDING": (
         "확인된 근거가 부족해요",
-        "현재 승인된 공식 자료만으로는 정확히 안내하기 어려워요.",
+        "지원 분야이지만 현재 승인된 공식 자료에서 직접 답할 근거를 찾지 못했어요.",
         ("질문의 대상과 목적을 조금 더 구체적으로 적어 주세요.",),
     ),
     "PERSONAL_LOOKUP": (
@@ -52,6 +44,11 @@ _FALLBACK_COPY: dict[PublicFallbackReason, tuple[str, str, tuple[str, ...]]] = {
         "법적 판단은 제공하지 않아요",
         "개별 사실관계에 따른 법적 결론이나 책임을 단정할 수 없어요.",
         ("일반 절차 안내가 필요하면 법적 판단 없이 다시 질문해 주세요.",),
+    ),
+    "CIVIC_SCOPE_GAP": (
+        "아직 지원하지 않는 민원이에요",
+        "행정 민원으로 보이지만 현재 승인된 안내 범위에는 없어요.",
+        ("지원 범위 확대 검토 대상으로 안전하게 접수할 수 있어요.",),
     ),
     "OUT_OF_SCOPE": (
         "지원 범위 밖의 질문이에요",
@@ -73,23 +70,47 @@ def build_success_response(
     office: OfficeRecord | None,
     confidence: float,
     context_token: str | None,
+    answer_mode: AnswerMode = "TEMPLATE",
+    answer: MaterializedChatAnswer | None = None,
 ) -> SuccessResponse:
     """Build SUCCESS without inventing facts or source metadata."""
 
+    if answer_mode == "TEMPLATE":
+        if answer is not None:
+            raise ValueError("SUCCESS_ANSWER_INVALID")
+        summary = record.answer_summary
+        procedure_steps = record.procedure_steps
+        required_documents = record.required_documents
+        processing_time = record.processing_time
+        fee = record.fee
+        department = record.department
+    elif answer_mode == "GENERATED":
+        if type(answer) is not MaterializedChatAnswer:
+            raise ValueError("SUCCESS_ANSWER_INVALID")
+        summary = answer.summary
+        procedure_steps = answer.procedure_steps
+        required_documents = answer.required_documents
+        processing_time = answer.processing_time
+        fee = answer.fee
+        department = answer.department
+    else:
+        raise ValueError("SUCCESS_ANSWER_MODE_INVALID")
+
     used_fields = ["answer_summary"]
-    if record.procedure_steps:
+    if procedure_steps:
         used_fields.append("procedure_steps")
-    if record.required_documents:
+    if required_documents:
         used_fields.append("required_documents")
-    if record.processing_time is not None:
+    if processing_time is not None:
         used_fields.append("processing_time")
-    if record.fee is not None:
+    if fee is not None:
         used_fields.append("fee")
     used_fields.append("department")
 
     return SuccessResponse(
         request_id=request_id,
         answer_status="SUCCESS",
+        answer_mode=answer_mode,
         intent=cast(
             Literal[
                 "MOVE_IN_RESIDENT_REGISTRATION",
@@ -100,12 +121,12 @@ def build_success_response(
             record.category.value,
         ),
         confidence=confidence,
-        summary=record.answer_summary,
-        procedure_steps=list(record.procedure_steps),
-        required_documents=list(record.required_documents),
-        processing_time=record.processing_time,
-        fee=record.fee,
-        department=record.department,
+        summary=summary,
+        procedure_steps=list(procedure_steps),
+        required_documents=list(required_documents),
+        processing_time=processing_time,
+        fee=fee,
+        department=department,
         sources=[
             Source(
                 source_id=record.public_id,
@@ -115,7 +136,7 @@ def build_success_response(
                 used_fields=used_fields,
             )
         ],
-        office=_public_office(office),
+        office=build_public_office(office),
         context_token=context_token,
     )
 
@@ -123,15 +144,19 @@ def build_success_response(
 def build_followup_response(
     *,
     request_id: UUID,
-    intent: Intent,
     confidence: float | None,
-    option_ids: tuple[FollowupOptionId, ...],
+    plan: FollowupPlan,
     context_token: str | None,
 ) -> FollowupResponse:
-    """Build a bounded follow-up response from server-defined option IDs."""
+    """Build FOLLOWUP only from a source-backed server-owned plan."""
 
-    if not option_ids or any(option_id not in _FOLLOWUP_LABELS for option_id in option_ids):
-        raise ValueError("FOLLOWUP_OPTION_INVALID")
+    if type(plan) is not FollowupPlan:
+        raise ValueError("SERVER_OWNED_FOLLOWUP_PLAN_REQUIRED")
+    intent = plan.intent
+    try:
+        options = plan.options
+    except (AttributeError, ValueError):
+        raise ValueError("SERVER_OWNED_FOLLOWUP_PLAN_REQUIRED") from None
     if intent not in {
         Intent.MOVE_IN_RESIDENT_REGISTRATION,
         Intent.CERTIFICATE_ISSUANCE,
@@ -157,7 +182,7 @@ def build_followup_response(
         confidence=confidence,
         sources=[],
         office=None,
-        followup_options=[_FOLLOWUP_LABELS[option_id] for option_id in option_ids],
+        followup_options=list(options),
         context_token=context_token,
     )
 
@@ -188,26 +213,9 @@ def build_fallback_response(
             message=message,
             next_actions=list(next_actions),
             candidate_eligible=candidate_eligible,
-            office=_public_office(office),
+            office=build_public_office(office),
         ),
         context_token=None,
-    )
-
-
-def _public_office(record: OfficeRecord | None) -> Office | None:
-    if record is None:
-        return None
-    return Office(
-        id=record.public_id,
-        region=record.region.value,
-        office_name=record.office_name,
-        address=record.address,
-        phone=record.phone,
-        opening_hours=record.opening_hours,
-        map_url=AnyUrl(record.map_url) if record.map_url is not None else None,
-        source_title=record.source_title,
-        source_url=AnyUrl(record.source_url),
-        last_verified_at=record.last_verified_at,
     )
 
 

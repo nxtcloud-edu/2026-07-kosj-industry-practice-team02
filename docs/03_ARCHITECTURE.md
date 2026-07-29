@@ -42,7 +42,7 @@ docs           source-of-truth, ADR, notes, reports
 scripts        reproducible project tooling
 ```
 
-현재 snapshot은 위 구조의 실행 가능한 API·Web·공유 계약·DB migration·공식 데이터를 포함한다.
+기존 스타터는 `legacy/`로 유지한다. 신규 앱 스캐폴딩 전 Codex가 패키지 관리자, 런타임 버전, 마이그레이션 도구, CI 환경을 인터뷰한다.
 
 ## 3. Chat 처리 경계
 
@@ -61,26 +61,32 @@ scripts        reproducible project tooling
 
 ## 4. LLM adapter
 
-합성 평가 공급자 모델은 정확히 Upstage `solar-pro3`로 고정한다. max output 1024,
-concurrency 1, 논리 요청당 재시도 최대 1회, 명시적 process run당 재시도를 포함한 실제
-outbound attempt 총 30회를 강제한다. 도메인 서비스가 공급자 API에 직접 의존하지 않도록
-다음 인터페이스를 둔다. adapter와 합성 평가 runner는 offline 검증까지 구현됐으며 actual
-network/model-quality 평가는 아직 실행하지 않았다. 시민 chat 기본 경로는 deterministic template다.
+합성 평가 공급자와 D-072/D-073가 승인한 local/private 시민 chat 목표 모델은 정확히 Upstage
+`solar-pro3`로 고정한다. 합성 평가 경로는 max output 1024, concurrency 1, 논리 요청당 재시도
+최대 1회, process outbound attempt 30이고 actual은 D-071에서 FAIL로 종료했다. 후속 시민 chat
+경로는 timeout 8초, logical attempt 1회, hidden retry 0, concurrency 1, process cap 30이다.
+도메인 서비스가 공급자 API에 직접 의존하지 않도록 provider-neutral interface를 사용한다.
+현재 product runtime은 아직 deterministic template이며
+승인 대기 실행계획 승인 뒤에만
+아래 좁은 interface를 구현한다.
 
 ```python
-class LLMProvider(Protocol):
-    async def classify_or_answer(self, request: GroundedRequest) -> GroundedResult: ...
+class GroundedAnswerGenerator(Protocol):
+    async def generate(self, request: GroundedChatRequest) -> GroundedChatResult: ...
 ```
 
 요구사항:
 
-- 입력은 마스킹된 질문과 허용된 KB 청크만
-- Upstage 입력은 서버 allowlist의 canonical local/private `T-01`~`T-10`만; 실제 시민·public 요청은 disabled/template
-- 출력은 스키마 검증 가능한 구조화 객체
-- timeout/retry/circuit-breaker 경계
+- 입력은 마스킹된 질문과 실제 답변에 필요한 최소 ACTIVE/OFFICIAL KB fact만
+- 시민 입력은 supported intent·안전 마스킹·ACTIVE/OFFICIAL·grounding을 모두 통과한
+  local/private 요청만; public/remote/실제 기관 운영은 disabled/template
+- 출력은 최대 500자 summary와 server-issued fact ID뿐이며 strict schema와 사실 drift 검증
+- timeout 8초, attempt 1, hidden retry 0, concurrency 1, process cap 30
 - 공급자 장애 시 KB 템플릿 또는 안전 폴백
 - 공급자 이름/모델/latency는 관측 가능하되 질문 텍스트 로그 금지
-- provider disabled 기본, 서버 allowlist synthetic evaluation runner에서만 활성; hidden retry·preflight provider call·cap reset endpoint 금지
+- source/office/policy/공식 fact text는 서버가 결합
+- provider disabled 기본, synthetic/chat mode 상호 배타; preflight provider call·cap reset
+  endpoint 금지
 
 ## 4.1 대화 문맥 경계
 
@@ -138,17 +144,17 @@ NEW
   함수만 실행한다. FastAPI repository도 고정 SQL 9개만 사용한다.
 - RLS는 8 table 모두 ENABLE+FORCE이고 owner-only policy를 사용한다.
 - 시민 read는 `ACTIVE + OFFICIAL` KB와 `OFFICIAL` 기관만 반환한다.
-- executable authority는 forward migration 9개이며 disposable-local compensation은
-  `00670 → 00660 → 00650 → 00600 → 00500 → 00400 → 00300 → 00200 → 00100`이다.
-- `database/schema-v1.draft.sql`은 검증된 `0.4.0-local`의 읽기 전용 논리 투영이며 권한·함수·trigger
+- executable authority는 forward migration 6개이며 disposable-local compensation은
+  `00600 → 00500 → 00400 → 00300 → 00200 → 00100`이다.
+- `database/schema-v1.draft.sql`은 검증된 `0.3.0-local`의 읽기 전용 논리 투영이며 권한·함수·trigger
   실행 근거가 아니다.
 - tracked source manifest와 runtime manifest는 build input과 binary authority를 분리한다. runner는
   `.tools/supabase/v2.109.1-sejong-loopback/supabase.exe`만 허용하고 stock/PATH fallback을 두지 않는다.
-- actual gate는 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`, fresh pgTAP 9 files/356 assertions,
-  backend integration 8/8, 9단계 compensation/absence/reset/replay와 final container 0/0을 증명했다.
-  이로써 manifest `database_schema=0.4.0-local`은 disposable local/private 기준선으로 활성화됐다.
+- 2026-07-18 actual gate는 정확히 하나의 `127.0.0.1:54322 -> 5432/tcp`, fresh pgTAP 282,
+  backend integration 8/8, 6단계 compensation/absence/reset/replay와 final container 0/0을 증명했다.
+  이로써 manifest `database_schema=0.3.0-local`은 disposable local/private 기준선으로 활성화됐다.
 - `73f300b`는 DB child와 descendant를 bounded process tree로 실행해 timeout/failure/success 모두에서
   종료·dispose·환경 복원을 보장한다. runner 50/50, patched 24/24와 final-code DB gate가 재검증했다.
-- Q-SEC-003=A/D-046으로 exact 22 signature property-only `00700` 방향은 확정했지만 구현은
-  public 준비까지 보류한다. 이 기준선은 local/private에 한정하며 `00700` 전체 검증 전에는
-  remote/public 배포, public admin/API, public backend DB credential 사용을 차단한다.
+- Q-SEC-003=A/D-046/D-092의 exact 22 signature property-only `00700`은 matching
+  rollback·body/owner/ACL fingerprint·전체 local regression을 통과했다. 이는 remote 배포
+  완료가 아니며, 인증 없는 public admin/API와 public backend DB credential은 계속 차단한다.
