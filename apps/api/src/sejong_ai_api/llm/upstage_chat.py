@@ -1,0 +1,249 @@
+"""One-attempt Upstage transport boundary for grounded citizen chat."""
+
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+from pydantic import ValidationError
+
+from sejong_ai_api.llm.chat_contracts import (
+    GeneratedChatDraft,
+    GroundedAnswerGenerator,
+    GroundedChatOutcomeCode,
+    GroundedChatRequest,
+    GroundedChatResult,
+)
+from sejong_ai_api.llm.chat_prompt import (
+    build_grounded_chat_messages,
+    estimate_grounded_input_upper_bound,
+)
+from sejong_ai_api.llm.contracts import TokenUsage
+from sejong_ai_api.llm.limits import (
+    AttemptBudget,
+    AttemptCapReached,
+    ProviderAttemptLedger,
+    ProviderCostReservation,
+    parse_provider_token_usage,
+)
+from sejong_ai_api.llm.settings import (
+    UPSTAGE_BASE_URL,
+    UPSTAGE_CHAT_TIMEOUT_SECONDS,
+    UPSTAGE_MAX_OUTPUT_TOKENS,
+    UPSTAGE_MODEL,
+    UpstageChatSettings,
+)
+
+_CHAT_COMPLETIONS_PATH = "/chat/completions"
+_ZERO_USAGE = TokenUsage(0, 0, 0)
+
+
+class _GroundedResponseRejected(RuntimeError):
+    """Carry one typed result through value-free reservation failure control flow."""
+
+    def __init__(self, result: GroundedChatResult) -> None:
+        super().__init__("PROVIDER_RESPONSE_REJECTED")
+        self.result = result
+
+
+def create_upstage_chat_client(settings: UpstageChatSettings) -> httpx.AsyncClient:
+    """Create the exact no-hidden-retry client for local grounded chat."""
+    if type(settings) is not UpstageChatSettings:
+        raise ValueError("UPSTAGE_CHAT_SETTINGS_INVALID")
+    timeout = httpx.Timeout(
+        UPSTAGE_CHAT_TIMEOUT_SECONDS,
+        connect=5.0,
+        read=8.0,
+        write=8.0,
+        pool=8.0,
+    )
+    transport = httpx.AsyncHTTPTransport(retries=0)
+    return httpx.AsyncClient(
+        base_url=UPSTAGE_BASE_URL,
+        headers={
+            "Authorization": f"Bearer {settings.api_key}",
+            "Content-Type": "application/json",
+        },
+        timeout=timeout,
+        transport=transport,
+    )
+
+
+class UpstageChatGenerator:
+    def __init__(
+        self,
+        *,
+        settings: UpstageChatSettings,
+        client: httpx.AsyncClient,
+        budget: AttemptBudget | ProviderAttemptLedger,
+    ) -> None:
+        if type(settings) is not UpstageChatSettings:
+            raise ValueError("UPSTAGE_CHAT_SETTINGS_INVALID")
+        if not isinstance(client, httpx.AsyncClient):
+            raise ValueError("UPSTAGE_CHAT_CLIENT_INVALID")
+        if type(budget) not in (AttemptBudget, ProviderAttemptLedger):
+            raise ValueError("ATTEMPT_BUDGET_INVALID")
+        self._settings = settings
+        self._client = client
+        self._budget = budget
+
+    async def generate(self, request: GroundedChatRequest) -> GroundedChatResult:
+        try:
+            messages = build_grounded_chat_messages(request)
+        except (AttributeError, TypeError, ValueError):
+            return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID)
+        if estimate_grounded_input_upper_bound(messages) > self._settings.max_input_tokens:
+            return _failure(GroundedChatOutcomeCode.INPUT_LIMIT)
+
+        payload = {
+            "model": UPSTAGE_MODEL,
+            "messages": list(messages),
+            "stream": False,
+            "temperature": 0.1,
+            "max_tokens": UPSTAGE_MAX_OUTPUT_TOKENS,
+        }
+        try:
+            if isinstance(self._budget, AttemptBudget):
+                async with self._budget.reserve():
+                    response = await self._client.post(
+                        _CHAT_COMPLETIONS_PATH,
+                        json=payload,
+                    )
+                return _parse_response(
+                    response,
+                    max_input_tokens=self._settings.max_input_tokens,
+                    max_output_tokens=self._settings.max_output_tokens,
+                )
+            else:
+                async with self._budget.reserve_generator() as reservation:
+                    response = await self._client.post(
+                        _CHAT_COMPLETIONS_PATH,
+                        json=payload,
+                    )
+                    result = _parse_response(
+                        response,
+                        max_input_tokens=self._settings.max_input_tokens,
+                        max_output_tokens=self._settings.max_output_tokens,
+                        reservation=reservation,
+                    )
+                    if result.code is not GroundedChatOutcomeCode.SUCCESS:
+                        raise _GroundedResponseRejected(result)
+                    return result
+        except AttemptCapReached:
+            return _failure(GroundedChatOutcomeCode.ATTEMPT_CAP)
+        except _GroundedResponseRejected as exc:
+            return exc.result
+        except httpx.TimeoutException:
+            return _failure(GroundedChatOutcomeCode.TIMEOUT)
+        except httpx.TransportError:
+            return _failure(GroundedChatOutcomeCode.TRANSPORT)
+        except Exception:
+            # Provider/transport failures cross this boundary only as a content-free enum.
+            # Cancellation and other BaseException subclasses intentionally remain unhandled.
+            return _failure(GroundedChatOutcomeCode.TRANSPORT)
+
+
+@dataclass(frozen=True, slots=True)
+class GroundedChatRuntime:
+    generator: GroundedAnswerGenerator
+    client: httpx.AsyncClient
+
+    async def aclose(self) -> None:
+        await self.client.aclose()
+
+
+def build_upstage_chat_runtime(
+    settings: UpstageChatSettings,
+    *,
+    ledger: ProviderAttemptLedger | None = None,
+) -> GroundedChatRuntime:
+    """Build one process-scoped generator, attempt budget and owned client."""
+    if type(settings) is not UpstageChatSettings:
+        raise ValueError("UPSTAGE_CHAT_SETTINGS_INVALID")
+    client = create_upstage_chat_client(settings)
+    budget = (
+        ledger
+        if ledger is not None
+        else AttemptBudget(
+            cap=settings.run_attempt_cap,
+            concurrency=settings.max_concurrency,
+        )
+    )
+    generator = UpstageChatGenerator(
+        settings=settings,
+        client=client,
+        budget=budget,
+    )
+    return GroundedChatRuntime(generator=generator, client=client)
+
+
+def _parse_response(
+    response: httpx.Response,
+    *,
+    max_input_tokens: int,
+    max_output_tokens: int,
+    reservation: ProviderCostReservation | None = None,
+) -> GroundedChatResult:
+    status_code = response.status_code
+    if status_code in (401, 403):
+        return _failure(GroundedChatOutcomeCode.AUTH)
+    if status_code == 429:
+        return _failure(GroundedChatOutcomeCode.RATE_LIMIT)
+    if status_code < 200 or status_code >= 300:
+        return _failure(GroundedChatOutcomeCode.HTTP_ERROR)
+
+    try:
+        envelope = response.json()
+    except (TypeError, ValueError):
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID)
+    if type(envelope) is not dict:
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID)
+
+    usage = parse_provider_token_usage(
+        envelope.get("usage"),
+        max_input_tokens=max_input_tokens,
+        max_output_tokens=max_output_tokens,
+    )
+    if usage is None:
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID)
+    if reservation is not None:
+        reservation.record_usage(usage)
+
+    choice = _first_choice(envelope.get("choices"))
+    if choice is None:
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID, usage=usage)
+    if choice.get("finish_reason") != "stop":
+        return _failure(GroundedChatOutcomeCode.TRUNCATED, usage=usage)
+
+    message = choice.get("message")
+    if type(message) is not dict:
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID, usage=usage)
+    content = message.get("content")
+    if type(content) is not str:
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID, usage=usage)
+    if not content.strip():
+        return _failure(GroundedChatOutcomeCode.EMPTY, usage=usage)
+
+    try:
+        draft = GeneratedChatDraft.model_validate_json(content)
+    except (ValidationError, ValueError):
+        return _failure(GroundedChatOutcomeCode.SCHEMA_INVALID, usage=usage)
+    return GroundedChatResult(
+        code=GroundedChatOutcomeCode.SUCCESS,
+        draft=draft,
+        usage=usage,
+    )
+
+
+def _first_choice(value: object) -> dict[str, Any] | None:
+    if type(value) is not list or not value:
+        return None
+    choice = value[0]
+    return choice if type(choice) is dict else None
+
+
+def _failure(
+    code: GroundedChatOutcomeCode,
+    *,
+    usage: TokenUsage = _ZERO_USAGE,
+) -> GroundedChatResult:
+    return GroundedChatResult(code=code, usage=usage)

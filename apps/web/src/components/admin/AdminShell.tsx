@@ -152,6 +152,28 @@ export default function AdminShell({
     return null;
   };
 
+  /** 시연 역할 선택 - local/private 역할 스위치, 인증 아님 (계약 X-Demo-Role) */
+  const roleSelect = (id: string) => (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-table-head font-semibold text-admin-nav-soft">
+        시연 역할 · 인증 아님
+      </label>
+      <select
+        id={id}
+        value={role}
+        onChange={(event) => setRole(event.target.value as AdminActor["role"])}
+        className="min-h-11 rounded-btn-s border border-white/20 bg-white/[0.07] px-2.5 text-note font-semibold text-white"
+      >
+        <option value="OPERATOR" className="text-text">
+          작성 운영자 · OPERATOR-LOCAL-001
+        </option>
+        <option value="APPROVER" className="text-text">
+          별도 승인자 · PM-LOCAL-001
+        </option>
+      </select>
+    </div>
+  );
+
   return (
     <AdminContext.Provider value={contextValue}>
       {/* fixture 모드 상시 배너 - 공지·사이드바와 구분되는 앰버 톤 (태성 리뷰 2) */}
@@ -160,29 +182,21 @@ export default function AdminShell({
         {/* 768px 미만: 상단 고정 바 - 로고 줄 + 메뉴 탭 줄 (모바일 정비 1) */}
         <header className="sticky top-0 z-40 bg-admin-nav md:hidden">
           <div className="flex h-14 items-center justify-between gap-2 px-4">
-            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색.
-                로고 = 운영 현황 홈 링크 (멘토 QA, 사이드바와 동일 동작) */}
-            <Link
-              href="/admin"
-              aria-label="이음센터 운영 현황으로"
-              className="flex items-center gap-1.5 rounded-btn-s text-[17px] font-extrabold text-white"
-            >
+            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
+            <span className="flex items-center gap-1.5 text-[17px] font-extrabold text-white">
               <Logo className="h-5 w-5 shrink-0 text-white" />
               <span>
                 <span className="text-tie-line">이음</span>센터
               </span>
-            </Link>
-            {/* 상단 바 우측 간결 드롭다운 = 시연 환경 축약형 (멘토 QA).
-                현재 actor는 aria-label로 스크린리더에 알린다 */}
+            </span>
             <label className="sr-only" htmlFor="demo-role-mobile">
               시연 역할
             </label>
             <select
               id="demo-role-mobile"
-              aria-label={`시연 역할 선택 · 현재 ${actor.actorId} · 인증 아님`}
               value={role}
               onChange={(event) => setRole(event.target.value as AdminActor["role"])}
-              className="demo-role-select min-h-9 max-w-[46%] rounded-btn-s border border-white/20 bg-white/[0.07] px-2 text-[13px] font-semibold text-white"
+              className="min-h-9 max-w-[46%] rounded-btn-s border border-white/20 bg-white/[0.07] px-2 text-[13px] font-semibold text-white"
             >
               <option value="OPERATOR" className="text-text">
                 작성 운영자
@@ -228,26 +242,17 @@ export default function AdminShell({
           </nav>
         </header>
 
-        {/* 사이드바 sticky 고정 (멘토 QA): 본문 스크롤 중에도 상단 고정.
-            h-screen + self-start로 뷰포트 높이 고정, 내용 초과 시 내부 스크롤.
-            모바일(md 미만)은 상단 바 레이아웃이라 영향 없음 */}
-        <aside className="hidden w-[216px] shrink-0 flex-col gap-[22px] bg-admin-nav px-3.5 py-[22px] md:sticky md:top-0 md:flex md:h-screen md:self-start md:overflow-y-auto">
-          {/* 브랜드 - 로고 심볼 흰색 변형 (§5-1). 로고 = 운영 현황 홈 링크 (멘토 QA) */}
+        <aside className="hidden w-[216px] shrink-0 flex-col gap-[22px] bg-admin-nav px-3.5 py-[22px] md:flex">
+          {/* 브랜드 - 로고 심볼 흰색 변형 (§5-1) */}
           <div className="px-2">
-            <Link
-              href="/admin"
-              aria-label="이음센터 운영 현황으로"
-              className="block rounded-btn-s"
-            >
-              <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-tie-line">
-                <Logo className="h-4 w-4 shrink-0 text-white" />
-                세종 민원이음 관리자
-              </span>
-              {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
-              <p className="mt-0.5 text-[20px] font-extrabold text-white">
-                <span className="text-tie-line">이음</span>센터
-              </p>
-            </Link>
+            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-tie-line">
+              <Logo className="h-4 w-4 shrink-0 text-white" />
+              세종 민원이음 관리자
+            </span>
+            {/* 워드마크 문법(최종 폴리시 4): 흰 변형은 "이음"만 밝은 하늘색 */}
+            <p className="mt-0.5 text-[20px] font-extrabold text-white">
+              <span className="text-tie-line">이음</span>센터
+            </p>
           </div>
 
           <nav aria-label="관리자 메뉴">
@@ -285,89 +290,26 @@ export default function AdminShell({
             </ul>
           </nav>
 
-          {/* 하단 고정 그룹: 시연 환경 패널 + 철학 카드 (멘토 QA).
-              흩어져 있던 시연 라벨·actor·샘플 뱃지를 단일 카드로 통합한다.
-              작성자·검수자 분리(자기검수 금지) 시연은 그대로 - 기능 변경 없음 */}
-          <div className="mt-auto flex flex-col gap-3.5">
-            {/* 시연 환경 패널 - 메뉴와 상단 헤어라인으로 구분 */}
-            <div className="border-t border-white/10 pt-3.5">
-              <div className="rounded-btn bg-white/[0.07] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[12px] font-bold text-white">
-                    시연 환경
-                  </span>
-                  <span className="text-[11px] font-semibold text-admin-nav-soft">
-                    인증 아님
-                  </span>
-                </div>
-                {/* actor 드롭다운(네이비 테마) - 흰 배경 select 금지.
-                    닫힌 상태는 역할명만 노출해 잘림을 없앤다: 네이티브 select는
-                    닫힘/펼침 텍스트를 분리할 수 없어 선택값 텍스트를 투명 처리하고
-                    역할명 오버레이로 대체한다. 옵션 팝업은 폭 제약이 없어 전체
-                    라벨(역할 · ID)이 잘리지 않는다. 현재 actor ID는 아래 캡션 +
-                    select aria-label로 유지(시각·스크린리더). */}
-                <label htmlFor="demo-role" className="sr-only">
-                  시연 역할 선택
-                </label>
-                <div className="relative mt-2">
-                  <select
-                    id="demo-role"
-                    aria-label={`시연 역할 선택 · 현재 ${actor.actorId} · 인증 아님`}
-                    value={role}
-                    onChange={(event) =>
-                      setRole(event.target.value as AdminActor["role"])
-                    }
-                    className="demo-role-select h-10 w-full cursor-pointer appearance-none truncate rounded-btn-s border border-white/20 bg-white/[0.07] pr-9 pl-3 text-note font-semibold text-transparent"
-                  >
-                    <option value="OPERATOR" className="text-text">
-                      작성 운영자 · OPERATOR-LOCAL-001
-                    </option>
-                    <option value="APPROVER" className="text-text">
-                      별도 승인자 · PM-LOCAL-001
-                    </option>
-                  </select>
-                  {/* 닫힌 상태 표시 - 역할명만 (잘림 없음) */}
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-note font-semibold text-white"
-                  >
-                    {role === "APPROVER" ? "별도 승인자" : "작성 운영자"}
-                  </span>
-                  {/* 커스텀 캐럿 - appearance-none으로 네이티브 화살표 제거 */}
-                  <svg
-                    aria-hidden="true"
-                    className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-admin-nav-soft"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
-                {/* 현재 actor ID - 드롭다운 바로 아래 캡션 (선택 변경 시 갱신) */}
-                <p className="mt-1.5 font-mono text-[11px] text-white/55">
-                  {actor.actorId}
-                </p>
-                {/* 데이터 출처 - 점 아이콘 + 캡션(드롭다운 영역과 8px, 버튼형 아님) */}
-                <p className="mt-2 flex items-center gap-1.5 text-table-head font-semibold text-admin-nav-soft">
-                  <span
-                    aria-hidden="true"
-                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-admin-nav-soft"
-                  />
-                  {mode === "fixture"
-                    ? "시연용 샘플 데이터"
-                    : "실제 local DB API 연결"}
-                </p>
-              </div>
-            </div>
+          {/* 시연 역할 스위치 - 작성자·검수자 분리(자기검수 금지) 시연용 */}
+          {roleSelect("demo-role")}
+          <p className="px-0.5 text-table-head leading-[1.5] text-admin-nav-soft">
+            현재 시연 actor
+            <br />
+            <b className="text-white">{actor.actorId}</b>
+          </p>
+          {mode === "fixture" ? (
+            <p className="rounded-btn bg-white/[0.07] px-3 py-2 text-table-head font-bold text-admin-nav-soft">
+              시연용 샘플 데이터
+            </p>
+          ) : (
+            <p className="rounded-btn bg-white/[0.07] px-3 py-2 text-table-head font-bold text-admin-nav-soft">
+              실제 local DB API 연결
+            </p>
+          )}
 
-            {/* 철학 카드 (§5-1) */}
-            <div className="rounded-btn bg-white/[0.07] p-3 text-table-head leading-[1.5] text-admin-nav-soft">
-              {PHILOSOPHY[pathname] ?? PHILOSOPHY["/admin"]}
-            </div>
+          {/* 최하단 철학 카드 (§5-1) */}
+          <div className="mt-auto rounded-btn bg-white/[0.07] p-3 text-table-head leading-[1.5] text-admin-nav-soft">
+            {PHILOSOPHY[pathname] ?? PHILOSOPHY["/admin"]}
           </div>
         </aside>
         <div className="min-w-0 flex-1 bg-bg-admin">{children}</div>

@@ -25,9 +25,43 @@ import {
 import SourceBadge from "@/components/citizen/SourceBadge";
 import FeedbackButtons from "@/components/citizen/FeedbackButtons";
 import RegionSelect from "@/components/citizen/RegionSelect";
+import type { ChatResponse } from "@/lib/chat-api";
+import type { FeedbackTransport } from "@/lib/feedback-api";
 
 type SuccessResponse = components["schemas"]["SuccessResponse"];
 type Office = components["schemas"]["Office"];
+
+const ANSWER_MODE_LABEL = {
+  GENERATED: "AI로 정리한 공식 안내",
+  TEMPLATE: "공식 안내",
+} as const;
+
+const ANSWER_MODE_DISCLOSURE =
+  "AI가 표현을 정리할 수 있지만 행정 사실과 출처는 승인된 공식 자료에서 확인하며, 오류가 있으면 공식 안내 형식을 사용합니다.";
+
+const CERTIFICATE_RELATED_QUESTIONS = [
+  "주민등록표 열람",
+  "무인민원발급기 이용",
+] as const;
+
+export function relatedQuestions(response: ChatResponse): readonly string[] {
+  return response.sources.some((source) => source.source_id === "KB-CERT-01")
+    ? CERTIFICATE_RELATED_QUESTIONS
+    : [];
+}
+
+function isNonBlankText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isHttpsUrl(value: unknown): value is string {
+  if (!isNonBlankText(value)) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 핵심 기한·수치 강조 (대화 화면 개정 2) - 파란 틴트 배경
@@ -147,23 +181,31 @@ export default function AnswerCard({
   response,
   region,
   onRegionChange,
+  onRelatedQuestion,
+  relatedQuestionsDisabled = false,
+  feedbackTransport,
 }: {
   response: SuccessResponse;
   /** 이 답변을 만든 요청의 selected_region - 있으면 "동 변경" 인라인 노출 (SFR-004) */
   region?: Region | null;
   onRegionChange?: (dong: Region) => void;
+  /** KB-CERT-01에만 붙는 다음 탐색 질문 - 답변 사실이 아니다. */
+  onRelatedQuestion?: (question: string) => void;
+  relatedQuestionsDisabled?: boolean;
+  feedbackTransport?: FeedbackTransport;
 }) {
   const [showRegionSelect, setShowRegionSelect] = useState(false);
 
-  // 동 미지정 대형폐기물 답변에는 "우리 동 기준으로 보기" 진입점을 연다.
-  // 대형폐기물만 배출일·배출장소가 동에 따라 달라지므로 여기로 한정한다 (SFR-004).
-  const showRegionEntry =
-    Boolean(onRegionChange) && !region && response.intent === "BULKY_WASTE";
-
-  // 출처 또는 최종 확인일 누락 → 답변 카드 렌더링 금지 (SER-003)
+  // 출처 메타데이터가 비었거나 안전한 HTTPS 원문 링크가 아니면 렌더링 금지 (SER-003)
   const hasValidSources =
     response.sources.length > 0 &&
-    response.sources.every((s) => s.source_id && s.last_verified_at);
+    response.sources.every(
+      (source) =>
+        isNonBlankText(source.source_id) &&
+        isNonBlankText(source.title) &&
+        isNonBlankText(source.last_verified_at) &&
+        isHttpsUrl(source.url),
+    );
   if (!hasValidSources) {
     return (
       <div
@@ -199,6 +241,7 @@ export default function AnswerCard({
   const steps = response.procedure_steps ?? [];
   const documents = response.required_documents ?? [];
   const deepLink = DEEP_LINK_BY_INTENT[response.intent];
+  const navigationQuestions = relatedQuestions(response);
 
   return (
     <article className="card-enter overflow-hidden rounded-card border border-border bg-white shadow-card">
@@ -207,7 +250,10 @@ export default function AnswerCard({
         <span className="rounded-[8px] border border-primary-border bg-primary-light px-2.5 py-1 text-caption font-extrabold text-primary">
           {INTENT_LABEL[response.intent]}
         </span>
-        {region ? (
+        <span className="rounded-[8px] border border-border bg-white px-2.5 py-1 text-caption font-extrabold text-text">
+          {ANSWER_MODE_LABEL[response.answer_mode]}
+        </span>
+        {region && (
           <span className="flex items-center rounded-[8px] bg-bg-sub px-2.5 py-1 text-caption font-bold text-text-sub">
             {region} 기준
             {onRegionChange && (
@@ -221,30 +267,6 @@ export default function AnswerCard({
               </button>
             )}
           </span>
-        ) : (
-          showRegionEntry && (
-            <button
-              type="button"
-              aria-expanded={showRegionSelect}
-              onClick={() => setShowRegionSelect((v) => !v)}
-              className="-my-1 flex min-h-11 items-center gap-1 rounded-[8px] border border-primary-border bg-primary-light px-3 text-caption font-bold text-primary hover:bg-hover-tint active:bg-hover-tint"
-            >
-              <svg
-                aria-hidden="true"
-                className="h-3.5 w-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              우리 동 기준으로 보기
-            </button>
-          )
         )}
       </div>
 
@@ -253,6 +275,9 @@ export default function AnswerCard({
           {/* 2. 요약 - 파란 틴트 강조 (개정 2) */}
           <p className="text-body-lg font-semibold text-text [text-wrap:pretty]">
             <HighlightedSummary text={response.summary ?? "확인된 민원 안내"} />
+          </p>
+          <p className="text-note leading-6 text-text-sub">
+            {ANSWER_MODE_DISCLOSURE}
           </p>
 
           {/* 3. 신청 방법 - 번호 원 + 이음선 (v3 불변) */}
@@ -316,19 +341,36 @@ export default function AnswerCard({
             )}
           </dl>
 
-          {/* 인라인 동 선택 (SFR-004 - 별도 온보딩 화면 없음).
-              region 있으면 "동 변경", 없으면 "우리 동 기준으로 보기" 진입 */}
+          {/* "동 변경" 인라인 동 선택 (SFR-004 - 별도 온보딩 화면 없음) */}
           {onRegionChange && showRegionSelect && (
             <div className="rounded-cell bg-bg-sub p-3">
               <RegionSelect
                 current={region}
-                label={region ? "다른 동으로 변경" : "우리 동 선택"}
                 onSelect={(dong) => {
                   setShowRegionSelect(false);
                   if (dong !== region) onRegionChange(dong);
                 }}
               />
             </div>
+          )}
+
+          {navigationQuestions.length > 0 && onRelatedQuestion && (
+            <section aria-label="관련 안내" className="flex flex-col gap-2">
+              <SectionLabel>다음 안내도 확인해 보세요</SectionLabel>
+              <div className="flex flex-wrap gap-2">
+                {navigationQuestions.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    disabled={relatedQuestionsDisabled}
+                    onClick={() => onRelatedQuestion(question)}
+                    className="min-h-11 rounded-btn-s border border-primary-border bg-white px-3 text-body font-bold text-primary hover:border-primary hover:bg-hover-tint active:bg-hover-tint disabled:opacity-60"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
         </div>
 
@@ -360,7 +402,11 @@ export default function AnswerCard({
           </a>
 
           {/* 6. 만족/불만족 - 엄지 아이콘 outline, 한 줄 우측 정렬 (개정 4) */}
-          <FeedbackButtons variant="inline" />
+          <FeedbackButtons
+            requestId={response.request_id}
+            transport={feedbackTransport}
+            variant="inline"
+          />
         </div>
       </div>
 

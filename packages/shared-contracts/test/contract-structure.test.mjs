@@ -9,7 +9,7 @@ import {
 const { openApi } = loadContracts();
 
 test("health and readiness 200 responses use strict required body components", () => {
-  assert.equal(openApi.info.version, "3.1.0-draft");
+  assert.equal(openApi.info.version, "4.1.0-draft");
 
   for (const [path, componentName, status] of [
     ["/health", "HealthResponse", "ok"],
@@ -35,6 +35,39 @@ test("readiness and chat share the approved 503 response reference", () => {
     openApi.paths["/api/v1/chat"].post.responses["503"].$ref,
     expected,
   );
+});
+
+test("office directory uses a strict reusable list and explicit errors", () => {
+  const officeOperation = openApi.paths["/api/v1/offices"].get;
+  assert.equal(officeOperation.operationId, "listOffices");
+  assert.deepEqual(
+    officeOperation.parameters.map(({ name, required }) => ({ name, required })),
+    [
+      { name: "region", required: true },
+      { name: "intent", required: true },
+    ],
+  );
+  assert.deepEqual(
+    officeOperation.responses["200"].content["application/json"].schema,
+    { $ref: "#/components/schemas/OfficeListResponse" },
+  );
+  assert.deepEqual(officeOperation.responses["422"], {
+    $ref: "#/components/responses/ValidationError",
+  });
+  assert.deepEqual(officeOperation.responses["503"], {
+    $ref: "#/components/responses/ServiceUnavailable",
+  });
+  assert.deepEqual(openApi.components.schemas.OfficeListResponse, {
+    type: "object",
+    additionalProperties: false,
+    required: ["items"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/Office" },
+      },
+    },
+  });
 });
 
 test("chat idempotency key is an optional UUID distinct from request_id", () => {
@@ -76,6 +109,10 @@ test("chat response is an explicit status-discriminated oneOf contract", () => {
     { $ref: "#/components/schemas/FallbackResponse" },
   ]);
   assert.ok(openApi.components.schemas.SuccessResponse.allOf[1].required.includes("office"));
+  assert.ok(openApi.components.schemas.SuccessResponse.allOf[1].required.includes("answer_mode"));
+  assert.deepEqual(openApi.components.schemas.SuccessResponse.allOf[1].properties.answer_mode, {
+    enum: ["GENERATED", "TEMPLATE"],
+  });
   assert.deepEqual(
     openApi.components.schemas.FollowupResponse.allOf[1].properties.office,
     { type: "null" },
@@ -87,6 +124,7 @@ test("privacy unresolved stays public-only and storage reasons remain unchanged"
     "INSUFFICIENT_GROUNDING",
     "PERSONAL_LOOKUP",
     "LEGAL_JUDGMENT",
+    "CIVIC_SCOPE_GAP",
     "OUT_OF_SCOPE",
     "PRIVACY_UNRESOLVED",
   ]);

@@ -1,59 +1,43 @@
-# Security
+# 보안 및 개인정보 원칙
 
-이 저장소는 local/private 교육용 MVP입니다. public 운영, 실제 시민 데이터 처리 또는 기관
-내부 시스템 연결을 승인한 자료가 아닙니다.
+## 저장소에 포함하지 않는 정보
 
-## 비협상 경계
+- 실제 `.env`, API key, token, DSN, 서명 secret
+- 실제 시민 개인정보와 질문 원문
+- local DB 상태, 액세스 로그, 오류 추적 payload
+- provider request·response body
 
-- 질문 원문을 애플리케이션 DB, 액세스 로그, 오류 추적에 저장하지 않습니다.
-- 외부 모델 호출 전 개인정보를 마스킹합니다. 안전한 마스킹 결과를 만들 수 없으면 호출과
-  저장을 모두 중단하고 `PRIVACY_UNRESOLVED`로 응답합니다.
-- 시민 검색은 `ACTIVE + OFFICIAL` KB만 사용합니다.
-- 출처명·URL·확인일은 서버가 승인 KB 메타데이터에서 결합합니다.
-- `PERSONAL_LOOKUP`, `LEGAL_JUDGMENT`, `OUT_OF_SCOPE`, `PRIVACY_UNRESOLVED`는 개선 후보가
-  아니며 질문 text/failed row를 저장하지 않습니다.
-- 작성자와 승인자는 달라야 하며 mock 후보는 ACTIVE로 승인할 수 없습니다.
+비밀값이나 실제 개인정보를 발견하면 commit과 push를 중단하고 해당 credential을 먼저 회수·교체합니다.
 
-## 비밀과 로그
+## 시민 질문 처리
 
-- 실제 `.env`, API key, token, DSN, DB password와 service-role credential을 커밋하지 않습니다.
-- API 로그는 서버 생성 request ID, method, route template, status만 허용합니다.
-- request body, query, header, cookie, Authorization, client IP, 답변과 provider/DB payload를
-  기록하지 않습니다.
-- 예제 환경 파일은 변수 이름만 제공하고 민감한 값은 비워 둡니다.
+- 외부 AI 호출 전에 개인정보를 마스킹합니다.
+- 시민 검색 대상은 `ACTIVE+OFFICIAL` KB로 제한합니다.
+- 출처명·URL·확인일과 기관 정보는 서버가 공식 KB에서 결합합니다.
+- 질문 원문은 애플리케이션 DB와 일반 로그에 저장하지 않습니다.
+- `PERSONAL_LOOKUP`, `LEGAL_JUDGMENT`, `OUT_OF_SCOPE`, `PRIVACY_UNRESOLVED`는 실패 질문 행과 KB 후보를 만들지 않습니다.
+- 공급자 장애나 계약 위반은 공식 KB 기반 TEMPLATE 또는 안전한 폴백으로 처리합니다.
 
-검사:
+## 관리자와 DB
+
+- KB 후보 작성자와 승인자는 달라야 합니다.
+- 승인되지 않은 후보와 mock 데이터는 시민 답변에 사용할 수 없습니다.
+- DB reset, rollback과 seed 검증은 `127.0.0.1`의 disposable local DB에서만 실행합니다.
+- local DB credential을 public 또는 remote 환경에서 재사용하지 않습니다.
+- 관리자 화면은 local/private MVP 범위이며 공개 인증·SSO/RBAC를 제공하지 않습니다.
+
+## 검사 명령
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts/check_secret_patterns.ps1 -RepositoryRoot .
+  -File scripts/check_secret_patterns.ps1
+
 python -B scripts/check_git_history_secrets.py --repo .
-node scripts/check_web_bundle_secrets.mjs apps/web/.next
 ```
 
-검사 결과는 credential 회전, 저장소 접근 검토와 배포 전 수동 보안 검토를 대체하지 않습니다.
+현재 파일 검사와 Git history 검사는 명백한 credential 패턴을 탐지하지만 모든 형태의 난독화·암호화된 비밀 부재를 보증하지 않습니다. 제출 전에는 변경 파일과 환경 설정을 함께 수동 확인합니다.
 
-## 외부 모델
+세부 정책은 다음 문서를 참고합니다.
 
-Upstage `solar-pro3` 경로는 서버 allowlist의 canonical 합성 평가 전용입니다. 실제 시민 자유
-입력, 실제 개인정보, public/remote 요청은 provider로 보내지 않습니다. provider key, raw prompt,
-raw response와 reasoning은 로그·보고서에 기록하지 않습니다.
-
-## local DB와 관리자
-
-- patched Supabase CLI는 PostgreSQL 포트를 정확히 `127.0.0.1:54322`에만 바인딩하는
-  disposable local 검증 경로입니다.
-- reset, rollback, seed와 login rotation을 remote DB 또는 실제 데이터에 실행하지 않습니다.
-- `/admin`의 역할 전환과 고정 actor는 데모용이며 인증이 아닙니다.
-- public 환경에서는 별도 서버측 인증/RBAC gate가 없으면 관리자 UI와 API를 비활성화합니다.
-- 개발 credential, TLS/rate-limit 부재와 deferred privileged-function hardening 때문에 local
-  기준선을 production-ready로 부르지 않습니다.
-
-상세 정책은 [`docs/07_SECURITY_PRIVACY.md`](docs/07_SECURITY_PRIVACY.md)와
-[`docs/source-of-truth/PRIVACY_POLICY.md`](docs/source-of-truth/PRIVACY_POLICY.md)를 따릅니다.
-
-## 취약점 또는 노출 발견 시
-
-커밋·배포를 중단하고 노출 credential을 먼저 회수·교체합니다. 질문 원문·개인정보가 포함됐다면
-복사·재게시하지 말고 저장 위치와 접근 범위만 값 없이 기록합니다. Git history 정리나 데이터
-삭제는 owner 승인과 별도 복구 계획을 거쳐 수행합니다.
+- `docs/07_SECURITY_PRIVACY.md`
+- `docs/source-of-truth/PRIVACY_POLICY.md`

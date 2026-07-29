@@ -136,9 +136,8 @@ printing a DSN, secret or citizen question.
 
 The immutable `.2` artifacts and dispatcher did not change. This is a local/private evidence
 promotion only: it does not activate a remote database, provider, deployment, public admin, or
-application `/ready=200`. The authoritative command is recorded above; the private source
-repository's detailed execution report is intentionally excluded from this public evaluation
-snapshot.
+application `/ready=200`. The authoritative command and detailed stage record are in
+[`DATA-SEED-002-LOCAL-VERIFICATION.md`](../test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md).
 
 ## 5. Security, privacy, rollback and handoff
 
@@ -155,5 +154,5 @@ snapshot.
 - On any future failure, stop promotion, retain `.2`, record only reached stages, prove cleanup and
   do not improvise role/grant/migration or destructive Docker recovery.
 
-The detailed reached/unreached stage report remains in the private source repository and is
-intentionally excluded from this public evaluation snapshot.
+The detailed reached/unreached stage evidence is in
+[`DATA-SEED-002-LOCAL-VERIFICATION.md`](../test-reports/DATA-SEED-002-LOCAL-VERIFICATION.md).

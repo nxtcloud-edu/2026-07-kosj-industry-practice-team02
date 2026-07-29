@@ -35,14 +35,7 @@ export function CitizenHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-border-soft bg-white">
       <div className="mx-auto flex w-full max-w-[680px] items-center justify-between px-5 py-3">
-        {/* 로고 = 첫 화면 홈 링크 (멘토 QA). 접근명은 워드마크 텍스트로 충분하나 명시한다 */}
-        <Link
-          href="/"
-          aria-label="세종 민원이음 첫 화면으로"
-          className="inline-flex rounded-btn-s"
-        >
-          <Wordmark symbolClassName="h-7 w-7" />
-        </Link>
+        <Wordmark symbolClassName="h-7 w-7" />
         <span className="text-[13px] font-semibold text-text-sub">
           세종특별자치시
         </span>
@@ -52,7 +45,13 @@ export function CitizenHeader() {
 }
 
 /** 대화 화면 헤더 - 뒤로가기 44px + 로고 심볼 + 워드마크 (§8 대화 프레임) */
-export function ChatHeader() {
+export function ChatHeader({
+  onNewConversation,
+  disabled = false,
+}: {
+  onNewConversation?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <header className="sticky top-0 z-10 border-b border-border-soft bg-white">
       <div className="mx-auto flex w-full max-w-[680px] items-center gap-2.5 px-5 py-2.5">
@@ -74,21 +73,23 @@ export function ChatHeader() {
             <path d="m15 18-6-6 6-6" />
           </svg>
         </Link>
-        {/* 로고(심볼 + 워드마크) = 첫 화면 홈 링크 (멘토 QA). 뒤로가기와 별개로
-            로고 클릭 시에도 / 로 이동한다 - 시민 헤더와 동일 동작 */}
-        <Link
-          href="/"
-          aria-label="세종 민원이음 첫 화면으로"
-          className="inline-flex items-center gap-2.5 rounded-btn-s"
-        >
-          <span className="shrink-0 text-primary">
-            <Logo className="h-6 w-6" />
-          </span>
-          {/* 워드마크 문법(볼드·검정 수정): 세종·민원 text 볼드 / 이음 primary */}
-          <h1 className="text-card-title font-extrabold text-text">
-            세종 민원<span className="text-primary">이음</span>
-          </h1>
-        </Link>
+        <span className="shrink-0 text-primary">
+          <Logo className="h-6 w-6" />
+        </span>
+        {/* 워드마크 문법(볼드·검정 수정): 세종·민원 text 볼드 / 이음 primary */}
+        <h1 className="min-w-0 flex-1 truncate text-card-title font-extrabold text-text">
+          세종 민원<span className="text-primary">이음</span>
+        </h1>
+        {onNewConversation && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onNewConversation}
+            className="min-h-11 shrink-0 rounded-btn-s border border-border bg-white px-3 text-[15px] font-bold text-primary hover:border-primary hover:bg-hover-tint disabled:opacity-60"
+          >
+            새 대화
+          </button>
+        )}
       </div>
     </header>
   );

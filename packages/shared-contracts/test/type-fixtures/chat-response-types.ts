@@ -12,6 +12,7 @@ type ValidSuccess = {
   sources: [{ source_id: string; title: string; url: string; last_verified_at: string }];
   office: null;
   context_token: string;
+  answer_mode: "TEMPLATE";
 };
 
 type InvalidSuccessWithPrivacy = {
@@ -103,8 +104,27 @@ type ValidPrivacy = {
   context_token: null;
 };
 
+type ValidCivicScopeGap = {
+  request_id: string;
+  answer_status: "FALLBACK";
+  intent: "OUT_OF_SCOPE";
+  sources: [];
+  fallback: {
+    reason: "CIVIC_SCOPE_GAP";
+    title: string;
+    message: string;
+    next_actions: [string];
+    candidate_eligible: false;
+    office: null;
+  };
+  context_token: null;
+};
+
 type _ValidSuccessCompiles = Assert<IsAssignable<ValidSuccess, ChatResponse>>;
 type _ValidPrivacyCompiles = Assert<IsAssignable<ValidPrivacy, ChatResponse>>;
+type _ValidCivicScopeGapCompiles = Assert<
+  IsAssignable<ValidCivicScopeGap, ChatResponse>
+>;
 type _ValidFollowupCompiles = Assert<IsAssignable<ValidFollowup, ChatResponse>>;
 type _SuccessPrivacyRejected = AssertFalse<
   IsAssignable<InvalidSuccessWithPrivacy, ChatResponse>
@@ -120,4 +140,11 @@ type _SuccessWithoutOfficeRejected = AssertFalse<
 >;
 type _FollowupOfficeRejected = AssertFalse<
   IsAssignable<InvalidFollowupWithOffice, ChatResponse>
+>;
+type SuccessChatResponse = Extract<ChatResponse, { answer_status: "SUCCESS" }>;
+type _SuccessAnswerModeAcceptsGenerated = Assert<
+  IsAssignable<"GENERATED", SuccessChatResponse["answer_mode"]>
+>;
+type _SuccessAnswerModeAcceptsTemplate = Assert<
+  IsAssignable<"TEMPLATE", SuccessChatResponse["answer_mode"]>
 >;

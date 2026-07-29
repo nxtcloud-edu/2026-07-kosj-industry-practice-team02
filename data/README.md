@@ -1,13 +1,19 @@
-# Data directories
+# 데이터 구성
 
-- `official/`: 사람 승인 뒤의 immutable release와 source registry만 둔다. 현재 정식 release
-  `0.1.0-initial.2`는 ACTIVE KB 19개·공식 기관 3개·승인 매핑 10개이며 local DB seed·최종
-  membership 검증을 통과했다. `[db.seed].enabled=false`이므로 migration reset과 정식 seed는
-  의도적으로 분리한다. 계보는 `docs/data-lineage/DATA-SEED-002-0.1.0-initial.2.md`를 따른다.
-- `staging/`: DATA-001의 공식 데이터 authoring·승인 증거다. `0.1.0-draft.1`은 KB 20·office 3·mapping 12, `PM-LOCAL-001`의 35개 disposition과 validator PASS 상태다. staging 자체는 시민 검색·seed·readiness에 사용할 수 없음
-- `schemas/`: staging artifact와 immutable DATA-SEED release를 위한 내부 데이터 계약,
-  DATA-001 exact source/content/audit hash 승인 매트릭스.
-- `evaluation/`: 표본 20개와 회귀 케이스
-- `mock/`: 시연용, 공식 답변 근거 사용 금지
-- `processed/`: 데이터 검증 테스트가 요구하는 canonical PM 검토 패킷·검증 보고서만 포함한다.
-  그 밖의 재생성 가능한 산출물은 공개 snapshot에서 제외한다.
+최종 MVP는 승인된 공식 지식만 시민 답변에 사용합니다.
+
+- `official/releases/0.1.0-initial.2/`: 승인된 최신 immutable release
+  - ACTIVE KB 19개
+  - 공식 기관 3개
+  - 기관·서비스 매핑 10개
+- `staging/data-001/0.1.0-draft.1/`: `.2` release를 재검증하기 위한 승인 입력
+- `schemas/data-seed/v2/`: 최신 release 검증 스키마
+- `retrieval/topic-coverage.v1.json`: 지원 주제와 coverage 경계
+- `evaluation/sample_questions_20.csv`: 대표 질문 20개
+
+시민 검색은 `ACTIVE` 상태의 공식 KB만 대상으로 합니다. staging 데이터와 테스트 fixture는
+시민 답변 근거로 사용하지 않습니다.
+
+`supabase/seed.sql`은 `.2` release의 `seed.sql`과 동일하지만
+`supabase/config.toml`의 `[db.seed].enabled=false` 설정 때문에 DB reset 시 자동 적용되지
+않습니다. 정식 seed 절차는 저장소 루트 `README.md`의 **실행 방법**을 따릅니다.

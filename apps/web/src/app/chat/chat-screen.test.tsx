@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -43,6 +50,7 @@ const OFFICE = {
 const SUCCESS_RESPONSE = {
   request_id: "11111111-1111-4111-8111-111111111111",
   answer_status: "SUCCESS",
+  answer_mode: "TEMPLATE",
   intent: "MOVE_IN_RESIDENT_REGISTRATION",
   confidence: 0.96,
   summary: "전입신고는 전입한 날부터 14일 이내에 해요.",
@@ -94,7 +102,7 @@ describe("citizen chat screen", () => {
     expect(window.location.search).toBe("");
   });
 
-  it("renders a successful answer with source, office metadata and the generated request shape", async () => {
+  it("renders a template official answer with its source, office metadata and generated request shape", async () => {
     const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
     render(
       <ChatScreen
@@ -112,6 +120,12 @@ describe("citizen chat screen", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("신분증")).toBeInTheDocument();
+    expect(screen.getByText("공식 안내")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "AI가 표현을 정리할 수 있지만 행정 사실과 출처는 승인된 공식 자료에서 확인하며, 오류가 있으면 공식 안내 형식을 사용합니다.",
+      ),
+    ).toBeInTheDocument();
     const sourceLink = screen.getByRole("link", { name: /원문 보기/ });
     expect(sourceLink).toHaveAttribute("href", SUCCESS_RESPONSE.sources[0].url);
     expect(screen.getByText(SUCCESS_RESPONSE.sources[0].title)).toBeInTheDocument();
@@ -128,6 +142,29 @@ describe("citizen chat screen", () => {
       },
       { idempotencyKey: "99999999-9999-4999-8999-999999999999" },
     );
+  });
+
+  it("labels a generated official answer while keeping its verified source link available", async () => {
+    const generatedResponse = {
+      ...SUCCESS_RESPONSE,
+      answer_mode: "GENERATED",
+    } satisfies ChatResponse;
+    const send = vi.fn().mockResolvedValue(generatedResponse);
+    render(<ChatScreen transport={transportWith(send)} />);
+
+    ask("이사했는데 전입신고 어떻게 해요?");
+
+    expect(await screen.findByText("AI로 정리한 공식 안내")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "AI가 표현을 정리할 수 있지만 행정 사실과 출처는 승인된 공식 자료에서 확인하며, 오류가 있으면 공식 안내 형식을 사용합니다.",
+      ),
+    ).toBeInTheDocument();
+    const sourceLink = screen.getByRole("link", { name: /원문 보기/ });
+    expect(sourceLink).toHaveAttribute("href", SUCCESS_RESPONSE.sources[0].url);
+    expect(sourceLink).toHaveAttribute("target", "_blank");
+    expect(sourceLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByText(/Upstage|solar-pro3/i)).not.toBeInTheDocument();
   });
 
   it("keeps follow-up context only in React memory and sends it with the selected option", async () => {
@@ -194,56 +231,188 @@ describe("citizen chat screen", () => {
     expect(await screen.findByText("아름동에 살아요")).toBeInTheDocument();
   });
 
-  it("offers a region entry point on a region-less bulky-waste answer and resends with selected_region (SFR-004)", async () => {
-    const regionlessBulky = {
-      ...SUCCESS_RESPONSE,
-      request_id: "88888888-8888-4888-8888-888888888888",
-      intent: "BULKY_WASTE",
-      summary: "대형폐기물은 신고 후 지정한 배출일 전날 저녁에 내놓으면 됩니다.",
-      office: null,
-      context_token: "signed-bulky-context",
-    } satisfies ChatResponse;
-    const regionalBulky = {
-      ...regionlessBulky,
-      request_id: "99999999-9999-4999-8999-999999999990",
-      summary: "아름동은 지정한 배출일 전날 저녁에 지정 장소에 내놓으면 됩니다.",
-      office: OFFICE,
-    } satisfies ChatResponse;
-    const send = vi
-      .fn()
-      .mockResolvedValueOnce(regionlessBulky)
-      .mockResolvedValueOnce(regionalBulky);
+  it("uses the direct residence-region selection on the next question without browser persistence", async () => {
+    const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
+    const localStorageSpy = vi.spyOn(Storage.prototype, "setItem");
     render(<ChatScreen transport={transportWith(send)} />);
 
-    // 질문에 동을 써도 selected_region 없이 온 답변엔 칩 대신 진입점이 뜬다
-    ask("아름동에서 대형폐기물은 언제 내놓나요?");
-    const entry = await screen.findByRole("button", {
-      name: "우리 동 기준으로 보기",
-    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "거주 지역 선택 · 선택사항" }),
+      { target: { value: "도담동" } },
+    );
+    ask("전입신고 알려줘");
 
-    // 진입점 → 동 선택 → 같은 질문을 selected_region 포함해 재전송
-    fireEvent.click(entry);
-    fireEvent.click(await screen.findByRole("button", { name: "아름동" }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0][0]).toMatchObject({
+      question: "전입신고 알려줘",
+      selected_region: "도담동",
+      context_token: null,
+    } satisfies Partial<ChatRequest>);
+    expect(localStorageSpy).not.toHaveBeenCalled();
+    expect(document.cookie).toBe("");
+  });
+
+  it("starts a new conversation by clearing memory state and returning focus without sending", async () => {
+    const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
+    render(<ChatScreen transport={transportWith(send)} />);
+
+    ask("전입신고 알려줘");
+    expect(
+      await screen.findByText(SUCCESS_RESPONSE.sources[0].title),
+    ).toBeInTheDocument();
+    const callsBeforeReset = send.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "새 대화" }));
+
+    expect(
+      screen.queryByText(SUCCESS_RESPONSE.sources[0].title),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("전입신고 알려줘")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "질문 입력" })).toHaveFocus();
+    expect(send).toHaveBeenCalledTimes(callsBeforeReset);
+  });
+
+  it("keeps the always-visible selected region through a new conversation but resets it on remount", async () => {
+    const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
+    const { unmount } = render(<ChatScreen transport={transportWith(send)} />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "거주 지역 선택 · 선택사항" }), {
+      target: { value: "도담동" },
+    });
+    ask("전입신고 알려줘");
+    await screen.findByText(SUCCESS_RESPONSE.sources[0].title);
+    expect(screen.getByRole("combobox", { name: "도담동 · 변경" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "새 대화" }));
+    expect(screen.getByRole("combobox", { name: "도담동 · 변경" })).toBeInTheDocument();
+    expect(screen.queryByText(SUCCESS_RESPONSE.sources[0].title)).not.toBeInTheDocument();
+
+    unmount();
+    render(<ChatScreen transport={transportWith(send)} />);
+    expect(
+      screen.getByRole("combobox", { name: "거주 지역 선택 · 선택사항" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps region in React only while visible before and after messages", async () => {
+    const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
+    const localStorageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const sessionStorageSpy = vi.spyOn(Storage.prototype, "setItem");
+    render(<ChatScreen transport={transportWith(send)} />);
+
+    expect(screen.getByRole("combobox", { name: "거주 지역 선택 · 선택사항" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "아름동" } });
+    ask("전입신고 알려줘");
+    await screen.findByText(SUCCESS_RESPONSE.sources[0].title);
+
+    expect(screen.getByRole("combobox", { name: "아름동 · 변경" })).toBeInTheDocument();
+    expect(localStorageSpy).not.toHaveBeenCalled();
+    expect(sessionStorageSpy).not.toHaveBeenCalled();
+    expect(document.cookie).toBe("");
+  });
+
+  it("binds each simultaneous footer and inline region label to a unique native select", async () => {
+    const send = vi.fn().mockResolvedValue(SUCCESS_RESPONSE);
+    render(<ChatScreen transport={transportWith(send)} />);
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "아름동" } });
+    ask("전입신고 알려줘");
+    await screen.findByText(SUCCESS_RESPONSE.sources[0].title);
+    fireEvent.click(screen.getByRole("button", { name: "동 변경" }));
+
+    const selects = screen.getAllByRole("combobox");
+    expect(selects).toHaveLength(2);
+    expect(new Set(selects.map((select) => select.id)).size).toBe(selects.length);
+    for (const select of selects) {
+      const label = document.querySelector<HTMLLabelElement>(
+        `label[for="${select.id}"]`,
+      );
+      expect(label).toHaveTextContent("아름동 · 변경");
+      expect(label?.htmlFor).toBe(select.id);
+      expect(select).toHaveAccessibleName("아름동 · 변경");
+    }
+  });
+
+  it("sends a certificate navigation question with its response context and a fresh idempotency key", async () => {
+    const certificateResponse = {
+      ...SUCCESS_RESPONSE,
+      request_id: "77777777-7777-4777-8777-777777777777",
+      intent: "CERTIFICATE_ISSUANCE",
+      sources: [{ ...SUCCESS_RESPONSE.sources[0], source_id: "KB-CERT-01" }],
+      context_token: "signed-certificate-context",
+    } satisfies ChatResponse;
+    const send = vi.fn().mockResolvedValueOnce(certificateResponse).mockResolvedValueOnce(SUCCESS_RESPONSE);
+    const createIdempotencyKey = vi.fn()
+      .mockReturnValueOnce("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+      .mockReturnValueOnce("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    render(
+      <ChatScreen
+        transport={transportWith(send)}
+        createIdempotencyKey={createIdempotencyKey}
+      />,
+    );
+
+    ask("등본과 초본의 차이");
+    fireEvent.click(await screen.findByRole("button", { name: "주민등록표 열람" }));
 
     await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
-    expect(send.mock.calls[1][0]).toEqual({
-      question: "아름동에서 대형폐기물은 언제 내놓나요?",
-      selected_region: "아름동",
-      simple_language: true,
-      context_token: "signed-bulky-context",
-    } satisfies ChatRequest);
+    expect(send.mock.calls[1][0]).toMatchObject({
+      question: "주민등록표 열람",
+      context_token: "signed-certificate-context",
+    } satisfies Partial<ChatRequest>);
+    expect(send.mock.calls[0][1]).toEqual({ idempotencyKey: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
+    expect(send.mock.calls[1][1]).toEqual({ idempotencyKey: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
+  });
 
-    // 갱신된 카드에는 "○○동 기준" 칩과 동 변경 버튼이 노출된다
-    expect(await screen.findByText("아름동 기준")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "동 변경" }),
-    ).toBeInTheDocument();
+  it("replaces the polite waiting message at 2 and 6 seconds and clears stale timers", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveResponse: ((response: ChatResponse) => void) | undefined;
+      const pending = new Promise<ChatResponse>((resolve) => {
+        resolveResponse = resolve;
+      });
+      const send = vi.fn().mockReturnValue(pending);
+      render(<ChatScreen transport={transportWith(send)} />);
+
+      ask("전입신고 알려줘");
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "공식 자료에서 확인하고 있어요.",
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "관련 민원과 공식 출처를 찾고 있어요.",
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000);
+      });
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "답변 근거를 다시 확인하고 있어요.",
+      );
+
+      await act(async () => {
+        resolveResponse?.(SUCCESS_RESPONSE);
+        await Promise.resolve();
+      });
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
     ["INSUFFICIENT_GROUNDING", true, "LOCAL_TAX_GENERAL"],
     ["PERSONAL_LOOKUP", false, "UNKNOWN"],
     ["LEGAL_JUDGMENT", false, "UNKNOWN"],
+    ["CIVIC_SCOPE_GAP", false, "OUT_OF_SCOPE"],
     ["OUT_OF_SCOPE", false, "OUT_OF_SCOPE"],
   ] as const)(
     "renders the %s fallback title, message and no source strip",

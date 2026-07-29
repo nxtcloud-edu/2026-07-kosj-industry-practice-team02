@@ -11,17 +11,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { components } from "../../../../../../packages/shared-contracts/src/generated/api";
-import { buildActualCandidateDraft } from "@/lib/admin-candidate-draft";
 import { STORED_REASON_LABEL, type StoredFailureReason } from "@/lib/labels";
-import { buildCandidateDraft } from "@/lib/demo-fixtures";
 import { useAdmin } from "@/components/admin/AdminShell";
+import CandidateAuthoringForm from "@/components/admin/CandidateAuthoringForm";
+import CivicScopeGapPanel from "@/components/admin/CivicScopeGapPanel";
 import FailureTable from "@/components/admin/FailureTable";
 import EmptyState from "@/components/admin/EmptyState";
 import PageHeader from "@/components/admin/PageHeader";
 import Toast from "@/components/common/Toast";
+import { AdminTransportError } from "@/lib/admin-api";
 
 type FailedQuestion = components["schemas"]["FailedQuestion"];
 type KBCandidateSummary = components["schemas"]["KBCandidateSummary"];
+type KBCandidateCreate = components["schemas"]["KBCandidateCreate"];
+type CivicScopeGapSummary = components["schemas"]["CivicScopeGapSummary"];
+type CivicScopeGapDecision = components["schemas"]["CivicScopeGapReviewRequest"]["decision"];
 
 type Filter = "ALL" | StoredFailureReason;
 
@@ -39,10 +43,36 @@ const FILTERS: { key: Filter; label: string }[] = [
  */
 let knownFailureIds: Set<string> | null = null;
 
+function candidateErrorMessage(
+  error: unknown,
+  phase: "create" | "submit",
+): string {
+  if (!(error instanceof AdminTransportError)) {
+    return phase === "create"
+      ? "KB 후보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+      : "승인 요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.";
+  }
+  if (error.code === "ADMIN_FORBIDDEN") {
+    return "작성 운영자 역할에서만 이 작업을 할 수 있어요.";
+  }
+  if (error.code === "ADMIN_VALIDATION_FAILED") {
+    return "입력값이나 공식 출처 주소를 확인해 주세요.";
+  }
+  if (error.code === "ADMIN_INVALID_STATE") {
+    return phase === "create"
+      ? "이미 후보가 있거나 현재 실패 질문 상태에서는 저장할 수 없어요."
+      : "이미 승인 요청됐거나 현재 후보 상태에서는 다시 요청할 수 없어요.";
+  }
+  return phase === "create"
+    ? "KB 후보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+    : "승인 요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.";
+}
+
 export default function AdminFailuresPage() {
-  const { transport, actor, role, mode, notifyDataChanged } = useAdmin();
+  const { transport, actor, role, notifyDataChanged } = useAdmin();
   const [items, setItems] = useState<FailedQuestion[] | null>(null);
   const [candidates, setCandidates] = useState<KBCandidateSummary[]>([]);
+  const [scopeGaps, setScopeGaps] = useState<CivicScopeGapSummary[]>([]);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,6 +81,8 @@ export default function AdminFailuresPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set());
+  const [editingFailure, setEditingFailure] = useState<FailedQuestion | null>(null);
+  const [scopeBusyId, setScopeBusyId] = useState<string | null>(null);
 
   // setState는 조회 완료 콜백에서만 - 이펙트 본문 동기 setState 금지 규칙 준수
   const fetchData = useCallback(
@@ -58,8 +90,9 @@ export default function AdminFailuresPage() {
       Promise.all([
         transport.listFailedQuestions(actor),
         transport.listCandidates(actor),
+        transport.listCivicScopeGaps(actor),
       ])
-        .then(([failureResponse, candidateResponse]) => {
+        .then(([failureResponse, candidateResponse, scopeResponse]) => {
           const failures = failureResponse.items;
           // 최초 로드는 하이라이트 없음, 이후엔 새로 등장한 id만 1회성 하이라이트.
           if (knownFailureIds !== null) {
@@ -71,6 +104,7 @@ export default function AdminFailuresPage() {
           knownFailureIds = new Set(failures.map((f) => f.id));
           setItems(failures);
           setCandidates(candidateResponse.items);
+          setScopeGaps(scopeResponse.items);
           setLastUpdated(new Date());
           setError(null);
         })
@@ -113,31 +147,80 @@ export default function AdminFailuresPage() {
     }
   };
 
-  /** 근거 부족 건 → KB 후보 초안 생성(자동 구성) + 승인 요청 (데모 #5) */
-  const createDraft = async (id: string) => {
-    const target = (items ?? []).find((f) => f.id === id);
-    if (!target) return;
-    setBusyId(id);
+  /** 운영자 작성 → 저장. 저장 실패와 승인 요청 실패를 구분한다. */
+  const createDraft = async (draft: KBCandidateCreate) => {
+    setBusyId(draft.failed_question_id);
+    let created: Awaited<ReturnType<typeof transport.createCandidate>>;
     try {
-      const draft =
-        mode === "actual"
-          ? buildActualCandidateDraft(target)
-          : buildCandidateDraft(target);
-      const created = await transport.createCandidate(actor, draft);
+      created = await transport.createCandidate(actor, draft);
+    } catch (error) {
+      setToast(candidateErrorMessage(error, "create"));
+      setBusyId(null);
+      return;
+    }
+    setEditingFailure(null);
+    try {
       await transport.submitCandidate(actor, created.id);
       setDraftBanner(draft.title);
-      setToast("KB 후보 초안이 생성되었습니다");
+      setToast("운영자가 작성한 KB 후보가 승인 요청되었습니다");
+    } catch (error) {
+      setToast(
+        `KB 후보는 저장됐습니다. ${candidateErrorMessage(error, "submit")}`,
+      );
+    } finally {
       await load();
       notifyDataChanged();
-    } catch {
-      setToast("KB 후보를 생성하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setBusyId(null);
+    }
+  };
+
+  const submitDraft = async (candidateId: string, title: string) => {
+    const candidate = candidates.find((item) => item.id === candidateId);
+    if (!candidate) return;
+    setBusyId(candidate.failed_question_id);
+    try {
+      await transport.submitCandidate(actor, candidateId);
+      setDraftBanner(title);
+      setToast("저장된 KB 후보를 승인 요청했습니다");
+      await load();
+      notifyDataChanged();
+    } catch (error) {
+      setToast(candidateErrorMessage(error, "submit"));
     } finally {
       setBusyId(null);
     }
   };
 
-  const draftedIds = useMemo(
-    () => new Set(candidates.map((c) => c.failed_question_id)),
+  const reviewScopeGap = async (
+    id: string,
+    decision: CivicScopeGapDecision,
+    reviewComment: string,
+  ) => {
+    setScopeBusyId(id);
+    try {
+      await transport.reviewCivicScopeGap(actor, id, {
+        decision,
+        review_comment: reviewComment,
+      });
+      await load();
+      notifyDataChanged();
+      setToast(
+        decision === "PLANNED"
+          ? "다음 지원 범위 검토 대상으로 표시했습니다"
+          : "지원 범위 검토 목록에서 제외했습니다",
+      );
+    } catch {
+      setToast("지원 범위 검토 결과를 반영하지 못했어요.");
+    } finally {
+      setScopeBusyId(null);
+    }
+  };
+
+  const candidateByFailureId = useMemo(
+    () =>
+      new Map(
+        candidates.map((candidate) => [candidate.failed_question_id, candidate]),
+      ),
     [candidates],
   );
 
@@ -267,15 +350,36 @@ export default function AdminFailuresPage() {
           ) : (
             <FailureTable
               items={filtered}
-              draftedFailureIds={draftedIds}
+              candidateByFailureId={candidateByFailureId}
               busyId={busyId}
               highlightIds={highlightIds}
               canOperate={role === "OPERATOR"}
               onConfirmReason={(id) => void confirmReason(id)}
-              onCreateDraft={(id) => void createDraft(id)}
+              onCreateDraft={(id) =>
+                setEditingFailure((items ?? []).find((item) => item.id === id) ?? null)
+              }
+              onSubmitDraft={(candidateId, title) =>
+                void submitDraft(candidateId, title)
+              }
             />
           )}
         </div>
+        {editingFailure && (
+          <CandidateAuthoringForm
+            failure={editingFailure}
+            busy={busyId === editingFailure.id}
+            onCancel={() => setEditingFailure(null)}
+            onSubmit={(draft) => void createDraft(draft)}
+          />
+        )}
+        <CivicScopeGapPanel
+          items={scopeGaps}
+          canReview={role === "APPROVER"}
+          busyId={scopeBusyId}
+          onReview={(id, decision, comment) =>
+            void reviewScopeGap(id, decision, comment)
+          }
+        />
       </div>
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}

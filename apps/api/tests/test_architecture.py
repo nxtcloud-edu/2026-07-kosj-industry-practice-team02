@@ -17,6 +17,7 @@ SOURCE_FILES = (
     API_ROOT / "src" / "sejong_ai_api" / "core" / "logging.py",
     PRIVACY_SOURCE,
 )
+RETRIEVAL_METADATA_PATH = API_ROOT.parents[1] / "data" / "retrieval" / "topic-coverage.v1.json"
 
 PRIVACY_ALLOWED_IMPORT_ROOTS = {
     "__future__",
@@ -89,6 +90,11 @@ def test_privacy_module_is_stdlib_only_and_import_safe() -> None:
 
 
 class ApiArchitectureTest(unittest.TestCase):
+    def test_retrieval_metadata_is_outside_the_official_release_tree(self) -> None:
+        self.assertEqual(RETRIEVAL_METADATA_PATH.parent.name, "retrieval")
+        self.assertNotIn("official", RETRIEVAL_METADATA_PATH.parts)
+        self.assertTrue(RETRIEVAL_METADATA_PATH.is_file())
+
     def test_exact_approved_dependencies_and_tool_configuration(self) -> None:
         pyproject_path = API_ROOT / "pyproject.toml"
         self.assertTrue(pyproject_path.is_file(), "apps/api/pyproject.toml must exist")
@@ -209,7 +215,7 @@ class ApiArchitectureTest(unittest.TestCase):
         self.assertEqual(completed.stdout.strip(), "isolated-import-safe")
         self.assertEqual(completed.stderr, "")
 
-    def test_public_app_import_does_not_transitively_load_llm_package(self) -> None:
+    def test_public_app_import_loads_only_provider_neutral_llm_modules(self) -> None:
         source_root = API_ROOT / "src"
         probe = textwrap.dedent(
             f"""
@@ -225,13 +231,29 @@ class ApiArchitectureTest(unittest.TestCase):
             sejong_ai_api.main.create_app()
             sejong_ai_api.local.create_local_app(environ={{}}, env_path=missing_env)
 
-            loaded = tuple(
+            loaded = {{
                 name
                 for name in sys.modules
                 if name == "sejong_ai_api.llm" or name.startswith("sejong_ai_api.llm.")
-            )
-            assert not loaded, loaded
-            print("public-import-llm-isolated")
+            }}
+            assert {{
+                "sejong_ai_api.llm",
+                "sejong_ai_api.llm.chat_contracts",
+                "sejong_ai_api.llm.facts",
+            }} <= loaded, loaded
+            forbidden = {{
+                "sejong_ai_api.llm.chat_prompt",
+                "sejong_ai_api.llm.classifier_provider",
+                "sejong_ai_api.llm.deepseek_classifier",
+                "sejong_ai_api.llm.deepseek_settings",
+                "sejong_ai_api.llm.deepseek_usage",
+                "sejong_ai_api.llm.limits",
+                "sejong_ai_api.llm.settings",
+                "sejong_ai_api.llm.upstage_chat",
+            }}
+            assert not (forbidden & loaded), loaded
+            assert "httpx" not in sys.modules
+            print("public-import-provider-isolated")
             """
         )
 
@@ -244,7 +266,7 @@ class ApiArchitectureTest(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout.strip(), "public-import-llm-isolated")
+        self.assertEqual(completed.stdout.strip(), "public-import-provider-isolated")
         self.assertEqual(completed.stderr, "")
 
 

@@ -10,15 +10,19 @@ from pydantic import AnyUrl
 from sejong_ai_api.admin.service import AdminService, AdminServiceError
 from sejong_ai_api.contracts.admin import (
     CandidateReviewRequest,
+    CivicScopeGapReviewRequest,
+    CivicScopeGapSummary,
     FailedQuestion,
     KBCandidateCreateRequest,
     KBCandidateSummary,
     ReasonConfirmationRequest,
 )
+from sejong_ai_api.contracts.feedback import CitizenFeedbackSummaryItem
 from sejong_ai_api.db.models import (
     Actor,
     AdminRole,
     CandidateDraft,
+    CitizenFeedbackAggregate,
     FallbackReason,
     PurgeResult,
 )
@@ -189,6 +193,37 @@ class FakeAdminRepository:
         self.approved_with_public_id: list[tuple[UUID, Actor, str, str]] = []
         self.rejected: list[tuple[UUID, Actor, str]] = []
         self.purge_calls = 0
+        self.scope_gap_purge_calls = 0
+        self.scope_gaps = [
+            CivicScopeGapSummary(
+                id=UUID("68000000-0000-4000-8000-000000000001"),
+                masked_question="합성 범위 부족 민원",
+                status="NEW",
+                created_at=NOW,
+                updated_at=NOW,
+                text_expires_at=NOW + timedelta(days=30),
+                text_purged_at=None,
+                reviewed_by=None,
+                reviewed_at=None,
+                review_comment=None,
+            )
+        ]
+        self.scope_gap_reviews: list[tuple[UUID, Actor, str, str]] = []
+        self.feedback_purge_calls = 0
+        self.feedback_items = [
+            CitizenFeedbackSummaryItem(
+                id=UUID("83000000-0000-4000-8000-000000000001"),
+                response_request_id=UUID("81000000-0000-4000-8000-000000000001"),
+                rating="DISSATISFIED",
+                category="OTHER",
+                reason_code="OTHER",
+                masked_detail="연락처 [전화번호]",
+                detail_was_masked=True,
+                created_at=NOW,
+                detail_expires_at=NOW + timedelta(days=30),
+                detail_purged_at=None,
+            )
+        ]
 
     async def list_failed_questions(
         self, *, reason: str | None, status: str | None
@@ -211,6 +246,36 @@ class FakeAdminRepository:
 
     async def purge_expired_failed_question_text(self) -> PurgeResult:
         self.purge_calls += 1
+        return PurgeResult(purged_count=0, purged_ids=())
+
+    async def list_civic_scope_gaps(
+        self, *, status: str | None
+    ) -> tuple[CivicScopeGapSummary, ...]:
+        return tuple(item for item in self.scope_gaps if status is None or item.status == status)
+
+    async def review_civic_scope_gap(
+        self, scope_gap_id: UUID, actor: Actor, decision: str, review_comment: str
+    ) -> None:
+        self.scope_gap_reviews.append((scope_gap_id, actor, decision, review_comment))
+
+    async def purge_expired_civic_scope_gap_text(self) -> PurgeResult:
+        self.scope_gap_purge_calls += 1
+        return PurgeResult(purged_count=0, purged_ids=())
+
+    async def list_citizen_feedback(self, *, limit: int) -> tuple[CitizenFeedbackSummaryItem, ...]:
+        return tuple(self.feedback_items[:limit])
+
+    async def summarize_citizen_feedback(self) -> CitizenFeedbackAggregate:
+        return CitizenFeedbackAggregate(
+            total=4,
+            satisfied=3,
+            dissatisfied=1,
+            category_counts=(("OTHER", 1),),
+            reason_counts=(("OTHER", 1),),
+        )
+
+    async def purge_expired_citizen_feedback_detail(self) -> PurgeResult:
+        self.feedback_purge_calls += 1
         return PurgeResult(purged_count=0, purged_ids=())
 
     async def confirm_failed_question_reason(
@@ -331,6 +396,53 @@ async def test_lists_and_filters_failed_questions_for_both_admin_roles() -> None
     assert result.total == 1
     assert result.items[0].id == FAILED_ID
     assert repository.purge_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_lists_scope_gaps_for_both_admin_roles_after_bounded_purge() -> None:
+    repository = FakeAdminRepository()
+    service = AdminService(repository)
+
+    result = await service.list_civic_scope_gaps(approver(), status="NEW")
+
+    assert result.total == 1
+    assert result.items[0].masked_question == "합성 범위 부족 민원"
+    assert repository.scope_gap_purge_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_only_approver_can_review_a_new_scope_gap() -> None:
+    repository = FakeAdminRepository()
+    service = AdminService(repository)
+    gap_id = repository.scope_gaps[0].id
+    payload = CivicScopeGapReviewRequest(
+        decision="PLANNED",
+        review_comment="다음 범위로 검토",
+    )
+
+    with pytest.raises(AdminServiceError) as caught:
+        await service.review_civic_scope_gap(operator(), gap_id, payload)
+    assert caught.value.code == "ADMIN_FORBIDDEN"
+
+    result = await service.review_civic_scope_gap(approver(), gap_id, payload)
+    assert result.status == "PLANNED"
+    assert repository.scope_gap_reviews == [(gap_id, approver(), "PLANNED", "다음 범위로 검토")]
+
+
+@pytest.mark.asyncio
+async def test_feedback_summary_uses_all_row_aggregate_and_recent_masked_items() -> None:
+    repository = FakeAdminRepository()
+    service = AdminService(repository)
+
+    result = await service.get_feedback_summary(approver())
+
+    assert result.total == 4
+    assert result.satisfied == 3
+    assert result.dissatisfied == 1
+    assert result.satisfaction_rate == 0.75
+    assert result.category_counts[0].model_dump() == {"code": "OTHER", "count": 1}
+    assert result.recent[0].masked_detail == "연락처 [전화번호]"
+    assert repository.feedback_purge_calls == 1
 
 
 @pytest.mark.asyncio

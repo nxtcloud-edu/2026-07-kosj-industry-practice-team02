@@ -80,10 +80,11 @@
 24. 감사 action은 후보 생성/제출/승인/반려와 실패 사유 확인만 허용하고 action별
     actor·target·old/new status·changed field shape를 DB check로 고정한다.
 
-현재 실행 shape는 `0.4.0-local`의 7 enum·8 table이다. 9개 timestamp migration과 역순
-compensation, trigger/capability, forced RLS, pgTAP 9 files/356 assertions 및 실제 backend
-integration 8/8로 table-local 조건과 cross-row/transaction 조건을 이중 검증한다. 논리
-projection만으로 정책을 강제했다고 판단하지 않는다.
+실행 후보 shape는 `0.3.0-local`의 7 enum·8 table이지만 현재 manifest는 local port blocker로
+`database_schema=0.2.0-draft`다. 위 table-local
+조건과 cross-row/transaction 조건은 timestamp migration, trigger/capability, forced RLS,
+pgTAP 및 실제 backend integration에서 이중 검증한다. 논리 projection만으로 정책을
+강제했다고 판단하지 않는다.
 
 ## 실패 사유와 후보 상태 전이
 

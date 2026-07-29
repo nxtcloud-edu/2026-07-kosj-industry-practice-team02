@@ -11,4 +11,3 @@
 *.webp binary
 *.ico binary
 *.pdf binary
-*.patch -whitespace

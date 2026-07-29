@@ -18,12 +18,20 @@ from pydantic import ValidationError
 
 from sejong_ai_api.admin.candidate_binding import RESERVED_KB_PUBLIC_ID
 from sejong_ai_api.chat.idempotency import IdempotencyClaim, IdempotencyClaimStatus
-from sejong_ai_api.contracts.admin import FailedQuestion, KBCandidateSummary
+from sejong_ai_api.contracts.admin import (
+    CivicScopeGapSummary,
+    FailedQuestion,
+    KBCandidateSummary,
+)
+from sejong_ai_api.contracts.chat import CHAT_RESPONSE_ADAPTER
+from sejong_ai_api.contracts.feedback import CitizenFeedbackSummaryItem
 from sejong_ai_api.db.errors import DatabaseUnavailableError, map_database_error
 from sejong_ai_api.db.models import (
     Actor,
     AdminRole,
     CandidateDraft,
+    CitizenFeedbackAggregate,
+    CitizenFeedbackWrite,
     FailureReasonConfirmation,
     FallbackReason,
     Intent,
@@ -62,6 +70,18 @@ CLAIM_CHAT_IDEMPOTENCY_SQL = "SELECT * FROM app_api.claim_chat_idempotency(%s, %
 COMPLETE_CHAT_IDEMPOTENCY_SQL = "SELECT app_api.complete_chat_idempotency(%s, %s, %s, %s)"
 ABANDON_CHAT_IDEMPOTENCY_SQL = "SELECT app_api.abandon_chat_idempotency(%s, %s, %s)"
 PURGE_EXPIRED_CHAT_IDEMPOTENCY_SQL = "SELECT * FROM app_api.purge_expired_chat_idempotency()"
+RECORD_CIVIC_SCOPE_GAP_SQL = "SELECT app_api.record_civic_scope_gap(%s)"
+LIST_CIVIC_SCOPE_GAPS_SQL = "SELECT * FROM app_api.list_civic_scope_gaps(%s)"
+REVIEW_CIVIC_SCOPE_GAP_SQL = "SELECT app_api.review_civic_scope_gap(%s, %s, %s, %s, %s)"
+PURGE_EXPIRED_CIVIC_SCOPE_GAP_TEXT_SQL = (
+    "SELECT * FROM app_api.purge_expired_civic_scope_gap_text()"
+)
+RECORD_CITIZEN_FEEDBACK_SQL = "SELECT app_api.record_citizen_feedback(%s, %s, %s, %s, %s, %s)"
+LIST_CITIZEN_FEEDBACK_SQL = "SELECT * FROM app_api.list_citizen_feedback(%s)"
+PURGE_EXPIRED_CITIZEN_FEEDBACK_DETAIL_SQL = (
+    "SELECT * FROM app_api.purge_expired_citizen_feedback_detail()"
+)
+SUMMARIZE_CITIZEN_FEEDBACK_SQL = "SELECT * FROM app_api.summarize_citizen_feedback()"
 
 _SUPPORTED_INTENTS = frozenset(
     {
@@ -80,17 +100,49 @@ _CONFIRMABLE_REASONS = frozenset(
 )
 _ADMIN_FAILURE_REASONS = frozenset(reason.value for reason in _CONFIRMABLE_REASONS)
 _ADMIN_FAILURE_STATUSES = frozenset({"NEW", "REASON_CONFIRMED"})
+_CIVIC_SCOPE_GAP_STATUSES = frozenset({"NEW", "PLANNED", "DISMISSED"})
+_CIVIC_SCOPE_GAP_DECISIONS = frozenset({"PLANNED", "DISMISSED"})
 _IDEMPOTENCY_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$", re.ASCII)
+_IDEMPOTENCY_VALIDATION_REQUEST_ID = "00000000-0000-4000-8000-000000000000"
+
+
+def _canonical_idempotency_response_key(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
+
+
 _FORBIDDEN_IDEMPOTENCY_RESPONSE_KEYS = frozenset(
-    {
+    _canonical_idempotency_response_key(key)
+    for key in {
+        "access_token",
+        "api_key",
+        "api_secret",
+        "authorization",
+        "authorization_header",
+        "bearer_token",
+        "client_secret",
+        "context",
         "context_token",
+        "correlation_id",
+        "correlation_request_id",
+        "draft",
+        "llm_api_key",
         "masked_question",
         "prompt",
+        "provider_api_key",
         "provider_body",
+        "provider_content",
+        "provider_error",
+        "provider_request",
+        "provider_response",
+        "provider_result",
+        "provider_secret",
         "question",
         "raw_question",
+        "request",
         "request_body",
         "request_id",
+        "secret",
+        "secret_access_key",
         "transcript",
     }
 )
@@ -142,6 +194,32 @@ class SejongRepository(Protocol):
     async def list_kb_candidates(self) -> Sequence[KBCandidateSummary]: ...
 
     async def get_kb_candidate(self, candidate_id: UUID) -> KBCandidateSummary | None: ...
+
+    async def record_civic_scope_gap(self, masked_question: str) -> None: ...
+
+    async def list_civic_scope_gaps(
+        self, *, status: str | None
+    ) -> Sequence[CivicScopeGapSummary]: ...
+
+    async def review_civic_scope_gap(
+        self,
+        scope_gap_id: UUID,
+        actor: Actor,
+        decision: str,
+        review_comment: str,
+    ) -> None: ...
+
+    async def purge_expired_civic_scope_gap_text(self) -> PurgeResult: ...
+
+    async def record_citizen_feedback(self, write: CitizenFeedbackWrite) -> None: ...
+
+    async def list_citizen_feedback(
+        self, *, limit: int
+    ) -> Sequence[CitizenFeedbackSummaryItem]: ...
+
+    async def purge_expired_citizen_feedback_detail(self) -> PurgeResult: ...
+
+    async def summarize_citizen_feedback(self) -> CitizenFeedbackAggregate: ...
 
     async def claim_chat_idempotency(
         self,
@@ -230,7 +308,7 @@ def _response_has_forbidden_key(value: object) -> bool:
         for key, nested in value.items():
             if type(key) is not str:
                 return True
-            if key.casefold() in _FORBIDDEN_IDEMPOTENCY_RESPONSE_KEYS:
+            if _canonical_idempotency_response_key(key) in _FORBIDDEN_IDEMPOTENCY_RESPONSE_KEYS:
                 return True
             if _response_has_forbidden_key(nested):
                 return True
@@ -244,15 +322,33 @@ def _require_safe_response_json(value: object) -> dict[str, Any]:
     if type(value) is not dict or not value or _response_has_forbidden_key(value):
         raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE")
     try:
-        encoded = json.dumps(
+        stored_encoded = json.dumps(
             value,
             ensure_ascii=False,
             allow_nan=False,
             separators=(",", ":"),
         ).encode("utf-8")
+        candidate = value.copy()
+        candidate["request_id"] = _IDEMPOTENCY_VALIDATION_REQUEST_ID
+        candidate["context_token"] = None
+        validated = CHAT_RESPONSE_ADAPTER.validate_json(
+            json.dumps(
+                candidate,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            )
+        )
     except (TypeError, ValueError):
         raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE") from None
-    if len(encoded) > _MAX_IDEMPOTENCY_RESPONSE_BYTES:
+    if (
+        len(stored_encoded) > _MAX_IDEMPOTENCY_RESPONSE_BYTES
+        or validated.model_dump(
+            mode="json",
+            exclude={"request_id", "context_token"},
+        )
+        != value
+    ):
         raise ValueError("IDEMPOTENCY_RESPONSE_UNSAFE")
     return value.copy()
 
@@ -360,6 +456,35 @@ def _safe_candidates(rows: list[dict[str, Any]]) -> tuple[KBCandidateSummary, ..
         return tuple(KBCandidateSummary.model_validate(row) for row in rows)
     except (TypeError, ValueError, ValidationError):
         raise DatabaseUnavailableError() from None
+
+
+def _safe_civic_scope_gaps(
+    rows: list[dict[str, Any]],
+) -> tuple[CivicScopeGapSummary, ...]:
+    try:
+        return tuple(CivicScopeGapSummary.model_validate(row) for row in rows)
+    except (TypeError, ValueError, ValidationError):
+        raise DatabaseUnavailableError() from None
+
+
+def _safe_citizen_feedback(
+    rows: list[dict[str, Any]],
+) -> tuple[CitizenFeedbackSummaryItem, ...]:
+    try:
+        return tuple(CitizenFeedbackSummaryItem.model_validate(row) for row in rows)
+    except (TypeError, ValueError, ValidationError):
+        raise DatabaseUnavailableError() from None
+
+
+def _feedback_count_map(value: object) -> tuple[tuple[str, int], ...]:
+    if type(value) is not dict:
+        raise ValueError("MALFORMED_DATABASE_RESULT")
+    items: list[tuple[str, int]] = []
+    for key, count in value.items():
+        if type(key) is not str or not key or type(count) is not int or count < 0:
+            raise ValueError("MALFORMED_DATABASE_RESULT")
+        items.append((key, count))
+    return tuple(sorted(items))
 
 
 class PsycopgSejongRepository:
@@ -628,6 +753,152 @@ class PsycopgSejongRepository:
         if len(rows) != 1:
             raise DatabaseUnavailableError()
         return _safe_candidates(rows)[0]
+
+    async def record_civic_scope_gap(self, masked_question: str) -> None:
+        valid_text = _required_text(masked_question)
+        if len(valid_text) > 2000:
+            raise ValueError("CIVIC_SCOPE_GAP_TEXT_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(RECORD_CIVIC_SCOPE_GAP_SQL, (valid_text,))
+                rows = await cursor.fetchall()
+                self._scalar_uuid(rows, "record_civic_scope_gap")
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+
+    async def list_civic_scope_gaps(
+        self, *, status: str | None
+    ) -> tuple[CivicScopeGapSummary, ...]:
+        valid_status = _require_admin_read_filter(status, _CIVIC_SCOPE_GAP_STATUSES)
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(LIST_CIVIC_SCOPE_GAPS_SQL, (valid_status,))
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return _safe_civic_scope_gaps(rows)
+
+    async def review_civic_scope_gap(
+        self,
+        scope_gap_id: UUID,
+        actor: Actor,
+        decision: str,
+        review_comment: str,
+    ) -> None:
+        valid_id = _require_uuid(scope_gap_id, "CIVIC_SCOPE_GAP_ID_INVALID")
+        valid_actor = _require_actor(actor, AdminRole.APPROVER)
+        valid_decision = _require_admin_read_filter(decision, _CIVIC_SCOPE_GAP_DECISIONS)
+        if valid_decision is None:
+            raise ValueError("CIVIC_SCOPE_GAP_DECISION_INVALID")
+        valid_comment = _require_review_comment(review_comment)
+        await self._execute_void_write(
+            REVIEW_CIVIC_SCOPE_GAP_SQL,
+            (
+                valid_id,
+                valid_actor.actor_id,
+                valid_actor.role.value,
+                valid_decision,
+                valid_comment,
+            ),
+        )
+
+    async def purge_expired_civic_scope_gap_text(self) -> PurgeResult:
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(PURGE_EXPIRED_CIVIC_SCOPE_GAP_TEXT_SQL, ())
+                rows = await cursor.fetchall()
+                result = self._purge_result(rows)
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return result
+
+    async def record_citizen_feedback(self, write: CitizenFeedbackWrite) -> None:
+        if type(write) is not CitizenFeedbackWrite:
+            raise ValueError("FEEDBACK_WRITE_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(
+                    RECORD_CITIZEN_FEEDBACK_SQL,
+                    (
+                        write.response_request_id,
+                        write.rating,
+                        write.category,
+                        write.reason_code,
+                        write.masked_detail,
+                        write.detail_was_masked,
+                    ),
+                )
+                rows = await cursor.fetchall()
+                self._scalar_uuid(rows, "record_citizen_feedback")
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+
+    async def list_citizen_feedback(self, *, limit: int) -> tuple[CitizenFeedbackSummaryItem, ...]:
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("FEEDBACK_LIMIT_INVALID")
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(LIST_CITIZEN_FEEDBACK_SQL, (limit,))
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return _safe_citizen_feedback(rows)
+
+    async def purge_expired_citizen_feedback_detail(self) -> PurgeResult:
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.transaction(),
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(PURGE_EXPIRED_CITIZEN_FEEDBACK_DETAIL_SQL, ())
+                rows = await cursor.fetchall()
+                result = self._purge_result(rows)
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        return result
+
+    async def summarize_citizen_feedback(self) -> CitizenFeedbackAggregate:
+        try:
+            async with (
+                self._pool.connection() as connection,
+                connection.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(SUMMARIZE_CITIZEN_FEEDBACK_SQL, ())
+                rows = await cursor.fetchall()
+        except psycopg.Error as exc:
+            raise map_database_error(exc) from exc
+        try:
+            if len(rows) != 1:
+                raise ValueError
+            row = rows[0]
+            return CitizenFeedbackAggregate(
+                total=row["total_count"],
+                satisfied=row["satisfied_count"],
+                dissatisfied=row["dissatisfied_count"],
+                category_counts=_feedback_count_map(row["category_counts"]),
+                reason_counts=_feedback_count_map(row["reason_counts"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            raise DatabaseUnavailableError() from None
 
     async def claim_chat_idempotency(
         self,

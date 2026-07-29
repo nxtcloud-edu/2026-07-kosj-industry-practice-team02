@@ -163,23 +163,6 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-/* 이음센터 네이비 사이드바의 시연 역할 select: 기본 남색 포커스 링은 배경에
-   묻히므로 밝은 하늘색(tie-line) 링으로 대체한다(멘토 QA). 안쪽 띠는 사이드바
-   배경색으로 링을 띄운다. .demo-role-select(0,2,0)가 :focus-visible(0,1,0)을 이긴다. */
-.demo-role-select:focus-visible {
-  box-shadow:
-    0 0 0 2px var(--color-admin-nav),
-    0 0 0 4px var(--color-tie-line);
-}
-
-/* 질문 입력 박스: 포커스 링은 컨테이너(rounded-btn, 12px)에서 한 번만 그린다.
-   내부 input은 자체 radius가 없어 global :focus-visible 링이 사각으로 겹쳐
-   컨테이너 둥근 링과 반경이 어긋난다(멘토 QA) - 내부 링을 억제해 컨테이너
-   radius로 통일한다. id 선택자(1,1,0)가 :focus-visible(0,1,0)을 이긴다. */
-#question-input:focus-visible {
-  box-shadow: none;
-}
-
 /* 스킵 링크 - 포커스 시에만 보임 (v3 §1) */
 .skip-link {
   position: absolute;
