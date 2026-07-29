@@ -45,6 +45,7 @@ from sejong_ai_api.llm.chat_contracts import (
 from sejong_ai_api.llm.contracts import TokenUsage
 from sejong_ai_api.llm.cost import estimate_cost_usd
 from sejong_ai_api.llm.deepseek_usage import estimate_deepseek_cost_usd
+from sejong_ai_api.llm.facts import materialize_grounded_answer
 from sejong_ai_api.local import create_local_app, load_local_settings
 
 
@@ -432,6 +433,20 @@ def _combined_provider_config() -> dict[str, str]:
     }
 
 
+def _deepseek_answer_config(*, classifier: bool = False) -> dict[str, str]:
+    return {
+        **_config(),
+        "CLASSIFIER_PROVIDER": "deepseek" if classifier else "disabled",
+        "LLM_PROVIDER": "deepseek",
+        "DEEPSEEK_API_KEY": "test-only-deepseek-sentinel",
+        "DEEPSEEK_MODEL": "deepseek-v4-flash",
+        "DEEPSEEK_BASE_URL": "https://api.deepseek.com",
+        "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
+        "UPSTAGE_CLASSIFIER_MODE": "false",
+        "UPSTAGE_GROUNDED_CHAT_MODE": "false",
+    }
+
+
 def _deepseek_classifier_config(*, grounded_chat: bool = False) -> dict[str, str]:
     return {
         **(_grounded_chat_config() if grounded_chat else _config()),
@@ -458,6 +473,44 @@ def _deepseek_scope_gap_response(request: httpx.Request) -> httpx.Response:
                             '"pending_slot":"NONE"}'
                         )
                     },
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 10,
+                "total_tokens": 30,
+            },
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return httpx.Response(
+        200,
+        request=request,
+        headers={"Content-Type": "application/json"},
+        stream=httpx.ByteStream(body),
+    )
+
+
+def _deepseek_grounded_response(request: httpx.Request) -> httpx.Response:
+    content = json.dumps(
+        {
+            "summary": "공식 안내 정보를 쉽게 정리 드려요",
+            "procedure_step_ids": ["STEP-01"],
+            "required_document_ids": [],
+            "processing_time_id": None,
+            "fee_id": None,
+            "department_id": "DEPT-01",
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    body = json.dumps(
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": content},
                 }
             ],
             "usage": {
@@ -1990,3 +2043,240 @@ def test_pool_construction_failure_stays_closed_without_leaking_the_diagnostic(
         response = client.get("/ready")
     assert response.status_code == 503
     assert sentinel not in json.dumps(response.json())
+
+
+def test_deepseek_answer_only_profile_injects_generator_without_eager_outbound(
+    tmp_path: Path,
+) -> None:
+    runtime = FakeGroundedRuntime()
+    factory_settings: list[object] = []
+
+    def runtime_factory(settings: object) -> FakeGroundedRuntime:
+        factory_settings.append(settings)
+        return runtime
+
+    app = create_local_app(
+        environ=_deepseek_answer_config(),
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: FakePool(),
+        repository_factory=lambda value: FakeRepository(value),
+        grounded_chat_runtime_factory=cast(Any, runtime_factory),
+    )
+
+    assert len(factory_settings) == 1
+    assert type(factory_settings[0]).__name__ == "DeepSeekChatSettings"
+    assert "test-only-deepseek-sentinel" not in repr(factory_settings[0])
+    assert runtime.generator.requests == []
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        assert client.get("/ready").status_code == 200
+        assert runtime.generator.requests == []
+        response = client.post(
+            "/api/v1/chat",
+            json={"question": "이사했는데 전입신고는 어떻게 하나요?"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["answer_mode"] == "TEMPLATE"
+    assert len(runtime.generator.requests) == 1
+    assert runtime.close_count == 1
+
+
+def test_deepseek_combined_profile_routes_masked_official_grounding_and_closes_clients(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sejong_ai_api.llm.deepseek_chat as chat_module
+    import sejong_ai_api.llm.deepseek_classifier as classifier_module
+
+    raw_phone = "010-2223-2545"
+    classifier_outbound = 0
+    answer_outbound = 0
+    classifier_requests: list[httpx.Request] = []
+    answer_requests: list[httpx.Request] = []
+    classifier_clients: list[httpx.AsyncClient] = []
+    answer_clients: list[httpx.AsyncClient] = []
+    answer_outcomes: list[GroundedChatResult] = []
+    grounded_requests: list[GroundedChatRequest] = []
+    repositories: list[FakeRepository] = []
+    original_generate = chat_module.DeepSeekChatGenerator.generate
+
+    async def observe_generate(self: object, request: GroundedChatRequest) -> GroundedChatResult:
+        grounded_requests.append(request)
+        result = await original_generate(cast(Any, self), request)
+        answer_outcomes.append(result)
+        return result
+
+    def classifier_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal classifier_outbound
+        classifier_outbound += 1
+        classifier_requests.append(request)
+        return _deepseek_scope_gap_response(request)
+
+    def answer_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal answer_outbound
+        answer_outbound += 1
+        answer_requests.append(request)
+        return _deepseek_grounded_response(request)
+
+    def classifier_client_factory(_settings: object) -> httpx.AsyncClient:
+        client = httpx.AsyncClient(transport=httpx.MockTransport(classifier_handler))
+        classifier_clients.append(client)
+        return client
+
+    def answer_client_factory(_settings: object) -> httpx.AsyncClient:
+        client = httpx.AsyncClient(transport=httpx.MockTransport(answer_handler))
+        answer_clients.append(client)
+        return client
+
+    def repository_factory(value: object) -> FakeRepository:
+        repository = FakeRepository(value)
+        repositories.append(repository)
+        return repository
+
+    monkeypatch.setattr(chat_module.DeepSeekChatGenerator, "generate", observe_generate)
+    monkeypatch.setattr(
+        classifier_module,
+        "create_deepseek_classifier_client",
+        classifier_client_factory,
+    )
+    monkeypatch.setattr(
+        chat_module,
+        "create_deepseek_chat_client",
+        answer_client_factory,
+    )
+    app = create_local_app(
+        environ=_deepseek_answer_config(classifier=True),
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: FakePool(),
+        repository_factory=repository_factory,
+    )
+
+    assert classifier_clients == []
+    assert len(answer_clients) == 1
+    assert classifier_outbound == 0
+    assert answer_outbound == 0
+    with TestClient(app) as client:
+        assert client.get("/ready").status_code == 200
+        supported = client.post(
+            "/api/v1/chat",
+            json={"question": f"이사했는데 전입신고는 어떻게 하나요? 연락처는 {raw_phone}"},
+        )
+        ambiguous = client.post(
+            "/api/v1/chat",
+            json={"question": "청년 월세 지원 어떻게 해요?"},
+        )
+
+    supported_payload = supported.json()
+    assert supported.status_code == 200
+    assert supported_payload["answer_status"] == "SUCCESS"
+    assert answer_outbound == 1
+    assert [outcome.code for outcome in answer_outcomes] == [GroundedChatOutcomeCode.SUCCESS]
+    assert len(grounded_requests) == 1
+    assert answer_outcomes[0].draft is not None
+    assert materialize_grounded_answer(grounded_requests[0], answer_outcomes[0].draft) is not None
+    assert supported_payload["answer_mode"] == "GENERATED"
+    assert supported_payload["summary"] == "공식 안내 정보를 쉽게 정리 드려요"
+    assert supported_payload["procedure_steps"] == ["공식 경로를 확인합니다."]
+    assert supported_payload["department"] == "담당 부서"
+    assert supported_payload["sources"][0]["source_id"] == "KB-MOVE-01"
+    assert supported_payload["sources"][0]["url"] == "https://example.invalid/official"
+    assert ambiguous.status_code == 200
+    assert ambiguous.json()["fallback"]["reason"] == "CIVIC_SCOPE_GAP"
+    assert classifier_outbound == 1
+    assert answer_outbound == 1
+    assert len(classifier_requests) == 1
+    assert len(answer_requests) == 1
+    assert raw_phone.encode("utf-8") not in answer_requests[0].content
+    assert "[전화번호]".encode() in answer_requests[0].content
+    assert raw_phone not in repr(repositories[0].events)
+    assert raw_phone not in json.dumps(supported_payload, ensure_ascii=False)
+    assert classifier_clients[0].is_closed
+    assert answer_clients[0].is_closed
+
+
+def test_deepseek_combined_profile_shares_deepseek_cost_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sejong_ai_api.llm.deepseek_chat as chat_module
+    import sejong_ai_api.llm.limits as limits_module
+
+    original_ledger_factory = limits_module.ProviderAttemptLedger
+    captured_arguments: dict[str, object] = {}
+    captured_ledgers: list[object] = []
+    grounded_runtime = FakeGroundedRuntime()
+
+    def capture_ledger(**kwargs: object) -> object:
+        captured_arguments.update(kwargs)
+        ledger = original_ledger_factory(**cast(Any, kwargs))
+        captured_ledgers.append(ledger)
+        return ledger
+
+    def build_runtime(_settings: object, *, ledger: object) -> FakeGroundedRuntime:
+        captured_ledgers.append(ledger)
+        return grounded_runtime
+
+    monkeypatch.setattr(limits_module, "ProviderAttemptLedger", capture_ledger)
+    monkeypatch.setattr(chat_module, "build_deepseek_chat_runtime", build_runtime)
+
+    app = create_local_app(
+        environ=_deepseek_answer_config(classifier=True),
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: FakePool(),
+        repository_factory=lambda value: FakeRepository(value),
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        assert client.get("/ready").status_code == 200
+
+    assert len(captured_ledgers) == 2
+    assert captured_ledgers[0] is captured_ledgers[1]
+    assert captured_arguments == {
+        "classifier_cap": 80,
+        "generator_cap": 100,
+        "combined_cap": 160,
+        "cost_cap_usd": Decimal("0.20"),
+        "classifier_worst_case_usd": estimate_deepseek_cost_usd(TokenUsage(16384, 0, 128)),
+        "generator_worst_case_usd": estimate_deepseek_cost_usd(TokenUsage(16384, 0, 1024)),
+        "classifier_cost_estimator": estimate_deepseek_cost_usd,
+        "generator_cost_estimator": estimate_deepseek_cost_usd,
+    }
+    assert grounded_runtime.close_count == 1
+
+
+def test_conflicting_deepseek_answer_profile_disables_generator_without_eager_outbound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sejong_ai_api.llm.deepseek_chat as chat_module
+
+    client_calls = 0
+
+    def unexpected_client(_settings: object) -> httpx.AsyncClient:
+        nonlocal client_calls
+        client_calls += 1
+        raise AssertionError("DEEPSEEK_CHAT_CLIENT_ON_CONFLICT")
+
+    monkeypatch.setattr(chat_module, "create_deepseek_chat_client", unexpected_client)
+    app = create_local_app(
+        environ={
+            **_deepseek_answer_config(),
+            "UPSTAGE_GROUNDED_CHAT_MODE": "true",
+        },
+        env_path=tmp_path / "missing",
+        pool_factory=lambda _value: FakePool(),
+        repository_factory=lambda value: FakeRepository(value),
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/ready").status_code == 200
+        response = client.post(
+            "/api/v1/chat",
+            json={"question": "이사했는데 전입신고는 어떻게 하나요?"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["answer_mode"] == "TEMPLATE"
+    assert client_calls == 0

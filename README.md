@@ -66,8 +66,9 @@
 ### 제한된 AI 사용
 
 - 명백한 지원 질문과 개인정보·정책 질문은 서버의 결정론적 경로가 먼저 처리합니다.
-- 마스킹을 통과한 안전한 모호 질문은 DeepSeek 분류기를 선택적으로 사용할 수 있습니다.
-- Upstage `solar-pro3`는 ACTIVE KB와 서버 발급 fact ID 안에서 답변 표현을 보조하도록 선택적으로 사용할 수 있습니다.
+- 마스킹을 통과한 안전한 모호 질문은 DeepSeek `deepseek-v4-flash` 분류기를 선택적으로 사용할 수 있습니다.
+- 같은 DeepSeek 모델은 ACTIVE KB와 서버 발급 fact ID 안에서 근거 제한형 답변 표현도 선택적으로 보조합니다.
+- 기존 Upstage 경로는 rollback 선택지로 보존하지만 기본 설정과 아래 실행 예시는 DeepSeek로 통일합니다.
 - 공급자 장애, timeout, JSON·계약 위반, 근거 불일치가 발생하면 공식 KB 기반 TEMPLATE 응답으로 복구합니다.
 - 기본 설정은 외부 공급자 비활성화이며 API key는 저장소에 포함하지 않습니다.
 
@@ -212,26 +213,20 @@ corepack pnpm --filter @sejong-ai/web dev
 
 AI 없이도 공식 KB 기반 답변·폴백·관리자 승인 흐름은 작동합니다. AI를 사용할 때는 `apps/api/.env`의 빈 칸에 로컬 key를 입력합니다.
 
-### DeepSeek 질문 분류
+### DeepSeek 질문 분류·근거 제한형 답변 생성
 
 ```dotenv
 CLASSIFIER_PROVIDER=deepseek
+LLM_PROVIDER=deepseek
 DEEPSEEK_API_KEY=
 DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com
+UPSTAGE_SYNTHETIC_EVALUATION_MODE=false
+UPSTAGE_CLASSIFIER_MODE=false
+UPSTAGE_GROUNDED_CHAT_MODE=false
 ```
 
-### Upstage 근거 제한형 답변 생성
-
-```dotenv
-LLM_PROVIDER=upstage
-LLM_MODEL=solar-pro3
-LLM_API_KEY=
-LLM_BASE_URL=https://api.upstage.ai/v1
-UPSTAGE_GROUNDED_CHAT_MODE=true
-```
-
-두 공급자를 함께 사용할 수 있지만 사실·출처·기관 정보는 계속 서버와 ACTIVE KB가 통제합니다. key를 설정한 `.env`는 Git에 추가하지 않습니다.
+두 역할은 Git 밖의 동일한 `DEEPSEEK_API_KEY`를 사용합니다. 모델은 마스킹된 질문과 서버가 선택한 ACTIVE/OFFICIAL KB의 제한된 fact만 받으며, 사실·출처·기관 정보는 계속 서버가 결합합니다. timeout·JSON·계약·근거 검증에 실패하면 공식 KB TEMPLATE 답변으로 전체 복구합니다. 기본값은 계속 `disabled`이고 실제 key를 설정한 `.env`는 Git에 추가하지 않습니다.
 
 ## 8. 동작 확인 시나리오
 
@@ -256,7 +251,7 @@ UPSTAGE_GROUNDED_CHAT_MODE=true
 # API
 uv run --project apps/api --frozen ruff format --check apps/api
 uv run --project apps/api --frozen ruff check apps/api
-uv run --project apps/api --frozen mypy apps/api/src
+uv run --project apps/api --frozen mypy apps/api/src apps/api/tests
 uv run --project apps/api --frozen pytest -q apps/api/tests
 
 # 공유 계약
@@ -281,9 +276,9 @@ python -B scripts/check_git_history_secrets.py --repo .
 
 | 영역 | 결과 |
 | --- | --- |
-| API Ruff format/check | PASS — 130 files |
-| API strict Mypy | PASS — 67 source files |
-| API Pytest | PASS — 2,547 passed, local DB 전용 8 skipped |
+| API Ruff format/check | PASS — 135 files |
+| API strict Mypy | PASS — 135 source/test files |
+| API Pytest | PASS — 2,612 passed, local DB 전용 8 skipped, 5 subtests passed |
 | 공유 계약 | PASS — 96/96 |
 | Web lint/typecheck/test/build | PASS — Vitest 77/77, Next production build |
 | 현재 파일·공개 Git history 비밀값 검사 | PASS — finding 0 |
@@ -310,7 +305,6 @@ Docker DB reset·seed·`/ready=200`·19→20 상태 변경은 이번 공개 expo
 
 ## 12. 제출 스냅샷
 
-- private source 기준 SHA: `cbcf28b737a234f2321eff93b4a2b827f90df2d4`
 - 스냅샷 작성일: 2026-07-30
 - 실제 `.env`, key, token, DSN, local DB 상태, 개인정보, 로그, cache와 build 산출물은 포함하지 않습니다.
 - 기존 입찰제안서 PDF와 `notice.md`는 원본 그대로 보존합니다.

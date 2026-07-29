@@ -1,10 +1,10 @@
 {
   "manifest_version": "1.0.0",
-  "updated_at": "2026-07-29T20:27:00+09:00",
+  "updated_at": "2026-07-30T02:36:42+09:00",
   "versions": {
     "product_spec": "2.7.0",
     "repo_guidance": "1.7.10",
-    "application": "0.14.0-citizen-feedback",
+    "application": "0.15.0-deepseek-grounded-answer",
     "web": "0.9.0-feedback-and-candidate-recovery",
     "api": "4.1.0-draft",
     "shared_contracts": "1.1.0",
@@ -12,8 +12,8 @@
     "official_data": "0.1.0-initial.2",
     "mock_data": "0.0.0-not-populated",
     "prompt_set": "0.4.5-explicit-intent-route-shape",
-    "test_suite": "2.3.0-citizen-feedback",
-    "documentation": "2.33.0-citizen-feedback"
+    "test_suite": "2.4.0-deepseek-grounded-answer",
+    "documentation": "2.34.0-deepseek-grounded-answer"
   },
   "policy": "Every implementation note records before/after versions. Breaking API or schema changes require human approval and an ADR."
 }

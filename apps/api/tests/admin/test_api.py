@@ -31,7 +31,7 @@ from sejong_ai_api.contracts.admin import (
     ReasonConfirmationRequest,
     ReasonConfirmationResponse,
 )
-from sejong_ai_api.contracts.feedback import FeedbackSummaryResponse
+from sejong_ai_api.contracts.feedback import FeedbackCount, FeedbackSummaryResponse
 from sejong_ai_api.db.models import Actor, AdminRole
 
 REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -156,8 +156,8 @@ class RouteService:
             satisfied=3,
             dissatisfied=1,
             satisfaction_rate=0.75,
-            category_counts=[{"code": "OTHER", "count": 1}],
-            reason_counts=[{"code": "OTHER", "count": 1}],
+            category_counts=[FeedbackCount(code="OTHER", count=1)],
+            reason_counts=[FeedbackCount(code="OTHER", count=1)],
             recent=[],
         )
 
