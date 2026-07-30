@@ -41,6 +41,7 @@ from sejong_ai_api.chat.retrieval import (
     GroundingEvidence,
     GroundingEvidenceKind,
     TopicSelection,
+    has_compatible_explicit_anchors,
     select_deterministic_topic,
     validate_semantic_selection,
 )
@@ -875,7 +876,18 @@ class ChatService:
         if type(decision) is not ClassifierDecision:
             return None
         if decision.route is ClassifierRoute.SUPPORTED:
-            return validate_semantic_selection(decision, catalog)
+            semantic_selection = validate_semantic_selection(decision, catalog)
+            if semantic_selection is None:
+                return None
+            if not has_compatible_explicit_anchors(question, semantic_selection):
+                return ClassifierDecision(
+                    route=ClassifierRoute.NO_TOPIC_MATCH,
+                    intent=semantic_selection.topic.record.category,
+                    topic_id=None,
+                    coverage_id=None,
+                    pending_slot=None,
+                )
+            return semantic_selection
         if decision.route is ClassifierRoute.NEEDS_FOLLOWUP:
             if decision.pending_slot is None:
                 return None

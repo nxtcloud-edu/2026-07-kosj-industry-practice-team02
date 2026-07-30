@@ -218,6 +218,47 @@ def test_deterministic_selector_returns_one_unique_strong_lexical_topic() -> Non
     assert "주소이전" in selected.evidence.matched_tokens
 
 
+def test_deterministic_selector_rejects_generic_fee_overlap_for_a_different_waste_item() -> None:
+    mattress = knowledge(
+        public_id="KB-WASTE-04",
+        service_name="매트리스 배출 수수료",
+        question_examples=(
+            "매트리스는 버리는 데 얼마인가요?",
+            "1인용 매트리스 수수료가 있나요?",
+        ),
+    )
+
+    selected = select_deterministic_topic(
+        safe_question("침대 2인용 프레임 수수료가 얼마에요?"),
+        Intent.BULKY_WASTE,
+        catalog(mattress),
+    )
+
+    assert selected is None
+
+
+def test_deterministic_selector_selects_bed_frame_only_after_its_topic_is_active() -> None:
+    mattress = knowledge(
+        public_id="KB-WASTE-04",
+        service_name="매트리스 배출 수수료",
+        question_examples=("1인용 매트리스 수수료가 있나요?",),
+    )
+    bed_frame = knowledge(
+        public_id="KB-WASTE-03",
+        service_name="침대 프레임 배출 수수료",
+        question_examples=("2인용 침대 프레임 배출 비용은 얼마인가요?",),
+    )
+
+    selected = select_deterministic_topic(
+        safe_question("침대 2인용 프레임 수수료가 얼마에요?"),
+        Intent.BULKY_WASTE,
+        catalog(mattress, bed_frame),
+    )
+
+    assert selected is not None
+    assert selected.topic.record is bed_frame
+
+
 def test_deterministic_selector_rejects_tied_top_two_lexical_topics() -> None:
     first = knowledge(
         public_id="KB-MOVE-01",

@@ -82,3 +82,21 @@ def test_every_approved_initial_question_example_reaches_its_grounded_record() -
             checked += 1
 
     assert checked == 57
+
+
+def test_unapproved_bed_frame_fee_does_not_resolve_to_active_mattress() -> None:
+    records = load_records()
+    waste_records = tuple(record for record in records if record.category is Intent.BULKY_WASTE)
+    catalog = build_topic_catalog(
+        waste_records,
+        load_topic_coverage(COVERAGE_PATH),
+    )
+    question = SafeQuestion(redact_question("침대 2인용 프레임 수수료가 얼마에요?"))
+
+    selection = select_deterministic_topic(
+        question,
+        Intent.BULKY_WASTE,
+        catalog,
+    )
+
+    assert selection is None

@@ -115,7 +115,7 @@ _INTENT_ANCHORS: dict[Intent, frozenset[str]] = {
         {"주민등록", "주민등록표", "등본", "초본", "무인민원발급", "무인발급기"}
     ),
     Intent.BULKY_WASTE: frozenset(
-        {"대형폐기물", "폐기물", "침대", "프레임", "매트리스", "소파", "가구", "배출"}
+        {"대형폐기물", "폐기물", "침대", "프레임", "매트리스", "소파", "가구"}
     ),
     Intent.LOCAL_TAX_GENERAL: frozenset(
         {
@@ -130,6 +130,12 @@ _INTENT_ANCHORS: dict[Intent, frozenset[str]] = {
             "과세증명서",
             "납부확인서",
         }
+    ),
+}
+_EXCLUSIVE_TOPIC_IDENTITIES: dict[Intent, tuple[frozenset[str], ...]] = {
+    Intent.BULKY_WASTE: (
+        frozenset({"침대", "프레임"}),
+        frozenset({"매트리스"}),
     ),
 }
 
@@ -305,7 +311,7 @@ def select_deterministic_topic(
     if (
         top_score == (0, 0)
         or top.service_or_example_overlap == 0
-        or not (meaningful_tokens(question.text) & _INTENT_ANCHORS[intent])
+        or not (frozenset(matched_tokens) & _INTENT_ANCHORS[intent])
     ):
         return None
     if len(ranked) > 1:
@@ -322,6 +328,29 @@ def select_deterministic_topic(
             matched_tokens=matched_tokens,
         ),
     )
+
+
+def has_compatible_explicit_anchors(
+    question: SafeQuestion,
+    selection: TopicSelection,
+) -> bool:
+    """Reject a provider topic that conflicts with explicit approved identity terms."""
+
+    if type(question) is not SafeQuestion or type(selection) is not TopicSelection:
+        raise TypeError("EXPLICIT_ANCHOR_INPUT_INVALID")
+    record = selection.topic.record
+    identity_groups = _EXCLUSIVE_TOPIC_IDENTITIES.get(record.category, ())
+    question_tokens = meaningful_tokens(question.text)
+    question_identities = tuple(
+        identity for identity in identity_groups if question_tokens & identity
+    )
+    if not question_identities:
+        return True
+    if len(question_identities) != 1:
+        return False
+    record_tokens = meaningful_tokens(" ".join((record.service_name, *record.question_examples)))
+    record_identities = tuple(identity for identity in identity_groups if record_tokens & identity)
+    return len(record_identities) == 1 and record_identities == question_identities
 
 
 def validate_semantic_selection(
@@ -399,6 +428,7 @@ __all__ = [
     "GroundingEvidence",
     "GroundingEvidenceKind",
     "RankedKnowledge",
+    "has_compatible_explicit_anchors",
     "TopicSelection",
     "meaningful_tokens",
     "normalize_for_exact",
