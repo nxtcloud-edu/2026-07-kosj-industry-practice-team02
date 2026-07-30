@@ -9,8 +9,8 @@ type FailedQuestion = components["schemas"]["FailedQuestion"];
  * 한 글자라도 다르면 승인은 200으로 성공하지만 KB가 활성화되지 않아
  * 같은 질문을 다시 물었을 때 계속 폴백한다.
  *
- * `data/staging/data-001/0.1.0-draft.1/kb_records.json` 의 문구는 이 상수와 다르므로
- * 그 파일을 근거로 값을 바꾸지 않는다.
+ * 값의 유일한 출처는 위 서버 모듈이다. 미승인 초안 데이터의 문구는 이 상수와 다르므로
+ * 그것을 근거로 값을 바꾸지 않는다.
  */
 export type ReservedCandidateDraft = Readonly<{
   representativeQuestion: string;
