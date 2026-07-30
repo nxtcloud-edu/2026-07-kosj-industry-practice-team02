@@ -363,6 +363,46 @@ def insufficient_grounding_setup() -> tuple[FakeRepository, FakeQuestionClassifi
     return repository, classifier
 
 
+def active_waste_without_bed_frame_setup() -> tuple[FakeRepository, FakeQuestionClassifier]:
+    repository = FakeRepository(
+        records=(
+            knowledge_record(
+                public_id="KB-WASTE-01",
+                service_name="대형폐기물 배출신청 절차",
+                question_examples=("대형폐기물은 어떻게 버려요?",),
+            ),
+            knowledge_record(
+                public_id="KB-WASTE-02",
+                service_name="대형폐기물 결제·스티커·변경·환불 안내",
+                question_examples=("스티커 환불은 어떻게 해요?",),
+            ),
+            knowledge_record(
+                public_id="KB-WASTE-04",
+                service_name="매트리스 배출 수수료",
+                question_examples=(
+                    "매트리스는 버리는 데 얼마인가요?",
+                    "1인용 매트리스 수수료가 있나요?",
+                ),
+            ),
+            knowledge_record(
+                public_id="KB-WASTE-05",
+                service_name="대형폐기물 배출요일·수거 문의",
+                question_examples=("대형폐기물은 무슨 요일에 내놓나요?",),
+            ),
+        )
+    )
+    classifier = FakeQuestionClassifier(
+        result=ClassifierDecision(
+            route=ClassifierRoute.NO_TOPIC_MATCH,
+            intent=Intent.BULKY_WASTE,
+            topic_id=None,
+            coverage_id=None,
+            pending_slot=None,
+        )
+    )
+    return repository, classifier
+
+
 @pytest.mark.parametrize(
     ("intent", "pending_slot", "options"),
     [
@@ -1893,6 +1933,51 @@ async def test_policy_fallback_event_matrix(
     assert event.intent is intent
     assert event.fallback_reason is reason
     assert (event.masked_question is not None) is masked_is_stored
+
+
+@pytest.mark.asyncio
+async def test_unapproved_bed_frame_fee_is_stored_as_insufficient_grounding() -> None:
+    repository, classifier = active_waste_without_bed_frame_setup()
+    question = "침대 2인용 프레임 수수료가 얼마에요?"
+
+    response = await service(
+        repository,
+        question_classifier=classifier,
+    ).answer(ChatRequest(question=question))
+
+    assert response.answer_status == "FALLBACK"
+    assert response.intent == Intent.BULKY_WASTE.value
+    assert response.fallback.reason == FallbackReason.INSUFFICIENT_GROUNDING.value
+    assert response.fallback.candidate_eligible is True
+    assert classifier.calls == [question]
+    assert len(repository.events) == 1
+    assert repository.events[0].answer_status is AnswerStatus.FALLBACK
+    assert repository.events[0].fallback_reason is FallbackReason.INSUFFICIENT_GROUNDING
+    assert repository.events[0].masked_question == question
+
+
+@pytest.mark.asyncio
+async def test_provider_cannot_map_explicit_bed_frame_to_active_mattress() -> None:
+    repository, classifier = active_waste_without_bed_frame_setup()
+    classifier.result = ClassifierDecision(
+        route=ClassifierRoute.SUPPORTED,
+        intent=Intent.BULKY_WASTE,
+        topic_id="KB-WASTE-04",
+        coverage_id="COVERAGE-03",
+        pending_slot=None,
+    )
+    question = "침대 2인용 프레임 수수료가 얼마에요?"
+
+    response = await service(
+        repository,
+        question_classifier=classifier,
+    ).answer(ChatRequest(question=question))
+
+    assert response.answer_status == "FALLBACK"
+    assert response.fallback.reason == FallbackReason.INSUFFICIENT_GROUNDING.value
+    assert classifier.calls == [question]
+    assert len(repository.events) == 1
+    assert repository.events[0].fallback_reason is FallbackReason.INSUFFICIENT_GROUNDING
 
 
 @pytest.mark.asyncio

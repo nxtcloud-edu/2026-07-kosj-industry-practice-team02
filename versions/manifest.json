@@ -1,10 +1,10 @@
 {
   "manifest_version": "1.0.0",
-  "updated_at": "2026-07-30T02:36:42+09:00",
+  "updated_at": "2026-07-30T17:09:12+09:00",
   "versions": {
     "product_spec": "2.7.0",
     "repo_guidance": "1.7.10",
-    "application": "0.15.0-deepseek-grounded-answer",
+    "application": "0.15.1-bed-frame-grounding",
     "web": "0.9.0-feedback-and-candidate-recovery",
     "api": "4.1.0-draft",
     "shared_contracts": "1.1.0",
@@ -12,7 +12,7 @@
     "official_data": "0.1.0-initial.2",
     "mock_data": "0.0.0-not-populated",
     "prompt_set": "0.4.5-explicit-intent-route-shape",
-    "test_suite": "2.4.0-deepseek-grounded-answer",
+    "test_suite": "2.4.1-bed-frame-grounding",
     "documentation": "2.34.0-deepseek-grounded-answer"
   },
   "policy": "Every implementation note records before/after versions. Breaking API or schema changes require human approval and an ADR."
