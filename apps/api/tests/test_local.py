@@ -386,7 +386,7 @@ def _grounded_chat_config() -> dict[str, str]:
         "LLM_TIMEOUT_SECONDS": "8",
         "LLM_MAX_RETRIES": "0",
         "LLM_MAX_CONCURRENCY": "1",
-        "LLM_MAX_INPUT_TOKENS": "4096",
+        "LLM_MAX_INPUT_TOKENS": "8192",
         "LLM_MAX_OUTPUT_TOKENS": "1024",
         "LLM_RUN_ATTEMPT_CAP": "30",
         "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
@@ -429,7 +429,7 @@ def _combined_provider_config() -> dict[str, str]:
         "LLM_CLASSIFIER_ATTEMPT_CAP": "80",
         "LLM_GENERATOR_ATTEMPT_CAP": "100",
         "LLM_COMBINED_ATTEMPT_CAP": "160",
-        "LLM_SESSION_COST_CAP_USD": "0.20",
+        "LLM_SESSION_COST_CAP_USD": "0.30",
     }
 
 
@@ -1409,9 +1409,9 @@ def test_combined_profile_shares_one_attempt_ledger_and_closes_both_clients(
         "classifier_cap": 80,
         "generator_cap": 100,
         "combined_cap": 160,
-        "cost_cap_usd": Decimal("0.20"),
-        "classifier_worst_case_usd": estimate_cost_usd(TokenUsage(4096, 0, 128)),
-        "generator_worst_case_usd": estimate_cost_usd(TokenUsage(4096, 0, 1024)),
+        "cost_cap_usd": Decimal("0.30"),
+        "classifier_worst_case_usd": estimate_cost_usd(TokenUsage(8192, 0, 128)),
+        "generator_worst_case_usd": estimate_cost_usd(TokenUsage(8192, 0, 1024)),
     }
     assert grounded_runtime.close_count == 1
     assert classifier_close_calls == 1
@@ -1541,9 +1541,9 @@ def test_deepseek_classifier_and_upstage_generator_use_separate_clients_and_shar
         "classifier_cap": 80,
         "generator_cap": 100,
         "combined_cap": 160,
-        "cost_cap_usd": Decimal("0.20"),
+        "cost_cap_usd": Decimal("0.30"),
         "classifier_worst_case_usd": estimate_deepseek_cost_usd(TokenUsage(16384, 0, 128)),
-        "generator_worst_case_usd": estimate_cost_usd(TokenUsage(4096, 0, 1024)),
+        "generator_worst_case_usd": estimate_cost_usd(TokenUsage(8192, 0, 1024)),
         "classifier_cost_estimator": estimate_deepseek_cost_usd,
         "generator_cost_estimator": estimate_cost_usd,
     }
@@ -2237,7 +2237,7 @@ def test_deepseek_combined_profile_shares_deepseek_cost_ledger(
         "classifier_cap": 80,
         "generator_cap": 100,
         "combined_cap": 160,
-        "cost_cap_usd": Decimal("0.20"),
+        "cost_cap_usd": Decimal("0.30"),
         "classifier_worst_case_usd": estimate_deepseek_cost_usd(TokenUsage(16384, 0, 128)),
         "generator_worst_case_usd": estimate_deepseek_cost_usd(TokenUsage(16384, 0, 1024)),
         "classifier_cost_estimator": estimate_deepseek_cost_usd,

@@ -13,8 +13,8 @@ from sejong_ai_api.llm.limits import (
     ProviderAttemptLedger,
 )
 
-CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 128))
-GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 1024))
+CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 128))
+GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 1024))
 
 
 def _provider_ledger(
@@ -22,7 +22,7 @@ def _provider_ledger(
     classifier_cap: int = 80,
     generator_cap: int = 100,
     combined_cap: int = 160,
-    cost_cap_usd: Decimal = Decimal("0.20"),
+    cost_cap_usd: Decimal = Decimal("0.30"),
     classifier_worst_case_usd: Decimal = CLASSIFIER_WORST_CASE_USD,
     generator_worst_case_usd: Decimal = GENERATOR_WORST_CASE_USD,
 ) -> ProviderAttemptLedger:
@@ -189,7 +189,7 @@ async def test_provider_ledger_enforces_exact_local_interactive_attempt_caps() -
     assert classifier_ledger.classifier_attempts_used == 80
     assert generator_ledger.generator_attempts_used == 100
     assert combined_ledger.combined_attempts_used == 160
-    assert getattr(limits_module, "LOCAL_INTERACTIVE_COST_CAP_USD", None) == Decimal("0.20")
+    assert getattr(limits_module, "LOCAL_INTERACTIVE_COST_CAP_USD", None) == Decimal("0.30")
 
 
 @pytest.mark.asyncio
@@ -270,7 +270,7 @@ async def test_provider_ledger_keeps_upstage_estimator_as_default_for_cached_usa
 @pytest.mark.asyncio
 async def test_provider_reservation_accepts_exact_lane_maximum_usage() -> None:
     ledger = _provider_ledger(cost_cap_usd=CLASSIFIER_WORST_CASE_USD)
-    usage = TokenUsage(4096, 0, 128)
+    usage = TokenUsage(8192, 0, 128)
 
     async with ledger.reserve_classifier() as reservation:
         reservation.record_usage(usage)
@@ -288,7 +288,7 @@ async def test_provider_reservation_rejects_usage_cost_above_reserved_maximum() 
             ValueError,
             match="^PROVIDER_USAGE_EXCEEDS_RESERVATION$",
         ):
-            reservation.record_usage(TokenUsage(4096, 0, 129))
+            reservation.record_usage(TokenUsage(8192, 0, 129))
 
     assert ledger.actual_cost_usd == CLASSIFIER_WORST_CASE_USD
 
@@ -298,7 +298,7 @@ async def test_provider_ledger_exact_cap_finalization_never_overshoots() -> None
     ledger = _provider_ledger(cost_cap_usd=CLASSIFIER_WORST_CASE_USD)
 
     async with ledger.reserve_classifier() as reservation:
-        reservation.record_usage(TokenUsage(4096, 0, 128))
+        reservation.record_usage(TokenUsage(8192, 0, 128))
 
     assert ledger.actual_cost_usd == CLASSIFIER_WORST_CASE_USD
     with pytest.raises(AttemptCapReached, match="^ATTEMPT_CAP_REACHED$"):

@@ -34,11 +34,15 @@
 - 응답 상태
   - 공식 근거 기반 `SUCCESS`
   - 필요한 내용을 다시 묻는 `FOLLOWUP`
-  - `INSUFFICIENT_GROUNDING`
-  - `PERSONAL_LOOKUP`
-  - `LEGAL_JUDGMENT`
-  - `OUT_OF_SCOPE`
-  - `PRIVACY_UNRESOLVED`
+  - 폴백 사유
+    | 사유 | 의미 | 질문 텍스트 저장 | KB 후보 대상 |
+    | --- | --- | --- | --- |
+    | `INSUFFICIENT_GROUNDING` | 지원 분야이나 승인 근거 부족 | 마스킹 텍스트 30일 | **예** |
+    | `CIVIC_SCOPE_GAP` | 행정 민원이나 지원 4분야 밖 | 마스킹 텍스트(범위 확대 검토 큐) | 아니오 |
+    | `PERSONAL_LOOKUP` | 개인별 조회 필요 | 저장 안 함 | 아니오 |
+    | `LEGAL_JUDGMENT` | 법적 판단 필요 | 저장 안 함 | 아니오 |
+    | `OUT_OF_SCOPE` | 행정 민원이 아님 | 저장 안 함 | 아니오 |
+    | `PRIVACY_UNRESOLVED` | 마스킹으로 안전을 보장할 수 없음 | 저장 안 함 | 아니오 |
 - 공식 데이터 기준선
   - ACTIVE KB 19개
   - 공식 기관 3개
@@ -55,7 +59,8 @@
 
 ### 개인정보 최소화
 
-외부 AI 호출 전에 개인정보를 마스킹합니다. 질문 원문과 실제 개인정보는 애플리케이션 DB·URL·브라우저 저장소·일반 로그에 보관하지 않습니다.
+상세 설계는 [7. 개인정보 보호](#7-개인정보-보호)에 있습니다. 요약하면 마스킹이 모든 후속 처리보다
+앞서고, 질문 원문은 어느 시점에도 저장하지 않으며, 보관 대상은 마스킹된 실패 질문과 비식별 집계뿐입니다.
 
 `PERSONAL_LOOKUP`, `LEGAL_JUDGMENT`, `OUT_OF_SCOPE`, `PRIVACY_UNRESOLVED`는 KB 후보로 만들지 않으며 질문 text와 실패 질문 행을 저장하지 않습니다.
 
@@ -71,6 +76,37 @@
 - 기존 Upstage 경로는 rollback 선택지로 보존하지만 기본 설정과 아래 실행 예시는 DeepSeek로 통일합니다.
 - 공급자 장애, timeout, JSON·계약 위반, 근거 불일치가 발생하면 공식 KB 기반 TEMPLATE 응답으로 복구합니다.
 - 기본 설정은 외부 공급자 비활성화이며 API key는 저장소에 포함하지 않습니다.
+
+분류기 프롬프트는 **순서가 고정된 5단계 판정 절차**입니다. 앞 단계에서 일치하면 즉시 확정하며,
+경로를 하나라도 누락하면 해당 트래픽이 다른 경로로 새기 때문에 전 경로를 빠짐없이 나열합니다.
+
+| 순서 | 조건 | 경로 |
+| --- | --- | --- |
+| 1 | 순수 범주어(서류·증명서·신고·민원·발급)만 있고 종류가 없음 | `NEEDS_FOLLOWUP` |
+| 2 | 지목한 서비스·품목이 승인 목록의 한 행에 해당 | `SUPPORTED` |
+| 3 | 지원 분야이나 해당 행이 없음 | `NO_TOPIC_MATCH` |
+| 4 | 행정 민원이나 지원 분야 밖 | `CIVIC_SCOPE_GAP` |
+| 5 | 행정 민원이 아님 | `NON_CIVIC` |
+
+모델 응답은 그대로 채택되지 않습니다. 서버가 발급한 fact ID와 대조해 어긋나면 초안 전체를 폐기하고
+결정론적 TEMPLATE 답변으로 되돌아갑니다. 사실·출처·기관 정보는 어느 경우에도 모델이 아니라
+서버가 승인 KB에서 결합합니다.
+
+#### 공급자 선택 근거
+
+제안서 6.1이 예고한 `deepseek-v4-flash` / `upstage` 비교 선택을 수행했습니다.
+선택 사유는 한국어 답변 품질이 아니라 **구조화 출력 계약의 통과 안정성**입니다.
+
+| | Upstage `solar-pro3` | DeepSeek `deepseek-v4-flash` |
+| --- | --- | --- |
+| 한국어 답변 품질(인간 평가) | 4.84 / 5 | — |
+| strict JSON 통과 | 27 / 30 | — |
+| 분류 HTTP·JSON·서버 계약 | `KEY_SET_REJECTED` 9/9 → `ENUM_SHAPE_REJECTED` 9/9 | **9 / 9 통과** |
+| 분류 정답률 | 채택 불가 | 6/9 → 8/9 |
+
+Upstage는 답변 품질이 좋았으나 서버가 출력을 시민 분류 결과로 안전하게 채택할 증거가 부족했습니다.
+Upstage 코드는 삭제하지 않고 선택 가능한 예비 공급자로 유지합니다.
+상세 기록은 [`docs/test-reports/LLM-004-DEEPSEEK-LOCAL-ACCEPTANCE.md`](docs/test-reports/LLM-004-DEEPSEEK-LOCAL-ACCEPTANCE.md)에 있습니다.
 
 ## 4. 기술 구성
 
@@ -103,9 +139,39 @@ database                 논리 DB projection과 rollback
 supabase/migrations      실행 가능한 DB migration
 supabase/tests/database  pgTAP 검증
 data                     공식 KB·기관·평가 질문
-scripts                  로컬 DB·seed·실행·보안 검사
+scripts                  로컬 DB·seed·실행·회귀 채점·보안 검사
 tools/web-e2e            브라우저 E2E
 docs                     핵심 아키텍처·보안·데이터·검증 근거
+```
+
+주요 파일:
+
+```text
+apps/api/src/sejong_ai_api/
+  main.py                          범용 FastAPI 앱 팩토리
+  local.py                         로컬 조립. DB 신원·환경변수 허용목록 고정
+  privacy/redaction.py             개인정보 탐지·마스킹. 파이프라인 최선두
+  chat/classification.py           결정론적 의도·정책 분류
+  chat/service.py                  질문 처리 오케스트레이션, 생성 실패 시 TEMPLATE 복구
+  admin/candidate_binding.py       예약 KB 활성화의 서버측 정확 일치 검증
+  llm/classifier_prompt.py         5단계 판정 절차 프롬프트
+  llm/deepseek_settings.py         DeepSeek 프로필. 값 불일치 시 fail-closed
+
+apps/web/src/
+  components/citizen/AnswerCard.tsx      답변 카드·출처·딥링크
+  components/admin/CandidateAuthoringForm.tsx  KB 후보 작성
+  lib/reserved-candidate.ts              예약 후보 공식 값(서버 바인딩 미러)
+
+scripts/
+  run_regression_metrics.py        20문항 + 데모 5문항 회귀 채점
+  verify_database.ps1              로컬 DB migration·rollback·pgTAP 게이트
+  verify_data_seed_db.py           공식 데이터 seed와 무결성 검증
+  provision_local_context_secret.py  context token secret 생성
+  check_secret_patterns.ps1        비밀값 패턴 검사
+
+REGRESSION-METRICS.md              지표 정의와 판정 기준
+REGRESSION-RESULTS-20260730.md     회귀 실행 기록
+REGRESSION-REPORT.html             품질 검증 결과 보고서
 ```
 
 ## 6. 실행 방법
@@ -209,7 +275,66 @@ corepack pnpm --filter @sejong-ai/web dev
 
 브라우저에서 `http://127.0.0.1:3000`을 엽니다.
 
-## 7. AI 연결
+## 7. 개인정보 보호
+
+공공 AI에서 가장 먼저 무너질 수 있는 지점이므로, 선언이 아니라 **구조로 강제**했습니다.
+
+### 7.1 마스킹은 모든 처리보다 앞선다
+
+```text
+시민 질문
+  → 개인정보 탐지·마스킹        ← 저장·분류·검색·외부 호출보다 앞
+  → SafeQuestion 생성           ← 검증 통과 없이는 생성 불가
+  → 의도 분류 → ACTIVE KB 검색 → 근거 판정 → 답변
+```
+
+`SafeQuestion`은 검증을 통과한 `RedactionResult`로만 생성되도록 **타입 수준에서 강제**됩니다
+(`apps/api/src/sejong_ai_api/chat/classification.py`). 마스킹을 건너뛰고 분류·검색·외부 호출로
+진입하는 경로는 코드상 존재하지 않습니다.
+
+마스킹으로 안전을 보장할 수 없으면 `PRIVACY_UNRESOLVED`로 **닫습니다**. 통과시키지 않습니다.
+
+### 7.2 탐지 대상
+
+주민등록번호, 결제카드번호, 금융계좌, 인증정보(비밀번호·OTP·인증번호), 차량번호, 접수번호,
+민감 건강·복지 정보, 상세 주소, 사람 이름을 탐지합니다. 이름과 상세 주소처럼 판단이 모호한
+경우에는 통과시키지 않고 `AMBIGUOUS_PERSON_NAME`·`AMBIGUOUS_DETAILED_ADDRESS`로 닫는
+**fail-closed** 방식입니다.
+
+### 7.3 저장 정책
+
+| 구분 | 내용 |
+| --- | --- |
+| **저장 금지** | 질문 원문, 주민등록번호·전화번호·이메일·상세주소·이름·신청번호 등 식별 정보 일체 |
+| **저장 대상** | 마스킹된 실패 질문, 분야·처리 결과·사유 코드·지역·응답시간의 비식별 집계 |
+| **보관 기간** | 개선 대상 실패 질문의 `masked_question`은 30일. 경과 시 행 삭제가 아니라 해당 텍스트를 `NULL`로 파기 |
+
+30일 경과 후에도 비텍스트 메타데이터와 KB 후보 연결은 유지되어 통계와 개선 이력은 보존됩니다.
+질문 원문은 **어느 시점에도** 저장하지 않습니다.
+
+### 7.4 외부 LLM 경계
+
+- 실제 시민 자유 입력과 공개 환경 요청은 **마스킹 여부와 무관하게** 외부 LLM으로 전송하지 않습니다.
+- 저장소 출하 기본값은 `CLASSIFIER_PROVIDER=disabled`, `LLM_PROVIDER=disabled`입니다.
+- 외부 LLM에 전달되는 것은 **마스킹된 현재 질문과 서버가 발급한 최소 fact ID**뿐입니다.
+  후보·mock·비공식 데이터, 출처 메타데이터, 대화 이력, 식별자, 비밀값은 제외됩니다.
+- 정책 폴백(`PERSONAL_LOOKUP`·`LEGAL_JUDGMENT`)과 `PRIVACY_UNRESOLVED`, 근거 부족은
+  provider 호출 없이 처리합니다.
+- 실제 시민 질문에 대한 사용 확대는 별도의 보안·개인정보 승인 절차를 거친 후에만 진행합니다.
+  절차는 [`docs/runbooks/LLM-003-LOCAL-GROUNDED-CHAT.md`](docs/runbooks/LLM-003-LOCAL-GROUNDED-CHAT.md)에 고정되어 있습니다.
+
+### 7.5 승인 분리
+
+KB 후보 작성자와 승인자는 반드시 달라야 하며, 작성자의 자가 승인은 서버가 `403`으로 차단합니다.
+승인된 후보만 시민 답변에 반영되고, 미승인 후보와 mock 데이터는 사용되지 않습니다.
+
+### 7.6 검증
+
+- 회귀 채점의 `pii_masking_rate`가 전 구간 **1.00**입니다.
+- 저장소 현재 파일과 공개 Git history에 대한 비밀값 검사 finding **0**입니다.
+- 질문·답변·prompt·provider body·DSN·key는 터미널·파일·로그에 출력하지 않습니다.
+
+## 8. AI 연결
 
 AI 없이도 공식 KB 기반 답변·폴백·관리자 승인 흐름은 작동합니다. AI를 사용할 때는 `apps/api/.env`의 빈 칸에 로컬 key를 입력합니다.
 
@@ -228,14 +353,14 @@ UPSTAGE_GROUNDED_CHAT_MODE=false
 
 두 역할은 Git 밖의 동일한 `DEEPSEEK_API_KEY`를 사용합니다. 모델은 마스킹된 질문과 서버가 선택한 ACTIVE/OFFICIAL KB의 제한된 fact만 받으며, 사실·출처·기관 정보는 계속 서버가 결합합니다. timeout·JSON·계약·근거 검증에 실패하면 공식 KB TEMPLATE 답변으로 전체 복구합니다. 기본값은 계속 `disabled`이고 실제 key를 설정한 `.env`는 Git에 추가하지 않습니다.
 
-## 8. 동작 확인 시나리오
+## 9. 동작 확인 시나리오
 
 1. `전입신고는 언제까지 해야 하나요?`
    → 공식 절차·출처·신청 경로
-2. `증명서 발급하고 싶어요`
-   → 필요한 증명서를 묻는 FOLLOWUP
-3. `아름동에서 대형폐기물은 언제 내놓나요?`
-   → 선택 지역의 공식 기관 카드
+2. `아름동에서 대형폐기물은 언제 내놓나요?` (지역 선택 후)
+   → 지역 조건 반영 답변과 공식 기관 카드
+3. `이사했는데 뭐 해야 하나요?`
+   → 단정 없이 민원 유형 선택지를 제시하는 FOLLOWUP
 4. `제 자동차세 얼마 나왔나요?`
    → PERSONAL_LOOKUP, 후보 생성 및 질문 저장 없음
 5. `침대 2인용 프레임 수수료가 얼마예요?`
@@ -243,9 +368,16 @@ UPSTAGE_GROUNDED_CHAT_MODE=false
    → 이음센터에서 후보 작성·다른 승인자 승인
    → 20번째 ACTIVE 반영 후 같은 질문 SUCCESS와 공식 출처
 
+위 5문항은 입찰제안서 7.5에 사전 확정해 공개한 데모 시나리오와 **원문 그대로 동일**합니다.
+
 19→20 승인 흐름은 DB 상태를 변경하므로 19 기준선에서 한 번 실행합니다. 다시 실행하려면 local DB migration과 정식 seed 절차로 기준선을 복원합니다.
 
-## 9. 검증 명령
+5번의 KB 후보 내용은 서버가 예약한 `KB-WASTE-03` 공식 값과 **정확히 일치해야** 활성화됩니다
+(`apps/api/src/sejong_ai_api/admin/candidate_binding.py`). 한 글자라도 다르면 승인은 성공하지만
+KB가 활성화되지 않아 재질의가 계속 폴백합니다. 이 위험을 없애기 위해 후보 작성 폼이 공식 값을
+자동으로 채웁니다(`apps/web/src/lib/reserved-candidate.ts`).
+
+## 10. 검증 명령
 
 ```powershell
 # API
@@ -268,24 +400,68 @@ corepack pnpm --filter @sejong-ai/web build
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/check_secret_patterns.ps1
 python -B scripts/check_git_history_secrets.py --repo .
+
+# 회귀 채점 (로컬 스택 기동 상태에서)
+$env:SEJONG_BASELINE_COMMIT = (git rev-parse --short HEAD)
+$env:SEJONG_PROVIDER_MODES  = "classifier=true,grounded=true"
+uv run --project apps/api --frozen python scripts/run_regression_metrics.py `
+  --origin "http://127.0.0.1:3000"
 ```
 
-### 9.1 이번 스냅샷 검증 결과
+### 10.1 저장소 게이트 결과
 
-2026-07-30에 위 공개 스냅샷에서 새로 실행한 결과입니다.
+2026-07-30 실행 결과입니다.
 
 | 영역 | 결과 |
 | --- | --- |
 | API Ruff format/check | PASS — 135 files |
 | API strict Mypy | PASS — 135 source/test files |
-| API Pytest | PASS — 2,612 passed, local DB 전용 8 skipped, 5 subtests passed |
+| API Pytest | PASS — 2,617 passed, local DB 전용 8 skipped, 5 subtests passed |
 | 공유 계약 | PASS — 96/96 |
-| Web lint/typecheck/test/build | PASS — Vitest 77/77, Next production build |
+| Web lint/typecheck/test/build | PASS — Vitest 80/80, Next production build |
 | 현재 파일·공개 Git history 비밀값 검사 | PASS — finding 0 |
 
-Docker DB reset·seed·`/ready=200`·19→20 상태 변경은 이번 공개 export에서 다시 실행하지 않았습니다. 관련 local 실행 절차와 기존 검증 근거는 `docs/test-reports/FINAL-LOCAL-DEMO-REHEARSAL.md`와 `docs/data-lineage/MVP-001-KB-WASTE-03-LOCAL-WORKFLOW.md`에 포함했습니다.
+`apps/api/tests/privacy/test_redaction.py`의 마스킹 성능 테스트는 2초 기준의 **실행 환경 민감**
+항목입니다. Web dev 서버 등 부하가 있는 상태에서는 근소하게 초과할 수 있으므로,
+API 테스트는 다른 개발 서버를 내린 상태에서 실행하십시오. Web Vitest도 같습니다.
 
-## 10. 팀 역할
+### 10.2 품질 지표 (입찰제안서 7.3 대응)
+
+핵심 20문항과 데모 5문항을 대상으로 **16회 측정**했습니다.
+아래는 `classifier=true,grounded=true` 구성의 최종 측정값입니다.
+
+| 지표 | 목표 | 기준선 | 최종 | 판정 |
+| --- | ---: | ---: | ---: | --- |
+| 의도 분류 정확도 | 0.85 | 0.80 | **0.85** | 달성 |
+| 답변 상태 정확도 | 0.80 | 0.85 | **0.90** | 달성 |
+| 출처 표기율 | 1.00 | 1.00 | **1.00** | 달성 |
+| 폴백 적절성 | 0.90 | 1.00 | **0.90** | 달성 |
+| 답변 가능 질문 성공률 | 0.80 | 0.70 | **1.00** | 달성 |
+| 개인정보 마스킹률 | 1.00 | 1.00 | **1.00** | 달성 |
+| 평균 응답시간 | 3,000 ms | 625 ms | **1,291 ms** | 달성 |
+| 오류율 | 0.00 | 0.00 | **0.00** | 달성 |
+| 데모 완주율 | 1.00 | 비교 대상 아님 | **1.00** | 달성 |
+
+폴백은 **양방향으로 채점**합니다. 답하면 안 되는 질문에 답한 과소 폴백과, 답할 수 있는 질문을
+회피한 과잉 폴백을 모두 실패로 집계해 "안 하는 것"으로 점수를 얻는 왜곡을 막습니다.
+최종 측정에서 양쪽 모두 0건입니다.
+
+읽을 때 유의할 점:
+
+- **데모 완주율은 선순환 흐름의 승인까지 수행된 상태를 전제**합니다. 갓 초기화한 DB에서
+  측정하면 승인 이력이 없어 0.80으로 산출됩니다.
+- 데모 완주율의 판정 기준을 한 차례 교정했으므로 **교정 전후 값은 비교하지 않습니다.**
+  표본 20문항 기반 8개 지표는 판정 로직을 변경하지 않아 전 구간 비교 가능합니다.
+- 측정은 표본 기준이며 전체 민원 정확도로 일반화하지 않습니다.
+
+전체 실행 기록은 [`REGRESSION-RESULTS-20260730.md`](REGRESSION-RESULTS-20260730.md),
+지표 정의와 판정 기준은 [`REGRESSION-METRICS.md`](REGRESSION-METRICS.md),
+보고서 형태는 [`REGRESSION-REPORT.html`](REGRESSION-REPORT.html)에 있습니다.
+
+Docker DB reset·seed·`/ready=200`·19→20 상태 변경의 기존 검증 근거는
+`docs/test-reports/FINAL-LOCAL-DEMO-REHEARSAL.md`와 `docs/data-lineage/MVP-001-KB-WASTE-03-LOCAL-WORKFLOW.md`에 있습니다.
+
+## 11. 팀 역할
 
 | 이름 | 역할 | 담당 |
 | --- | --- | --- |
@@ -294,16 +470,25 @@ Docker DB reset·seed·`/ready=200`·19→20 상태 변경은 이번 공개 expo
 | 이유라 | Data · AI | 증명서·지방세 KB, 검색·AI 품질 |
 | 오현송 | Data · AI | 전입·대형폐기물 KB, 테스트셋·QA |
 
-## 11. 현재 한계
+## 12. 현재 한계
 
 - local/private 학습·시연용 MVP입니다.
-- 공개 배포와 remote DB는 구성하지 않았습니다.
+- **공개 배포와 remote DB는 구성하지 않았습니다.** `local.py`가 DB 신원을
+  로컬 루프백으로 고정하고 있어, 배포하려면 별도의 호스팅 조립 경로가 필요합니다.
+- **관리자 화면은 인증이 없습니다.** `X-Demo-Actor-Id`·`X-Demo-Role` 헤더 기반 demo actor를
+  사용하므로 공개 환경에 노출하면 안 됩니다. SSO·RBAC는 구현 범위 밖입니다.
 - 실제 신청·개인별 조회·본인 인증·정부24 내부 연계는 지원하지 않습니다.
-- 관리자 화면은 local demo actor를 사용하며 public 인증·SSO/RBAC는 구현 범위 밖입니다.
 - GPS·최단거리 기관 계산·지도·다국어·음성은 포함하지 않습니다.
 - 외부 AI 공급자의 품질·비용·가용성은 운영 환경에서 별도 검증이 필요합니다.
+- `answer_mode`(`TEMPLATE`/`GENERATED`)는 같은 질문에서도 실행마다 달라질 수 있습니다.
+  안전 속성에는 영향이 없으나 개별 답변을 "AI 생성"으로 특정할 수는 없습니다.
+- 회귀 채점은 표본 기준이며 전체 민원 정확도로 일반화하지 않습니다.
+  화면 계층 구현(딥링크 등)은 API 응답을 보는 채점기가 검증하지 못합니다.
+- 일부 행정 용어가 사람 이름으로 오탐되어 `PRIVACY_UNRESOLVED`로 닫히는 사례가 있습니다.
+  안전 방향의 오류이나 안전 용어 목록 보완이 필요합니다.
+- 데이터는 ACTIVE KB 19건, 기관 3건, 매핑 10건 규모입니다. 실서비스에는 확충이 필요합니다.
 
-## 12. 제출 스냅샷
+## 13. 제출 스냅샷
 
 - 스냅샷 작성일: 2026-07-30
 - 실제 `.env`, key, token, DSN, local DB 상태, 개인정보, 로그, cache와 build 산출물은 포함하지 않습니다.

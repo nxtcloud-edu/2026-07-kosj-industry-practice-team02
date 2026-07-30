@@ -28,8 +28,8 @@ from sejong_ai_api.privacy.redaction import redact_question
 Handler = Callable[[httpx.Request], httpx.Response]
 SECRET = "classifier-test-key-not-a-real-secret"
 DSN_SENTINEL = "postgresql://forbidden-dsn.invalid/database"
-CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 128))
-GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 1024))
+CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 128))
+GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 1024))
 
 
 def _question(text: str = "청년 월세 지원 어떻게 해요?") -> SafeQuestion:
@@ -338,7 +338,7 @@ async def test_success_makes_one_exact_closed_source_free_request() -> None:
         ({"prompt_tokens": True, "completion_tokens": 10}, True),
         ({"prompt_tokens": 20.0, "completion_tokens": 10}, True),
         ({"prompt_tokens": -1, "completion_tokens": 10}, True),
-        ({"prompt_tokens": 4097, "completion_tokens": 10}, True),
+        ({"prompt_tokens": 8193, "completion_tokens": 10}, True),
         ({"prompt_tokens": 20, "completion_tokens": True}, True),
         ({"prompt_tokens": 20, "completion_tokens": 10.0}, True),
         ({"prompt_tokens": 20, "completion_tokens": -1}, True),
@@ -460,9 +460,9 @@ async def test_classifier_accepts_exact_usage_maxima_and_metered_details() -> No
     settings = UpstageClassifierSettings(api_key=SECRET)
     ledger = _ledger()
     usage = {
-        "prompt_tokens": 4096,
+        "prompt_tokens": 8192,
         "completion_tokens": 128,
-        "total_tokens": 4224,
+        "total_tokens": 8320,
         "cached_tokens": 1024,
         "prompt_tokens_details": {"cached_tokens": 1024},
     }
@@ -482,7 +482,7 @@ async def test_classifier_accepts_exact_usage_maxima_and_metered_details() -> No
 
     assert decision is not None
     assert decision.route is ClassifierRoute.CIVIC_SCOPE_GAP
-    assert ledger.actual_cost_usd == estimate_cost_usd(TokenUsage(4096, 1024, 128))
+    assert ledger.actual_cost_usd == estimate_cost_usd(TokenUsage(8192, 1024, 128))
     assert ledger.actual_cost_usd <= CLASSIFIER_WORST_CASE_USD
 
 
@@ -586,7 +586,7 @@ async def test_real_governed_20_catalog_with_256_chars_reaches_transport_and_led
     ledger = _ledger()
 
     assert len(safe.text) == 256
-    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 4096
+    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 8192
 
     def handler(_request: httpx.Request) -> httpx.Response:
         nonlocal calls
@@ -1037,15 +1037,15 @@ async def test_ineligible_catalog_is_rejected_before_transport_or_ledger_reserva
 
 
 @pytest.mark.asyncio
-async def test_prompt_over_4096_estimate_is_rejected_before_transport_and_reservation() -> None:
+async def test_prompt_over_8192_estimate_is_rejected_before_transport_and_reservation() -> None:
     settings = UpstageClassifierSettings(api_key=SECRET)
-    catalog = _catalog(coverage_label="가" * 4096)
+    catalog = _catalog(coverage_label="가" * 8192)
     messages = build_classifier_messages(
         _question(),
         catalog,
         max_input_chars=1024,
     )
-    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) > 4096
+    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) > 8192
     calls = 0
     ledger = _ledger()
 

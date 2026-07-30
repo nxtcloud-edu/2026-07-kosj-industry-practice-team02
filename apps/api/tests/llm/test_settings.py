@@ -24,7 +24,7 @@ VALID = {
     "LLM_TIMEOUT_SECONDS": "15",
     "LLM_MAX_RETRIES": "1",
     "LLM_MAX_CONCURRENCY": "1",
-    "LLM_MAX_INPUT_TOKENS": "4096",
+    "LLM_MAX_INPUT_TOKENS": "8192",
     "LLM_MAX_OUTPUT_TOKENS": "1024",
     "LLM_RUN_ATTEMPT_CAP": "30",
     "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "true",
@@ -70,7 +70,7 @@ COMBINED_VALID = {
     "LLM_CLASSIFIER_ATTEMPT_CAP": "80",
     "LLM_GENERATOR_ATTEMPT_CAP": "100",
     "LLM_COMBINED_ATTEMPT_CAP": "160",
-    "LLM_SESSION_COST_CAP_USD": "0.20",
+    "LLM_SESSION_COST_CAP_USD": "0.30",
 }
 
 
@@ -83,7 +83,7 @@ def test_exact_synthetic_settings_load_without_exposing_key() -> None:
     assert settings.timeout_seconds == 15.0
     assert settings.max_retries == 1
     assert settings.max_concurrency == 1
-    assert settings.max_input_tokens == 4096
+    assert settings.max_input_tokens == 8192
     assert settings.max_output_tokens == 1024
     assert settings.run_attempt_cap == 30
     assert Decimal("0.05") == RUN_COST_CAP_USD
@@ -99,7 +99,7 @@ def test_exact_grounded_chat_settings_load_without_exposing_key() -> None:
     assert settings.timeout_seconds == 8.0
     assert settings.max_retries == 0
     assert settings.max_concurrency == 1
-    assert settings.max_input_tokens == 4096
+    assert settings.max_input_tokens == 8192
     assert settings.max_output_tokens == 1024
     assert settings.run_attempt_cap == 30
     assert CHAT_VALID["LLM_API_KEY"] not in repr(settings)
@@ -141,7 +141,7 @@ def test_exact_local_interactive_combined_profile_loads_for_both_lanes() -> None
     assert classifier.classifier_attempt_cap == 80
     assert classifier.generator_attempt_cap == 100
     assert classifier.combined_attempt_cap == 160
-    assert classifier.session_cost_cap_usd == Decimal("0.20")
+    assert classifier.session_cost_cap_usd == Decimal("0.30")
     assert chat.run_attempt_cap == 30
     assert COMBINED_VALID["LLM_API_KEY"] not in repr(classifier)
     assert COMBINED_VALID["LLM_API_KEY"] not in repr(chat)
@@ -408,7 +408,7 @@ def test_duplicate_combined_cost_cap_dotenv_assignment_fails_closed(tmp_path: Pa
         "\n".join(
             [
                 *(f"{key}={value}" for key, value in COMBINED_VALID.items()),
-                "LLM_SESSION_COST_CAP_USD=0.20",
+                "LLM_SESSION_COST_CAP_USD=0.30",
             ]
         ),
         encoding="utf-8",
@@ -467,7 +467,7 @@ def test_duplicate_allowlisted_dotenv_assignment_fails_closed(tmp_path: Path) ->
                 "LLM_TIMEOUT_SECONDS=15",
                 "LLM_MAX_RETRIES=1",
                 "LLM_MAX_CONCURRENCY=1",
-                "LLM_MAX_INPUT_TOKENS=4096",
+                "LLM_MAX_INPUT_TOKENS=8192",
                 "LLM_MAX_OUTPUT_TOKENS=1024",
                 "LLM_RUN_ATTEMPT_CAP=30",
                 "UPSTAGE_SYNTHETIC_EVALUATION_MODE=true",

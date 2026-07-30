@@ -81,7 +81,7 @@ def test_exact_deepseek_classifier_settings_expose_only_fixed_profile_limits() -
     assert settings.classifier_attempt_cap == 80
     assert settings.generator_attempt_cap == 100
     assert settings.combined_attempt_cap == 160
-    assert str(settings.session_cost_cap_usd) == "0.20"
+    assert str(settings.session_cost_cap_usd) == "0.30"
     assert DEEPSEEK_VALID["DEEPSEEK_API_KEY"] not in repr(settings)
 
 
@@ -129,7 +129,7 @@ def test_deepseek_and_valid_upstage_generator_profiles_remain_independent() -> N
         "LLM_TIMEOUT_SECONDS": "8",
         "LLM_MAX_RETRIES": "0",
         "LLM_MAX_CONCURRENCY": "1",
-        "LLM_MAX_INPUT_TOKENS": "4096",
+        "LLM_MAX_INPUT_TOKENS": "8192",
         "LLM_MAX_OUTPUT_TOKENS": "1024",
         "LLM_RUN_ATTEMPT_CAP": "30",
         "UPSTAGE_GROUNDED_CHAT_MODE": "true",
@@ -182,7 +182,7 @@ def test_grounded_generator_requires_a_valid_independently_loaded_upstage_capabi
         "LLM_TIMEOUT_SECONDS": "8",
         "LLM_MAX_RETRIES": "0",
         "LLM_MAX_CONCURRENCY": "1",
-        "LLM_MAX_INPUT_TOKENS": "4096",
+        "LLM_MAX_INPUT_TOKENS": "8192",
         "LLM_MAX_OUTPUT_TOKENS": "1024",
         "LLM_RUN_ATTEMPT_CAP": "30",
         "UPSTAGE_GROUNDED_CHAT_MODE": "true",
@@ -245,7 +245,7 @@ def test_grounded_deepseek_loader_never_reads_llm_api_key_from_the_configuration
         "LLM_TIMEOUT_SECONDS": "8",
         "LLM_MAX_RETRIES": "0",
         "LLM_MAX_CONCURRENCY": "1",
-        "LLM_MAX_INPUT_TOKENS": "4096",
+        "LLM_MAX_INPUT_TOKENS": "8192",
         "LLM_MAX_OUTPUT_TOKENS": "1024",
         "LLM_RUN_ATTEMPT_CAP": "30",
         "UPSTAGE_GROUNDED_CHAT_MODE": "true",
@@ -279,7 +279,7 @@ def test_deepseek_loader_reads_no_upstage_key_and_upstage_loader_reads_no_deepse
                 "LLM_TIMEOUT_SECONDS": "8",
                 "LLM_MAX_RETRIES": "0",
                 "LLM_MAX_CONCURRENCY": "1",
-                "LLM_MAX_INPUT_TOKENS": "4096",
+                "LLM_MAX_INPUT_TOKENS": "8192",
                 "LLM_MAX_OUTPUT_TOKENS": "1024",
                 "LLM_RUN_ATTEMPT_CAP": "30",
                 "UPSTAGE_SYNTHETIC_EVALUATION_MODE": "false",
@@ -408,7 +408,7 @@ def test_loads_exact_deepseek_chat_profile(tmp_path: Path) -> None:
     assert settings.classifier_attempt_cap == 80
     assert settings.generator_attempt_cap == 100
     assert settings.combined_attempt_cap == 160
-    assert str(settings.session_cost_cap_usd) == "0.20"
+    assert str(settings.session_cost_cap_usd) == "0.30"
     assert DEEPSEEK_CHAT_VALID["DEEPSEEK_API_KEY"] not in repr(settings)
 
 

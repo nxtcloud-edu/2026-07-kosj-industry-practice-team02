@@ -65,3 +65,6 @@ backups/
 .codex/local/
 .worktrees/
 .superpowers/
+
+# 이전 코드베이스(028053d)의 회귀 측정 원본. 참고용 로컬 보관.
+regression-metrics-20260728-grounded.json

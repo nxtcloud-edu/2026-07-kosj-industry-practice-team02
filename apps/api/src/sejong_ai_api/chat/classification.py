@@ -108,6 +108,15 @@ _PERSONAL_LOOKUP_TERMS = (
     "발급상태",
     "신고상태",
     "민원번호",
+    "자동차세",
+    "재산세",
+    "주민세",
+    "지방소득세",
+)
+# 아래 항목은 그 자체로 개인 조회를 뜻하지 않는다. 1인칭 주어가 함께 있을 때만 개인 조회로 본다.
+# 세목명은 일반 안내 질문("자동차세 납부 방법 알려주세요")에도 그대로 쓰이기 때문이다.
+_SUBJECT_BOUND_LOOKUP_TERMS = frozenset(
+    {"체납액", "납부내역", "자동차세", "재산세", "주민세", "지방소득세"}
 )
 _LOOKUP_ACTIONS = ("조회", "알려", "확인", "보여", "됐", "완료")
 _LEGAL_TERMS = (
@@ -338,7 +347,9 @@ def _is_personal_lookup(value: str, compact: str) -> bool:
     has_personal_target = any(term in compact for term in _PERSONAL_LOOKUP_TERMS)
     has_lookup_action = any(term in compact for term in _LOOKUP_ACTIONS)
     intrinsically_personal = any(
-        term in compact for term in _PERSONAL_LOOKUP_TERMS if term not in {"체납액", "납부내역"}
+        term in compact
+        for term in _PERSONAL_LOOKUP_TERMS
+        if term not in _SUBJECT_BOUND_LOOKUP_TERMS
     )
     return (has_subject and has_personal_target) or (intrinsically_personal and has_lookup_action)
 

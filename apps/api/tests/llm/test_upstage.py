@@ -334,7 +334,7 @@ async def test_provider_reported_input_overflow_returns_without_retry(
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal requests
         requests += 1
-        return _provider_response(prompt_tokens=4097)
+        return _provider_response(prompt_tokens=8193)
 
     async with httpx.AsyncClient(
         base_url=exact_settings.base_url,
@@ -347,7 +347,7 @@ async def test_provider_reported_input_overflow_returns_without_retry(
         ).generate(grounded_fixture)
 
     assert outcome.code is OutcomeCode.INPUT_LIMIT
-    assert outcome.usage.input_tokens == 4097
+    assert outcome.usage.input_tokens == 8193
     assert outcome.attempts_used == 1
     assert outcome.attempt_outcomes == (OutcomeCode.INPUT_LIMIT,)
     assert requests == 1

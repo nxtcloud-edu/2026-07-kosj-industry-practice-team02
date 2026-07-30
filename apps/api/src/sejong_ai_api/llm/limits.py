@@ -10,7 +10,7 @@ from enum import Enum
 from sejong_ai_api.llm.contracts import TokenUsage
 from sejong_ai_api.llm.cost import estimate_cost_usd
 
-LOCAL_INTERACTIVE_COST_CAP_USD = Decimal("0.20")
+LOCAL_INTERACTIVE_COST_CAP_USD = Decimal("0.30")
 CostEstimator = Callable[[TokenUsage], Decimal]
 
 

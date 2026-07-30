@@ -149,6 +149,7 @@ def test_classifier_prompt_contains_only_masked_question_governed_catalog_and_wi
                 "GENERAL_BULKY_DISPOSAL",
                 "NONE",
             ],
+            ["NEEDS_FOLLOWUP", "NONE", "NONE", "NONE", "DOMAIN"],
             ["CIVIC_SCOPE_GAP", "NONE", "NONE", "NONE", "NONE"],
         ],
     }
@@ -323,7 +324,7 @@ def test_classifier_prompt_builds_supported_example_from_first_same_catalog_row(
     ]
 
 
-def test_classifier_prompt_includes_exact_all_none_scope_gap_example() -> None:
+def test_classifier_prompt_includes_exact_domain_followup_example() -> None:
     payload = json.loads(
         build_classifier_messages(
             _safe_question(),
@@ -333,6 +334,13 @@ def test_classifier_prompt_includes_exact_all_none_scope_gap_example() -> None:
     )
 
     assert payload["ex"][1] == [
+        "NEEDS_FOLLOWUP",
+        "NONE",
+        "NONE",
+        "NONE",
+        "DOMAIN",
+    ]
+    assert payload["ex"][2] == [
         "CIVIC_SCOPE_GAP",
         "NONE",
         "NONE",
@@ -415,7 +423,7 @@ def test_real_governed_catalog_fits_and_preserves_every_approved_value(
     )
 
     assert len(catalog.topics) == expected_size
-    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 4096
+    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 8192
     payload = json.loads(messages[1]["content"])
     assert payload["cat"] == {
         intent.value: [
@@ -445,6 +453,7 @@ def test_real_governed_catalog_fits_and_preserves_every_approved_value(
             first.coverage.coverage_id,
             "NONE",
         ],
+        ["NEEDS_FOLLOWUP", "NONE", "NONE", "NONE", "DOMAIN"],
         ["CIVIC_SCOPE_GAP", "NONE", "NONE", "NONE", "NONE"],
     ]
 
@@ -483,7 +492,7 @@ def test_real_governed_20_catalog_with_256_character_question_fits_route_matrix_
     assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) == sum(
         len(message["content"]) for message in messages
     )
-    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 4096
+    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) <= 8192
 
 
 def test_classifier_prompt_rejects_question_over_1024_chars_without_truncation() -> None:
@@ -508,11 +517,11 @@ def test_classifier_prompt_rejects_ineligible_catalog_size(size: int) -> None:
 def test_classifier_input_estimate_counts_complete_content_and_can_exceed_bound() -> None:
     messages = build_classifier_messages(
         _safe_question(),
-        _catalog(coverage_label="가" * 4096),
+        _catalog(coverage_label="가" * 8192),
         max_input_chars=1024,
     )
 
     assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) == sum(
         len(message["content"]) for message in messages
     )
-    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) > 4096
+    assert classifier_prompt_module.estimate_classifier_input_upper_bound(messages) > 8192

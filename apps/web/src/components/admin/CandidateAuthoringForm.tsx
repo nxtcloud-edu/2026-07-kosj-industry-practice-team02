@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent, type InvalidEvent } from "react";
 import type { components } from "../../../../../packages/shared-contracts/src/generated/api";
+import { RESERVED_CANDIDATE, isReservedCandidateTarget } from "@/lib/reserved-candidate";
 
 type FailedQuestion = components["schemas"]["FailedQuestion"];
 type KBCandidateCreate = components["schemas"]["KBCandidateCreate"];
@@ -56,20 +57,28 @@ export default function CandidateAuthoringForm({
   onCancel,
   onSubmit,
 }: Props) {
-  const [title, setTitle] = useState("");
+  // 예약된 활성화 대상이면 서버가 보유한 공식 값을 채워 둔다. 그 밖에는 빈 칸으로 시작한다.
+  const reserved = isReservedCandidateTarget(failure);
+  const seed = reserved ? RESERVED_CANDIDATE : null;
+
+  const [title, setTitle] = useState(seed?.title ?? "");
   const [representativeQuestion, setRepresentativeQuestion] = useState(
-    failure.masked_question ?? "",
+    seed?.representativeQuestion ?? failure.masked_question ?? "",
   );
-  const [answerSummary, setAnswerSummary] = useState("");
-  const [procedureSteps, setProcedureSteps] = useState("");
-  const [requiredDocuments, setRequiredDocuments] = useState("");
-  const [processingTime, setProcessingTime] = useState("");
-  const [fee, setFee] = useState("");
-  const [department, setDepartment] = useState("");
-  const [sourceTitle, setSourceTitle] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [lastVerifiedAt, setLastVerifiedAt] = useState("");
-  const [caution, setCaution] = useState("");
+  const [answerSummary, setAnswerSummary] = useState(seed?.answerSummary ?? "");
+  const [procedureSteps, setProcedureSteps] = useState(
+    seed ? seed.procedureSteps.join("\n") : "",
+  );
+  const [requiredDocuments, setRequiredDocuments] = useState(
+    seed ? seed.requiredDocuments.join("\n") : "",
+  );
+  const [processingTime, setProcessingTime] = useState(seed?.processingTime ?? "");
+  const [fee, setFee] = useState(seed?.fee ?? "");
+  const [department, setDepartment] = useState(seed?.department ?? "");
+  const [sourceTitle, setSourceTitle] = useState(seed?.sourceTitle ?? "");
+  const [sourceUrl, setSourceUrl] = useState(seed?.sourceUrl ?? "");
+  const [lastVerifiedAt, setLastVerifiedAt] = useState(seed?.lastVerifiedAt ?? "");
+  const [caution, setCaution] = useState(seed?.caution ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -109,6 +118,12 @@ export default function CandidateAuthoringForm({
         <p className="mt-1 text-caption text-text-sub">
           운영자가 공식 출처를 확인해 직접 작성합니다. 저장 후 별도 승인자가 검수합니다.
         </p>
+        {reserved ? (
+          <p className="mt-2 rounded-btn-s bg-primary/5 px-3 py-2 text-caption text-text-sub">
+            승인된 공식 출처에 이 민원의 등록 예정 항목이 있어 값을 채워 두었습니다.
+            내용을 확인하고 필요하면 수정한 뒤 제출하세요. 반영 여부는 별도 승인자가 판정합니다.
+          </p>
+        ) : null}
       </div>
       <form
         onSubmit={submit}

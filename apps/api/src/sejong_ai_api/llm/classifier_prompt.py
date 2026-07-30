@@ -27,9 +27,17 @@ _SYSTEM_MESSAGE = (
     "cat[intent]=[topic_id,coverage_id,coverage_label,approved_examples];"
     "SUPPORTED=one cat row covers ask;"
     "NO_TOPIC_MATCH=supported intent/no row covers asked fact/procedure;"
+    "NEEDS_FOLLOWUP=missing/ambiguous detail blocks safe choice;"
     "CIVIC_SCOPE_GAP=government/admin service outside intents;"
     "NON_CIVIC=not government/admin service;"
-    "NEEDS_FOLLOWUP=missing/ambiguous detail blocks safe choice;"
+    "decide in this order and stop at the first match;"
+    "1 ask is only a bare category word(서류/증명서/신고/민원/발급) "
+    "with no specific kind=NEEDS_FOLLOWUP;"
+    "2 asked service/item fits one cat row=SUPPORTED;"
+    "3 asked service/item belongs to a cat intent but no row covers it=NO_TOPIC_MATCH;"
+    "4 asked service is government/admin but outside cat intents=CIVIC_SCOPE_GAP;"
+    "5 not a government/admin service=NON_CIVIC;"
+    "never widen a row to a service it does not name;"
     "pick narrowest covered row;"
     "exclusions bind;"
     "SUPPORTED:intent/topic_id/coverage_id=same row,pending_slot=NONE;"
@@ -89,6 +97,7 @@ def build_classifier_messages(
                 first.coverage.coverage_id,
                 "NONE",
             ],
+            ["NEEDS_FOLLOWUP", "NONE", "NONE", "NONE", "DOMAIN"],
             ["CIVIC_SCOPE_GAP", "NONE", "NONE", "NONE", "NONE"],
         ],
     }

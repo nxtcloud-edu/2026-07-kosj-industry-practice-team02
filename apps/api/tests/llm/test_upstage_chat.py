@@ -26,8 +26,8 @@ from sejong_ai_api.llm.upstage_chat import (
 
 Handler = Callable[[httpx.Request], httpx.Response]
 SECRET = "chat-test-key-not-a-real-secret"
-CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 128))
-GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(4096, 0, 1024))
+CLASSIFIER_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 128))
+GENERATOR_WORST_CASE_USD = estimate_cost_usd(TokenUsage(8192, 0, 1024))
 
 
 def _ledger(
@@ -353,13 +353,13 @@ async def test_malformed_or_truncated_output_fails_closed_after_one_request(
             TokenUsage(0, 0, 0),
         ),
         (
-            {"prompt_tokens": 4096, "completion_tokens": 10},
+            {"prompt_tokens": 8192, "completion_tokens": 10},
             True,
             GroundedChatOutcomeCode.SUCCESS,
-            TokenUsage(4096, 0, 10),
+            TokenUsage(8192, 0, 10),
         ),
         (
-            {"prompt_tokens": 4097, "completion_tokens": 10},
+            {"prompt_tokens": 8193, "completion_tokens": 10},
             True,
             GroundedChatOutcomeCode.SCHEMA_INVALID,
             TokenUsage(0, 0, 0),
@@ -390,14 +390,14 @@ async def test_malformed_or_truncated_output_fails_closed_after_one_request(
         ),
         (
             {
-                "prompt_tokens": 4096,
+                "prompt_tokens": 8192,
                 "completion_tokens": 1024,
-                "total_tokens": 5120,
+                "total_tokens": 9216,
                 "cached_tokens": 1024,
             },
             True,
             GroundedChatOutcomeCode.SUCCESS,
-            TokenUsage(4096, 1024, 1024),
+            TokenUsage(8192, 1024, 1024),
         ),
         (
             {
@@ -578,7 +578,7 @@ async def test_provider_reported_input_overflow_is_schema_invalid_after_one_requ
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal requests
         requests += 1
-        return _provider_response(prompt_tokens=4097)
+        return _provider_response(prompt_tokens=8193)
 
     async with httpx.AsyncClient(
         base_url=settings.base_url,
