@@ -1,7 +1,7 @@
 # 회귀 테스트 실행 기록 — 2026-07-30
 
 측정 대상: 로컬 스택(API `:8000` + Web `:3000` + local DB, ACTIVE KB 19/기관 3/매핑 10)
-실행기: `run_regression_metrics.py` (이 저장소에는 미포함, 별도 체크아웃에서 실행)
+실행기: `scripts/run_regression_metrics.py`
 표본: `data/evaluation/sample_questions_20.csv` (T-01~T-20) + 제안서 §7.5 데모 5문항
 
 ## 1. 전체 실행 결과
@@ -33,6 +33,9 @@
 
 모든 실행은 `classifier=true,grounded=true`(B 제외: `classifier=false,grounded=true`).
 `′` 표시는 동일 설정 재실행이며 기능 지표가 완전히 일치했다(지연시간만 변동).
+
+**측정 회차는 총 15회다.** 위 표의 마지막 행 `목표치`는 실행이 아니라 판정 기준이므로
+회차에 포함하지 않는다. §6.3.1의 "기준선~H 13회"에 I·J를 더한 값과 일치한다.
 
 ## 2. 문항별 실제 동작 변화
 
@@ -257,4 +260,3 @@ staging을 참조해 후보를 작성하면 실패한다.
 3. **마스킹 오탐** — “주민세 …”가 `AMBIGUOUS_PERSON_NAME`으로 거절된다
    (`_SAFE_STANDALONE_NAME_TERMS`에 `주민세` 누락)
 4. **하니스 커버리지** — 데모 문항의 답변 상태를 판정 항목에 포함 (§3.4)
-5. **회귀 실행기 부재** — `scripts/run_regression_metrics.py`가 이 저장소에 없다
